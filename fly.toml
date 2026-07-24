@@ -5,7 +5,7 @@
 #   1. Instala o flyctl e faz login:  fly auth login
 #   2. Cria a app (usa este nome ou muda-o):  fly apps create appdoivo
 #   3. Cria o volume persistente na mesma regiao:
-#        fly volumes create appdoivo_data --region mad --size 1
+#        fly volumes create appdoivo_data --region cdg --size 1
 #   4. Define os segredos (NAO ficam no repositorio):
 #        fly secrets set TOKEN_SECRET=<32 bytes hex> ADMIN_TOKEN=<your-admin-password> ADMIN_NAME=Ivo `
 #          VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:tu@exemplo.pt
@@ -18,7 +18,7 @@
 #     para poupar (mas ai o cron so corre quando houver visitas).
 
 app = "appdoivo"
-primary_region = "mad"
+primary_region = "cdg"
 
 [build]
 

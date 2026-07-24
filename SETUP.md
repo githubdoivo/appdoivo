@@ -56,7 +56,7 @@ The only requirement is a **persistent disk** for the SQLite database. If the ho
 1. Install `flyctl` and sign in: `fly auth login`
 2. Create the app: `fly apps create appdoivo`
 3. Create the persistent volume in the same region:
-   `fly volumes create appdoivo_data --region mad --size 1`
+   `fly volumes create appdoivo_data --region cdg --size 1`
 4. Set the secrets (these are never committed to the repository):
    ```
    fly secrets set TOKEN_SECRET=<32-byte hex> ADMIN_TOKEN=<your-admin-password> ADMIN_NAME=Ivo `
