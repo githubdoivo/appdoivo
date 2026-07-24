@@ -1,0 +1,216 @@
+// PT/EN translation system. Usage: t('key', { params }).
+const LANG_KEY = 'appivo_lang';
+
+export const translations = {
+  pt: {
+    // Login
+    tagline: 'bem-vinde. mostra-me a tua chave',
+    access_key: 'Chave de acesso',
+    enter: 'Entrar',
+    // Header
+    logout: 'Sair',
+    admin: 'Admin',
+    notif_enable: 'Notificações',
+    notif_on: 'Notificações ativas',
+    notif_off: 'Não suportado',
+    // Tabs
+    tab_rata: 'A Rata',
+    tab_outfit: 'Best Outfit',
+    // Rata Game
+    rata_hero: 'a cada hora, uma nova consequência',
+    rata_current: 'a consequência do momento',
+    rata_none: 'ainda nada. o destino está a preparar-se.',
+    rata_pending: '{n} na fila. sai uma nova a cada hora, sem escapatória.',
+    rata_suggest: 'atira a tua consequência',
+    rata_suggest_ph: 'escreve a maldade de hoje',
+    send: 'Enviar',
+    rata_my: 'A tua sugestão de hoje:',
+    rata_one_per_day: 'Só podes sugerir uma por dia.',
+    // Best Outfit
+    outfit_hero: 'quem deu mais slay esta noite?',
+    outfit_voting: 'votação',
+    outfit_open: 'a votação está aberta. quem serviu look? escolhe:',
+    outfit_wait: 'ainda não abriu. tem calma, família - quem organiza já abre.',
+    outfit_closed: 'noite encerrada. o slay foi contabilizado.',
+    outfit_no_contestants: 'Ainda não há concorrentes para esta noite.',
+    outfit_voted_name: 'Já votaste em {name}.',
+    outfit_voted: 'Já votaste nesta noite.',
+    outfit_results: 'Resultados',
+    votes_short: 'votos',
+    vote_one: 'voto',
+    night_label: 'Noite',
+    theme_furnished: 'Furnished',
+    theme_swamp: 'Swamp',
+    // Notif
+    notif_enabled_msg: 'Notificações ativadas!',
+    notif_unsupported_msg: 'Este dispositivo não suporta notificações push. No iPhone: adiciona a app ao ecrã principal primeiro.',
+    notif_server_msg: 'As notificações não estão configuradas no servidor.',
+    // Admin
+    back: 'Voltar',
+    admin_no_session: 'Sem sessão. Entra na app primeiro.',
+    admin_only: 'Acesso restrito ao administrador.',
+    settings_title: 'Definições',
+    voting_control_title: 'Controlo da votação',
+    voting_state: 'Estado atual',
+    voting_is_open: 'Aberta',
+    voting_is_closed: 'Encerrada',
+    voting_open_btn: 'Abrir votação',
+    voting_close_btn: 'Encerrar e publicar',
+    voting_reset_btn: 'Reiniciar (nova votação)',
+    confirm_reset: 'Reiniciar apaga os votos desta noite e reabre a votação. Continuar?',
+    night_select_label: 'Noite a gerir',
+    timezone: 'Fuso horário',
+    save: 'Guardar',
+    saved: 'Guardado.',
+    users_title: 'Utilizadores',
+    user_name_ph: 'Nome do utilizador',
+    create_user: 'Criar + gerar chave',
+    col_name: 'Nome',
+    col_key: 'Chave',
+    remove: 'Remover',
+    copy: 'Copiar',
+    copy_all: 'Copiar tudo',
+    copied: 'Copiado!',
+    confirm_remove_user: 'Remover este utilizador?',
+    user_created: 'Utilizador criado.\n\nNome: {name}\nChave: {token}\n\nEnvia esta chave ao utilizador.',
+    contestants_title: 'Concorrentes da noite',
+    contestant_name_ph: 'Nome do concorrente',
+    add: 'Adicionar',
+    no_contestants: 'Nenhum concorrente nesta noite.',
+    rata_admin_title: 'Consequências',
+    rata_admin_help: 'Sai uma consequência automaticamente a cada hora - não precisas de fazer nada. Este botão só força já a próxima (para testar ou animar a noite).',
+    reveal_now: 'Revelar consequência agora',
+    votes_title: 'Votos da noite',
+    col_voter: 'Votante',
+    col_contestant: 'Concorrente',
+    col_time: 'Hora',
+    no_votes: 'Sem votos hoje.',
+    ranking: 'Ranking',
+    col_votes: 'Votos',
+    col_text: 'Texto',
+    col_author: 'Autoria',
+    col_day: 'Dia',
+    col_status: 'Estado',
+    status_used: 'revelada',
+    status_pending: 'pendente',
+    no_consequences: 'Sem consequências.',
+    revealed_msg: 'Revelada: "{text}"',
+  },
+  en: {
+    tagline: 'welcome. show me your key',
+    access_key: 'Access key',
+    enter: 'Enter',
+    logout: 'Log out',
+    admin: 'Admin',
+    notif_enable: 'Notifications',
+    notif_on: 'Notifications on',
+    notif_off: 'Not supported',
+    tab_rata: 'A Rata',
+    tab_outfit: 'Best Outfit',
+    rata_hero: 'every hour, a new consequence',
+    rata_current: 'the consequence of the moment',
+    rata_none: 'nothing yet. fate is getting ready.',
+    rata_pending: '{n} in the queue. a new one drops every hour, no escape.',
+    rata_suggest: 'drop your consequence',
+    rata_suggest_ph: 'write today\'s mischief',
+    send: 'Send',
+    rata_my: 'Your suggestion today:',
+    rata_one_per_day: 'You can only suggest one per day.',
+    outfit_hero: 'who wore it better tonight?',
+    outfit_voting: 'voting',
+    outfit_open: "voting's open. who served a look? pick one:",
+    outfit_wait: 'not open yet. patience, family - the host will open it.',
+    outfit_closed: 'night closed. the slay has been counted.',
+    outfit_no_contestants: 'No contestants yet for this night.',
+    outfit_voted_name: 'You voted for {name}.',
+    outfit_voted: 'You have voted this night.',
+    outfit_results: 'Results',
+    votes_short: 'votes',
+    vote_one: 'vote',
+    night_label: 'Night',
+    theme_furnished: 'Furnished',
+    theme_swamp: 'Swamp',
+    notif_enabled_msg: 'Notifications enabled!',
+    notif_unsupported_msg: 'This device does not support push notifications. On iPhone: add the app to your home screen first.',
+    notif_server_msg: 'Notifications are not configured on the server.',
+    back: 'Back',
+    admin_no_session: 'No session. Log in to the app first.',
+    admin_only: 'Admin access only.',
+    settings_title: 'Settings',
+    voting_control_title: 'Voting control',
+    voting_state: 'Current state',
+    voting_is_open: 'Open',
+    voting_is_closed: 'Closed',
+    voting_open_btn: 'Open voting',
+    voting_close_btn: 'Close & publish',
+    voting_reset_btn: 'Reset (new vote)',
+    confirm_reset: "Reset clears this night's votes and reopens voting. Continue?",
+    night_select_label: 'Night to manage',
+    timezone: 'Timezone',
+    save: 'Save',
+    saved: 'Saved.',
+    users_title: 'Users',
+    user_name_ph: 'User name',
+    create_user: 'Create + generate key',
+    col_name: 'Name',
+    col_key: 'Key',
+    remove: 'Remove',
+    copy: 'Copy',
+    copy_all: 'Copy all',
+    copied: 'Copied!',
+    confirm_remove_user: 'Remove this user?',
+    user_created: 'User created.\n\nName: {name}\nKey: {token}\n\nSend this key to the user.',
+    contestants_title: "Night's contestants",
+    contestant_name_ph: 'Contestant name',
+    add: 'Add',
+    no_contestants: 'No contestants this night.',
+    rata_admin_title: 'Consequences',
+    rata_admin_help: 'A consequence is revealed automatically every hour - you do not need to do anything. This button just forces the next one now (to test or liven up the night).',
+    reveal_now: 'Reveal a consequence now',
+    votes_title: "Night's votes",
+    col_voter: 'Voter',
+    col_contestant: 'Contestant',
+    col_time: 'Time',
+    no_votes: 'No votes today.',
+    ranking: 'Ranking',
+    col_votes: 'Votes',
+    col_text: 'Text',
+    col_author: 'Author',
+    col_day: 'Day',
+    col_status: 'Status',
+    status_used: 'revealed',
+    status_pending: 'pending',
+    no_consequences: 'No consequences.',
+    revealed_msg: 'Revealed: "{text}"',
+  },
+};
+
+export function getLang() {
+  const stored = localStorage.getItem(LANG_KEY);
+  return stored === 'en' || stored === 'pt' ? stored : 'pt';
+}
+
+export function setLang(lang) {
+  localStorage.setItem(LANG_KEY, lang);
+}
+
+/** Traduz uma chave, substituindo {params}. */
+export function t(key, params = {}) {
+  const lang = getLang();
+  let str = translations[lang]?.[key] ?? translations.pt[key] ?? key;
+  for (const [k, v] of Object.entries(params)) {
+    str = str.replaceAll(`{${k}}`, v);
+  }
+  return str;
+}
+
+/** Aplica traducoes a elementos com data-i18n / data-i18n-ph. */
+export function applyI18n(root = document) {
+  root.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.documentElement.lang = getLang();
+}

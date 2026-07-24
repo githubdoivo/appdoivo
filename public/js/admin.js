@@ -1,0 +1,276 @@
+import { api, getToken } from './api.js';
+import { t, applyI18n, getLang, setLang } from './i18n.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+/** Copia texto para o clipboard e dá feedback breve no botão. */
+async function copyToClipboard(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch { /* ignora */ }
+    document.body.removeChild(ta);
+  }
+  if (btn) {
+    const prev = btn.textContent;
+    btn.textContent = t('copied');
+    setTimeout(() => (btn.textContent = prev), 1200);
+  }
+}
+
+async function boot() {
+  applyI18n();
+  updateLangUI();
+  if (!getToken()) {
+    $('auth-error').textContent = t('admin_no_session');
+    return;
+  }
+  try {
+    const me = await api('/me');
+    if (!me.isAdmin) {
+      $('auth-error').textContent = t('admin_only');
+      return;
+    }
+  } catch (err) {
+    $('auth-error').textContent = err.message;
+    return;
+  }
+  $('admin-content').classList.remove('hidden');
+  reloadAll();
+}
+
+function reloadAll() {
+  loadSettings();
+  loadVotingState();
+  loadUsers();
+  loadContestants();
+  loadVotes();
+  loadConsequences();
+}
+
+/* -------------------------------- Idioma --------------------------------- */
+
+function updateLangUI() {
+  const lang = getLang();
+  document.querySelectorAll('#lang-switch button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+}
+
+document.querySelectorAll('#lang-switch button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setLang(b.dataset.lang);
+    applyI18n();
+    updateLangUI();
+    if (!$('admin-content').classList.contains('hidden')) reloadAll();
+  });
+});
+
+/* ------------------------------ Votacao ---------------------------------- */
+
+// Night currently selected in the panel (scope of controls/contestants/votes).
+function currentNight() {
+  return $('admin-night')?.value || 'furnished';
+}
+
+$('admin-night').addEventListener('change', () => {
+  loadVotingState();
+  loadContestants();
+});
+
+async function loadVotingState() {
+  const { nights } = await api('/admin/voting');
+  const night = currentNight();
+  const open = nights.some((n) => n.night === night && n.status === 'open');
+  const label = $('voting-state-label');
+  label.textContent = open ? t('voting_is_open') : t('voting_is_closed');
+  label.classList.toggle('is-open', open);
+  label.classList.toggle('is-closed', !open);
+}
+
+async function setVoting(action) {
+  $('voting-msg').textContent = '';
+  await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
+  loadVotingState();
+  loadVotes();
+}
+
+$('voting-open-btn').addEventListener('click', () => setVoting('open'));
+$('voting-close-btn').addEventListener('click', () => setVoting('close'));
+$('voting-reset-btn').addEventListener('click', () => {
+  if (!confirm(t('confirm_reset'))) return;
+  setVoting('reset');
+});
+
+/* ------------------------------ Definicoes ------------------------------- */
+
+async function loadSettings() {
+  const s = await api('/admin/settings');
+  $('timezone').value = s.timezone;
+}
+
+$('settings-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/admin/settings', {
+      method: 'PUT',
+      body: {
+        timezone: $('timezone').value.trim(),
+      },
+    });
+    $('settings-msg').textContent = t('saved');
+    setTimeout(() => ($('settings-msg').textContent = ''), 2000);
+  } catch (err) {
+    $('settings-msg').textContent = err.message;
+  }
+});
+
+/* ------------------------------ Utilizadores ----------------------------- */
+
+async function loadUsers() {
+  const users = await api('/admin/users');
+  $('users-table').innerHTML =
+    `<tr><th>${t('col_name')}</th><th>${t('col_key')}</th><th></th></tr>` +
+    users.map((u) => `
+      <tr>
+        <td>${esc(u.name)}${u.is_admin ? ' <span class="badge">admin</span>' : ''}</td>
+        <td class="token-cell">${esc(u.token)}</td>
+        <td class="row-actions">
+          <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
+          ${u.is_admin ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
+        </td>
+      </tr>`).join('');
+
+  $('users-table').querySelectorAll('[data-copy-user]').forEach((b) => {
+    b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
+  });
+
+  $('users-table').querySelectorAll('[data-del-user]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      if (!confirm(t('confirm_remove_user'))) return;
+      await api(`/admin/users/${b.dataset.delUser}`, { method: 'DELETE' });
+      loadUsers();
+    });
+  });
+
+  $('copy-all-users').onclick = () => {
+    const lines = users.filter((u) => !u.is_admin).map((u) => `${u.name}: ${u.token}`).join('\n');
+    copyToClipboard(lines, $('copy-all-users'));
+  };
+}
+
+$('user-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('user-name-input').value.trim();
+  if (!name) return;
+  try {
+    const u = await api('/admin/users', { method: 'POST', body: { name } });
+    $('user-name-input').value = '';
+    alert(t('user_created', { name: u.name, token: u.token }));
+    loadUsers();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+/* ------------------------------ Concorrentes ----------------------------- */
+
+async function loadContestants() {
+  const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
+  $('contestants-table').innerHTML = contestants.length
+    ? `<tr><th>${t('col_name')}</th><th></th></tr>` + contestants.map((c) => `
+        <tr><td>${esc(c.name)}</td>
+        <td><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
+
+  $('contestants-table').querySelectorAll('[data-del-contestant]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      await api(`/admin/contestants/${b.dataset.delContestant}`, { method: 'DELETE' });
+      loadContestants();
+    });
+  });
+}
+
+$('contestant-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('contestant-name').value.trim();
+  if (!name) return;
+  await api('/admin/contestants', { method: 'POST', body: { name, night: currentNight() } });
+  $('contestant-name').value = '';
+  loadContestants();
+});
+
+/* --------------------------------- Votos --------------------------------- */
+
+// Night selected in the votes card sub-tabs (independent of the one at the top).
+let votesNight = 'furnished';
+
+async function loadVotes() {
+  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
+  const votesHtml = votes.length
+    ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
+      votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(v.created_at)}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+  const resultsHtml = results.length
+    ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
+      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+    : '';
+  $('votes-table').innerHTML = votesHtml + resultsHtml;
+}
+
+document.querySelectorAll('#votes-night-tabs .tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#votes-night-tabs .tab').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    votesNight = btn.dataset.vnight;
+    loadVotes();
+  });
+});
+
+/* ------------------------------ Rata Game -------------------------------- */
+
+$('reveal-btn').addEventListener('click', async () => {
+  try {
+    const r = await api('/admin/consequences/reveal', { method: 'POST' });
+    $('reveal-msg').textContent = t('revealed_msg', { text: r.revealed.text });
+    loadConsequences();
+  } catch (err) {
+    $('reveal-msg').textContent = err.message;
+  }
+});
+
+async function loadConsequences() {
+  const rows = await api('/admin/consequences');
+  $('consequences-table').innerHTML = rows.length
+    ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
+      rows.map((c) => `<tr>
+        <td>${esc(c.text)}</td><td>${esc(c.author)}</td>
+        <td class="muted">${esc(c.day)}</td>
+        <td>${c.status === 'used' ? t('status_used') : t('status_pending')}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
+}
+
+/* --------------------------------- Tabs ---------------------------------- */
+
+document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.atab;
+    ['users', 'outfit', 'rata'].forEach((name) => {
+      $(`atab-${name}`).classList.toggle('hidden', name !== tab);
+    });
+  });
+});
+
+boot();
+

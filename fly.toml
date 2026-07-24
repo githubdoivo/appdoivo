@@ -1,0 +1,43 @@
+# Configuracao de deploy no Fly.io (https://fly.io).
+# A base de dados SQLite vive num volume persistente montado em /data.
+#
+# Passos (uma vez):
+#   1. Instala o flyctl e faz login:  fly auth login
+#   2. Cria a app (usa este nome ou muda-o):  fly apps create appdoivo
+#   3. Cria o volume persistente na mesma regiao:
+#        fly volumes create appdoivo_data --region mad --size 1
+#   4. Define os segredos (NAO ficam no repositorio):
+#        fly secrets set TOKEN_SECRET=<32 bytes hex> ADMIN_TOKEN=<your-admin-password> ADMIN_NAME=Ivo `
+#          VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:tu@exemplo.pt
+#   5. Deploy:  fly deploy
+#
+# Notas:
+#   - TIMEZONE e PORT ficam abaixo em [env] (nao sao segredos).
+#   - min_machines_running = 1 mantem a maquina acordada para a revelacao
+#     horaria da Rata funcionar mesmo sem trafego. Poe 0 fora dos eventos
+#     para poupar (mas ai o cron so corre quando houver visitas).
+
+app = "appdoivo"
+primary_region = "mad"
+
+[build]
+
+[env]
+  PORT = "3000"
+  DB_FILE = "/data/app.sqlite"
+  TIMEZONE = "Europe/Lisbon"
+
+[[mounts]]
+  source = "appdoivo_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

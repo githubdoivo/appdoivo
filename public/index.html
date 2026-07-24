@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#e7e3d6" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <title>appdoivo</title>
+</head>
+<body>
+  <!-- Ecra de login -->
+  <section id="login" class="view">
+    <div class="cover">
+      <p class="eyebrow kicker">MMXXVI</p>
+      <img class="logo-mark" src="/icons/icon.svg" alt="" />
+      <h1 class="script">appdoivo</h1>
+      <div class="rule"></div>
+      <p class="tagline" data-i18n="tagline">Bem-vindo. Introduz a tua chave de acesso.</p>
+      <form id="login-form">
+        <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="off" required />
+        <button type="submit" data-i18n="enter">Entrar</button>
+      </form>
+      <p id="login-error" class="error"></p>
+    </div>
+  </section>
+
+  <!-- App -->
+  <section id="app" class="view hidden">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-name">appdoivo</span>
+        <span id="admin-badge" class="badge hidden">admin</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="lang" id="lang-switch">
+          <button data-lang="pt">PT</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <button id="notif-btn" class="ghost" title="Notificacoes">Notificações</button>
+        <a id="admin-link" href="/admin.html" class="btn ghost hidden" data-i18n="admin">Admin</a>
+        <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="rata" data-i18n="tab_rata">A Rata</button>
+      <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Best Outfit</button>
+    </nav>
+
+    <!-- Rata Game -->
+    <div id="tab-rata" class="tab-panel">
+      <p class="hero-line" data-i18n="rata_hero">Cada hora, o destino escolhe.</p>
+      <div class="card">
+        <span class="eyebrow" data-i18n="tab_rata">A Rata</span>
+        <h2 data-i18n="rata_current">Consequência atual</h2>
+        <div id="current-consequence" class="highlight" style="margin-top:12px">...</div>
+        <p class="muted" id="pending-line" style="margin-top:12px"></p>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="rata_suggest">Sugere a tua consequência</h2>
+        <div id="suggest-area" style="margin-top:12px">
+          <form id="suggest-form">
+            <textarea id="suggest-text" maxlength="200" rows="3" data-i18n-ph="rata_suggest_ph" placeholder="Escreve a tua consequência de hoje..."></textarea>
+            <button type="submit" style="margin-top:10px" data-i18n="send">Enviar</button>
+          </form>
+        </div>
+        <p id="suggest-msg" class="muted" style="margin-top:10px"></p>
+      </div>
+    </div>
+
+    <!-- Best Outfit -->
+    <div id="tab-outfit" class="tab-panel hidden">
+      <p class="hero-line" data-i18n="outfit_hero">Quem tem o melhor visual da noite?</p>
+
+      <div class="outfit-banner">
+        <div class="theme-motif" aria-hidden="true"></div>
+        <div class="outfit-banner-body">
+          <p class="outfit-theme-eyebrow"><span data-i18n="night_label">Noite</span> &middot; <span id="outfit-theme-name">Furnished</span></p>
+          <div class="theme-switch" id="theme-switch">
+            <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
+            <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <span class="eyebrow" data-i18n="tab_outfit">Best Outfit</span>
+        <h2 data-i18n="outfit_voting">Votação</h2>
+        <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
+        <div id="vote-area"></div>
+      </div>
+      <div class="card hidden" id="results-card">
+        <h2 data-i18n="outfit_results">Resultados</h2>
+        <ol id="results-list" class="tier" style="margin-top:10px"></ol>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

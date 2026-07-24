@@ -1,0 +1,459 @@
+/* ============================================================
+   App do Ivo - estetica editorial inspirada nos temas do ano
+   Night 1 "furnished" (objetos domesticos, veludo teal/clay)
+   Night 2 "swamp" (pantano, musgo/oliva)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Italianno&display=swap');
+
+:root {
+  --paper:    #e7e3d6;
+  --paper-2:  #efece1;
+  --paper-3:  #f4f1e8;
+  --ink:      #2b2721;
+  --ink-soft: #635d4f;
+  --line:     #cbc4b2;
+  --line-2:   #ded7c6;
+
+  /* Night 1 - furnished */
+  --rata:     #3f5b54;
+  --rata-2:   #52756c;
+  /* Night 2 - swamp */
+  --outfit:   #59662f;
+  --outfit-2: #6f7d42;
+  /* acento quente */
+  --clay:     #a96b4b;
+  --clay-2:   #bd8062;
+
+  --danger:   #9c4a3c;
+  --radius:   4px;
+  --shadow:   0 12px 40px rgba(43, 39, 33, 0.12);
+
+  --serif:  'Cormorant Garamond', Georgia, serif;
+  --body:   'EB Garamond', Georgia, serif;
+  --script: 'Italianno', cursive;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; overflow-y: scroll; }
+
+body {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--ink);
+  text-transform: lowercase;
+  background-color: var(--paper);
+  /* textura de papel subtil */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-font-smoothing: antialiased;
+}
+
+.hidden { display: none !important; }
+
+.muted { color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
+.error { color: var(--danger); min-height: 1.2em; font-style: italic; }
+
+.view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
+
+/* ------------------------------- Tipografia ------------------------------ */
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em; margin: 0; }
+
+.eyebrow {
+  font-family: var(--body);
+  text-transform: lowercase;
+  letter-spacing: 0.28em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.script { font-family: var(--script); font-weight: 400; line-height: 0.9; }
+
+/* --------------------------------- Login --------------------------------- */
+
+#login .cover {
+  min-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.cover .kicker { letter-spacing: 0.4em; }
+.cover .logo-mark { width: 96px; height: 96px; margin-bottom: 4px; }
+.cover h1.script { font-size: 5.4rem; color: var(--ink); margin: -6px 0 2px; }
+.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.4; margin: 14px 0 18px; }
+.cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
+
+#login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
+
+/* -------------------------------- Inputs --------------------------------- */
+
+input, textarea, select {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--paper-3);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1rem;
+  text-transform: lowercase;
+  transition: border-color 0.2s;
+}
+input[type="password"] { text-transform: none; }
+::placeholder { text-transform: lowercase; }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
+textarea { resize: vertical; }
+
+label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+
+/* -------------------------------- Botoes --------------------------------- */
+
+button, .btn {
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 12px 20px;
+  font-family: var(--body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.16em;
+  background: var(--ink);
+  color: var(--paper-3);
+  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+button:hover, .btn:hover { background: transparent; color: var(--ink); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+button.ghost, a.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 7px 12px;
+  font-size: 0.66rem;
+}
+button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transparent; }
+button.small { padding: 7px 12px; font-size: 0.64rem; letter-spacing: 0.14em; }
+button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
+button.danger:hover { background: var(--danger); color: var(--paper-3); }
+
+/* -------------------------------- Topbar --------------------------------- */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+  gap: 12px;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; }
+.brand .badge {
+  font-family: var(--body);
+  text-transform: lowercase;
+  letter-spacing: 0.16em;
+  font-size: 0.64rem;
+  font-weight: 600;
+  border: 1px solid var(--clay);
+  color: var(--clay);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+/* interruptor de idioma */
+.lang {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.lang button {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 6px 10px;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  border-radius: 0;
+}
+.lang button.active { background: var(--ink); color: var(--paper-3); }
+.lang button:hover { background: transparent; color: var(--ink); }
+.lang button.active:hover { background: var(--ink); color: var(--paper-3); }
+
+/* --------------------------------- Tabs ---------------------------------- */
+
+.tabs { display: flex; gap: 26px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.tab {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+  padding: 4px 0 12px;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.01em;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover { background: transparent; color: var(--ink); }
+.tab.active { color: var(--ink); border-bottom-color: var(--clay); }
+
+/* --------------------------------- Cards --------------------------------- */
+
+.card {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 18px;
+}
+.card h2 { font-size: 1.5rem; margin-bottom: 4px; }
+.card .eyebrow { display: block; margin-bottom: 3px; }
+
+.hero-line {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.5rem;
+  color: var(--ink-soft);
+  margin: 2px 0 20px;
+  line-height: 1.3;
+}
+
+/* bloco de destaque (consequencia atual) */
+.highlight {
+  background: var(--paper-3);
+  border-left: 2px solid var(--rata);
+  padding: 18px 20px;
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+#tab-outfit .highlight { border-left-color: var(--outfit); }
+
+/* ----------------------------- Rata / Outfit ----------------------------- */
+
+.vote-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: var(--paper-3);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 15px 18px;
+  margin-bottom: 10px;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+.vote-option::after { content: '\2192'; opacity: 0; transition: opacity 0.2s; color: var(--outfit); }
+.vote-option:hover { background: var(--paper-3); color: var(--ink); border-color: var(--outfit); }
+.vote-option:hover::after { opacity: 1; }
+
+/* --------------------------------- Tier ---------------------------------- */
+
+.tier { list-style: none; padding: 0; margin: 0; counter-reset: rank; }
+.tier li {
+  counter-increment: rank;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.tier li:last-child { border-bottom: none; }
+.tier li::before {
+  content: counter(rank, decimal-leading-zero);
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  color: var(--clay);
+  min-width: 40px;
+}
+.tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
+.tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+.tier li:first-child .name { font-weight: 600; }
+.tier li:first-child::before { color: var(--outfit); }
+
+/* --------------------------------- Admin --------------------------------- */
+
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
+.token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; word-break: break-all; color: var(--rata); }
+
+.inline { display: flex; gap: 8px; margin-bottom: 8px; }
+.inline input { margin-bottom: 0; }
+.inline button { white-space: nowrap; }
+
+.help { font-size: 0.95rem; font-style: italic; color: var(--ink-soft); margin: 0 0 14px; }
+
+/* ------------------------------ Responsivo ------------------------------- */
+
+@media (max-width: 480px) {
+  body { font-size: 17px; }
+  .cover h1.script { font-size: 4.2rem; }
+  .brand .brand-name { font-size: 1.9rem; }
+  .tabs { gap: 20px; }
+  .tab { font-size: 1.2rem; }
+  .card { padding: 18px; }
+  .highlight, .hero-line { font-size: 1.3rem; }
+}
+
+/* ===================== Transicao suave ao trocar de tema ================ */
+
+body { transition: background-color 0.45s ease; }
+.card, .vote-option, .highlight, .outfit-banner, .topbar, .tabs {
+  transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+}
+
+/* ================= Controlo de votacao (painel admin) =================== */
+
+.voting-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
+.voting-state.is-open { color: var(--rata); }
+.voting-state.is-closed { color: var(--danger); }
+
+/* ============ Best Outfit: tema comutavel (furnished / swamp) =========== */
+/* O tema e aplicado a <body> (pagina TODA) apenas quando o Best Outfit esta
+   ativo. As restantes divisoes ficam limpas (sem classe de tema). */
+
+/* --- FURNISHED: interior domestico, veludo teal, papel de parede quente --- */
+body.theme-furnished {
+  --paper:    #d6ded7;
+  --paper-2:  #e2e8e1;
+  --paper-3:  #ebefe9;
+  --ink:      #22302b;
+  --ink-soft: #566a62;
+  --line:     #a9bab2;
+  --line-2:   #c0cec6;
+  --clay:     #305049;
+  --clay-2:   #43655c;
+  --rata:     #305049;
+  --ot:       #305049;
+  --ot-2:     #43655c;
+  --ot-tint:  #e2e8e1;
+  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23e2e8e1'/%3E%3Cg fill='none' stroke='%23305049' stroke-opacity='0.30'%3E%3Cpath d='M15 0V60M45 0V60'/%3E%3C/g%3E%3Cg fill='%23305049' fill-opacity='0.22'%3E%3Cpath d='M30 10 L38 22 L30 34 L22 22 Z'/%3E%3Ccircle cx='0' cy='45' r='3'/%3E%3Ccircle cx='60' cy='45' r='3'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #c7d2ca;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23cdd8d0'/%3E%3Cg stroke='%23305049' stroke-opacity='0.16' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%23305049' fill-opacity='0.13'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23cdd8d0'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* --- SWAMP: pantano, musgo/oliva, aguas paradas, juncos e nenufares --- */
+body.theme-swamp {
+  --paper:    #ccd4b3;
+  --paper-2:  #d7dcc0;
+  --paper-3:  #e0e4cd;
+  --ink:      #242a17;
+  --ink-soft: #55613a;
+  --line:     #aab291;
+  --line-2:   #bfc7a4;
+  --clay:     #55632c;
+  --clay-2:   #6c7b3c;
+  --rata:     #55632c;
+  --ot:       #55632c;
+  --ot-2:     #6c7b3c;
+  --ot-tint:  #d7dcc0;
+  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #bfc8a3;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Flourishes tematicos aplicados a pagina inteira quando ha tema */
+body.theme-furnished .brand .brand-name,
+body.theme-swamp .brand .brand-name { color: var(--ot); }
+body.theme-furnished .hero-line,
+body.theme-swamp .hero-line { color: var(--ot-2); }
+body.theme-furnished .card,
+body.theme-swamp .card {
+  box-shadow: 0 12px 34px rgba(34, 48, 43, 0.12);
+}
+body.theme-swamp .card { box-shadow: 0 12px 34px rgba(36, 42, 23, 0.14); }
+
+/* Banner com motivo tematico + interruptor de tema */
+.outfit-banner {
+  position: relative;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 18px;
+  background: var(--ot-tint);
+}
+.theme-motif {
+  height: 84px;
+  background-image: var(--ot-motif);
+  background-repeat: repeat;
+  border-bottom: 1px solid var(--line-2);
+}
+.outfit-banner-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+}
+.outfit-theme-eyebrow {
+  margin: 0;
+  font-family: var(--body);
+  text-transform: lowercase;
+  letter-spacing: 0.22em;
+  font-size: 0.66rem;
+  color: var(--ot);
+}
+.outfit-theme-eyebrow #outfit-theme-name { font-weight: 600; }
+
+.theme-switch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--paper-3);
+}
+.theme-switch button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 8px 14px;
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  border-radius: 0;
+}
+.theme-switch button:hover { background: transparent; color: var(--ink); }
+.theme-switch button.active { background: var(--ot); color: var(--paper-3); }
+.theme-switch button.active:hover { background: var(--ot); color: var(--paper-3); }
+.theme-switch .emoji { font-size: 1rem; }
+
+/* Elementos do Best Outfit seguem o acento do tema ativo */
+#tab-outfit .card { background: var(--ot-tint); }
+#tab-outfit .highlight { border-left-color: var(--ot); }
+#tab-outfit .vote-option::after { color: var(--ot); }
+#tab-outfit .vote-option:hover { border-color: var(--ot); }
+#tab-outfit .tier li:first-child::before { color: var(--ot); }
+#tab-outfit input:focus, #tab-outfit textarea:focus { border-color: var(--ot); }

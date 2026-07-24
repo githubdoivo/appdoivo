@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#e7e3d6" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <title>Admin - appdoivo</title>
+</head>
+<body>
+  <section class="view">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-name">appdoivo</span>
+        <span class="badge" data-i18n="admin">Admin</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="lang" id="lang-switch">
+          <button data-lang="pt">PT</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/" class="btn ghost" data-i18n="back">Voltar</a>
+      </div>
+    </header>
+    <p id="auth-error" class="error"></p>
+
+    <div id="admin-content" class="hidden">
+      <nav class="tabs" id="admin-tabs">
+        <button class="tab active" data-atab="users" data-i18n="users_title">Utilizadores</button>
+        <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
+        <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
+      </nav>
+
+      <!-- Separador: Utilizadores -->
+      <div id="atab-users" class="tab-panel">
+        <div class="card">
+          <div class="card-head">
+            <h2 data-i18n="users_title">Utilizadores</h2>
+            <button id="copy-all-users" type="button" class="small ghost" data-i18n="copy_all">Copiar tudo</button>
+          </div>
+          <form id="user-form" class="inline" style="margin-top:12px">
+            <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Nome do utilizador" />
+            <button type="submit" class="small" data-i18n="create_user">Criar + gerar chave</button>
+          </form>
+          <table id="users-table"></table>
+        </div>
+      </div>
+
+      <!-- Separador: Best Outfit -->
+      <div id="atab-outfit" class="tab-panel hidden">
+        <div class="card">
+          <h2 data-i18n="voting_control_title">Controlo da votação</h2>
+          <label class="field" data-i18n="night_select_label" style="margin-top:12px">Noite a gerir</label>
+          <select id="admin-night">
+            <option value="furnished">Furnished</option>
+            <option value="swamp">Swamp</option>
+          </select>
+          <p style="margin-top:12px">
+            <span data-i18n="voting_state">Estado atual</span>:
+            <strong id="voting-state-label" class="voting-state">--</strong>
+          </p>
+          <div class="voting-controls" style="margin-top:12px">
+            <button type="button" id="voting-open-btn" data-i18n="voting_open_btn">Abrir votação</button>
+            <button type="button" id="voting-close-btn" class="ghost" data-i18n="voting_close_btn">Encerrar e publicar</button>
+            <button type="button" id="voting-reset-btn" class="ghost" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
+          </div>
+          <span id="voting-msg" class="muted"></span>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="contestants_title">Concorrentes da noite</h2>
+          <form id="contestant-form" class="inline" style="margin-top:12px">
+            <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
+            <button type="submit" class="small" data-i18n="add">Adicionar</button>
+          </form>
+          <table id="contestants-table"></table>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="votes_title">Votos da noite</h2>
+          <nav class="tabs" id="votes-night-tabs" style="margin-top:12px">
+            <button class="tab active" data-vnight="furnished" data-i18n="theme_furnished">Furnished</button>
+            <button class="tab" data-vnight="swamp" data-i18n="theme_swamp">Swamp</button>
+          </nav>
+          <table id="votes-table"></table>
+        </div>
+      </div>
+
+      <!-- Separador: A Rata -->
+      <div id="atab-rata" class="tab-panel hidden">
+        <div class="card">
+          <h2 data-i18n="rata_admin_title">A Rata</h2>
+          <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
+          <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência agora</button>
+          <span id="reveal-msg" class="muted"></span>
+          <table id="consequences-table" style="margin-top:16px"></table>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="settings_title">Definições (A Rata)</h2>
+          <form id="settings-form" style="margin-top:12px">
+            <label class="field" data-i18n="timezone">Fuso horário</label>
+            <input id="timezone" type="text" placeholder="Europe/Lisbon" />
+            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
+            <span id="settings-msg" class="muted"></span>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

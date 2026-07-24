@@ -1,0 +1,24 @@
+{
+  "name": "appdoivo",
+  "version": "1.0.0",
+  "description": "Web app com duas features: consequencias (rata) e votos.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/server.js",
+    "genkeys": "node scripts/generate-vapid.js",
+    "admin-token": "node --disable-warning=ExperimentalWarning scripts/print-admin-token.js",
+    "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "engines": {
+    "node": ">=23.4"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cron": "^4.6.0",
+    "web-push": "^3.6.7"
+  }
+}

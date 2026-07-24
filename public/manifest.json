@@ -1,0 +1,17 @@
+{
+  "name": "appdoivo",
+  "short_name": "AppIvo",
+  "description": "Consequencias e votos diarios.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e7e3d6",
+  "theme_color": "#e7e3d6",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
