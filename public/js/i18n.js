@@ -13,7 +13,6 @@ export const translations = {
     notif_enable: 'Notificações',
     notif_on: 'Notificações ativas',
     notif_ios_add_home: 'Adiciona ao ecrã principal',
-    add_app_btn: 'Adicionar app',
     // Tabs
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
@@ -44,7 +43,7 @@ export const translations = {
     theme_swamp: 'Swamp',
     // Notif
     notif_enabled_msg: 'Notificações ativadas!',
-    notif_unsupported_msg: 'Falta só um passo: toca em Partilhar → Adicionar ao Ecrã Principal e depois abre a app a partir desse ícone para poderes ativar as notificações.',
+    notif_unsupported_msg: 'Falta um passo, família: Partilhar → Adicionar ao Ecrã Principal, depois abre por aí para ligares as notificações.',
     notif_server_msg: 'As notificações não estão configuradas no servidor.',
     // Admin
     back: 'Voltar',
@@ -111,7 +110,6 @@ export const translations = {
     notif_enable: 'Notifications',
     notif_on: 'Notifications on',
     notif_ios_add_home: 'Add to Home Screen',
-    add_app_btn: 'Add app',
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
     rata_hero: 'every hour, a new consequence',
@@ -138,7 +136,7 @@ export const translations = {
     theme_furnished: 'Furnished',
     theme_swamp: 'Swamp',
     notif_enabled_msg: 'Notifications enabled!',
-    notif_unsupported_msg: 'One more step: tap Share → Add to Home Screen, then open the app from that icon to enable notifications.',
+    notif_unsupported_msg: 'One step left, family: Share → Add to Home Screen, then open it from there to turn on notifications.',
     notif_server_msg: 'Notifications are not configured on the server.',
     back: 'Back',
     admin_no_session: 'No session. Log in to the app first.',

@@ -173,6 +173,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
+.brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa */
@@ -451,6 +452,30 @@ body.theme-swamp .card {
   box-shadow: 0 12px 34px rgba(34, 48, 43, 0.12);
 }
 body.theme-swamp .card { box-shadow: 0 12px 34px rgba(36, 42, 23, 0.14); }
+
+/* ================= A Rata: sinistro, mesma simplicidade dos temas ======== */
+/* Aplicado a <body> apenas quando o separador A Rata esta ativo (ver
+   applyNight() em app.js), mesmo mecanismo dos temas Furnished/Swamp. */
+body.theme-rata {
+  --paper:    #1c1712;
+  --paper-2:  #241d17;
+  --paper-3:  #2c231b;
+  --ink:      #e8ddd0;
+  --ink-soft: #a8998a;
+  --line:     #453a2e;
+  --line-2:   #55483a;
+  --clay:     #a8452f;
+  --clay-2:   #c25a3f;
+  --rata:     #a8452f;
+  background-color: #16120e;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%2318130f'/%3E%3Cg fill='none' stroke='%23a8452f' stroke-opacity='0.14'%3E%3Cpath d='M20 140 Q16 100 24 70 Q30 46 20 20'/%3E%3Cpath d='M110 140 Q116 104 106 76 Q100 50 112 24'/%3E%3C/g%3E%3Cg fill='%23a8452f' fill-opacity='0.20'%3E%3Ccircle cx='20' cy='18' r='2.5'/%3E%3Ccircle cx='112' cy='22' r='2'/%3E%3Ccircle cx='66' cy='50' r='1.6'/%3E%3Ccircle cx='40' cy='90' r='2'/%3E%3Ccircle cx='96' cy='100' r='2.4'/%3E%3C/g%3E%3C/svg%3E");
+}
+body.theme-rata .brand .brand-name { color: var(--clay); }
+body.theme-rata .hero-line { color: var(--clay-2); }
+body.theme-rata .card {
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+}
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {

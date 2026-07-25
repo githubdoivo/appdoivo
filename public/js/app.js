@@ -38,6 +38,9 @@ function showApp(me) {
   if (me.isAdmin) {
     $('admin-badge').classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
+  } else {
+    $('user-badge').textContent = me.name;
+    $('user-badge').classList.remove('hidden');
   }
   refreshNotifButton();
   loadConsequences();
@@ -127,10 +130,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
 
 function refreshNotifButton() {
   const state = pushSupport();
-  const homeBtn = $('home-btn');
   const notifBtn = $('notif-btn');
-
-  homeBtn.classList.toggle('hidden', state !== 'ios-add-home');
 
   if (state === 'unsupported') {
     notifBtn.classList.add('hidden');
@@ -146,11 +146,6 @@ function refreshNotifButton() {
   notifBtn.title = label;
   notifBtn.setAttribute('aria-label', label);
 }
-
-$('home-btn').addEventListener('click', () => {
-  closeMenu();
-  alert(t('notif_unsupported_msg'));
-});
 
 $('notif-btn').addEventListener('click', async () => {
   try {
@@ -212,6 +207,7 @@ function applyNight() {
   NIGHTS.forEach((n) => {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
   });
+  document.body.classList.toggle('theme-rata', currentTab === 'rata');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
