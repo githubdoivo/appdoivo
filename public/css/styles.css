@@ -175,13 +175,16 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-/* Menu compacto (idioma, notificacoes, admin, sair) atras de um botao */
+/* Botoes de icone (casa, notificacoes) fixos na topbar */
+.icon-btn { padding: 7px 11px; font-size: 1.05rem; line-height: 1; }
+.icon-btn.active { border-color: var(--rata); opacity: 0.6; }
+
+/* Menu compacto (admin, sair) atras de um botao */
 .menu-wrap { position: relative; }
 .menu-toggle {
-  padding: 8px 14px;
-  font-size: 1.1rem;
+  padding: 8px 12px;
+  font-size: 1rem;
   line-height: 1;
-  letter-spacing: 0.2em;
 }
 .menu-panel {
   position: absolute;
@@ -192,14 +195,13 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  min-width: 200px;
+  min-width: 160px;
   padding: 12px;
   background: var(--paper-3);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 12px 34px rgba(36, 30, 20, 0.14);
 }
-.menu-panel .lang { align-self: flex-start; }
 .menu-panel button.ghost,
 .menu-panel a.ghost { width: 100%; }
 

@@ -62,7 +62,6 @@ document.querySelectorAll('#lang-switch button').forEach((b) => {
     refreshNotifButton();
     loadConsequences();
     loadVotes();
-    closeMenu();
   });
 });
 
@@ -127,12 +126,26 @@ document.querySelectorAll('.tab').forEach((btn) => {
 
 function refreshNotifButton() {
   const state = pushSupport();
-  const btn = $('notif-btn');
-  if (state === 'granted') { btn.textContent = t('notif_on'); btn.disabled = true; }
-  else if (state === 'unsupported') { btn.textContent = t('notif_off'); btn.disabled = true; }
-  else if (state === 'ios-add-home') { btn.textContent = t('notif_ios_add_home'); btn.disabled = false; }
-  else { btn.textContent = t('notif_enable'); btn.disabled = false; }
+  const homeBtn = $('home-btn');
+  const notifBtn = $('notif-btn');
+
+  homeBtn.classList.toggle('hidden', state !== 'ios-add-home');
+
+  if (state === 'ios-add-home' || state === 'unsupported') {
+    notifBtn.classList.add('hidden');
+    return;
+  }
+
+  notifBtn.classList.remove('hidden');
+  const isOn = state === 'granted';
+  notifBtn.disabled = isOn;
+  notifBtn.classList.toggle('active', isOn);
+  const label = t(isOn ? 'notif_on' : 'notif_enable');
+  notifBtn.title = label;
+  notifBtn.setAttribute('aria-label', label);
 }
+
+$('home-btn').addEventListener('click', () => alert(t('notif_unsupported_msg')));
 
 $('notif-btn').addEventListener('click', async () => {
   try {
