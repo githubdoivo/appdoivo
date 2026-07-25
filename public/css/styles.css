@@ -175,17 +175,22 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-/* Botoes de icone (casa, notificacoes) fixos na topbar */
-.icon-btn { padding: 7px 11px; font-size: 1.05rem; line-height: 1; }
+/* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa */
+.icon-btn,
+.menu-toggle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+}
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
 /* Menu compacto (admin, sair) atras de um botao */
 .menu-wrap { position: relative; }
-.menu-toggle {
-  padding: 8px 12px;
-  font-size: 1rem;
-  line-height: 1;
-}
 .menu-panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -204,8 +209,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .menu-panel button.ghost,
 .menu-panel a.ghost { width: 100%; }
-.menu-panel .lang-in-menu { align-self: center; }
-.menu-panel .lang-in-menu button { padding: 4px 12px; }
+.menu-panel .lang-in-menu { align-self: stretch; justify-content: center; }
+.menu-panel .lang-in-menu button { flex: 1; padding: 4px 12px; }
 
 /* interruptor de idioma */
 .lang {
