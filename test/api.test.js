@@ -135,6 +135,23 @@ test('the owner cannot be demoted even when other admins exist', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
+test('a promoted admin (not the owner) can still be removed', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'promotable' } });
+  await api('PATCH', `/admin/users/${created.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const del = await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+  assert.equal(del.status, 200);
+
+  const users = await api('GET', '/admin/users', { token: ADMIN });
+  assert.ok(!users.data.some((u) => u.id === created.data.id), 'promoted admin should have been removed');
+});
+
+test('the owner can never be removed', async () => {
+  const me = await api('GET', '/me', { token: ADMIN });
+  const del = await api('DELETE', `/admin/users/${me.data.id}`, { token: ADMIN });
+  assert.equal(del.status, 400);
+});
+
 /* ----------------------------- Consequences ------------------------------ */
 
 test('you can only suggest 1 consequence per day', async () => {

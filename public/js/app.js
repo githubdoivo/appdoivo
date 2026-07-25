@@ -79,8 +79,8 @@ function renderTutorialStep() {
 }
 
 function startTutorial() {
-  // Ask which language to run the tour in first - it may not match
-  // whatever the app happens to be showing by default at this point.
+  // Ask for the app's language first (not just the tour's) - it becomes
+  // the app-wide preselected language and can still be changed later.
   $('tutorial-lang-step').classList.remove('hidden');
   $('tutorial-content-step').classList.add('hidden');
   $('tutorial-overlay').classList.remove('hidden');
@@ -306,6 +306,7 @@ function applyNight() {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
   });
   document.body.classList.toggle('theme-rata', currentTab === 'rata');
+  document.body.classList.toggle('theme-mural', currentTab === 'chat');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
