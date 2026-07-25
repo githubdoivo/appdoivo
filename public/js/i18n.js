@@ -1,4 +1,6 @@
 // PT/EN translation system. Usage: t('key', { params }).
+import { api, getToken } from './api.js';
+
 const LANG_KEY = 'appivo_lang';
 
 export const translations = {
@@ -273,6 +275,11 @@ export function getLang() {
 
 export function setLang(lang) {
   localStorage.setItem(LANG_KEY, lang);
+  // Best-effort: remembers the choice server-side so push notifications can
+  // later be sent in it. Silently ignored when logged out or offline.
+  if (getToken()) {
+    api('/me/lang', { method: 'POST', body: { lang } }).catch(() => {});
+  }
 }
 
 /** Traduz uma chave, substituindo {params}. */

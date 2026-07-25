@@ -249,16 +249,18 @@ test('fonts load via a <link> in <head>, not a render-blocking @import', async (
 
 /* --------------------------- Dark/light mode ------------------------------ */
 
-test('dark/light mode toggles and persists, without flattening an active night theme', async () => {
+test('dark/light mode toggles and persists, and gives each night theme its own dark/light variant', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
 
   const initialIsDark = await page.evaluate(() => document.documentElement.classList.contains('mode-dark'));
   assert.equal(initialIsDark, false, 'should default to light mode');
 
-  // On the rata tab (theme-rata active), the night theme's own card color
-  // must stay exactly as-is regardless of the dark/light choice - furnished/
-  // swamp/rata keep their own distinct look, independent of this toggle.
+  // On the rata tab (theme-rata active), each night theme now has a distinct
+  // light AND dark variant (see html.mode-light/html.mode-dark compound
+  // selectors in styles.css), so the card color must actually change when
+  // the mode toggle is clicked - it should no longer be flattened away, but
+  // it should also no longer stay frozen at a single look either.
   const rataCardBg = await page.$eval('.card', (el) => getComputedStyle(el).backgroundColor);
 
   await page.click('#theme-toggle');
@@ -270,7 +272,7 @@ test('dark/light mode toggles and persists, without flattening an active night t
   }));
   assert.equal(afterToggle.dark, true, 'clicking the toggle should switch to dark mode');
   assert.equal(afterToggle.stored, 'dark', 'the choice should persist to localStorage');
-  assert.equal(afterToggle.cardBg, rataCardBg, 'theme-rata card color should be unaffected by dark mode');
+  assert.notEqual(afterToggle.cardBg, rataCardBg, 'theme-rata card color should switch to its dark variant');
 
   // The choice must still survive a reload.
   await page.reload();

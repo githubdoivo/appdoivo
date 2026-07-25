@@ -1,5 +1,5 @@
 import { api, getToken, setToken, clearToken } from './api.js';
-import { registerServiceWorker, enablePush, pushSupport } from './push.js';
+import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 
@@ -251,35 +251,7 @@ function applyDeepLinkParams() {
 
 /* ----------------------------- Notificacoes ------------------------------ */
 
-function refreshNotifButton() {
-  const state = pushSupport();
-  const notifBtn = $('notif-btn');
-
-  if (state === 'unsupported') {
-    notifBtn.classList.add('hidden');
-    return;
-  }
-
-  notifBtn.classList.remove('hidden');
-  const isOn = state === 'granted';
-  const needsHomeScreen = state === 'ios-add-home';
-  notifBtn.classList.toggle('active', isOn);
-  const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
-  notifBtn.title = label;
-  notifBtn.setAttribute('aria-label', label);
-}
-
-$('notif-btn').addEventListener('click', async () => {
-  if (pushSupport() === 'granted') {
-    alert(t('notif_already_on_msg'));
-    return;
-  }
-  try {
-    const ok = await enablePush();
-    if (ok) alert(t('notif_enabled_msg'));
-  } catch { /* mensagens tratadas em push.js */ }
-  refreshNotifButton();
-});
+wireNotifButton('notif-btn');
 
 /* ------------------------------- Rata Game ------------------------------- */
 

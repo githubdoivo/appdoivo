@@ -1,6 +1,7 @@
 import { api, getToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
+import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -47,6 +48,7 @@ async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
+  await registerServiceWorker().catch(() => {});
   if (!getToken()) {
     $('auth-error').textContent = t('admin_no_session');
     return;
@@ -72,6 +74,7 @@ async function boot() {
     selectAdminTab('rata');
   }
   $('admin-content').classList.remove('hidden');
+  refreshNotifButton('notif-btn');
   reloadAll();
 }
 
@@ -93,6 +96,7 @@ function updateLangUI() {
 }
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
+wireNotifButton('notif-btn');
 
 $('lang-toggle').addEventListener('click', () => {
   setLang(getLang() === 'pt' ? 'en' : 'pt');

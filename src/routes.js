@@ -56,6 +56,14 @@ router.post('/me/tutorial-seen', (req, res) => {
   res.json({ ok: true });
 });
 
+// Remembers the user's last-selected app language, so push notifications can
+// be sent in it later (see broadcast() in push.js).
+router.post('/me/lang', (req, res) => {
+  const lang = req.body?.lang === 'en' ? 'en' : 'pt';
+  db.prepare('UPDATE users SET lang = ? WHERE id = ?').run(lang, req.user.id);
+  res.json({ ok: true });
+});
+
 /* ------------------------------ Consequences ----------------------------- */
 
 // Suggest one consequence per day.
@@ -337,8 +345,8 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   const phase = advanceResultsPhase(night);
   if (phase === 'all') {
     await broadcast({
-      title: 'período de votação encerrado',
-      body: 'we got a winner!',
+      title: { pt: 'resultados revelados', en: 'results revealed' },
+      body: { pt: 'já podes ver quem venceu o Best Outfit!', en: 'you can now see who won Best Outfit!' },
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
     });
