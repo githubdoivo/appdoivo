@@ -5,8 +5,9 @@ import { getTimezone } from './time.js';
 
 /**
  * Starts the scheduled jobs:
- *  - Every hour (minute 0) between 16:00 and 04:00: reveals a random
- *    consequence and notifies. No reveals 05:00-15:00.
+ *  - Every 2 hours (minute 0) between 16:00 and 04:00: reveals a random
+ *    consequence and notifies. No reveals 05:00-15:00. Hourly was too much
+ *    to keep track of, so this is spaced out to every other hour.
  *  - Every minute: expires chat messages older than 5 minutes, even when
  *    nobody's posting (postMessage/listMessages also prune on their own,
  *    this just keeps things tidy between activity).
@@ -15,8 +16,8 @@ import { getTimezone } from './time.js';
 export function startScheduler() {
   const tz = getTimezone();
 
-  // Every hour, at minute 0, hours 16-23 and 0-4 (crosses midnight).
-  cron.schedule('0 16-23,0-4 * * *', async () => {
+  // Every 2 hours, at minute 0: 16,18,20,22,0,2,4 (crosses midnight).
+  cron.schedule('0 16,18,20,22,0,2,4 * * *', async () => {
     try {
       const revealed = await revealRandomConsequence();
       if (revealed) {
