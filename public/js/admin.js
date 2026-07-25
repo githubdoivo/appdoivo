@@ -141,24 +141,28 @@ $('settings-form').addEventListener('submit', async (e) => {
 
 async function loadUsers() {
   const users = await api('/admin/users');
-  $('users-table').innerHTML =
-    `<tr><th>${t('col_name')}</th><th>${t('col_key')}</th><th></th></tr>` +
-    users.map((u) => `
-      <tr>
-        <td>${esc(u.name)}${u.is_owner ? ' <span class="badge">' + t('owner_badge') + '</span>' : u.is_admin ? ' <span class="badge">admin</span>' : ''}</td>
-        <td class="token-cell">${esc(u.token)}</td>
-        <td class="row-actions">
+
+  $('users-list').innerHTML = users.length
+    ? users.map((u) => `
+      <div class="user-row">
+        <div class="user-row-name">
+          ${esc(u.name)}
+          ${u.is_owner ? `<span class="badge">${t('owner_badge')}</span>` : u.is_admin ? '<span class="badge">admin</span>' : ''}
+        </div>
+        <div class="user-row-token">${esc(u.token)}</div>
+        <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
           ${u.is_admin ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
-        </td>
-      </tr>`).join('');
+        </div>
+      </div>`).join('')
+    : `<p class="muted">${t('no_users')}</p>`;
 
-  $('users-table').querySelectorAll('[data-copy-user]').forEach((b) => {
+  $('users-list').querySelectorAll('[data-copy-user]').forEach((b) => {
     b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
   });
 
-  $('users-table').querySelectorAll('[data-del-user]').forEach((b) => {
+  $('users-list').querySelectorAll('[data-del-user]').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!confirm(t('confirm_remove_user'))) return;
       await api(`/admin/users/${b.dataset.delUser}`, { method: 'DELETE' });
@@ -166,7 +170,7 @@ async function loadUsers() {
     });
   });
 
-  $('users-table').querySelectorAll('[data-toggle-admin]').forEach((b) => {
+  $('users-list').querySelectorAll('[data-toggle-admin]').forEach((b) => {
     b.addEventListener('click', async () => {
       const makingAdmin = b.dataset.next === '1';
       if (!confirm(t(makingAdmin ? 'confirm_make_admin' : 'confirm_remove_admin_role'))) return;

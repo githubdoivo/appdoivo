@@ -209,8 +209,14 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .menu-panel button.ghost,
 .menu-panel a.ghost { width: 100%; }
-.menu-panel .lang-in-menu { align-self: stretch; justify-content: center; }
-.menu-panel .lang-in-menu button { flex: 1; padding: 4px 12px; }
+.menu-panel .lang-in-menu {
+  align-self: stretch;
+  justify-content: center;
+  border-radius: var(--radius);
+  border-color: var(--ink);
+}
+.menu-panel .lang-in-menu button { flex: 1; padding: 7px 12px; }
+.menu-panel .lang-in-menu button:first-child { border-right: 1px solid var(--ink); }
 
 /* interruptor de idioma */
 .lang {
@@ -341,6 +347,21 @@ th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line
 th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
 .token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; white-space: nowrap; color: var(--rata); }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Lista de utilizadores em cartoes (evita colunas espremidas em mobile) */
+.user-list { margin-top: 8px; }
+.user-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.user-row:last-child { border-bottom: none; }
+.user-row-name { font-weight: 600; }
+.user-row-name .badge { margin-left: 6px; }
+.user-row-token {
+  font-family: 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--rata);
+  word-break: break-all;
+  margin: 4px 0 10px;
+}
+.user-row .row-actions { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
 
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }
 .inline input { margin-bottom: 0; }
