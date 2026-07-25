@@ -164,7 +164,6 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   text-align: center;
   gap: 6px;
 }
-.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.5; margin: 14px 0 18px; }
 .cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
