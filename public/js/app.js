@@ -140,7 +140,7 @@ function refreshNotifButton() {
   notifBtn.classList.remove('hidden');
   const isOn = state === 'granted';
   const needsHomeScreen = state === 'ios-add-home';
-  notifBtn.disabled = isOn || needsHomeScreen;
+  notifBtn.disabled = isOn;
   notifBtn.classList.toggle('active', isOn);
   const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
   notifBtn.title = label;
