@@ -28,7 +28,7 @@
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
-        <button class="tab active" data-atab="users" data-i18n="users_title">Utilizadores</button>
+        <button class="tab active" data-atab="users" data-i18n="users_title">Gerir Utilizadores</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
       </nav>
@@ -37,14 +37,14 @@
       <div id="atab-users" class="tab-panel">
         <div class="card">
           <div class="card-head">
-            <h2 data-i18n="users_title">Utilizadores</h2>
+            <h2 data-i18n="users_title">Gerir Utilizadores</h2>
             <button id="copy-all-users" type="button" class="small ghost" data-i18n="copy_all">Copiar tudo</button>
           </div>
           <form id="user-form" class="inline" style="margin-top:12px">
             <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Nome do utilizador" />
             <button type="submit" class="small" data-i18n="create_user">Criar + gerar chave</button>
           </form>
-          <table id="users-table"></table>
+          <div id="users-list" class="user-list"></div>
         </div>
       </div>
 
@@ -75,7 +75,7 @@
             <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
             <button type="submit" class="small" data-i18n="add">Adicionar</button>
           </form>
-          <table id="contestants-table"></table>
+          <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
 
         <div class="card">
@@ -84,7 +84,7 @@
             <button class="tab active" data-vnight="furnished" data-i18n="theme_furnished">Furnished</button>
             <button class="tab" data-vnight="swamp" data-i18n="theme_swamp">Swamp</button>
           </nav>
-          <table id="votes-table"></table>
+          <div class="table-scroll"><table id="votes-table"></table></div>
         </div>
       </div>
 
@@ -95,7 +95,7 @@
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
           <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência agora</button>
           <span id="reveal-msg" class="muted"></span>
-          <table id="consequences-table" style="margin-top:16px"></table>
+          <div class="table-scroll"><table id="consequences-table" style="margin-top:16px"></table></div>
         </div>
 
         <div class="card">

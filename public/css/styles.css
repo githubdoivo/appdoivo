@@ -76,20 +76,54 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 .script { font-family: var(--script); font-weight: 400; line-height: 0.9; }
 
 /* --------------------------------- Login --------------------------------- */
+/* Fundo provisorio ate termos a arte final em alta resolucao. */
+
+#login {
+  position: relative;
+  overflow: hidden;
+  max-width: none;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 0;
+  --ink: #ece5d5;
+  --ink-soft: #c7bca3;
+  --line: rgba(236, 229, 213, 0.35);
+  --paper-3: #241d17;
+}
+/* Zoom controlado (a partir do topo) em vez de recortar o ficheiro de
+   origem - mantem a letra "twenty-nine divine" sempre visivel. */
+#login::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(180deg, rgba(12, 16, 8, 0.30) 0%, rgba(12, 16, 8, 0.12) 38%, rgba(8, 11, 6, 0.62) 100%),
+    url('/images/login-bg.png');
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  transform: scale(1.22);
+  transform-origin: top center;
+}
 
 #login .cover {
-  min-height: 82vh;
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 22px 20px 48px;
+  min-height: 88vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   text-align: center;
   gap: 6px;
 }
 .cover .kicker { letter-spacing: 0.4em; }
-.cover .logo-mark { width: 96px; height: 96px; margin-bottom: 4px; }
-.cover h1.script { font-size: 5.4rem; color: var(--ink); margin: -6px 0 2px; }
-.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.4; margin: 14px 0 18px; }
+.cover h1.script { font-size: 3.4rem; color: var(--ink); margin: -6px 0 2px; }
+.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.5; margin: 14px 0 18px; }
 .cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
@@ -173,7 +207,62 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
+.brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
+.brand .badge.user-badge.tester-badge { border-color: var(--outfit); color: var(--outfit); }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa.
+   Auto-suficiente (nao depende de .ghost) para nao entrar em conflito de
+   especificidade com "button.ghost" e acabar com padding/font-size errados. */
+button.icon-btn,
+button.menu-toggle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+button.icon-btn:hover,
+button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
+/* Ajuste optico: o glifo do emoji/simbolo nao fica centrado no proprio box */
+#notif-btn { transform: translate(1px, 2px); }
+#menu-toggle { transform: translateX(1px); }
+.icon-btn.active { border-color: var(--rata); opacity: 0.6; }
+
+/* Menu compacto (admin, sair) atras de um botao */
+.menu-wrap { position: relative; }
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 160px;
+  padding: 12px;
+  background: var(--paper-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgba(36, 30, 20, 0.14);
+}
+.menu-panel button.ghost,
+.menu-panel a.ghost { width: 100%; }
+.menu-panel .lang-in-menu {
+  align-self: stretch;
+  justify-content: center;
+  border-radius: var(--radius);
+  border-color: var(--ink);
+}
+.menu-panel .lang-in-menu button { flex: 1; padding: 7px 12px; }
+.menu-panel .lang-in-menu button:first-child { border-right: 1px solid var(--ink); }
 
 /* interruptor de idioma */
 .lang {
@@ -302,7 +391,23 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
-.token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; word-break: break-all; color: var(--rata); }
+.token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; white-space: nowrap; color: var(--rata); }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Lista de utilizadores em cartoes (evita colunas espremidas em mobile) */
+.user-list { margin-top: 8px; }
+.user-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.user-row:last-child { border-bottom: none; }
+.user-row-name { font-weight: 600; }
+.user-row-name .badge { margin-left: 6px; }
+.user-row-token {
+  font-family: 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--rata);
+  word-break: break-all;
+  margin: 4px 0 10px;
+}
+.user-row .row-actions { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
 
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }
 .inline input { margin-bottom: 0; }
@@ -320,10 +425,6 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   .tab { font-size: 1.2rem; }
   .card { padding: 18px; }
   .highlight, .hero-line { font-size: 1.3rem; }
-
-  .topbar { flex-direction: column; align-items: flex-start; }
-  .topbar-actions { width: 100%; justify-content: flex-start; }
-  #notif-btn { order: 10; flex-basis: 100%; margin-top: 6px; }
 }
 
 /* ===================== Transicao suave ao trocar de tema ================ */
@@ -396,6 +497,30 @@ body.theme-swamp .card {
   box-shadow: 0 12px 34px rgba(34, 48, 43, 0.12);
 }
 body.theme-swamp .card { box-shadow: 0 12px 34px rgba(36, 42, 23, 0.14); }
+
+/* ================= A Rata: sinistro, mesma simplicidade dos temas ======== */
+/* Aplicado a <body> apenas quando o separador A Rata esta ativo (ver
+   applyNight() em app.js), mesmo mecanismo dos temas Furnished/Swamp. */
+body.theme-rata {
+  --paper:    #1c1712;
+  --paper-2:  #241d17;
+  --paper-3:  #2c231b;
+  --ink:      #e8ddd0;
+  --ink-soft: #a8998a;
+  --line:     #453a2e;
+  --line-2:   #55483a;
+  --clay:     #a8452f;
+  --clay-2:   #c25a3f;
+  --rata:     #a8452f;
+  background-color: #16120e;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%2318130f'/%3E%3Cg fill='%23a8452f' fill-opacity='0.07'%3E%3Cellipse cx='34' cy='46' rx='24' ry='15'/%3E%3Cellipse cx='158' cy='96' rx='32' ry='19'/%3E%3Cellipse cx='94' cy='168' rx='28' ry='17'/%3E%3Cellipse cx='176' cy='24' rx='20' ry='12'/%3E%3C/g%3E%3Cg fill='%23a8452f' fill-opacity='0.13'%3E%3Ccircle cx='42' cy='40' r='6'/%3E%3Ccircle cx='55' cy='50' r='4'/%3E%3Ccircle cx='30' cy='55' r='5'/%3E%3Ccircle cx='168' cy='90' r='7'/%3E%3Ccircle cx='150' cy='106' r='5'/%3E%3Ccircle cx='178' cy='100' r='4'/%3E%3Ccircle cx='100' cy='162' r='6'/%3E%3Ccircle cx='84' cy='176' r='5'/%3E%3Ccircle cx='110' cy='178' r='4'/%3E%3Ccircle cx='180' cy='20' r='4.5'/%3E%3C/g%3E%3Cg fill='none' stroke='%23a8452f' stroke-opacity='0.09' stroke-width='1.2'%3E%3Cpath d='M10 130 Q50 112 90 130 T170 130'/%3E%3Cpath d='M0 190 Q40 174 80 190 T160 190 T200 184'/%3E%3C/g%3E%3C/svg%3E");
+}
+body.theme-rata .brand .brand-name { color: var(--clay); }
+body.theme-rata .hero-line { color: var(--clay-2); }
+body.theme-rata .card {
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+}
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {

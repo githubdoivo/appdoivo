@@ -14,6 +14,9 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   TIMEZONE = "Europe/Lisbon"
+  # Only set in QA - lets admins promote/revoke other users' admin status.
+  # Production never sets this; only the owner has admin access there.
+  ENABLE_ADMIN_PROMOTION = "true"
 
 [http_service]
   internal_port = 3000

@@ -38,6 +38,11 @@ function showApp(me) {
   if (me.isAdmin) {
     $('admin-badge').classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
+  } else {
+    const badge = $('user-badge');
+    badge.textContent = me.adminPromotionEnabled ? t('tester_badge') : me.name;
+    badge.classList.toggle('tester-badge', !!me.adminPromotionEnabled);
+    badge.classList.remove('hidden');
   }
   refreshNotifButton();
   loadConsequences();
@@ -62,7 +67,29 @@ document.querySelectorAll('#lang-switch button').forEach((b) => {
     refreshNotifButton();
     loadConsequences();
     loadVotes();
+    closeMenu();
   });
+});
+
+/* --------------------------------- Menu ----------------------------------- */
+
+function closeMenu() {
+  $('menu-panel').classList.add('hidden');
+  $('menu-toggle').setAttribute('aria-expanded', 'false');
+}
+
+$('menu-toggle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const nowHidden = $('menu-panel').classList.toggle('hidden');
+  $('menu-toggle').setAttribute('aria-expanded', String(!nowHidden));
+});
+
+document.addEventListener('click', (e) => {
+  if (!$('menu-panel').contains(e.target) && e.target !== $('menu-toggle')) closeMenu();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
 });
 
 /* -------------------------------- Login ---------------------------------- */
@@ -105,11 +132,21 @@ document.querySelectorAll('.tab').forEach((btn) => {
 
 function refreshNotifButton() {
   const state = pushSupport();
-  const btn = $('notif-btn');
-  if (state === 'granted') { btn.textContent = t('notif_on'); btn.disabled = true; }
-  else if (state === 'unsupported') { btn.textContent = t('notif_off'); btn.disabled = true; }
-  else if (state === 'ios-add-home') { btn.textContent = t('notif_ios_add_home'); btn.disabled = false; }
-  else { btn.textContent = t('notif_enable'); btn.disabled = false; }
+  const notifBtn = $('notif-btn');
+
+  if (state === 'unsupported') {
+    notifBtn.classList.add('hidden');
+    return;
+  }
+
+  notifBtn.classList.remove('hidden');
+  const isOn = state === 'granted';
+  const needsHomeScreen = state === 'ios-add-home';
+  notifBtn.disabled = isOn;
+  notifBtn.classList.toggle('active', isOn);
+  const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
+  notifBtn.title = label;
+  notifBtn.setAttribute('aria-label', label);
 }
 
 $('notif-btn').addEventListener('click', async () => {
@@ -172,6 +209,7 @@ function applyNight() {
   NIGHTS.forEach((n) => {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
   });
+  document.body.classList.toggle('theme-rata', currentTab === 'rata');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });

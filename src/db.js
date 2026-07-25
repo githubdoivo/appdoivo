@@ -88,6 +88,17 @@ if (columnExists('users', 'token') && !columnExists('users', 'token_hash')) {
   db.exec('PRAGMA foreign_keys = ON');
 }
 
+// Migration: mark the master admin (owner). Never demotable, unlike admins
+// promoted later via the admin panel. For databases seeded before this
+// column existed, backfill it onto whichever admin was created first.
+if (!columnExists('users', 'is_owner')) {
+  db.exec('ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0');
+  const firstAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1').get();
+  if (firstAdmin) {
+    db.prepare('UPDATE users SET is_owner = 1 WHERE id = ?').run(firstAdmin.id);
+  }
+}
+
 // Migration: per-day voting -> per-night voting.
 // Older databases had contestants/votes with a 'day' column. Voting is now per
 // night (furnished/swamp), so the old tables are dropped (voting data is
@@ -156,7 +167,7 @@ export function seed({ adminToken, adminName, timezone }) {
   if (!admin) {
     const token = adminToken || generateToken();
     const info = db.prepare(
-      'INSERT INTO users (name, token_hash, token_enc, is_admin) VALUES (?, ?, ?, 1)'
+      'INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner) VALUES (?, ?, ?, 1, 1)'
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
     admin = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     return { admin, created: true, token };
