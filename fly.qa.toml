@@ -1,0 +1,27 @@
+# QA/preview deploy config (https://fly.io). Deployed manually from feature
+# branches to preview changes before they're merged into main and deployed
+# to production via fly.toml. No persistent volume - the database is
+# ephemeral on purpose (resets on every deploy/restart), and the machine
+# scales to zero when idle, so this costs close to nothing to keep around.
+#
+# Deploy with:  fly deploy -a appdoivo-qa --config fly.qa.toml
+
+app = "appdoivo-qa"
+primary_region = "cdg"
+
+[build]
+
+[env]
+  PORT = "3000"
+  TIMEZONE = "Europe/Lisbon"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
