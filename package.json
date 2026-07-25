@@ -10,7 +10,8 @@
     "genkeys": "node scripts/generate-vapid.js",
     "admin-token": "node --disable-warning=ExperimentalWarning scripts/print-admin-token.js",
     "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
-    "test": "node --disable-warning=ExperimentalWarning --test"
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js"
   },
   "engines": {
     "node": ">=23.4"
@@ -20,5 +21,8 @@
     "express": "^4.21.2",
     "node-cron": "^4.6.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0"
   }
 }

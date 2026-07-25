@@ -28,7 +28,13 @@ behavior safely, not for managing real users.
 
 1. Branch off `main` with the right prefix.
 2. Implement the change, run `npm test` locally (or `docker compose exec app
-   npm test`), commit.
+   npm test`), commit. `npm test` covers both API/logic tests
+   (`test/api.test.js`) and a real-browser UI/UX suite
+   (`test/ui.test.js`) that drives the app with Playwright's WebKit engine
+   (same engine as iOS Safari) across iPhone SE/13/Pro Max viewports,
+   catching layout overflow, misalignment, and regressions on real device
+   sizes before they reach QA. One-time setup: `npx playwright install
+   webkit chromium`. Run just the UI suite with `npm run test:ui`.
 3. Deploy the branch to QA (`fly deploy -a appdoivo-qa --config
    fly.qa.toml`) and verify manually at www.qa.appdoivo.com.
 4. Only after that's confirmed working: merge the branch into `main` and
