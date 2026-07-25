@@ -185,9 +185,10 @@ router.delete('/admin/users/:id', (req, res) => {
 });
 
 // Promotes or revokes admin status. Disabled outside environments that opt
-// in via ENABLE_ADMIN_PROMOTION (production never sets this - only the
-// owner is meant to have admin access there). Always keeps at least one
-// admin, and the owner can never be demoted, by themselves or anyone else.
+// in via ENABLE_ADMIN_PROMOTION. Always keeps at least one admin, and the
+// owner can never be demoted, by themselves or anyone else. The golden
+// rule (only the owner sees access keys) is enforced separately below
+// regardless of this flag.
 router.patch('/admin/users/:id/admin', (req, res) => {
   if (process.env.ENABLE_ADMIN_PROMOTION !== 'true') {
     return res.status(403).json({ error: 'Funcionalidade desativada neste ambiente.' });

@@ -44,12 +44,9 @@ function showApp(me) {
     adminBadge.classList.toggle('role-admin', !me.isOwner);
     adminBadge.classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
-  } else {
-    const badge = $('user-badge');
-    badge.textContent = me.adminPromotionEnabled ? t('tester_badge') : me.name;
-    badge.classList.toggle('tester-badge', !!me.adminPromotionEnabled);
-    badge.classList.remove('hidden');
   }
+  // Plain (non-admin) users get no badge near the logo at all - only
+  // owner/admin are flagged there. Manage Users still shows every role.
   refreshNotifButton();
   loadConsequences();
   loadVotes();
@@ -104,49 +101,24 @@ $('tutorial-next').addEventListener('click', () => {
 $('tutorial-skip').addEventListener('click', () => endTutorial());
 
 /* -------------------------------- Idioma --------------------------------- */
+// Single square button, like the theme toggle: it shows the language you'll
+// switch TO, not the one that's active.
 
 function updateLangUI() {
-  const lang = getLang();
-  document.querySelectorAll('#lang-switch button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.lang === lang);
-  });
+  $('lang-toggle').textContent = getLang() === 'pt' ? 'EN' : 'PT';
 }
 
-document.querySelectorAll('#lang-switch button').forEach((b) => {
-  b.addEventListener('click', () => {
-    setLang(b.dataset.lang);
-    applyI18n();
-    updateLangUI();
-    applyNight();
-    refreshNotifButton();
-    loadConsequences();
-    loadVotes();
-    closeMenu();
-  });
+$('lang-toggle').addEventListener('click', () => {
+  setLang(getLang() === 'pt' ? 'en' : 'pt');
+  applyI18n();
+  updateLangUI();
+  applyNight();
+  refreshNotifButton();
+  loadConsequences();
+  loadVotes();
 });
-
-/* --------------------------------- Menu ----------------------------------- */
-
-function closeMenu() {
-  $('menu-panel').classList.add('hidden');
-  $('menu-toggle').setAttribute('aria-expanded', 'false');
-}
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
-
-$('menu-toggle').addEventListener('click', (e) => {
-  e.stopPropagation();
-  const nowHidden = $('menu-panel').classList.toggle('hidden');
-  $('menu-toggle').setAttribute('aria-expanded', String(!nowHidden));
-});
-
-document.addEventListener('click', (e) => {
-  if (!$('menu-panel').contains(e.target) && e.target !== $('menu-toggle')) closeMenu();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeMenu();
-});
 
 /* -------------------------------- Login ---------------------------------- */
 

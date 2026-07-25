@@ -85,23 +85,20 @@ function reloadAll() {
 }
 
 /* -------------------------------- Idioma --------------------------------- */
+// Single square button, like the theme toggle: shows the language you'll
+// switch TO, not the one that's active.
 
 function updateLangUI() {
-  const lang = getLang();
-  document.querySelectorAll('#lang-switch button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.lang === lang);
-  });
+  $('lang-toggle').textContent = getLang() === 'pt' ? 'EN' : 'PT';
 }
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
 
-document.querySelectorAll('#lang-switch button').forEach((b) => {
-  b.addEventListener('click', () => {
-    setLang(b.dataset.lang);
-    applyI18n();
-    updateLangUI();
-    if (!$('admin-content').classList.contains('hidden')) reloadAll();
-  });
+$('lang-toggle').addEventListener('click', () => {
+  setLang(getLang() === 'pt' ? 'en' : 'pt');
+  applyI18n();
+  updateLangUI();
+  if (!$('admin-content').classList.contains('hidden')) reloadAll();
 });
 
 /* ------------------------------ Votacao ---------------------------------- */

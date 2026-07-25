@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- folha, mesma paleta do icone (pedra com musgo) mas forma distinta -->
+  <path d="M50 10C74 20 86 42 78 66C71 86 50 94 50 94C50 94 29 86 22 66C14 42 26 20 50 10Z" fill="#55632c"/>
+  <path d="M50 20V86" stroke="#6c7b3c" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="3" fill="#8a9c5b"/>
+  <circle cx="60" cy="55" r="2.5" fill="#8a9c5b"/>
+</svg>

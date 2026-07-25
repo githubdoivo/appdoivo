@@ -18,12 +18,16 @@ const NAMES = [
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
 
+// The rata is a passable, anonymous token - whoever ends up holding it when
+// a consequence is revealed might not be near anyone else at that moment.
+// So these never assume a specific person is present nearby (no "to your
+// left/right/in front of you" - the game doesn't work that way).
 const CONSEQUENCES_PENDING = [
-  'Troca de peça de roupa com a pessoa à tua esquerda durante 30 minutos.',
-  'Fala só a cantar até à próxima consequência.',
-  'Deixa alguém redesenhar a tua sobrancelha com um lápis.',
-  'Faz uma pose de estátua sempre que alguém disser o teu nome.',
-  'Dá um elogio sincero a cada pessoa da sala.',
+  'Wear one item of clothing inside-out for 30 minutes.',
+  'Only speak by singing until the next consequence.',
+  "If someone's around, let them redraw one of your eyebrows with an eyeliner pencil.",
+  'Freeze like a statue every time someone says your name.',
+  'Give a genuine compliment to everyone around you right now.',
 ];
 
 export function seedDemo() {
@@ -53,7 +57,7 @@ export function seedDemo() {
     // one already revealed (shows up as the "current consequence")
     const revealedId = insCons.run(
       demoUsers[0],
-      'Imita o animal que a pessoa à tua frente escolher, durante 1 minuto.',
+      'Do your best animal impression for 1 minute - you choose which animal.',
       day, 'used'
     ).lastInsertRowid;
     db.prepare("UPDATE consequences SET revealed_at = datetime('now') WHERE id = ?").run(revealedId);

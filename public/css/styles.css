@@ -36,15 +36,18 @@
 }
 
 /* ==================== Dark / light mode (UI chrome) ======================
-   A global preference, independent of the per-night Best Outfit/Rata
-   branding, but it overrides ALL the same variables the night themes set
-   (including the --ot-* ones the outfit tab uses) so nothing from a
-   theme leaks through with mismatched contrast. The extra specificity of
-   "html.mode-x body" over "body.theme-x" is intentional so the choice
-   here always wins on every screen, including the themed tabs. #login is
-   unaffected by design (it has its own fixed palette over a photo). */
+   A global preference for screens with no active night theme (admin.html,
+   and the main app before/without a specific Best Outfit/Rata look).
+   Declared on <html> (not body) as plain custom properties, so it only
+   ever wins through normal inheritance: the moment a night theme is
+   active, body.theme-rata/furnished/swamp sets these same variables
+   directly on body itself, and a direct declaration on an element always
+   wins over an inherited one - no specificity fight needed, and the
+   furnished/swamp/rata looks stay exactly as distinctive as before.
+   #login is unaffected by design (it has its own fixed palette over a
+   photo, set directly on #login itself, same protection). */
 
-html.mode-light body {
+html.mode-light {
   --paper:    #f5eef1;
   --paper-2:  #faf5f7;
   --paper-3:  #fdfafc;
@@ -59,15 +62,9 @@ html.mode-light body {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
-  --ot:       #a7abdb;
-  --ot-2:     #c1c4e6;
-  --ot-tint:  #faf5f7;
-  --ot-motif: none;
-  background-color: var(--paper);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
 }
 
-html.mode-dark body {
+html.mode-dark {
   --paper:    #17131f;
   --paper-2:  #1f1a2b;
   --paper-3:  #261f35;
@@ -82,12 +79,6 @@ html.mode-dark body {
   --clay:     #cf9a5c;
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
-  --ot:       #5c7fb8;
-  --ot-2:     #7898cc;
-  --ot-tint:  #1f1a2b;
-  --ot-motif: none;
-  background-color: var(--paper);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -255,6 +246,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   padding-bottom: 14px;
@@ -263,7 +255,9 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   gap: 12px;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; }
+/* Hardcoded, not var(--clay): the logo keeps one identity color always,
+   regardless of active tab, night theme, or light/dark mode. */
+.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: #a96b4b; }
 .brand .badge,
 .user-row-name .badge {
   font-family: var(--body);
@@ -276,20 +270,19 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
-.brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
-.brand .badge.user-badge.tester-badge { border-color: var(--outfit); color: var(--outfit); }
-
 /* Role badges: owner / admin / user, each its own color. */
-.badge.role-owner { border-color: var(--clay); color: var(--clay); }
-.badge.role-admin { border-color: var(--outfit); color: var(--outfit); }
-.badge.role-user { border-color: var(--rata); color: var(--rata); }
+/* Hardcoded, not var(--clay/--outfit/--rata): each role keeps exactly one
+   color everywhere it appears, regardless of night theme or light/dark mode. */
+.badge.role-owner { border-color: #a96b4b; color: #a96b4b; }
+.badge.role-admin { border-color: #59662f; color: #59662f; }
+.badge.role-user { border-color: #3f5b54; color: #3f5b54; }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-/* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa.
-   Auto-suficiente (nao depende de .ghost) para nao entrar em conflito de
-   especificidade com "button.ghost" e acabar com padding/font-size errados. */
+/* Botoes de icone (tema, notificacoes, idioma, gerir, sair) na topbar -
+   todos a mesma caixa quadrada. Auto-suficiente (nao depende de .ghost)
+   para nao entrar em conflito de especificidade com "button.ghost". */
 button.icon-btn,
-button.menu-toggle {
+a.icon-btn {
   width: 38px;
   height: 38px;
   padding: 0;
@@ -303,10 +296,10 @@ button.menu-toggle {
   line-height: 1;
 }
 button.icon-btn:hover,
-button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
-button.icon-btn svg,
-button.menu-toggle svg { width: 19px; height: 19px; display: block; }
-.icon-btn.active { border-color: var(--rata); opacity: 0.6; }
+a.icon-btn:hover { border-color: var(--ink); background: transparent; }
+.icon-btn svg { width: 19px; height: 19px; display: block; }
+
+.lang-toggle { font-size: 0.7rem; letter-spacing: 0.06em; font-weight: 600; text-transform: none; }
 
 /* Theme toggle: shows the icon for what you'll switch TO. Light (default)
    shows the moon (switch to dark); dark mode shows the sun (switch to light). */
@@ -314,58 +307,10 @@ button.menu-toggle svg { width: 19px; height: 19px; display: block; }
 html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
-/* Menu compacto (admin, sair) atras de um botao */
-.menu-wrap { position: relative; }
-.menu-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  min-width: 160px;
-  padding: 12px;
-  /* Glass accent: a translucent, blurred surface floating over the page -
-     used sparingly here (an overlay), not as the app's base look. */
-  background: color-mix(in srgb, var(--paper-3) 78%, transparent);
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgba(36, 30, 20, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-.menu-panel button.ghost,
-.menu-panel a.ghost { width: 100%; }
-.menu-panel .lang-in-menu {
-  align-self: stretch;
-  justify-content: center;
-  border-radius: var(--radius);
-  border-color: var(--ink);
-}
-.menu-panel .lang-in-menu button { flex: 1; padding: 7px 12px; }
-.menu-panel .lang-in-menu button:first-child { border-right: 1px solid var(--ink); }
-
-/* interruptor de idioma */
-.lang {
-  display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.lang button {
-  border: none;
-  background: transparent;
-  color: var(--ink-soft);
-  padding: 6px 10px;
-  font-size: 0.62rem;
-  letter-spacing: 0.12em;
-  border-radius: 0;
-}
-.lang button.active { background: var(--ink); color: var(--paper-3); }
-.lang button:hover { background: transparent; color: var(--ink); }
-.lang button.active:hover { background: var(--ink); color: var(--paper-3); }
+/* Notification bell: opacity visually tells on from off, not just the
+   title/aria-label. Dim when off, full strength (+ accent border) once on. */
+#notif-btn { opacity: 0.45; }
+#notif-btn.active { opacity: 1; border-color: var(--rata); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -585,8 +530,6 @@ body.theme-swamp {
 }
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
-body.theme-furnished .brand .brand-name,
-body.theme-swamp .brand .brand-name { color: var(--ot); }
 body.theme-furnished .hero-line,
 body.theme-swamp .hero-line { color: var(--ot-2); }
 body.theme-furnished .card,
@@ -613,7 +556,6 @@ body.theme-rata {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%2318130f'/%3E%3Cg fill='%23a8452f' fill-opacity='0.07'%3E%3Cellipse cx='34' cy='46' rx='24' ry='15'/%3E%3Cellipse cx='158' cy='96' rx='32' ry='19'/%3E%3Cellipse cx='94' cy='168' rx='28' ry='17'/%3E%3Cellipse cx='176' cy='24' rx='20' ry='12'/%3E%3C/g%3E%3Cg fill='%23a8452f' fill-opacity='0.13'%3E%3Ccircle cx='42' cy='40' r='6'/%3E%3Ccircle cx='55' cy='50' r='4'/%3E%3Ccircle cx='30' cy='55' r='5'/%3E%3Ccircle cx='168' cy='90' r='7'/%3E%3Ccircle cx='150' cy='106' r='5'/%3E%3Ccircle cx='178' cy='100' r='4'/%3E%3Ccircle cx='100' cy='162' r='6'/%3E%3Ccircle cx='84' cy='176' r='5'/%3E%3Ccircle cx='110' cy='178' r='4'/%3E%3Ccircle cx='180' cy='20' r='4.5'/%3E%3C/g%3E%3Cg fill='none' stroke='%23a8452f' stroke-opacity='0.09' stroke-width='1.2'%3E%3Cpath d='M10 130 Q50 112 90 130 T170 130'/%3E%3Cpath d='M0 190 Q40 174 80 190 T160 190 T200 184'/%3E%3C/g%3E%3C/svg%3E");
 }
-body.theme-rata .brand .brand-name { color: var(--clay); }
 body.theme-rata .hero-line { color: var(--clay-2); }
 body.theme-rata .card {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);

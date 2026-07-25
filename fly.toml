@@ -26,6 +26,11 @@ primary_region = "cdg"
   PORT = "3000"
   DB_FILE = "/data/app.sqlite"
   TIMEZONE = "Europe/Lisbon"
+  # Lets the owner promote/revoke other real users to admin ("tester")
+  # in production. The golden rule (only the owner sees access keys) is
+  # unaffected - that's enforced separately in src/routes.js regardless
+  # of this flag.
+  ENABLE_ADMIN_PROMOTION = "true"
 
 [[mounts]]
   source = "appdoivo_data"

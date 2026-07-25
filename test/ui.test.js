@@ -125,17 +125,22 @@ for (const deviceName of IOS_DEVICES) {
 // hacks that kept drifting out of sync. Guard the actual invariant: their
 // boxes must be vertically centered on each other.
 
-test('topbar bell and hamburger icons stay vertically aligned', async () => {
+test('every topbar icon button stays vertically aligned', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   // Push may be "unsupported" in a headless test browser, which hides the
   // bell via .hidden - force it visible to check its box regardless.
   await page.evaluate(() => document.getElementById('notif-btn').classList.remove('hidden'));
 
-  const bell = await page.$eval('#notif-btn', (el) => el.getBoundingClientRect());
-  const menu = await page.$eval('#menu-toggle', (el) => el.getBoundingClientRect());
-  const drift = Math.abs((bell.top + bell.height / 2) - (menu.top + menu.height / 2));
-  assert.ok(drift < 2, `bell/hamburger vertical centers are ${drift.toFixed(1)}px apart`);
+  const centers = await page.$$eval('.topbar-actions .icon-btn', (els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top + r.height / 2;
+    })
+  );
+  assert.ok(centers.length >= 4, `expected at least 4 topbar icon buttons, found ${centers.length}`);
+  const drift = Math.max(...centers) - Math.min(...centers);
+  assert.ok(drift < 2, `topbar icon buttons are ${drift.toFixed(1)}px apart vertically`);
   await context.close();
 });
 
@@ -241,35 +246,41 @@ test('fonts load via a <link> in <head>, not a render-blocking @import', async (
 
 /* --------------------------- Dark/light mode ------------------------------ */
 
-test('dark/light mode toggles, persists, and overrides the active night theme', async () => {
+test('dark/light mode toggles and persists, without flattening an active night theme', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
 
   const initialIsDark = await page.evaluate(() => document.documentElement.classList.contains('mode-dark'));
   assert.equal(initialIsDark, false, 'should default to light mode');
 
+  // On the rata tab (theme-rata active), the night theme's own card color
+  // must stay exactly as-is regardless of the dark/light choice - furnished/
+  // swamp/rata keep their own distinct look, independent of this toggle.
+  const rataCardBg = await page.$eval('.card', (el) => getComputedStyle(el).backgroundColor);
+
   await page.click('#theme-toggle');
   await page.waitForTimeout(200);
   const afterToggle = await page.evaluate(() => ({
     dark: document.documentElement.classList.contains('mode-dark'),
     stored: localStorage.getItem('appivo_mode'),
+    cardBg: getComputedStyle(document.querySelector('.card')).backgroundColor,
   }));
   assert.equal(afterToggle.dark, true, 'clicking the toggle should switch to dark mode');
   assert.equal(afterToggle.stored, 'dark', 'the choice should persist to localStorage');
+  assert.equal(afterToggle.cardBg, rataCardBg, 'theme-rata card color should be unaffected by dark mode');
 
-  // Reload: the choice must survive, on a page that has an active night theme
-  // (theme-rata) - dark mode must still visibly win over it (higher-specificity
-  // override), not just be set as an inert class.
+  // The choice must still survive a reload.
   await page.reload();
   await page.waitForSelector('#app:not(.hidden)');
-  const afterReload = await page.evaluate(() => {
-    const cardBg = getComputedStyle(document.querySelector('.card')).backgroundColor;
-    return { dark: document.documentElement.classList.contains('mode-dark'), cardBg };
-  });
-  assert.equal(afterReload.dark, true, 'dark mode should survive a reload');
-  // The mystique dark card background is a dark violet (#1f1a2b = rgb(31,26,43)),
-  // nowhere near the light theme-rata card tone - confirms the override is real.
-  assert.equal(afterReload.cardBg, 'rgb(31, 26, 43)', 'card background does not reflect dark mode over the night theme');
+  const stillDark = await page.evaluate(() => document.documentElement.classList.contains('mode-dark'));
+  assert.equal(stillDark, true, 'dark mode should survive a reload');
+
+  // admin.html has no night theme competing for these variables, so dark
+  // mode's own mystique palette (#1f1a2b = rgb(31,26,43)) applies there.
+  await page.goto(base + '/admin.html');
+  await page.waitForSelector('#admin-content:not(.hidden)');
+  const adminCardBg = await page.$eval('.card', (el) => getComputedStyle(el).backgroundColor);
+  assert.equal(adminCardBg, 'rgb(31, 26, 43)', 'admin.html should reflect dark mode with no theme to compete with');
 
   await context.close();
 });
