@@ -23,7 +23,8 @@ db.exec(`
     token_hash TEXT NOT NULL UNIQUE,
     token_enc  TEXT NOT NULL,
     is_admin   INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 
   CREATE TABLE IF NOT EXISTS consequences (
@@ -97,6 +98,18 @@ if (!columnExists('users', 'is_owner')) {
   if (firstAdmin) {
     db.prepare('UPDATE users SET is_owner = 1 WHERE id = ?').run(firstAdmin.id);
   }
+}
+
+// Migration: track when a user's role last changed, so Manage Users can
+// surface recently created/promoted users above the rest.
+// SQLite forbids a non-constant DEFAULT on ALTER TABLE ADD COLUMN (only
+// CREATE TABLE allows one), so this adds it with a constant placeholder
+// and backfills real values immediately after. Every INSERT elsewhere sets
+// updated_at explicitly, so the column's post-migration default is never
+// relied on for new rows.
+if (!columnExists('users', 'updated_at')) {
+  db.exec("ALTER TABLE users ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
+  db.exec('UPDATE users SET updated_at = created_at');
 }
 
 // Migration: per-day voting -> per-night voting.
@@ -187,7 +200,7 @@ export function seed({ adminToken, adminName, timezone }) {
   if (!admin) {
     const token = adminToken || generateToken();
     const info = db.prepare(
-      'INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner) VALUES (?, ?, ?, 1, 1)'
+      "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
     admin = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     return { admin, created: true, token };

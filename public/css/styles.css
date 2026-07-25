@@ -35,6 +35,61 @@
   --script: 'Italianno', cursive;
 }
 
+/* ==================== Dark / light mode (UI chrome) ======================
+   A global preference, independent of the per-night Best Outfit/Rata
+   branding, but it overrides ALL the same variables the night themes set
+   (including the --ot-* ones the outfit tab uses) so nothing from a
+   theme leaks through with mismatched contrast. The extra specificity of
+   "html.mode-x body" over "body.theme-x" is intentional so the choice
+   here always wins on every screen, including the themed tabs. #login is
+   unaffected by design (it has its own fixed palette over a photo). */
+
+html.mode-light body {
+  --paper:    #f5eef1;
+  --paper-2:  #faf5f7;
+  --paper-3:  #fdfafc;
+  --ink:      #4a3f4d;
+  --ink-soft: #8d7f92;
+  --line:     #e3d4e0;
+  --line-2:   #ecdfe8;
+  --rata:     #8fbfae;
+  --rata-2:   #aad4c5;
+  --outfit:   #a7abdb;
+  --outfit-2: #c1c4e6;
+  --clay:     #e2a798;
+  --clay-2:   #ecc0b4;
+  --danger:   #d98a7a;
+  --ot:       #a7abdb;
+  --ot-2:     #c1c4e6;
+  --ot-tint:  #faf5f7;
+  --ot-motif: none;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+html.mode-dark body {
+  --paper:    #17131f;
+  --paper-2:  #1f1a2b;
+  --paper-3:  #261f35;
+  --ink:      #e9e1f0;
+  --ink-soft: #a897bb;
+  --line:     #382f4d;
+  --line-2:   #453a5e;
+  --rata:     #7c6bb0;
+  --rata-2:   #9686c8;
+  --outfit:   #5c7fb8;
+  --outfit-2: #7898cc;
+  --clay:     #cf9a5c;
+  --clay-2:   #dcb27c;
+  --danger:   #c4685a;
+  --ot:       #5c7fb8;
+  --ot-2:     #7898cc;
+  --ot-tint:  #1f1a2b;
+  --ot-motif: none;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+}
+
 * { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; overflow-y: scroll; }
@@ -253,6 +308,12 @@ button.icon-btn svg,
 button.menu-toggle svg { width: 19px; height: 19px; display: block; }
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
+/* Theme toggle: shows the icon for what you'll switch TO. Light (default)
+   shows the moon (switch to dark); dark mode shows the sun (switch to light). */
+#theme-toggle .icon-sun { display: none; }
+html.mode-dark #theme-toggle .icon-sun { display: block; }
+html.mode-dark #theme-toggle .icon-moon { display: none; }
+
 /* Menu compacto (admin, sair) atras de um botao */
 .menu-wrap { position: relative; }
 .menu-panel {
@@ -406,6 +467,12 @@ button.menu-toggle svg { width: 19px; height: 19px; display: block; }
 .tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
 .tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 .tier li:nth-child(-n+3) .name { font-weight: 600; }
+
+/* Podium reveal in progress (before "all"): the row already states its own
+   rank in the name ("3rd place · X"), so the auto counter would be wrong
+   for a partial list - hide it and just bold every revealed row. */
+.tier.podium-reveal li::before { content: none; }
+.tier.podium-reveal .name { font-weight: 600; }
 .tier li:first-child::before { color: var(--outfit); }
 
 /* --------------------------------- Admin --------------------------------- */

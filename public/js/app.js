@@ -1,6 +1,7 @@
 import { api, getToken, setToken, clearToken } from './api.js';
 import { registerServiceWorker, enablePush, pushSupport } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
+import { applyMode, toggleMode } from './theme.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -12,6 +13,7 @@ let currentTab = 'rata';
 /* ------------------------------- Arranque -------------------------------- */
 
 async function boot() {
+  applyMode();
   applyI18n();
   updateLangUI();
   applyNight();
@@ -82,6 +84,8 @@ function closeMenu() {
   $('menu-panel').classList.add('hidden');
   $('menu-toggle').setAttribute('aria-expanded', 'false');
 }
+
+$('theme-toggle').addEventListener('click', () => toggleMode());
 
 $('menu-toggle').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -257,12 +261,12 @@ async function loadVotes() {
   try {
     const data = await api(`/votes/status?night=${encodeURIComponent(night)}`);
     const results = Array.isArray(data.results) ? data.results : [];
-    const hasVotes = results.some((r) => r.votes > 0);
 
-    // Status controlled by the admin: open / closed (with or without results).
+    // Status controlled by the admin: open / closed-pending-reveal / closed.
     let statusKey;
     if (data.status === 'open') statusKey = 'outfit_open';
-    else if (hasVotes) statusKey = 'outfit_closed';
+    else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
+    else if (data.status === 'closed') statusKey = 'outfit_closed';
     else statusKey = 'outfit_wait';
     $('voting-status').textContent = t(statusKey);
 
@@ -281,11 +285,18 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    if (data.status === 'closed' && hasVotes) {
+    const revealing = data.status === 'closed' && data.resultsPhase && data.resultsPhase !== 'hidden';
+    if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
-      $('results-list').innerHTML = results
-        .map((r) => `<li><span class="name">${esc(r.name)}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`)
-        .join('');
+      const list = $('results-list');
+      // Before "all", show just what's been revealed so far, labeled by its
+      // actual rank (not the tier list's auto-numbering, which would be
+      // wrong for a partial set) - e.g. "3rd place" appearing alone first.
+      list.classList.toggle('podium-reveal', data.resultsPhase !== 'all');
+      list.innerHTML = results.map((r) => {
+        const label = data.resultsPhase === 'all' ? esc(r.name) : `${t(`rank_${r.rank}`)} · ${esc(r.name)}`;
+        return `<li><span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
+      }).join('');
     } else {
       $('results-card').classList.add('hidden');
     }
