@@ -76,20 +76,41 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 .script { font-family: var(--script); font-weight: 400; line-height: 0.9; }
 
 /* --------------------------------- Login --------------------------------- */
+/* Fundo provisorio ate termos a arte final em alta resolucao. */
+
+#login {
+  max-width: none;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 0;
+  background-image:
+    linear-gradient(180deg, rgba(12, 16, 8, 0.30) 0%, rgba(12, 16, 8, 0.12) 38%, rgba(8, 11, 6, 0.62) 100%),
+    url('/images/login-bg.png');
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  --ink: #ece5d5;
+  --ink-soft: #c7bca3;
+  --line: rgba(236, 229, 213, 0.35);
+  --paper-3: #241d17;
+}
 
 #login .cover {
-  min-height: 82vh;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 22px 20px 48px;
+  min-height: 88vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   text-align: center;
   gap: 6px;
 }
 .cover .kicker { letter-spacing: 0.4em; }
-.cover .logo-mark { width: 96px; height: 96px; margin-bottom: 4px; }
-.cover h1.script { font-size: 5.4rem; color: var(--ink); margin: -6px 0 2px; }
-.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.4; margin: 14px 0 18px; }
+.cover .logo-mark { width: 64px; height: 64px; margin-bottom: 4px; }
+.cover h1.script { font-size: 3.4rem; color: var(--ink); margin: -6px 0 2px; }
+.cover .rule { width: 62px; height: 1px; background: var(--ink); opacity: 0.5; margin: 14px 0 18px; }
 .cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
@@ -189,6 +210,9 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   font-size: 1.05rem;
   line-height: 1;
 }
+/* Ajuste optico: o glifo do emoji/simbolo nao fica centrado no proprio box */
+#notif-btn { padding-left: 2px; padding-top: 3px; }
+#menu-toggle { padding-left: 1px; }
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
 /* Menu compacto (admin, sair) atras de um botao */
@@ -470,7 +494,7 @@ body.theme-rata {
   --rata:     #a8452f;
   background-color: #16120e;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%2318130f'/%3E%3Cg fill='none' stroke='%23a8452f' stroke-opacity='0.14'%3E%3Cpath d='M20 140 Q16 100 24 70 Q30 46 20 20'/%3E%3Cpath d='M110 140 Q116 104 106 76 Q100 50 112 24'/%3E%3C/g%3E%3Cg fill='%23a8452f' fill-opacity='0.20'%3E%3Ccircle cx='20' cy='18' r='2.5'/%3E%3Ccircle cx='112' cy='22' r='2'/%3E%3Ccircle cx='66' cy='50' r='1.6'/%3E%3Ccircle cx='40' cy='90' r='2'/%3E%3Ccircle cx='96' cy='100' r='2.4'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%2318130f'/%3E%3Cg fill='%23a8452f' fill-opacity='0.07'%3E%3Cellipse cx='34' cy='46' rx='24' ry='15'/%3E%3Cellipse cx='158' cy='96' rx='32' ry='19'/%3E%3Cellipse cx='94' cy='168' rx='28' ry='17'/%3E%3Cellipse cx='176' cy='24' rx='20' ry='12'/%3E%3C/g%3E%3Cg fill='%23a8452f' fill-opacity='0.13'%3E%3Ccircle cx='42' cy='40' r='6'/%3E%3Ccircle cx='55' cy='50' r='4'/%3E%3Ccircle cx='30' cy='55' r='5'/%3E%3Ccircle cx='168' cy='90' r='7'/%3E%3Ccircle cx='150' cy='106' r='5'/%3E%3Ccircle cx='178' cy='100' r='4'/%3E%3Ccircle cx='100' cy='162' r='6'/%3E%3Ccircle cx='84' cy='176' r='5'/%3E%3Ccircle cx='110' cy='178' r='4'/%3E%3Ccircle cx='180' cy='20' r='4.5'/%3E%3C/g%3E%3Cg fill='none' stroke='%23a8452f' stroke-opacity='0.09' stroke-width='1.2'%3E%3Cpath d='M10 130 Q50 112 90 130 T170 130'/%3E%3Cpath d='M0 190 Q40 174 80 190 T160 190 T200 184'/%3E%3C/g%3E%3C/svg%3E");
 }
 body.theme-rata .brand .brand-name { color: var(--clay); }
 body.theme-rata .hero-line { color: var(--clay-2); }
