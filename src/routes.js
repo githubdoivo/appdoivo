@@ -151,6 +151,24 @@ router.delete('/admin/users/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Promotes or revokes admin status. Always keeps at least one admin.
+router.patch('/admin/users/:id/admin', (req, res) => {
+  const id = Number(req.params.id);
+  const isAdmin = !!req.body?.isAdmin;
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+
+  if (!isAdmin && user.is_admin) {
+    const { c: adminCount } = db.prepare('SELECT count(*) c FROM users WHERE is_admin = 1').get();
+    if (adminCount <= 1) {
+      return res.status(400).json({ error: 'Tem de existir sempre pelo menos um admin.' });
+    }
+  }
+
+  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, id);
+  res.json({ ok: true, is_admin: isAdmin });
+});
+
 // Votes for a night (full admin view)
 router.get('/admin/votes', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;

@@ -19,6 +19,7 @@ const ADMIN = 'test-admin-token';
 let server;
 let base;
 let userToken;
+let userId;
 let contestantId;
 
 before(async () => {
@@ -68,11 +69,35 @@ test('admin creates a user', async () => {
   assert.equal(r.status, 201);
   assert.ok(r.data.token);
   userToken = r.data.token;
+  userId = r.data.id;
 });
 
 test('a normal user cannot access the admin panel', async () => {
   const r = await api('GET', '/admin/users', { token: userToken });
   assert.equal(r.status, 403);
+});
+
+test('promoting a user grants admin access', async () => {
+  const promote = await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  assert.equal(promote.status, 200);
+  assert.equal(promote.data.is_admin, true);
+
+  const check = await api('GET', '/admin/users', { token: userToken });
+  assert.equal(check.status, 200);
+});
+
+test('demoting revokes admin access', async () => {
+  const demote = await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  assert.equal(demote.status, 200);
+
+  const check = await api('GET', '/admin/users', { token: userToken });
+  assert.equal(check.status, 403);
+});
+
+test('cannot demote the last remaining admin', async () => {
+  const me = await api('GET', '/me', { token: ADMIN });
+  const demote = await api('PATCH', `/admin/users/${me.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  assert.equal(demote.status, 400);
 });
 
 /* ----------------------------- Consequences ------------------------------ */

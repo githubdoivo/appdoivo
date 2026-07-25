@@ -146,6 +146,7 @@ async function loadUsers() {
         <td class="token-cell">${esc(u.token)}</td>
         <td class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
+          <button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>
           ${u.is_admin ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </td>
       </tr>`).join('');
@@ -159,6 +160,19 @@ async function loadUsers() {
       if (!confirm(t('confirm_remove_user'))) return;
       await api(`/admin/users/${b.dataset.delUser}`, { method: 'DELETE' });
       loadUsers();
+    });
+  });
+
+  $('users-table').querySelectorAll('[data-toggle-admin]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const makingAdmin = b.dataset.next === '1';
+      if (!confirm(t(makingAdmin ? 'confirm_make_admin' : 'confirm_remove_admin_role'))) return;
+      try {
+        await api(`/admin/users/${b.dataset.toggleAdmin}/admin`, { method: 'PATCH', body: { isAdmin: makingAdmin } });
+        loadUsers();
+      } catch (err) {
+        alert(err.message);
+      }
     });
   });
 
