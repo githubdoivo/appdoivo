@@ -143,12 +143,22 @@
   <!-- Tutorial de boas-vindas (primeira sessao) -->
   <div id="tutorial-overlay" class="tutorial-overlay hidden">
     <div class="tutorial-card">
-      <div class="tutorial-dots" id="tutorial-dots"></div>
-      <h2 id="tutorial-title"></h2>
-      <p id="tutorial-text"></p>
-      <div class="tutorial-actions">
-        <button type="button" id="tutorial-skip" class="ghost" data-i18n="tutorial_skip">Saltar</button>
-        <button type="button" id="tutorial-next" data-i18n="tutorial_next">Seguinte</button>
+      <div id="tutorial-lang-step">
+        <h2>Português ou English?</h2>
+        <p>Escolhe o idioma do tour.<br />Choose the tour's language.</p>
+        <div class="tutorial-actions">
+          <button type="button" id="tutorial-lang-pt">PT</button>
+          <button type="button" id="tutorial-lang-en">EN</button>
+        </div>
+      </div>
+      <div id="tutorial-content-step" class="hidden">
+        <div class="tutorial-dots" id="tutorial-dots"></div>
+        <h2 id="tutorial-title"></h2>
+        <p id="tutorial-text"></p>
+        <div class="tutorial-actions">
+          <button type="button" id="tutorial-skip" class="ghost" data-i18n="tutorial_skip">Saltar</button>
+          <button type="button" id="tutorial-next" data-i18n="tutorial_next">Seguinte</button>
+        </div>
       </div>
     </div>
   </div>

@@ -63,10 +63,13 @@ async function loginPage(context, token, path = '/') {
   await page.goto(base + path);
   await page.waitForSelector(path === '/admin.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: 5000 });
   // First-session tutorial overlay would otherwise intercept every click in
-  // tests that aren't specifically testing it - skip it if it's showing.
-  const skipBtn = await page.$('#tutorial-skip');
-  if (skipBtn && await skipBtn.isVisible()) {
-    await skipBtn.click();
+  // tests that aren't specifically testing it - dismiss it if it's showing
+  // (language choice first, then skip the content step).
+  const langBtn = await page.$('#tutorial-lang-pt');
+  if (langBtn && await langBtn.isVisible()) {
+    await langBtn.click();
+    await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
+    await page.click('#tutorial-skip');
     await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: 5000 });
   }
   return page;
@@ -297,10 +300,17 @@ test('first-session tutorial shows once, steps through, then never shows again',
   await page.goto(base + '/');
   await page.waitForSelector('#app:not(.hidden)');
 
-  // Shows immediately on a fresh account, on step 1.
+  // Shows immediately on a fresh account, asking for a language first.
   await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: 5000 });
+  const langStepVisible = await page.$eval('#tutorial-lang-step', (el) => !el.classList.contains('hidden'));
+  assert.ok(langStepVisible, 'tutorial should ask for a language before showing content');
+
+  // Picking English should render the actual tour content in English.
+  await page.click('#tutorial-lang-en');
+  await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
   const firstTitle = await page.$eval('#tutorial-title', (el) => el.textContent);
   assert.ok(firstTitle.length > 0, 'first tutorial step has no title');
+  assert.match(firstTitle, /welcome/i, 'choosing English did not render the tour in English');
   let activeDots = await page.$$eval('.tutorial-dots .dot.active', (els) => els.length);
   assert.equal(activeDots, 1, 'exactly one dot should be active at a time');
 
