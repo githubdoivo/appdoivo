@@ -404,6 +404,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .user-list { margin-top: 8px; }
 .user-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .user-row:last-child { border-bottom: none; }
+.user-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .user-row-name { font-weight: 600; }
 .user-row-name .badge { margin-left: 6px; }
 .user-row-token {
@@ -411,9 +412,9 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   font-size: 0.8rem;
   color: var(--rata);
   word-break: break-all;
-  margin: 4px 0 10px;
+  text-align: right;
 }
-.user-row .row-actions { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
+.user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }
 .inline input { margin-bottom: 0; }

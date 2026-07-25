@@ -153,11 +153,13 @@ async function loadUsers() {
   $('users-list').innerHTML = users.length
     ? users.map((u) => `
       <div class="user-row">
-        <div class="user-row-name">
-          ${esc(u.name)}
-          ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
+        <div class="user-row-top">
+          <div class="user-row-name">
+            ${esc(u.name)}
+            ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
+          </div>
+          <div class="user-row-token">${esc(u.token)}</div>
         </div>
-        <div class="user-row-token">${esc(u.token)}</div>
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
