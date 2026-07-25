@@ -39,8 +39,10 @@ function showApp(me) {
     $('admin-badge').classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
   } else {
-    $('user-badge').textContent = me.name;
-    $('user-badge').classList.remove('hidden');
+    const badge = $('user-badge');
+    badge.textContent = me.adminPromotionEnabled ? t('tester_badge') : me.name;
+    badge.classList.toggle('tester-badge', !!me.adminPromotionEnabled);
+    badge.classList.remove('hidden');
   }
   refreshNotifButton();
   loadConsequences();

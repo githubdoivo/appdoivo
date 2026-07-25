@@ -174,6 +174,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   border-radius: 999px;
 }
 .brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
+.brand .badge.user-badge.tester-badge { border-color: var(--outfit); color: var(--outfit); }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa */
