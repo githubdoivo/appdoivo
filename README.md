@@ -93,7 +93,6 @@ consequences survive each deploy.
 ## Notes
 
 - The database is stored in `data/app.sqlite` (ignored by Git).
-- Quick API check: `node scripts/smoke.js <ADMIN_TOKEN> <port>`.
 - Demo data (contestants and votes per night, consequences) for preview:
   `npm run seed-demo`. Do not use in production.
 - Any CLI script that imports `src/db.js` must load `dotenv` first

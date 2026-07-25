@@ -185,9 +185,11 @@ router.post('/admin/users', (req, res) => {
 
 router.delete('/admin/users/:id', (req, res) => {
   const id = Number(req.params.id);
-  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id);
+  const user = db.prepare('SELECT is_owner FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
-  if (user.is_admin) return res.status(400).json({ error: 'Nao podes remover o admin.' });
+  // Only the owner is protected from removal. A promoted admin is still
+  // just a regular user with an extra role, so they stay deletable.
+  if (user.is_owner) return res.status(400).json({ error: 'Nao podes remover o dono da conta.' });
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
   res.json({ ok: true });
 });

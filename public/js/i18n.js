@@ -75,7 +75,6 @@ export const translations = {
     notif_unsupported_msg: 'Falta só isto: Partilhar → Adicionar ao Ecrã Principal, e depois abre a app a partir daí.',
     notif_server_msg: 'As notificações não estão configuradas no servidor.',
     // Admin
-    back: 'Voltar',
     admin_no_session: 'Sem sessão. Entra na app primeiro.',
     admin_only: 'Acesso restrito ao administrador.',
     voting_control_title: 'Controlo da votação',
@@ -202,7 +201,6 @@ export const translations = {
     notif_already_on_msg: 'Notifications are already on!',
     notif_unsupported_msg: 'One last thing: Share → Add to Home Screen, then open the app from there.',
     notif_server_msg: 'Notifications are not configured on the server.',
-    back: 'Back',
     admin_no_session: 'No session. Log in to the app first.',
     admin_only: 'Admin access only.',
     voting_control_title: 'Voting control',

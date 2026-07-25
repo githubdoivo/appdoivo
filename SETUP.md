@@ -9,10 +9,19 @@ This guide explains how to run it locally, how to host it safely for free, and h
 
 ## Push notifications
 
-Two automatic notifications are sent to every subscribed device:
+Two automatic notifications are sent to every subscribed device, each in the
+recipient's own last-selected app language (PT or EN, stored per user and
+synced whenever they switch languages in the app):
 
-- **A Rata (hourly):** when a new consequence is revealed, everyone receives - title "quem tem a rata?", body "temos uma nova consequência!". The consequence itself is not shown in the notification, on purpose, so people open the app to see it.
-- **Best Outfit (on close):** when the admin closes a night's voting, everyone receives - title "período de votação encerrado", body "we got a winner!".
+- **A Rata (hourly):** when a new consequence is revealed. The consequence
+  itself is not shown in the notification, on purpose, so people open the
+  app to see it.
+- **Best Outfit (staged reveal):** once the admin has revealed all result
+  stages (3rd → 2nd → 1st → everyone) for a night, not when voting first
+  closes.
+
+The exact title/body strings live in `src/consequences.js` and
+`src/routes.js` (search for `broadcast(`) - update this doc if you change them.
 
 Notes:
 

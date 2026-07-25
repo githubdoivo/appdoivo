@@ -13,7 +13,7 @@ Never commit straight to `main`.
 
 ## Environments
 
-- **QA** (`appdoivo-qa`, https://www.qa.appdoivo.com) - manual preview target.
+- **QA** (`appdoivo-qa`, https://qa.appdoivo.com) - manual preview target.
   No persistent volume: the database is ephemeral and resets on every deploy.
   Same admin login as production, but its own `TOKEN_SECRET`/VAPID keys.
   Deployed manually, on demand, from whatever branch is being tested - never
@@ -26,25 +26,32 @@ behavior safely, not for managing real users.
 
 ## Process for a change
 
-1. Branch off `main` with the right prefix.
-2. Implement the change, run `npm test` locally (or `docker compose exec app
-   npm test`), commit. `npm test` covers both API/logic tests
-   (`test/api.test.js`) and a real-browser UI/UX suite
-   (`test/ui.test.js`) that drives the app with Playwright's WebKit engine
-   (same engine as iOS Safari) across iPhone SE/13/Pro Max viewports,
-   catching layout overflow, misalignment, and regressions on real device
-   sizes before they reach QA. One-time setup: `npx playwright install
-   webkit chromium`. Run just the UI suite with `npm run test:ui`.
-3. Deploy the branch to QA (`fly deploy -a appdoivo-qa --config
-   fly.qa.toml`) and verify manually at www.qa.appdoivo.com.
-4. Only after that's confirmed working: merge the branch into `main` and
-   push.
-5. Deploy `main` to production explicitly (`fly deploy -a appdoivo`). Fly's
-   GitHub integration is connected but has not reliably auto-deployed on
-   push in practice, so treat the manual deploy as the real step, not the
-   integration.
-6. Verify production directly (HTTP check, login, and whatever the change
-   actually touched) before considering the change done.
+Changes are batched: a work session typically covers several features/fixes
+on one branch, tested and deployed together rather than one-change-per-branch
+and one-deploy-per-change. Don't deploy after every small feature - batch the
+session's work and deploy once at the end.
+
+1. Branch off `main` with the right prefix (one branch can carry the whole
+   session's worth of work).
+2. Implement each change, running `npm test` locally (or `docker compose exec
+   app npm test`) as you go. `npm test` covers both API/logic tests
+   (`test/api.test.js`) and a real-browser UI/UX suite (`test/ui.test.js`)
+   that drives the app with Playwright's WebKit engine (same engine as iOS
+   Safari) across iPhone SE/13/Pro Max viewports, catching layout overflow,
+   misalignment, and regressions on real device sizes before they reach QA.
+   One-time setup: `npx playwright install webkit chromium`. Run just the UI
+   suite with `npm run test:ui`.
+3. Once the session's batch of work is complete and `npm test` passes,
+   commit, push, open a PR, and merge it into `main` (delete the branch on
+   merge - `gh pr merge --merge --delete-branch`).
+4. Deploy `main` to QA (`fly deploy -a appdoivo-qa --config fly.qa.toml`) and
+   verify manually at https://qa.appdoivo.com.
+5. Only after QA is confirmed working: deploy `main` to production
+   explicitly (`fly deploy -a appdoivo`). Fly's GitHub integration is
+   connected but has not reliably auto-deployed on push in practice, so treat
+   the manual deploy as the real step, not the integration.
+6. Verify production directly (HTTP check, login, and whatever the batch
+   actually touched) before considering the session's work done.
 
 ## Secrets
 
