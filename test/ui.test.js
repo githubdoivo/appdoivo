@@ -1,0 +1,228 @@
+// UI/UX regression suite. Unlike test/api.test.js (server logic only), this
+// drives real rendered pages with Playwright's WebKit engine - the same
+// engine iOS Safari uses - so layout/rendering issues that only show up on
+// an actual iPhone (not Chromium) get caught here before a deploy.
+//
+// Run with: npm run test:ui (needs `npx playwright install webkit` once).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { webkit, devices } from 'playwright';
+
+const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`);
+process.env.DB_FILE = DB;
+process.env.ADMIN_TOKEN = 'ui-test-admin-token';
+process.env.ADMIN_NAME = 'UI Test Admin';
+process.env.TIMEZONE = 'Europe/Lisbon';
+process.env.ENABLE_ADMIN_PROMOTION = 'true';
+
+const { default: app } = await import('../src/app.js');
+
+const ADMIN = 'ui-test-admin-token';
+let server;
+let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
+let browser;
+
+before(async () => {
+  server = app.listen(0);
+  await once(server, 'listening');
+  base = `http://127.0.0.1:${server.address().port}`;
+  browser = await webkit.launch();
+});
+
+after(async () => {
+  await browser?.close();
+  server?.close();
+  for (const ext of ['', '-wal', '-shm']) {
+    try { rmSync(DB + ext); } catch { /* ignore */ }
+  }
+});
+
+async function api(method, path, { token, body } = {}) {
+  const res = await fetch(`${base}/api${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+/** New browser context using a real iPhone device profile (viewport, UA, touch, DPR). */
+async function iphoneContext(deviceName) {
+  return browser.newContext({ ...devices[deviceName] });
+}
+
+/** Logs in via localStorage (like the app itself does) and waits for the app shell. */
+async function loginPage(context, token, path = '/') {
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
+  await page.goto(base + path);
+  await page.waitForSelector(path === '/admin.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: 5000 });
+  return page;
+}
+
+/** scrollWidth beyond the viewport means something is overflowing horizontally. */
+async function horizontalOverflow(page) {
+  return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+}
+
+/* ------------------------- No horizontal overflow ------------------------ */
+// Sweep real iPhone sizes, smallest to largest, on every top-level screen.
+
+const IOS_DEVICES = ['iPhone SE', 'iPhone 13', 'iPhone 16 Pro Max'];
+
+for (const deviceName of IOS_DEVICES) {
+  test(`login screen has no horizontal overflow on ${deviceName}`, async () => {
+    const context = await iphoneContext(deviceName);
+    const page = await context.newPage();
+    await page.goto(base + '/');
+    await page.waitForSelector('#login:not(.hidden)', { timeout: 5000 });
+    const overflow = await horizontalOverflow(page);
+    assert.ok(overflow <= 1, `login screen overflows by ${overflow}px on ${deviceName}`);
+    await context.close();
+  });
+
+  test(`main app (rata + best outfit tabs) has no horizontal overflow on ${deviceName}`, async () => {
+    const context = await iphoneContext(deviceName);
+    const page = await loginPage(context, ADMIN, '/');
+    const rataOverflow = await horizontalOverflow(page);
+    assert.ok(rataOverflow <= 1, `"a rata" tab overflows by ${rataOverflow}px on ${deviceName}`);
+
+    await page.click('[data-tab="outfit"]');
+    await page.waitForTimeout(150);
+    const outfitOverflow = await horizontalOverflow(page);
+    assert.ok(outfitOverflow <= 1, `"best outfit" tab overflows by ${outfitOverflow}px on ${deviceName}`);
+    await context.close();
+  });
+
+  test(`admin panel has no horizontal overflow on ${deviceName}`, async () => {
+    const context = await iphoneContext(deviceName);
+    const page = await loginPage(context, ADMIN, '/admin.html');
+    const overflow = await horizontalOverflow(page);
+    assert.ok(overflow <= 1, `admin panel overflows by ${overflow}px on ${deviceName}`);
+    await context.close();
+  });
+}
+
+/* ---------------------- Topbar icon alignment (regression) --------------- */
+// Bell + hamburger used to be nudged into place with per-icon transform
+// hacks that kept drifting out of sync. Guard the actual invariant: their
+// boxes must be vertically centered on each other.
+
+test('topbar bell and hamburger icons stay vertically aligned', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  // Push may be "unsupported" in a headless test browser, which hides the
+  // bell via .hidden - force it visible to check its box regardless.
+  await page.evaluate(() => document.getElementById('notif-btn').classList.remove('hidden'));
+
+  const bell = await page.$eval('#notif-btn', (el) => el.getBoundingClientRect());
+  const menu = await page.$eval('#menu-toggle', (el) => el.getBoundingClientRect());
+  const drift = Math.abs((bell.top + bell.height / 2) - (menu.top + menu.height / 2));
+  assert.ok(drift < 2, `bell/hamburger vertical centers are ${drift.toFixed(1)}px apart`);
+  await context.close();
+});
+
+/* ------------------------ Login flash (regression) ------------------------ */
+// #login used to be visible by default, so an authenticated user briefly saw
+// the login form before the session check resolved. It must ship hidden.
+
+test('#login ships hidden in the raw HTML (no flash before auth check resolves)', async () => {
+  const html = await (await fetch(base + '/')).text();
+  const match = html.match(/<section id="login" class="([^"]*)"/);
+  assert.ok(match, 'could not find #login in the served HTML');
+  assert.ok(match[1].split(/\s+/).includes('hidden'), '#login is not hidden by default - it will flash before auth resolves');
+});
+
+/* --------------------- Role badge colors (regression) --------------------- */
+// owner / admin / user must each render in a visually distinct color.
+
+test('owner, admin and user role badges each render in a distinct color', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'plainuser' } });
+  const toPromote = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'futureadmin' } });
+  await api('PATCH', `/admin/users/${toPromote.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/admin.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
+  const ownerColor = await colorOf('.badge.role-owner');
+  const adminColor = await colorOf('.badge.role-admin');
+  const userColor = await colorOf('.badge.role-user');
+
+  assert.notEqual(ownerColor, adminColor, 'owner and admin badges have the same color');
+  assert.notEqual(ownerColor, userColor, 'owner and user badges have the same color');
+  assert.notEqual(adminColor, userColor, 'admin and user badges have the same color');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+  await api('PATCH', `/admin/users/${toPromote.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${toPromote.id}`, { token: ADMIN });
+});
+
+/* --------------- Manage Users key layout (regression) --------------- */
+
+test('Manage Users row keeps the access key visible with no overflow', async () => {
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/admin.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
+  assert.ok(tokenVisible, 'access key is not visible in the user row');
+
+  const overflow = await horizontalOverflow(page);
+  assert.ok(overflow <= 1, `Manage Users overflows by ${overflow}px with the key inline`);
+  await context.close();
+});
+
+/* -------------- Golden rule: non-owner admin UI (regression) ------------- */
+
+test('a non-owner admin never sees the Manage Users tab', async () => {
+  const promoted = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'nonowneradmin' } });
+  await api('PATCH', `/admin/users/${promoted.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, promoted.token, '/admin.html');
+  const usersTabHidden = await page.$eval('[data-atab="users"]', (el) => el.classList.contains('hidden'));
+  assert.ok(usersTabHidden, 'non-owner admin can see the Manage Users tab');
+
+  await context.close();
+  await api('PATCH', `/admin/users/${promoted.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${promoted.id}`, { token: ADMIN });
+});
+
+/* ------------------- Notification deep-link (regression) ----------------- */
+
+test('?tab=&night= deep-links land on the right tab/night, then clean the URL', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.goto(`${base}/?tab=outfit&night=swamp`);
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const outfitActive = await page.$eval('[data-tab="outfit"]', (el) => el.classList.contains('active'));
+  const swampTheme = await page.evaluate(() => document.body.classList.contains('theme-swamp'));
+  const cleanedUrl = await page.evaluate(() => location.search);
+
+  assert.ok(outfitActive, 'deep link did not select the outfit tab');
+  assert.ok(swampTheme, 'deep link did not apply the swamp night');
+  assert.equal(cleanedUrl, '', 'query params were not cleaned up after applying the deep link');
+  await context.close();
+});
+
+/* --------------------- Font loading (regression) -------------------- */
+// A render-blocking CSS @import caused a visible reflow on font swap; fonts
+// must load via a <link> in <head> instead, in parallel with styles.css.
+
+test('fonts load via a <link> in <head>, not a render-blocking @import', async () => {
+  const html = await (await fetch(base + '/')).text();
+  assert.match(html, /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com/, 'no font <link> found in <head>');
+
+  const css = await (await fetch(base + '/css/styles.css')).text();
+  assert.doesNotMatch(css, /@import\s+url\(['"]?https:\/\/fonts\.googleapis\.com/, 'styles.css still render-blocks on a Google Fonts @import');
+});
