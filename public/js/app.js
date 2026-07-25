@@ -79,15 +79,30 @@ function renderTutorialStep() {
 }
 
 function startTutorial() {
+  // Ask which language to run the tour in first - it may not match
+  // whatever the app happens to be showing by default at this point.
+  $('tutorial-lang-step').classList.remove('hidden');
+  $('tutorial-content-step').classList.add('hidden');
+  $('tutorial-overlay').classList.remove('hidden');
+}
+
+function beginTutorialContent(lang) {
+  setLang(lang);
+  applyI18n();
+  updateLangUI();
+  $('tutorial-lang-step').classList.add('hidden');
+  $('tutorial-content-step').classList.remove('hidden');
   tutorialStep = 0;
   renderTutorialStep();
-  $('tutorial-overlay').classList.remove('hidden');
 }
 
 async function endTutorial() {
   $('tutorial-overlay').classList.add('hidden');
   try { await api('/me/tutorial-seen', { method: 'POST' }); } catch { /* not critical */ }
 }
+
+$('tutorial-lang-pt').addEventListener('click', () => beginTutorialContent('pt'));
+$('tutorial-lang-en').addEventListener('click', () => beginTutorialContent('en'));
 
 $('tutorial-next').addEventListener('click', () => {
   if (tutorialStep < TUTORIAL_STEPS.length - 1) {
