@@ -35,14 +35,17 @@
         <span class="brand-name">appdoivo</span>
         <span id="admin-badge" class="badge hidden">admin</span>
       </div>
-      <div class="topbar-actions">
-        <div class="lang" id="lang-switch">
-          <button data-lang="pt">PT</button>
-          <button data-lang="en">EN</button>
+      <div class="menu-wrap">
+        <button id="menu-toggle" class="menu-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Menu">⋯</button>
+        <div id="menu-panel" class="menu-panel hidden">
+          <div class="lang" id="lang-switch">
+            <button data-lang="pt">PT</button>
+            <button data-lang="en">EN</button>
+          </div>
+          <button id="notif-btn" class="ghost" title="Notificacoes">Notificações</button>
+          <a id="admin-link" href="/admin.html" class="btn ghost hidden" data-i18n="admin">Admin</a>
+          <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
         </div>
-        <button id="notif-btn" class="ghost" title="Notificacoes">Notificações</button>
-        <a id="admin-link" href="/admin.html" class="btn ghost hidden" data-i18n="admin">Admin</a>
-        <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
       </div>
     </header>
 

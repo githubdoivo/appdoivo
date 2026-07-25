@@ -62,7 +62,29 @@ document.querySelectorAll('#lang-switch button').forEach((b) => {
     refreshNotifButton();
     loadConsequences();
     loadVotes();
+    closeMenu();
   });
+});
+
+/* --------------------------------- Menu ----------------------------------- */
+
+function closeMenu() {
+  $('menu-panel').classList.add('hidden');
+  $('menu-toggle').setAttribute('aria-expanded', 'false');
+}
+
+$('menu-toggle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const nowHidden = $('menu-panel').classList.toggle('hidden');
+  $('menu-toggle').setAttribute('aria-expanded', String(!nowHidden));
+});
+
+document.addEventListener('click', (e) => {
+  if (!$('menu-panel').contains(e.target) && e.target !== $('menu-toggle')) closeMenu();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
 });
 
 /* -------------------------------- Login ---------------------------------- */
