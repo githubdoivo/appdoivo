@@ -753,6 +753,10 @@ html.mode-dark body.theme-mural .card {
 .tutorial-card p { color: var(--ink-soft); line-height: 1.5; margin: 0 0 20px; }
 .tutorial-actions { display: flex; align-items: center; gap: 10px; }
 .tutorial-actions button { flex: 1; }
+/* .ghost (skip) has smaller padding/font than the primary button by
+   design elsewhere in the app - override it here so skip/next actually
+   match, not just share a flex-basis. */
+.tutorial-actions button.ghost { padding: 12px 20px; font-size: 0.78rem; }
 
 /* ----------------------------------- Chat ---------------------------------- */
 
