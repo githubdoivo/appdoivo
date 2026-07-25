@@ -271,3 +271,33 @@ test('the owner can reset event content, users are untouched', async () => {
   const users = await api('GET', '/admin/users', { token: ADMIN });
   assert.ok(users.data.some((u) => u.id === userId), 'user accounts must survive a content reset');
 });
+
+/* ----------------------------------- Chat ---------------------------------- */
+
+test('posting and reading a chat message', async () => {
+  const post = await api('POST', '/chat/messages', { token: ADMIN, body: { text: 'ola pessoal' } });
+  assert.equal(post.status, 201);
+
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  assert.equal(list.status, 200);
+  const found = list.data.messages.find((m) => m.text === 'ola pessoal');
+  assert.ok(found, 'posted message should appear in the list');
+  assert.equal(found.author, 'Test Admin');
+});
+
+test('an empty chat message is rejected', async () => {
+  const r = await api('POST', '/chat/messages', { token: ADMIN, body: { text: '   ' } });
+  assert.equal(r.status, 400);
+});
+
+test('chat keeps only the 20 most recent messages', async () => {
+  for (let i = 0; i < 25; i++) {
+    await api('POST', '/chat/messages', { token: ADMIN, body: { text: `msg-${i}` } });
+  }
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  assert.ok(list.data.messages.length <= 20, `expected at most 20 messages, got ${list.data.messages.length}`);
+  // The oldest ones (msg-0..msg-4) must have been trimmed; the latest survive.
+  const texts = list.data.messages.map((m) => m.text);
+  assert.ok(!texts.includes('msg-0'), 'oldest message should have been pruned');
+  assert.ok(texts.includes('msg-24'), 'most recent message should still be there');
+});

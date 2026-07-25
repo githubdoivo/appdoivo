@@ -54,7 +54,54 @@ function showApp(me) {
   loadConsequences();
   loadVotes();
   applyDeepLinkParams();
+  if (!me.tutorialSeen) startTutorial();
 }
+
+/* ------------------------------- Tutorial --------------------------------- */
+// First-session walkthrough. Tied to the account (tutorial_seen on the
+// user row), not localStorage, so it doesn't repeat on a new device and
+// doesn't reappear just because storage got cleared.
+
+const TUTORIAL_STEPS = [
+  ['tutorial_1_title', 'tutorial_1_text'],
+  ['tutorial_2_title', 'tutorial_2_text'],
+  ['tutorial_3_title', 'tutorial_3_text'],
+  ['tutorial_4_title', 'tutorial_4_text'],
+  ['tutorial_5_title', 'tutorial_5_text'],
+];
+let tutorialStep = 0;
+
+function renderTutorialStep() {
+  const [titleKey, textKey] = TUTORIAL_STEPS[tutorialStep];
+  $('tutorial-title').textContent = t(titleKey);
+  $('tutorial-text').textContent = t(textKey);
+  $('tutorial-next').textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? t('tutorial_done') : t('tutorial_next');
+  $('tutorial-dots').innerHTML = TUTORIAL_STEPS
+    .map((_, i) => `<span class="dot${i === tutorialStep ? ' active' : ''}"></span>`)
+    .join('');
+}
+
+function startTutorial() {
+  tutorialStep = 0;
+  renderTutorialStep();
+  $('tutorial-overlay').classList.remove('hidden');
+}
+
+async function endTutorial() {
+  $('tutorial-overlay').classList.add('hidden');
+  try { await api('/me/tutorial-seen', { method: 'POST' }); } catch { /* not critical */ }
+}
+
+$('tutorial-next').addEventListener('click', () => {
+  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+    tutorialStep++;
+    renderTutorialStep();
+  } else {
+    endTutorial();
+  }
+});
+
+$('tutorial-skip').addEventListener('click', () => endTutorial());
 
 /* -------------------------------- Idioma --------------------------------- */
 
@@ -129,13 +176,73 @@ function selectTab(tab) {
   currentTab = tab;
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
+  $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
   applyNight();
   if (currentTab === 'rata') loadConsequences();
   if (currentTab === 'outfit') loadVotes();
+  if (currentTab === 'chat') startChatPolling();
+  else stopChatPolling();
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => selectTab(btn.dataset.tab));
+});
+
+/* --------------------------------- Chat ----------------------------------- */
+// Open, ephemeral group chat. Polled (not real-time/websocket) - simplest
+// fit for this app's minimal-stack style. Messages expire server-side.
+
+let chatPollTimer = null;
+
+function startChatPolling() {
+  loadChat();
+  if (chatPollTimer) return;
+  chatPollTimer = setInterval(loadChat, 3000);
+}
+
+function stopChatPolling() {
+  if (chatPollTimer) {
+    clearInterval(chatPollTimer);
+    chatPollTimer = null;
+  }
+}
+
+function formatChatTime(dateTimeStr) {
+  return (String(dateTimeStr).split(' ')[1] || '').slice(0, 5);
+}
+
+async function loadChat() {
+  try {
+    const { messages } = await api('/chat/messages');
+    const el = $('chat-messages');
+    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+    el.innerHTML = messages.length
+      ? messages.map((m) => `
+        <div class="chat-msg">
+          <div class="chat-msg-head">
+            <span class="chat-msg-author">${esc(m.author)}</span>
+            <span class="chat-msg-time">${formatChatTime(m.created_at)}</span>
+          </div>
+          <div class="chat-msg-text">${esc(m.text)}</div>
+        </div>`).join('')
+      : `<p class="chat-empty">${t('chat_empty')}</p>`;
+    if (wasAtBottom) el.scrollTop = el.scrollHeight;
+  } catch { /* transient network hiccup - the next poll will retry */ }
+}
+
+$('chat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('chat-text');
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    await api('/chat/messages', { method: 'POST', body: { text } });
+    input.value = '';
+    await loadChat();
+    $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 // Notification taps land here with ?tab=&night= so the app opens straight

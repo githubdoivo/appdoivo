@@ -3,6 +3,20 @@ const LANG_KEY = 'appivo_lang';
 
 export const translations = {
   pt: {
+    // Tutorial (primeira sessao)
+    tutorial_skip: 'saltar',
+    tutorial_next: 'seguinte',
+    tutorial_done: 'começar',
+    tutorial_1_title: 'bem-vindo ao appdoivo',
+    tutorial_1_text: 'um guia rápido antes de começares. leva 30 segundos.',
+    tutorial_2_title: 'a rata',
+    tutorial_2_text: 'a cada hora sai uma consequência nova, ao acaso. também podes sugerir a tua.',
+    tutorial_3_title: 'best outfit',
+    tutorial_3_text: 'vota em quem serviu o melhor look de cada noite, quando a votação estiver aberta.',
+    tutorial_4_title: 'notificações',
+    tutorial_4_text: 'ativa o sino para saberes logo quando sai uma consequência nova ou os resultados são revelados.',
+    tutorial_5_title: 'modo claro / escuro',
+    tutorial_5_text: 'o ícone da lua/sol junto ao sino troca entre um visual mais claro e um mais místico. escolhe o teu.',
     // Login
     tagline: 'bem-vinde. mostra-me a tua chave',
     access_key: 'Chave de acesso',
@@ -16,6 +30,13 @@ export const translations = {
     // Tabs
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
+    tab_chat: 'Chat',
+    // Chat
+    chat_hero: 'conversa aberta. tudo some sozinho.',
+    chat_help: 'as mensagens desaparecem ao fim de 5 minutos ou quando passam de 20 - não ficam guardadas.',
+    chat_ph: 'escreve uma mensagem...',
+    chat_send: 'enviar',
+    chat_empty: 'ainda não há mensagens. sê a primeira pessoa a falar.',
     // Rata Game
     rata_hero: 'a cada hora, uma nova consequência',
     rata_current: 'a consequência do momento',
@@ -118,6 +139,20 @@ export const translations = {
     revealed_msg: 'Revelada: "{text}"',
   },
   en: {
+    // Tutorial (first session)
+    tutorial_skip: 'skip',
+    tutorial_next: 'next',
+    tutorial_done: 'get started',
+    tutorial_1_title: 'welcome to appdoivo',
+    tutorial_1_text: "a quick guide before you start. takes 30 seconds.",
+    tutorial_2_title: 'a rata',
+    tutorial_2_text: 'a new random consequence drops every hour. you can also suggest your own.',
+    tutorial_3_title: 'best outfit',
+    tutorial_3_text: "vote for who served the best look each night, whenever voting is open.",
+    tutorial_4_title: 'notifications',
+    tutorial_4_text: 'turn on the bell to know right away when a new consequence drops or results get revealed.',
+    tutorial_5_title: 'light / dark mode',
+    tutorial_5_text: "the moon/sun icon next to the bell switches between a lighter look and a more mystique one. pick yours.",
     tagline: 'welcome. show me your key',
     access_key: 'Access key',
     enter: 'Enter',
@@ -128,6 +163,12 @@ export const translations = {
     notif_ios_add_home: 'Add to Home Screen',
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
+    tab_chat: 'Chat',
+    chat_hero: 'open chat. everything disappears on its own.',
+    chat_help: "messages disappear after 5 minutes or once there are more than 20 - nothing is kept.",
+    chat_ph: 'write a message...',
+    chat_send: 'send',
+    chat_empty: 'no messages yet. be the first to say something.',
     rata_hero: 'every hour, a new consequence',
     rata_current: 'the consequence of the moment',
     rata_none: 'nothing yet. fate is getting ready.',

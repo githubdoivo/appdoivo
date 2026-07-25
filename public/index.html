@@ -76,6 +76,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="rata" data-i18n="tab_rata">A Rata</button>
       <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Best Outfit</button>
+      <button class="tab" data-tab="chat" data-i18n="tab_chat">Chat</button>
     </nav>
 
     <!-- Rata Game -->
@@ -127,7 +128,33 @@
         <ol id="results-list" class="tier" style="margin-top:10px"></ol>
       </div>
     </div>
+
+    <!-- Chat efemero -->
+    <div id="tab-chat" class="tab-panel hidden">
+      <p class="hero-line" data-i18n="chat_hero">Conversa aberta. Tudo some sozinho.</p>
+      <div class="card">
+        <p class="help" data-i18n="chat_help">Explicação</p>
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-form" class="inline" style="margin-top:12px">
+          <input id="chat-text" type="text" maxlength="300" data-i18n-ph="chat_ph" placeholder="Escreve uma mensagem..." autocomplete="off" />
+          <button type="submit" class="small" data-i18n="chat_send">Enviar</button>
+        </form>
+      </div>
+    </div>
   </section>
+
+  <!-- Tutorial de boas-vindas (primeira sessao) -->
+  <div id="tutorial-overlay" class="tutorial-overlay hidden">
+    <div class="tutorial-card">
+      <div class="tutorial-dots" id="tutorial-dots"></div>
+      <h2 id="tutorial-title"></h2>
+      <p id="tutorial-text"></p>
+      <div class="tutorial-actions">
+        <button type="button" id="tutorial-skip" class="ghost" data-i18n="tutorial_skip">Saltar</button>
+        <button type="button" id="tutorial-next" data-i18n="tutorial_next">Seguinte</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/js/app.js"></script>
 </body>
