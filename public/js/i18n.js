@@ -32,7 +32,7 @@ export const translations = {
     // Tabs
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
-    tab_chat: 'Mural',
+    tab_chat: 'Wall',
     // Mural (parede onde se afixam mensagens ate desaparecerem)
     chat_hero: 'um mural aberto. tudo desaparece sozinho.',
     chat_help: 'as mensagens ficam afixadas por 5 minutos ou até passarem de 20 - depois desaparecem.',
