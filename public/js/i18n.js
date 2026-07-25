@@ -13,6 +13,7 @@ export const translations = {
     notif_enable: 'Notificações',
     notif_on: 'Notificações ativas',
     notif_off: 'Não suportado',
+    notif_ios_add_home: 'Adiciona ao ecrã principal',
     // Tabs
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
@@ -105,6 +106,7 @@ export const translations = {
     notif_enable: 'Notifications',
     notif_on: 'Notifications on',
     notif_off: 'Not supported',
+    notif_ios_add_home: 'Add to Home Screen',
     tab_rata: 'A Rata',
     tab_outfit: 'Best Outfit',
     rata_hero: 'every hour, a new consequence',
