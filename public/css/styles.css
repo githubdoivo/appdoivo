@@ -211,8 +211,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   line-height: 1;
 }
 /* Ajuste optico: o glifo do emoji/simbolo nao fica centrado no proprio box */
-#notif-btn { padding-left: 2px; padding-top: 3px; }
-#menu-toggle { padding-left: 1px; }
+#notif-btn { transform: translate(1px, 2px); }
+#menu-toggle { transform: translateX(1px); }
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
 /* Menu compacto (admin, sair) atras de um botao */
