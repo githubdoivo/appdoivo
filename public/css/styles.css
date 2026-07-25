@@ -62,6 +62,7 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
+  --brand:    #8a4630;
 }
 
 html.mode-dark {
@@ -79,6 +80,7 @@ html.mode-dark {
   --clay:     #cf9a5c;
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
+  --brand:    #e2a878;
 }
 
 * { box-sizing: border-box; }
@@ -249,9 +251,12 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   gap: 12px;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-/* Hardcoded, not var(--clay): the logo keeps one identity color always,
-   regardless of active tab, night theme, or light/dark mode. */
-.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: #a96b4b; }
+/* Uses --brand (declared on <html> alongside mode-light/mode-dark, not
+   var(--clay)): the logo keeps one identity color regardless of active
+   tab or night theme, but still adapts to light/dark mode so it never
+   washes out against either background. The fallback matches the old
+   fixed color, for the brief moment before applyMode() runs. */
+.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: var(--brand, #a96b4b); }
 .brand .badge,
 .user-row-name .badge {
   font-family: var(--body);
