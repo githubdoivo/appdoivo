@@ -40,15 +40,36 @@ export function removeSubscription(endpoint) {
   db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
 }
 
-/** Sends a notification to every subscriber. Cleans up invalid subscriptions. */
+/** Picks the localized string for a field that may be `{ pt, en }` or a plain string. */
+function localize(field, lang) {
+  if (field && typeof field === 'object') return field[lang] || field.pt || field.en;
+  return field;
+}
+
+/**
+ * Sends a notification to every subscriber, in each recipient's own
+ * `lang` (last language they selected in the app; defaults to 'pt').
+ * `payload.title`/`payload.body` may be a plain string (sent as-is to
+ * everyone) or `{ pt, en }` to localize per recipient. Cleans up invalid
+ * subscriptions.
+ */
 export async function broadcast(payload) {
   if (!configured) return { sent: 0, failed: 0 };
-  const rows = db.prepare('SELECT endpoint, subscription FROM push_subscriptions').all();
-  const body = JSON.stringify(payload);
+  const rows = db.prepare(`
+    SELECT s.endpoint, s.subscription, u.lang
+    FROM push_subscriptions s
+    JOIN users u ON u.id = s.user_id
+  `).all();
   let sent = 0;
   let failed = 0;
 
   await Promise.all(rows.map(async (row) => {
+    const lang = row.lang === 'en' ? 'en' : 'pt';
+    const body = JSON.stringify({
+      ...payload,
+      title: localize(payload.title, lang),
+      body: localize(payload.body, lang),
+    });
     try {
       await webpush.sendNotification(JSON.parse(row.subscription), body);
       sent++;

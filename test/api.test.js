@@ -301,3 +301,23 @@ test('chat keeps only the 20 most recent messages', async () => {
   assert.ok(!texts.includes('msg-0'), 'oldest message should have been pruned');
   assert.ok(texts.includes('msg-24'), 'most recent message should still be there');
 });
+
+/* ------------------------------ Language preference ------------------------ */
+
+test('a user can set their language preference, and it is reflected on /me', async () => {
+  const r = await api('POST', '/me/lang', { token: ADMIN, body: { lang: 'en' } });
+  assert.equal(r.status, 200);
+
+  const me = await api('GET', '/me', { token: ADMIN });
+  assert.equal(me.data.lang, 'en');
+
+  // Reset back to pt so it doesn't bleed into other tests relying on ADMIN.
+  await api('POST', '/me/lang', { token: ADMIN, body: { lang: 'pt' } });
+});
+
+test('an invalid language value falls back to pt', async () => {
+  const r = await api('POST', '/me/lang', { token: ADMIN, body: { lang: 'xx' } });
+  assert.equal(r.status, 200);
+  const me = await api('GET', '/me', { token: ADMIN });
+  assert.equal(me.data.lang, 'pt');
+});

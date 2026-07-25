@@ -25,7 +25,8 @@ db.exec(`
     is_admin   INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
-    tutorial_seen INTEGER NOT NULL DEFAULT 0
+    tutorial_seen INTEGER NOT NULL DEFAULT 0,
+    lang TEXT NOT NULL DEFAULT 'pt'
   );
 
   CREATE TABLE IF NOT EXISTS consequences (
@@ -126,6 +127,12 @@ if (!columnExists('users', 'updated_at')) {
 // tutorial yet. 0 is a constant, so a plain ALTER TABLE is fine here.
 if (!columnExists('users', 'tutorial_seen')) {
   db.exec('ALTER TABLE users ADD COLUMN tutorial_seen INTEGER NOT NULL DEFAULT 0');
+}
+
+// Migration: last language a user selected in the app, so push notifications
+// can be sent in their own language instead of a fixed default.
+if (!columnExists('users', 'lang')) {
+  db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'pt'");
 }
 
 // Migration: per-day voting -> per-night voting.

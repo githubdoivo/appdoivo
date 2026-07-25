@@ -64,3 +64,40 @@ export async function enablePush() {
   await api('/push/subscribe', { method: 'POST', body: { subscription } });
   return true;
 }
+
+/** Updates a notif icon button (any page) to match current support/state. */
+export function refreshNotifButton(btnId = 'notif-btn') {
+  const notifBtn = document.getElementById(btnId);
+  if (!notifBtn) return;
+  const state = pushSupport();
+
+  if (state === 'unsupported') {
+    notifBtn.classList.add('hidden');
+    return;
+  }
+
+  notifBtn.classList.remove('hidden');
+  const isOn = state === 'granted';
+  const needsHomeScreen = state === 'ios-add-home';
+  notifBtn.classList.toggle('active', isOn);
+  const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
+  notifBtn.title = label;
+  notifBtn.setAttribute('aria-label', label);
+}
+
+/** Wires a notif icon button's click handler (any page). */
+export function wireNotifButton(btnId = 'notif-btn') {
+  const notifBtn = document.getElementById(btnId);
+  if (!notifBtn) return;
+  notifBtn.addEventListener('click', async () => {
+    if (pushSupport() === 'granted') {
+      alert(t('notif_already_on_msg'));
+      return;
+    }
+    try {
+      const ok = await enablePush();
+      if (ok) alert(t('notif_enabled_msg'));
+    } catch { /* mensagens tratadas acima */ }
+    refreshNotifButton(btnId);
+  });
+}
