@@ -14,12 +14,18 @@ export function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Token em falta.' });
   }
 
-  const user = db.prepare('SELECT id, name, is_admin, is_owner FROM users WHERE token_hash = ?').get(hashToken(token));
+  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) {
     return res.status(401).json({ error: 'Token invalido.' });
   }
 
-  req.user = { id: user.id, name: user.name, isAdmin: !!user.is_admin, isOwner: !!user.is_owner };
+  req.user = {
+    id: user.id,
+    name: user.name,
+    isAdmin: !!user.is_admin,
+    isOwner: !!user.is_owner,
+    tutorialSeen: !!user.tutorial_seen,
+  };
   next();
 }
 

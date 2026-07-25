@@ -62,6 +62,13 @@ async function loginPage(context, token, path = '/') {
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
   await page.goto(base + path);
   await page.waitForSelector(path === '/admin.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: 5000 });
+  // First-session tutorial overlay would otherwise intercept every click in
+  // tests that aren't specifically testing it - skip it if it's showing.
+  const skipBtn = await page.$('#tutorial-skip');
+  if (skipBtn && await skipBtn.isVisible()) {
+    await skipBtn.click();
+    await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: 5000 });
+  }
   return page;
 }
 
@@ -86,7 +93,7 @@ for (const deviceName of IOS_DEVICES) {
     await context.close();
   });
 
-  test(`main app (rata + best outfit tabs) has no horizontal overflow on ${deviceName}`, async () => {
+  test(`main app (rata + best outfit + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
     const context = await iphoneContext(deviceName);
     const page = await loginPage(context, ADMIN, '/');
     const rataOverflow = await horizontalOverflow(page);
@@ -96,6 +103,11 @@ for (const deviceName of IOS_DEVICES) {
     await page.waitForTimeout(150);
     const outfitOverflow = await horizontalOverflow(page);
     assert.ok(outfitOverflow <= 1, `"best outfit" tab overflows by ${outfitOverflow}px on ${deviceName}`);
+
+    await page.click('[data-tab="chat"]');
+    await page.waitForTimeout(150);
+    const chatOverflow = await horizontalOverflow(page);
+    assert.ok(chatOverflow <= 1, `"chat" tab overflows by ${chatOverflow}px on ${deviceName}`);
     await context.close();
   });
 
@@ -258,6 +270,72 @@ test('dark/light mode toggles, persists, and overrides the active night theme', 
   // The mystique dark card background is a dark violet (#1f1a2b = rgb(31,26,43)),
   // nowhere near the light theme-rata card tone - confirms the override is real.
   assert.equal(afterReload.cardBg, 'rgb(31, 26, 43)', 'card background does not reflect dark mode over the night theme');
+
+  await context.close();
+});
+
+/* ------------------------------- Tutorial ---------------------------------- */
+
+test('first-session tutorial shows once, steps through, then never shows again', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'tutorialtestuser' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), created.token);
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)');
+
+  // Shows immediately on a fresh account, on step 1.
+  await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: 5000 });
+  const firstTitle = await page.$eval('#tutorial-title', (el) => el.textContent);
+  assert.ok(firstTitle.length > 0, 'first tutorial step has no title');
+  let activeDots = await page.$$eval('.tutorial-dots .dot.active', (els) => els.length);
+  assert.equal(activeDots, 1, 'exactly one dot should be active at a time');
+
+  // Step through every step via "next".
+  for (let i = 0; i < 4; i++) {
+    const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
+    await page.click('#tutorial-next');
+    await page.waitForTimeout(100);
+    const titleAfter = await page.$eval('#tutorial-title', (el) => el.textContent);
+    assert.notEqual(titleAfter, titleBefore, `step ${i + 2} did not render new content`);
+  }
+
+  // Last step's button finishes the tutorial instead of advancing further.
+  await page.click('#tutorial-next');
+  await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: 5000 });
+
+  // Reloading (new "session") must not show it again - it's tied to the account.
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.waitForTimeout(300);
+  const stillHidden = await page.$eval('#tutorial-overlay', (el) => el.classList.contains('hidden'));
+  assert.ok(stillHidden, 'tutorial reappeared after being completed once');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
+/* ----------------------------------- Chat ---------------------------------- */
+
+test('sending a chat message shows it in the list for another user', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.click('[data-tab="chat"]');
+  await page.waitForTimeout(200);
+
+  const unique = `hello-${Date.now()}`;
+  await page.fill('#chat-text', unique);
+  await page.click('#chat-form button[type=submit]');
+  await page.waitForTimeout(300);
+
+  const seenBySender = await page.evaluate(() => document.getElementById('chat-messages').textContent);
+  assert.ok(seenBySender.includes(unique), 'sender does not see their own message');
+
+  // Someone else polling should see it too, without sending anything themselves.
+  const other = await api('GET', '/chat/messages', { token: ADMIN });
+  assert.ok(other.messages.some((m) => m.text === unique));
 
   await context.close();
 });

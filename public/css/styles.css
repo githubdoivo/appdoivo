@@ -327,10 +327,14 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
   gap: 8px;
   min-width: 160px;
   padding: 12px;
-  background: var(--paper-3);
-  border: 1px solid var(--line);
+  /* Glass accent: a translucent, blurred surface floating over the page -
+     used sparingly here (an overlay), not as the app's base look. */
+  background: color-mix(in srgb, var(--paper-3) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgba(36, 30, 20, 0.14);
+  box-shadow: 0 12px 34px rgba(36, 30, 20, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 .menu-panel button.ghost,
 .menu-panel a.ghost { width: 100%; }
@@ -679,3 +683,52 @@ body.theme-rata .card {
 #tab-outfit .vote-option:hover { border-color: var(--ot); }
 #tab-outfit .tier li:first-child::before { color: var(--ot); }
 #tab-outfit input:focus, #tab-outfit textarea:focus { border-color: var(--ot); }
+
+/* ----------------------------- Tutorial overlay --------------------------- */
+
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.tutorial-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 26px 24px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.tutorial-dots { display: flex; justify-content: center; gap: 6px; margin-bottom: 16px; }
+.tutorial-dots .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--line); }
+.tutorial-dots .dot.active { background: var(--clay); }
+.tutorial-card h2 { font-size: 1.4rem; margin-bottom: 10px; }
+.tutorial-card p { color: var(--ink-soft); line-height: 1.5; margin: 0 0 20px; }
+.tutorial-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* ----------------------------------- Chat ---------------------------------- */
+
+.chat-messages {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+.chat-msg { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.chat-msg:last-child { border-bottom: none; }
+.chat-msg-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.chat-msg-author { font-family: var(--body); font-size: 0.66rem; text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
+.chat-msg-time { font-family: var(--body); font-size: 0.62rem; color: var(--ink-soft); white-space: nowrap; }
+.chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
+.chat-empty { color: var(--ink-soft); font-style: italic; font-size: 0.92rem; }

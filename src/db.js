@@ -24,7 +24,8 @@ db.exec(`
     token_enc  TEXT NOT NULL,
     is_admin   INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    tutorial_seen INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS consequences (
@@ -51,6 +52,15 @@ db.exec(`
     endpoint     TEXT NOT NULL UNIQUE,
     subscription TEXT NOT NULL,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Ephemeral open chat: messages expire after 5 minutes or once there are
+  -- more than 20, whichever comes first (see src/chat.js).
+  CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 `);
 
@@ -110,6 +120,12 @@ if (!columnExists('users', 'is_owner')) {
 if (!columnExists('users', 'updated_at')) {
   db.exec("ALTER TABLE users ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
   db.exec('UPDATE users SET updated_at = created_at');
+}
+
+// Migration: whether a user has been shown the first-session onboarding
+// tutorial yet. 0 is a constant, so a plain ALTER TABLE is fine here.
+if (!columnExists('users', 'tutorial_seen')) {
+  db.exec('ALTER TABLE users ADD COLUMN tutorial_seen INTEGER NOT NULL DEFAULT 0');
 }
 
 // Migration: per-day voting -> per-night voting.

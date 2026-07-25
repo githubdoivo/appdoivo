@@ -29,6 +29,7 @@ import {
   removeSubscription,
   broadcast,
 } from './push.js';
+import { listMessages, postMessage } from './chat.js';
 
 const router = Router();
 
@@ -48,6 +49,11 @@ router.use(authenticate);
 
 router.get('/me', (req, res) => {
   res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
+});
+
+router.post('/me/tutorial-seen', (req, res) => {
+  db.prepare('UPDATE users SET tutorial_seen = 1 WHERE id = ?').run(req.user.id);
+  res.json({ ok: true });
 });
 
 /* ------------------------------ Consequences ----------------------------- */
@@ -99,6 +105,20 @@ router.post('/votes', (req, res) => {
   const night = req.body?.night;
   if (!contestantId) return res.status(400).json({ error: 'Escolhe um concorrente.' });
   const result = castVote(req.user.id, contestantId, night);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json({ ok: true });
+});
+
+/* ---------------------------------- Chat ---------------------------------- */
+// Open, ephemeral group chat - messages expire after 5 minutes or once
+// there are more than 20, whichever comes first (see src/chat.js).
+
+router.get('/chat/messages', (req, res) => {
+  res.json({ messages: listMessages() });
+});
+
+router.post('/chat/messages', (req, res) => {
+  const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json({ ok: true });
 });
