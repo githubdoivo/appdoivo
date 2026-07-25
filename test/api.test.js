@@ -197,3 +197,31 @@ test('reset clears the night votes and reopens voting', async () => {
   const v = await api('POST', '/votes', { token: userToken, body: { contestantId, night: NIGHT } });
   assert.equal(v.status, 201);
 });
+
+/* --------------------------- Owner content reset -------------------------- */
+// Wipes contestants/votes/consequences - runs last so it doesn't disturb
+// the shared state the tests above rely on.
+
+test('a non-owner admin cannot reset event content', async () => {
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const r = await api('POST', '/admin/reset-content', { token: userToken });
+  assert.equal(r.status, 403);
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+});
+
+test('the owner can reset event content, users are untouched', async () => {
+  const r = await api('POST', '/admin/reset-content', { token: ADMIN });
+  assert.equal(r.status, 200);
+
+  const contestants = await api('GET', `/admin/contestants?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(contestants.data.contestants.length, 0);
+
+  const consequences = await api('GET', '/admin/consequences', { token: ADMIN });
+  assert.equal(consequences.data.length, 0);
+
+  const voting = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.ok(voting.data.nights.every((n) => n.status === 'closed'));
+
+  const users = await api('GET', '/admin/users', { token: ADMIN });
+  assert.ok(users.data.some((u) => u.id === userId), 'user accounts must survive a content reset');
+});

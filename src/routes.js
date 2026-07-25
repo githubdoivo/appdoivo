@@ -185,6 +185,16 @@ router.patch('/admin/users/:id/admin', (req, res) => {
   res.json({ ok: true, is_admin: isAdmin });
 });
 
+// Owner-only: wipe game content (contestants, votes, consequences) to start
+// a fresh event, without touching user accounts/keys. Production data is
+// otherwise permanent (persistent volume, never reset on deploy).
+router.post('/admin/reset-content', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM contestants').run(); // cascades to votes
+  db.prepare('DELETE FROM consequences').run();
+  for (const night of NIGHTS) setSetting(`voting_status_${night}`, 'closed');
+  res.json({ ok: true });
+});
+
 // Votes for a night (full admin view)
 router.get('/admin/votes', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
