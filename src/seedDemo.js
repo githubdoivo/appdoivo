@@ -1,10 +1,14 @@
-// Populates demo data: contestants, votes, consequences. Idempotent - only
-// adds data for tables that are still empty, so it's safe to call on every
-// boot (used automatically in QA via SEED_DEMO=true, see server.js).
-import db, { generateUserToken, setSetting } from './db.js';
+// Populates demo users + consequences. Idempotent - only adds data for
+// tables that are still empty, so it's safe to call on every boot (used
+// automatically in QA via SEED_DEMO=true, see server.js).
+//
+// Contestants are intentionally NOT seeded here - they're event-specific
+// and should always start empty on every deploy, added fresh by the admin.
+// Only the user list is a stable template (real names), so QA login
+// credentials are always ready without losing/regenerating them.
+import db, { generateUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
-import { NIGHTS } from './nights.js';
 
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
@@ -25,53 +29,24 @@ const CONSEQUENCES_PENDING = [
 export function seedDemo() {
   const day = today();
 
-  // 1) Contestants per night (Best Outfit) -----------------------------------
-  const insC = db.prepare('INSERT INTO contestants (name, night) VALUES (?, ?)');
-  for (const night of NIGHTS) {
-    const existing = db.prepare('SELECT COUNT(*) AS n FROM contestants WHERE night = ?').get(night).n;
-    if (existing === 0) {
-      for (const name of NAMES) insC.run(name, night);
-      console.log(`[seed-demo] Added ${NAMES.length} contestants for night "${night}".`);
-    }
-  }
-
-  // 2) Demo users --------------------------------------------------------------
+  // 1) Demo users ------------------------------------------------------------
+  // Displayed name keeps accents (NAMES as-is); the access key is always
+  // stripped of them by generateUserToken, e.g. "Carla Mendes" -> "carlamendes1234".
   const nonAdmin = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
   const demoUsers = [];
-  if (nonAdmin < 25) {
-    const insU = db.prepare('INSERT INTO users (name, token_hash, token_enc, is_admin) VALUES (?, ?, ?, 0)');
-    for (let i = 1; i <= 30; i++) {
-      const name = `Convidado ${i}`;
+  if (nonAdmin < NAMES.length) {
+    const insU = db.prepare("INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
+    for (const name of NAMES) {
       const tok = generateUserToken(name);
       const info = insU.run(name, hashToken(tok), encryptToken(tok));
       demoUsers.push(info.lastInsertRowid);
     }
-    console.log('[seed-demo] Created 30 demo users (Convidado 1..30).');
+    console.log(`[seed-demo] Created ${NAMES.length} demo users.`);
   } else {
     db.prepare('SELECT id FROM users WHERE is_admin = 0').all().forEach((u) => demoUsers.push(u.id));
   }
 
-  // 3) Demo votes per night (weighted distribution) -----------------------------
-  for (const night of NIGHTS) {
-    const contestants = db.prepare('SELECT id, name FROM contestants WHERE night = ?').all(night);
-    const votesExist = db.prepare('SELECT COUNT(*) AS n FROM votes WHERE night = ?').get(night).n;
-    if (votesExist === 0 && contestants.length) {
-      const weighted = [];
-      contestants.forEach((c, i) => {
-        const w = Math.max(1, Math.round(8 * Math.random()) + (i % 5 === 0 ? 6 : 0));
-        for (let k = 0; k < w; k++) weighted.push(c.id);
-      });
-      const insV = db.prepare('INSERT OR IGNORE INTO votes (user_id, contestant_id, night) VALUES (?, ?, ?)');
-      for (const uid of demoUsers) {
-        const cid = weighted[Math.floor(Math.random() * weighted.length)];
-        insV.run(uid, cid, night);
-      }
-      const total = db.prepare('SELECT COUNT(*) AS n FROM votes WHERE night = ?').get(night).n;
-      console.log(`[seed-demo] Recorded ${total} demo votes in night "${night}".`);
-    }
-  }
-
-  // 4) Consequences --------------------------------------------------------------
+  // 2) Consequences ------------------------------------------------------------
   const consExist = db.prepare('SELECT COUNT(*) AS n FROM consequences').get().n;
   if (consExist === 0 && demoUsers.length) {
     const insCons = db.prepare('INSERT INTO consequences (user_id, text, day, status) VALUES (?, ?, ?, ?)');
@@ -88,9 +63,4 @@ export function seedDemo() {
     });
     console.log(`[seed-demo] Added 1 revealed consequence and ${CONSEQUENCES_PENDING.length} pending.`);
   }
-
-  // 5) Voting status for the preview -----------------------------------------------
-  // Night 1 closed (shows results), night 2 open (shows voting).
-  setSetting(`voting_status_${NIGHTS[0]}`, 'closed');
-  if (NIGHTS[1]) setSetting(`voting_status_${NIGHTS[1]}`, 'open');
 }

@@ -1,5 +1,6 @@
 import { api, getToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
+import { applyMode, toggleMode } from './theme.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -43,6 +44,7 @@ let adminPromotionEnabled = false;
 let isOwner = false;
 
 async function boot() {
+  applyMode();
   applyI18n();
   updateLangUI();
   if (!getToken()) {
@@ -91,6 +93,8 @@ function updateLangUI() {
   });
 }
 
+$('theme-toggle').addEventListener('click', () => toggleMode());
+
 document.querySelectorAll('#lang-switch button').forEach((b) => {
   b.addEventListener('click', () => {
     setLang(b.dataset.lang);
@@ -112,14 +116,29 @@ $('admin-night').addEventListener('change', () => {
   loadContestants();
 });
 
+// What clicking "reveal next" will do, keyed by the *current* phase.
+const NEXT_REVEAL_LABEL = {
+  hidden: 'reveal_next_btn_third',
+  third: 'reveal_next_btn_second',
+  second: 'reveal_next_btn_first',
+  first: 'reveal_next_btn_all',
+  all: 'reveal_next_btn_done',
+};
+
 async function loadVotingState() {
   const { nights } = await api('/admin/voting');
   const night = currentNight();
-  const open = nights.some((n) => n.night === night && n.status === 'open');
+  const info = nights.find((n) => n.night === night);
+  const open = info?.status === 'open';
   const label = $('voting-state-label');
   label.textContent = open ? t('voting_is_open') : t('voting_is_closed');
   label.classList.toggle('is-open', open);
   label.classList.toggle('is-closed', !open);
+
+  const phase = info?.resultsPhase || 'hidden';
+  const revealBtn = $('reveal-next-btn');
+  revealBtn.textContent = t(NEXT_REVEAL_LABEL[phase]);
+  revealBtn.disabled = phase === 'all' || open;
 }
 
 async function setVoting(action) {
@@ -134,6 +153,16 @@ $('voting-close-btn').addEventListener('click', () => setVoting('close'));
 $('voting-reset-btn').addEventListener('click', () => {
   if (!confirm(t('confirm_reset'))) return;
   setVoting('reset');
+});
+
+$('reveal-next-btn').addEventListener('click', async () => {
+  $('reveal-phase-msg').textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/reveal-next`, { method: 'POST' });
+    loadVotingState();
+  } catch (err) {
+    $('reveal-phase-msg').textContent = err.message;
+  }
 });
 
 /* ------------------------------ Definicoes ------------------------------- */

@@ -1,6 +1,29 @@
-import db from './db.js';
+import db, { getSetting, setSetting } from './db.js';
 import { nightStatus } from './time.js';
 import { isNight } from './nights.js';
+
+// Regular users don't see the full ranking the instant voting closes - the
+// admin reveals it in stages (3rd, 2nd, 1st, then everyone), like an
+// awards countdown, at their own pace during the event.
+const REVEAL_PHASES = ['hidden', 'third', 'second', 'first', 'all'];
+
+/** Current results-reveal phase for a night. */
+export function getResultsPhase(night) {
+  return getSetting(`results_phase_${night}`, 'hidden');
+}
+
+/** Resets the reveal phase back to hidden (voting opened/closed/reset). */
+export function resetResultsPhase(night) {
+  setSetting(`results_phase_${night}`, 'hidden');
+}
+
+/** Advances to the next reveal phase (stays at 'all' once fully revealed). */
+export function advanceResultsPhase(night) {
+  const idx = REVEAL_PHASES.indexOf(getResultsPhase(night));
+  const next = REVEAL_PHASES[Math.min(idx + 1, REVEAL_PHASES.length - 1)];
+  setSetting(`results_phase_${night}`, next);
+  return next;
+}
 
 /** Contestants registered for a night. */
 export function contestantsForNight(night) {
@@ -48,9 +71,9 @@ export function castVote(userId, contestantId, night) {
   return { ok: true };
 }
 
-/** Ranking of the most-voted contestants for a night. */
+/** Full ranking of contestants for a night, each with its rank (admin view). */
 export function resultsForNight(night) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT c.id, c.name, COUNT(v.id) AS votes
     FROM contestants c
     LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night
@@ -58,4 +81,18 @@ export function resultsForNight(night) {
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
   `).all(night);
+  return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+/** Results a regular user may see right now, filtered by the reveal phase. */
+export function visibleResultsForNight(night) {
+  const all = resultsForNight(night);
+  const phase = getResultsPhase(night);
+  let results;
+  if (phase === 'hidden') results = [];
+  else if (phase === 'third') results = all.filter((r) => r.rank === 3);
+  else if (phase === 'second') results = all.filter((r) => r.rank === 2 || r.rank === 3);
+  else if (phase === 'first') results = all.filter((r) => r.rank <= 3);
+  else results = all; // 'all'
+  return { phase, results };
 }

@@ -78,6 +78,25 @@ test('a normal user cannot access the admin panel', async () => {
   assert.equal(r.status, 403);
 });
 
+test('Manage Users list: owner pinned first, then most recently created/updated', async () => {
+  const older = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Older' } });
+  const newer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Newer' } });
+
+  const list1 = await api('GET', '/admin/users', { token: ADMIN });
+  assert.equal(list1.data[0].is_owner, true, 'owner must be first');
+  assert.equal(list1.data[1].id, newer.data.id, 'most recently created user comes right after the owner');
+
+  // Touch "older" (role change) so it becomes the most recently updated.
+  await api('PATCH', `/admin/users/${older.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  await api('PATCH', `/admin/users/${older.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+
+  const list2 = await api('GET', '/admin/users', { token: ADMIN });
+  assert.equal(list2.data[1].id, older.data.id, 'the user just updated moves back to the top');
+
+  await api('DELETE', `/admin/users/${older.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${newer.data.id}`, { token: ADMIN });
+});
+
 test('promoting a user grants admin access, but not owner-only Manage Users access', async () => {
   const promote = await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
   assert.equal(promote.status, 200);
@@ -176,15 +195,42 @@ test('nights are independent: voting in another night is possible', async () => 
   assert.equal(v.status, 201); // already voted in 'furnished', but not yet in this night
 });
 
-test('closing the night publishes the results', async () => {
+test('closing the night hides results until the admin reveals them in stages', async () => {
   const close = await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN });
   assert.equal(close.data.votingStatus, 'closed');
 
-  const status = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
-  assert.equal(status.data.status, 'closed');
-  assert.ok(Array.isArray(status.data.results));
-  const top = status.data.results.find((r) => r.id === contestantId);
-  assert.equal(top.votes, 1);
+  // Closed but not revealed yet: no results visible to regular users.
+  const hidden = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
+  assert.equal(hidden.data.status, 'closed');
+  assert.equal(hidden.data.resultsPhase, 'hidden');
+  assert.deepEqual(hidden.data.results, []);
+
+  // Only one contestant this night (rank 1) - "third"/"second" phases have
+  // nothing at those ranks yet, so results stay empty until "first".
+  await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN }); // -> third
+  const third = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
+  assert.equal(third.data.resultsPhase, 'third');
+  assert.deepEqual(third.data.results, []);
+
+  await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN }); // -> second
+  const second = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
+  assert.equal(second.data.resultsPhase, 'second');
+  assert.deepEqual(second.data.results, []);
+
+  await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN }); // -> first
+  const first = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
+  assert.equal(first.data.resultsPhase, 'first');
+  const topFirst = first.data.results.find((r) => r.id === contestantId);
+  assert.equal(topFirst.votes, 1);
+
+  await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN }); // -> all
+  const all = await api('GET', `/votes/status?night=${NIGHT}`, { token: userToken });
+  assert.equal(all.data.resultsPhase, 'all');
+  assert.ok(all.data.results.find((r) => r.id === contestantId));
+
+  // Advancing past "all" is a no-op.
+  const again = await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN });
+  assert.equal(again.data.resultsPhase, 'all');
 });
 
 test('reset clears the night votes and reopens voting', async () => {

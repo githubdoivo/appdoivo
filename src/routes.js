@@ -17,6 +17,10 @@ import {
   myVoteForNight,
   castVote,
   resultsForNight,
+  visibleResultsForNight,
+  resetResultsPhase,
+  advanceResultsPhase,
+  getResultsPhase,
 } from './votes.js';
 import {
   getPublicKey,
@@ -77,12 +81,16 @@ router.get('/consequences/current', (req, res) => {
 router.get('/votes/status', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
   const status = nightStatus(night);
+  const { phase, results } = status === 'closed'
+    ? visibleResultsForNight(night)
+    : { phase: null, results: null };
   res.json({
     night,
     status,
     contestants: contestantsForNight(night),
     myVote: myVoteForNight(req.user.id, night),
-    results: status === 'closed' ? resultsForNight(night) : null,
+    results,
+    resultsPhase: phase,
   });
 });
 
@@ -125,7 +133,7 @@ router.use('/admin/users', requireOwner);
 // Users
 router.get('/admin/users', (req, res) => {
   const users = db.prepare(
-    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_admin DESC, name'
+    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, updated_at DESC'
   ).all();
   res.json(users.map((u) => ({
     id: u.id,
@@ -142,7 +150,7 @@ router.post('/admin/users', (req, res) => {
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
   const token = generateUserToken(name);
   const info = db.prepare(
-    'INSERT INTO users (name, token_hash, token_enc, is_admin) VALUES (?, ?, ?, 0)'
+    "INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(name, hashToken(token), encryptToken(token));
   res.status(201).json({ id: info.lastInsertRowid, name, token });
 });
@@ -181,7 +189,7 @@ router.patch('/admin/users/:id/admin', (req, res) => {
     }
   }
 
-  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, id);
+  db.prepare("UPDATE users SET is_admin = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(isAdmin ? 1 : 0, id);
   res.json({ ok: true, is_admin: isAdmin });
 });
 
@@ -274,7 +282,11 @@ router.put('/admin/settings', (req, res) => {
 // Per-night voting control (Best Outfit): status + open / close / reset.
 router.get('/admin/voting', (req, res) => {
   res.json({
-    nights: NIGHTS.map((night) => ({ night, status: nightStatus(night) })),
+    nights: NIGHTS.map((night) => ({
+      night,
+      status: nightStatus(night),
+      resultsPhase: getResultsPhase(night),
+    })),
   });
 });
 
@@ -282,20 +294,35 @@ router.post('/admin/voting/:night/open', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'open');
+  resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });
 
-router.post('/admin/voting/:night/close', async (req, res) => {
+// Closing just stops voting - it does NOT reveal anything yet. The admin
+// reveals results in stages afterwards via /reveal-next.
+router.post('/admin/voting/:night/close', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'closed');
-  await broadcast({
-    title: 'período de votação encerrado',
-    body: 'we got a winner!',
-    tag: 'results',
-    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
-  });
+  resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
+});
+
+// Advances the results reveal one stage: hidden -> third -> second -> first
+// -> all. The "winner" notification only fires once everyone can be seen.
+router.post('/admin/voting/:night/reveal-next', async (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  const phase = advanceResultsPhase(night);
+  if (phase === 'all') {
+    await broadcast({
+      title: 'período de votação encerrado',
+      body: 'we got a winner!',
+      tag: 'results',
+      url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+    });
+  }
+  res.json({ ok: true, night, resultsPhase: phase });
 });
 
 router.post('/admin/voting/:night/reset', (req, res) => {
@@ -303,6 +330,7 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'open');
+  resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });
 
