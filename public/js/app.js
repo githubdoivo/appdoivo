@@ -36,7 +36,11 @@ function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   if (me.isAdmin) {
-    $('admin-badge').classList.remove('hidden');
+    const adminBadge = $('admin-badge');
+    adminBadge.textContent = me.isOwner ? 'owner' : 'admin';
+    adminBadge.classList.toggle('role-owner', me.isOwner);
+    adminBadge.classList.toggle('role-admin', !me.isOwner);
+    adminBadge.classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
   } else {
     const badge = $('user-badge');
@@ -47,6 +51,7 @@ function showApp(me) {
   refreshNotifButton();
   loadConsequences();
   loadVotes();
+  applyDeepLinkParams();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -115,18 +120,36 @@ $('logout-btn').addEventListener('click', () => {
 
 /* --------------------------------- Tabs ---------------------------------- */
 
+function selectTab(tab) {
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  currentTab = tab;
+  $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
+  $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
+  applyNight();
+  if (currentTab === 'rata') loadConsequences();
+  if (currentTab === 'outfit') loadVotes();
+}
+
 document.querySelectorAll('.tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTab = btn.dataset.tab;
-    $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
-    $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
-    applyNight();
-    if (currentTab === 'rata') loadConsequences();
-    if (currentTab === 'outfit') loadVotes();
-  });
+  btn.addEventListener('click', () => selectTab(btn.dataset.tab));
 });
+
+// Notification taps land here with ?tab=&night= so the app opens straight
+// on the result being announced, instead of just wherever it was left.
+function applyDeepLinkParams() {
+  const params = new URLSearchParams(location.search);
+  const tab = params.get('tab');
+  const night = params.get('night');
+  if (!tab && !night) return;
+
+  if (night && NIGHTS.includes(night)) {
+    localStorage.setItem(NIGHT_KEY, night);
+  }
+  if (tab === 'rata' || tab === 'outfit') {
+    selectTab(tab);
+  }
+  history.replaceState({}, '', location.pathname);
+}
 
 /* ----------------------------- Notificacoes ------------------------------ */
 

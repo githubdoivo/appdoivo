@@ -14,12 +14,12 @@ export function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Token em falta.' });
   }
 
-  const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
+  const user = db.prepare('SELECT id, name, is_admin, is_owner FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) {
     return res.status(401).json({ error: 'Token invalido.' });
   }
 
-  req.user = { id: user.id, name: user.name, isAdmin: !!user.is_admin };
+  req.user = { id: user.id, name: user.name, isAdmin: !!user.is_admin, isOwner: !!user.is_owner };
   next();
 }
 
@@ -27,6 +27,18 @@ export function authenticate(req, res, next) {
 export function requireAdmin(req, res, next) {
   if (!req.user?.isAdmin) {
     return res.status(403).json({ error: 'Acesso restrito ao administrador.' });
+  }
+  next();
+}
+
+/**
+ * Middleware that requires owner privileges. Golden rule: nobody but the
+ * owner may see other users' access keys, so anything that exposes them
+ * (Manage Users) is gated behind this rather than plain requireAdmin.
+ */
+export function requireOwner(req, res, next) {
+  if (!req.user?.isOwner) {
+    return res.status(403).json({ error: 'Acesso restrito ao dono da conta.' });
   }
   next();
 }

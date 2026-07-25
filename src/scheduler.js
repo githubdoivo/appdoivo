@@ -4,14 +4,15 @@ import { getTimezone } from './time.js';
 
 /**
  * Starts the scheduled jobs:
- *  - Every hour (minute 0): reveals a random consequence and notifies.
+ *  - Every hour (minute 0) between 16:00 and 03:00: reveals a random
+ *    consequence and notifies. No reveals 04:00-15:00.
  * (Voting is controlled manually by the admin, not on a schedule.)
  */
 export function startScheduler() {
   const tz = getTimezone();
 
-  // Every hour, at minute 0.
-  cron.schedule('0 * * * *', async () => {
+  // Every hour, at minute 0, hours 16-23 and 0-3 (crosses midnight).
+  cron.schedule('0 16-23,0-3 * * *', async () => {
     try {
       const revealed = await revealRandomConsequence();
       if (revealed) {

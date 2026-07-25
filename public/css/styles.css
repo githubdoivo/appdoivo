@@ -4,7 +4,8 @@
    Night 2 "swamp" (pantano, musgo/oliva)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Italianno&display=swap');
+/* Fonts are loaded via a <link> in <head> (not @import here) so they
+   download in parallel with this stylesheet instead of after it. */
 
 :root {
   --paper:    #e7e3d6;
@@ -196,7 +197,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; }
-.brand .badge {
+.brand .badge,
+.user-row-name .badge {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
@@ -209,6 +211,11 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
 .brand .badge.user-badge.tester-badge { border-color: var(--outfit); color: var(--outfit); }
+
+/* Role badges: owner / admin / user, each its own color. */
+.badge.role-owner { border-color: var(--clay); color: var(--clay); }
+.badge.role-admin { border-color: var(--outfit); color: var(--outfit); }
+.badge.role-user { border-color: var(--rata); color: var(--rata); }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa.
@@ -230,9 +237,8 @@ button.menu-toggle {
 }
 button.icon-btn:hover,
 button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
-/* Ajuste optico: o glifo do emoji/simbolo nao fica centrado no proprio box */
-#notif-btn { transform: translate(1px, 2px); }
-#menu-toggle { transform: translateX(1px); }
+button.icon-btn svg,
+button.menu-toggle svg { width: 19px; height: 19px; display: block; }
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
 /* Menu compacto (admin, sair) atras de um botao */
@@ -380,7 +386,7 @@ button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
 }
 .tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
 .tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
-.tier li:first-child .name { font-weight: 600; }
+.tier li:nth-child(-n+3) .name { font-weight: 600; }
 .tier li:first-child::before { color: var(--outfit); }
 
 /* --------------------------------- Admin --------------------------------- */

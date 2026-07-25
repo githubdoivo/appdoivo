@@ -28,6 +28,9 @@ async function copyToClipboard(text, btn) {
 }
 
 let adminPromotionEnabled = false;
+// Golden rule: nobody but the owner sees other users' access keys, so
+// non-owner admins ("testers") don't get the Manage Users tab at all.
+let isOwner = false;
 
 async function boot() {
   applyI18n();
@@ -43,9 +46,14 @@ async function boot() {
       return;
     }
     adminPromotionEnabled = !!me.adminPromotionEnabled;
+    isOwner = !!me.isOwner;
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
+  }
+  if (!isOwner) {
+    document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
+    selectAdminTab('rata');
   }
   $('admin-content').classList.remove('hidden');
   reloadAll();
@@ -54,7 +62,7 @@ async function boot() {
 function reloadAll() {
   loadSettings();
   loadVotingState();
-  loadUsers();
+  if (isOwner) loadUsers();
   loadContestants();
   loadVotes();
   loadConsequences();
@@ -147,7 +155,7 @@ async function loadUsers() {
       <div class="user-row">
         <div class="user-row-name">
           ${esc(u.name)}
-          ${u.is_owner ? `<span class="badge">${t('owner_badge')}</span>` : u.is_admin ? '<span class="badge">admin</span>' : ''}
+          ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
         </div>
         <div class="user-row-token">${esc(u.token)}</div>
         <div class="row-actions">
@@ -282,15 +290,15 @@ async function loadConsequences() {
 
 /* --------------------------------- Tabs ---------------------------------- */
 
-document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.atab;
-    ['users', 'outfit', 'rata'].forEach((name) => {
-      $(`atab-${name}`).classList.toggle('hidden', name !== tab);
-    });
+function selectAdminTab(tab) {
+  document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
+  ['users', 'outfit', 'rata'].forEach((name) => {
+    $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
+}
+
+document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
+  btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
 
 boot();
