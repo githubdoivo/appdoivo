@@ -323,6 +323,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 
   .topbar { flex-direction: column; align-items: flex-start; }
   .topbar-actions { width: 100%; justify-content: flex-start; }
+  #notif-btn { order: 10; flex-basis: 100%; margin-top: 6px; }
 }
 
 /* ===================== Transicao suave ao trocar de tema ================ */
