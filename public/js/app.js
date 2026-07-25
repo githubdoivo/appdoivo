@@ -147,7 +147,10 @@ function refreshNotifButton() {
   notifBtn.setAttribute('aria-label', label);
 }
 
-$('home-btn').addEventListener('click', () => alert(t('notif_unsupported_msg')));
+$('home-btn').addEventListener('click', () => {
+  closeMenu();
+  alert(t('notif_unsupported_msg'));
+});
 
 $('notif-btn').addEventListener('click', async () => {
   try {
