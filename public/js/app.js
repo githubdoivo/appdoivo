@@ -165,7 +165,6 @@ function refreshNotifButton() {
   notifBtn.classList.remove('hidden');
   const isOn = state === 'granted';
   const needsHomeScreen = state === 'ios-add-home';
-  notifBtn.disabled = isOn;
   notifBtn.classList.toggle('active', isOn);
   const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
   notifBtn.title = label;
@@ -173,6 +172,10 @@ function refreshNotifButton() {
 }
 
 $('notif-btn').addEventListener('click', async () => {
+  if (pushSupport() === 'granted') {
+    alert(t('notif_already_on_msg'));
+    return;
+  }
   try {
     const ok = await enablePush();
     if (ok) alert(t('notif_enabled_msg'));

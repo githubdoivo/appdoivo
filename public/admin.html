@@ -15,7 +15,7 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-name">appdoivo</span>
-        <span class="badge" data-i18n="admin">Admin</span>
+        <span id="role-badge" class="badge">admin</span>
       </div>
       <div class="topbar-actions">
         <div class="lang" id="lang-switch">
@@ -46,6 +46,13 @@
             <button type="submit" class="small" data-i18n="create_user">Criar + gerar chave</button>
           </form>
           <div id="users-list" class="user-list"></div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="reset_content_title">Zona perigosa</h2>
+          <p class="help" data-i18n="reset_content_help">Explicação</p>
+          <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
+          <span id="reset-content-msg" class="muted"></span>
         </div>
       </div>
 
@@ -100,9 +107,8 @@
         </div>
 
         <div class="card">
-          <h2 data-i18n="settings_title">Definições (A Rata)</h2>
+          <h2 data-i18n="timezone">Fuso horário</h2>
           <form id="settings-form" style="margin-top:12px">
-            <label class="field" data-i18n="timezone">Fuso horário</label>
             <input id="timezone" type="text" placeholder="Europe/Lisbon" />
             <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
             <span id="settings-msg" class="muted"></span>

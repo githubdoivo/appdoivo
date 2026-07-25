@@ -6,6 +6,16 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
+// European date order everywhere: "YYYY-MM-DD[ HH:MM:SS]" -> "DD-MM-YYYY[ HH:MM]".
+function formatEuDate(dateStr) {
+  const [y, m, d] = String(dateStr).split(' ')[0].split('-');
+  return `${d}-${m}-${y}`;
+}
+function formatEuDateTime(dateTimeStr) {
+  const [datePart, timePart = ''] = String(dateTimeStr).split(' ');
+  return `${formatEuDate(datePart)} ${timePart.slice(0, 5)}`.trim();
+}
+
 /** Copia texto para o clipboard e dá feedback breve no botão. */
 async function copyToClipboard(text, btn) {
   try {
@@ -51,6 +61,10 @@ async function boot() {
     $('auth-error').textContent = err.message;
     return;
   }
+  const roleBadge = $('role-badge');
+  roleBadge.textContent = isOwner ? 'owner' : 'admin';
+  roleBadge.classList.toggle('role-owner', isOwner);
+  roleBadge.classList.toggle('role-admin', !isOwner);
   if (!isOwner) {
     document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
     selectAdminTab('rata');
@@ -213,6 +227,18 @@ $('user-form').addEventListener('submit', async (e) => {
   }
 });
 
+$('reset-content-btn').addEventListener('click', async () => {
+  if (!confirm(t('confirm_reset_content'))) return;
+  try {
+    await api('/admin/reset-content', { method: 'POST' });
+    $('reset-content-msg').textContent = t('reset_content_done_msg');
+    setTimeout(() => ($('reset-content-msg').textContent = ''), 3000);
+    reloadAll();
+  } catch (err) {
+    $('reset-content-msg').textContent = err.message;
+  }
+});
+
 /* ------------------------------ Concorrentes ----------------------------- */
 
 async function loadContestants() {
@@ -249,7 +275,7 @@ async function loadVotes() {
   const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
   const votesHtml = votes.length
     ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
-      votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(v.created_at)}</td></tr>`).join('')
+      votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
   const resultsHtml = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
@@ -285,7 +311,7 @@ async function loadConsequences() {
     ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
       rows.map((c) => `<tr>
         <td>${esc(c.text)}</td><td>${esc(c.author)}</td>
-        <td class="muted">${esc(c.day)}</td>
+        <td class="muted">${esc(formatEuDate(c.day))}</td>
         <td>${c.status === 'used' ? t('status_used') : t('status_pending')}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }

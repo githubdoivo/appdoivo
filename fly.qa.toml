@@ -17,6 +17,9 @@ primary_region = "cdg"
   # Only set in QA - lets admins promote/revoke other users' admin status.
   # Production never sets this; only the owner has admin access there.
   ENABLE_ADMIN_PROMOTION = "true"
+  # Only set in QA - the DB is ephemeral here, so auto-load demo/mock data
+  # (contestants, votes, consequences) on every boot. Never set in prod.
+  SEED_DEMO = "true"
 
 [http_service]
   internal_port = 3000
