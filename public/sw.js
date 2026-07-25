@@ -29,13 +29,21 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ('focus' in client) return client.focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      const client = clients[0];
+      if (!client) return self.clients.openWindow(url);
+      // Take the user straight to the result being announced, not just
+      // whatever page the app happened to be left open on.
+      if ('navigate' in client) {
+        try {
+          await client.navigate(url);
+        } catch {
+          // Navigate can be refused in some states; focusing is still better than nothing.
+        }
       }
-      return self.clients.openWindow(url);
+      return 'focus' in client ? client.focus() : undefined;
     })
   );
 });

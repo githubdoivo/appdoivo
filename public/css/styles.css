@@ -230,9 +230,8 @@ button.menu-toggle {
 }
 button.icon-btn:hover,
 button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
-/* Ajuste optico: o glifo do emoji/simbolo nao fica centrado no proprio box */
-#notif-btn { transform: translate(1px, 2px); }
-#menu-toggle { transform: translateX(1px); }
+button.icon-btn svg,
+button.menu-toggle svg { width: 19px; height: 19px; display: block; }
 .icon-btn.active { border-color: var(--rata); opacity: 0.6; }
 
 /* Menu compacto (admin, sair) atras de um botao */
@@ -380,7 +379,7 @@ button.menu-toggle:hover { border-color: var(--ink); background: transparent; }
 }
 .tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
 .tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
-.tier li:first-child .name { font-weight: 600; }
+.tier li:nth-child(-n+3) .name { font-weight: 600; }
 .tier li:first-child::before { color: var(--outfit); }
 
 /* --------------------------------- Admin --------------------------------- */

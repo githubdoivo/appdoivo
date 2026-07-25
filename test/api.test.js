@@ -78,13 +78,18 @@ test('a normal user cannot access the admin panel', async () => {
   assert.equal(r.status, 403);
 });
 
-test('promoting a user grants admin access', async () => {
+test('promoting a user grants admin access, but not owner-only Manage Users access', async () => {
   const promote = await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
   assert.equal(promote.status, 200);
   assert.equal(promote.data.is_admin, true);
 
-  const check = await api('GET', '/admin/users', { token: userToken });
-  assert.equal(check.status, 200);
+  // General admin access: works.
+  const votes = await api('GET', '/admin/votes', { token: userToken });
+  assert.equal(votes.status, 200);
+
+  // Golden rule: only the owner sees other users' access keys.
+  const users = await api('GET', '/admin/users', { token: userToken });
+  assert.equal(users.status, 403);
 });
 
 test('demoting revokes admin access', async () => {

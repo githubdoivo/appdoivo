@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from './db.js';
-import { authenticate, requireAdmin } from './auth.js';
+import { authenticate, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
 import { generateToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
@@ -117,6 +117,10 @@ router.post('/push/unsubscribe', (req, res) => {
 /* --------------------------------- Admin --------------------------------- */
 
 router.use('/admin', requireAdmin);
+
+// Golden rule: nobody but the owner can see other users' access keys, so
+// user management (which exposes them) is locked down beyond plain admin.
+router.use('/admin/users', requireOwner);
 
 // Users
 router.get('/admin/users', (req, res) => {
@@ -279,7 +283,7 @@ router.post('/admin/voting/:night/close', async (req, res) => {
     title: 'período de votação encerrado',
     body: 'we got a winner!',
     tag: 'results',
-    url: '/',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
   res.json({ ok: true, night, votingStatus: 'closed' });
 });
