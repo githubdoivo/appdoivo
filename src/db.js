@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -136,6 +136,26 @@ db.exec(`
 /** Generates a secure, readable token. */
 export function generateToken() {
   return randomBytes(24).toString('base64url');
+}
+
+/**
+ * Generates a memorable per-user token: their name plus a random 4-digit
+ * suffix (e.g. "rito8749"), easier to type/remember than an opaque string.
+ * Retries on the rare collision (checked via the token's lookup hash).
+ */
+export function generateUserToken(name) {
+  const base = String(name)
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '') || 'user';
+
+  let token;
+  do {
+    const digits = String(randomInt(0, 10000)).padStart(4, '0');
+    token = `${base}${digits}`;
+  } while (db.prepare('SELECT 1 FROM users WHERE token_hash = ?').get(hashToken(token)));
+
+  return token;
 }
 
 /** Reads a setting with a default value. */

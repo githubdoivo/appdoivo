@@ -4,7 +4,8 @@
    Night 2 "swamp" (pantano, musgo/oliva)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Italianno&display=swap');
+/* Fonts are loaded via a <link> in <head> (not @import here) so they
+   download in parallel with this stylesheet instead of after it. */
 
 :root {
   --paper:    #e7e3d6;
@@ -196,7 +197,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; }
-.brand .badge {
+.brand .badge,
+.user-row-name .badge {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
@@ -209,6 +211,11 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .brand .badge.user-badge { border-color: var(--rata); color: var(--rata); }
 .brand .badge.user-badge.tester-badge { border-color: var(--outfit); color: var(--outfit); }
+
+/* Role badges: owner / admin / user, each its own color. */
+.badge.role-owner { border-color: var(--clay); color: var(--clay); }
+.badge.role-admin { border-color: var(--outfit); color: var(--outfit); }
+.badge.role-user { border-color: var(--rata); color: var(--rata); }
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Botoes de icone (casa, notificacoes, menu) fixos na topbar - mesma caixa.

@@ -155,7 +155,7 @@ async function loadUsers() {
       <div class="user-row">
         <div class="user-row-name">
           ${esc(u.name)}
-          ${u.is_owner ? `<span class="badge">${t('owner_badge')}</span>` : u.is_admin ? `<span class="badge">${t('tester_badge')}</span>` : ''}
+          ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
         </div>
         <div class="user-row-token">${esc(u.token)}</div>
         <div class="row-actions">

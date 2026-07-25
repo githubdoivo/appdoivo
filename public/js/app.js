@@ -37,7 +37,9 @@ function showApp(me) {
   $('app').classList.remove('hidden');
   if (me.isAdmin) {
     const adminBadge = $('admin-badge');
-    adminBadge.textContent = me.isOwner ? t('owner_badge') : t('tester_badge');
+    adminBadge.textContent = me.isOwner ? 'owner' : 'admin';
+    adminBadge.classList.toggle('role-owner', me.isOwner);
+    adminBadge.classList.toggle('role-admin', !me.isOwner);
     adminBadge.classList.remove('hidden');
     $('admin-link').classList.remove('hidden');
   } else {

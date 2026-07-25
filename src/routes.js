@@ -2,7 +2,7 @@ import { Router } from 'express';
 import db from './db.js';
 import { authenticate, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
-import { generateToken, getSetting, setSetting } from './db.js';
+import { generateUserToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
 import { today, nightStatus, getTimezone } from './time.js';
 import { NIGHTS, isNight, DEFAULT_NIGHT } from './nights.js';
@@ -140,7 +140,7 @@ router.get('/admin/users', (req, res) => {
 router.post('/admin/users', (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
-  const token = generateToken();
+  const token = generateUserToken(name);
   const info = db.prepare(
     'INSERT INTO users (name, token_hash, token_enc, is_admin) VALUES (?, ?, ?, 0)'
   ).run(name, hashToken(token), encryptToken(token));
