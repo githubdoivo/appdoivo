@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "short_name": "AppIvo",
+  "short_name": "appdoivo",
   "description": "Consequencias e votos diarios.",
   "start_url": "/",
   "display": "standalone",
