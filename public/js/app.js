@@ -108,6 +108,7 @@ function refreshNotifButton() {
   const btn = $('notif-btn');
   if (state === 'granted') { btn.textContent = t('notif_on'); btn.disabled = true; }
   else if (state === 'unsupported') { btn.textContent = t('notif_off'); btn.disabled = true; }
+  else if (state === 'ios-add-home') { btn.textContent = t('notif_ios_add_home'); btn.disabled = false; }
   else { btn.textContent = t('notif_enable'); btn.disabled = false; }
 }
 

@@ -17,17 +17,31 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-/** Estado das notificacoes: unsupported | denied | default | granted. */
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+/**
+ * Estado das notificacoes: unsupported | ios-add-home | denied | default | granted.
+ * No iOS, o Push API so existe depois de "Adicionar ao ecra principal" - nesse
+ * caso distinguimos de um "unsupported" genuino para podermos guiar o utilizador.
+ */
 export function pushSupport() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-    return 'unsupported';
+  const hasPushApi = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if (!hasPushApi) {
+    return isIOS() && !isStandalone() ? 'ios-add-home' : 'unsupported';
   }
   return Notification.permission; // default | granted | denied
 }
 
 /** Pede permissao e subscreve o push. Devolve true se subscrito. */
 export async function enablePush() {
-  if (pushSupport() === 'unsupported') {
+  const support = pushSupport();
+  if (support === 'unsupported' || support === 'ios-add-home') {
     alert(t('notif_unsupported_msg'));
     return false;
   }
