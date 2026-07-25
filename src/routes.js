@@ -43,7 +43,7 @@ router.post('/auth/login', loginRateLimit, (req, res) => {
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
-  res.json(req.user);
+  res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
 });
 
 /* ------------------------------ Consequences ----------------------------- */
@@ -121,13 +121,14 @@ router.use('/admin', requireAdmin);
 // Users
 router.get('/admin/users', (req, res) => {
   const users = db.prepare(
-    'SELECT id, name, token_enc, is_admin, created_at FROM users ORDER BY is_admin DESC, name'
+    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_admin DESC, name'
   ).all();
   res.json(users.map((u) => ({
     id: u.id,
     name: u.name,
     token: decryptToken(u.token_enc),
     is_admin: !!u.is_admin,
+    is_owner: !!u.is_owner,
     created_at: u.created_at,
   })));
 });
@@ -151,12 +152,23 @@ router.delete('/admin/users/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Promotes or revokes admin status. Always keeps at least one admin.
+// Promotes or revokes admin status. Disabled outside environments that opt
+// in via ENABLE_ADMIN_PROMOTION (production never sets this - only the
+// owner is meant to have admin access there). Always keeps at least one
+// admin, and the owner can never be demoted, by themselves or anyone else.
 router.patch('/admin/users/:id/admin', (req, res) => {
+  if (process.env.ENABLE_ADMIN_PROMOTION !== 'true') {
+    return res.status(403).json({ error: 'Funcionalidade desativada neste ambiente.' });
+  }
+
   const id = Number(req.params.id);
   const isAdmin = !!req.body?.isAdmin;
-  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id);
+  const user = db.prepare('SELECT is_admin, is_owner FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+
+  if (!isAdmin && user.is_owner) {
+    return res.status(400).json({ error: 'Nao podes remover o admin principal.' });
+  }
 
   if (!isAdmin && user.is_admin) {
     const { c: adminCount } = db.prepare('SELECT count(*) c FROM users WHERE is_admin = 1').get();

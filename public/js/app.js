@@ -62,6 +62,7 @@ document.querySelectorAll('#lang-switch button').forEach((b) => {
     refreshNotifButton();
     loadConsequences();
     loadVotes();
+    closeMenu();
   });
 });
 
@@ -131,16 +132,17 @@ function refreshNotifButton() {
 
   homeBtn.classList.toggle('hidden', state !== 'ios-add-home');
 
-  if (state === 'ios-add-home' || state === 'unsupported') {
+  if (state === 'unsupported') {
     notifBtn.classList.add('hidden');
     return;
   }
 
   notifBtn.classList.remove('hidden');
   const isOn = state === 'granted';
-  notifBtn.disabled = isOn;
+  const needsHomeScreen = state === 'ios-add-home';
+  notifBtn.disabled = isOn || needsHomeScreen;
   notifBtn.classList.toggle('active', isOn);
-  const label = t(isOn ? 'notif_on' : 'notif_enable');
+  const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
   notifBtn.title = label;
   notifBtn.setAttribute('aria-label', label);
 }

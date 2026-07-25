@@ -204,6 +204,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 .menu-panel button.ghost,
 .menu-panel a.ghost { width: 100%; }
+.menu-panel .lang-in-menu { align-self: center; }
+.menu-panel .lang-in-menu button { padding: 4px 12px; }
 
 /* interruptor de idioma */
 .lang {
@@ -332,7 +334,8 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
-.token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; word-break: break-all; color: var(--rata); }
+.token-cell { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 0.72rem; white-space: nowrap; color: var(--rata); }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }
 .inline input { margin-bottom: 0; }

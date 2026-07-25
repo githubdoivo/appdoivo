@@ -12,6 +12,7 @@ process.env.DB_FILE = DB;
 process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.TIMEZONE = 'Europe/Lisbon';
+process.env.ENABLE_ADMIN_PROMOTION = 'true';
 
 const { default: app } = await import('../src/app.js');
 
@@ -98,6 +99,16 @@ test('cannot demote the last remaining admin', async () => {
   const me = await api('GET', '/me', { token: ADMIN });
   const demote = await api('PATCH', `/admin/users/${me.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
   assert.equal(demote.status, 400);
+});
+
+test('the owner cannot be demoted even when other admins exist', async () => {
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const me = await api('GET', '/me', { token: ADMIN });
+  const demote = await api('PATCH', `/admin/users/${me.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  assert.equal(demote.status, 400);
+
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
 /* ----------------------------- Consequences ------------------------------ */

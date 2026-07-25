@@ -27,6 +27,8 @@ async function copyToClipboard(text, btn) {
   }
 }
 
+let adminPromotionEnabled = false;
+
 async function boot() {
   applyI18n();
   updateLangUI();
@@ -40,6 +42,7 @@ async function boot() {
       $('auth-error').textContent = t('admin_only');
       return;
     }
+    adminPromotionEnabled = !!me.adminPromotionEnabled;
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
@@ -142,11 +145,11 @@ async function loadUsers() {
     `<tr><th>${t('col_name')}</th><th>${t('col_key')}</th><th></th></tr>` +
     users.map((u) => `
       <tr>
-        <td>${esc(u.name)}${u.is_admin ? ' <span class="badge">admin</span>' : ''}</td>
+        <td>${esc(u.name)}${u.is_owner ? ' <span class="badge">' + t('owner_badge') + '</span>' : u.is_admin ? ' <span class="badge">admin</span>' : ''}</td>
         <td class="token-cell">${esc(u.token)}</td>
         <td class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
-          <button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>
+          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
           ${u.is_admin ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </td>
       </tr>`).join('');
