@@ -4,25 +4,25 @@ import db from './db.js';
 const MAX_MESSAGES = 20;
 const MAX_TEXT_LENGTH = 300;
 
-// Cheeky mythological portmanteaus (e.g. "nasty" + "(h)ermes" ->
-// "nastyermes", "horny" + "(a)phrodite" -> "hornyfrodite") - the Wall is
-// anonymous, so every message gets a random one of these instead of the
-// real poster's name.
-const ADJECTIVES = [
-  'nasty', 'horny', 'sad', 'moody', 'petty', 'feral', 'messy', 'dramatic',
-  'thirsty', 'salty', 'spicy', 'chaotic', 'unhinged', 'clingy', 'extra',
-  'iconic', 'unbothered', 'feisty', 'wistful', 'unwell', 'delulu', 'soggy',
+// Furnished-themed object + swamp-themed creature (e.g. "chair" + "frog"
+// -> "chairfrog"), matching the app's own Best Outfit night themes - the
+// Wall is anonymous, so every message gets a random one of these instead
+// of the real poster's name.
+const FURNISHED_OBJECTS = [
+  'chair', 'lamp', 'rug', 'sofa', 'curtain', 'mirror', 'vase', 'shelf',
+  'candle', 'cushion', 'teapot', 'drawer', 'doormat', 'clock', 'stool',
+  'mug', 'kettle', 'blanket', 'pillow', 'doorknob', 'footstool', 'teacup',
 ];
-const GODS = [
-  'ermes', 'frodite', 'zeus', 'athena', 'poseidon', 'hades', 'apollo',
-  'artemis', 'dionysus', 'hera', 'ares', 'demeter', 'persephone',
-  'narcissus', 'icarus', 'eros', 'iris', 'circe', 'medusa', 'psyche',
+const SWAMP_CREATURES = [
+  'frog', 'toad', 'newt', 'heron', 'eel', 'leech', 'moth', 'gator',
+  'crane', 'snail', 'beetle', 'mosquito', 'catfish', 'turtle',
+  'salamander', 'firefly', 'crawdad', 'dragonfly', 'tadpole', 'stork',
 ];
 
 function randomPseudonym() {
-  const adj = ADJECTIVES[randomInt(0, ADJECTIVES.length)];
-  const god = GODS[randomInt(0, GODS.length)];
-  return `${adj}${god}`;
+  const object = FURNISHED_OBJECTS[randomInt(0, FURNISHED_OBJECTS.length)];
+  const creature = SWAMP_CREATURES[randomInt(0, SWAMP_CREATURES.length)];
+  return `${object}${creature}`;
 }
 
 /** Trims down to the 20 most recent messages. No time-based expiry - the
