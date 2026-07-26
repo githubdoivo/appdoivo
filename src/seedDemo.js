@@ -6,7 +6,7 @@
 // and should always start empty on every deploy, added fresh by the admin.
 // Only the user list is a stable template (real names), so QA login
 // credentials are always ready without losing/regenerating them.
-import db, { generateUserToken } from './db.js';
+import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
 
@@ -35,13 +35,15 @@ export function seedDemo() {
 
   // 1) Demo users ------------------------------------------------------------
   // Displayed name keeps accents (NAMES as-is); the access key is always
-  // stripped of them by generateUserToken, e.g. "Carla Mendes" -> "carlamendes1234".
+  // stripped of them, e.g. "Carla Mendes" -> "carlamendes1234". Uses the
+  // deterministic generateDemoUserToken (not the random generateUserToken)
+  // so a tester's key stays the same across every QA reseed/deploy.
   const nonAdmin = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
   const demoUsers = [];
   if (nonAdmin < NAMES.length) {
     const insU = db.prepare("INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
     for (const name of NAMES) {
-      const tok = generateUserToken(name);
+      const tok = generateDemoUserToken(name);
       const info = insU.run(name, hashToken(tok), encryptToken(tok));
       demoUsers.push(info.lastInsertRowid);
     }
