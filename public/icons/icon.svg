@@ -1,20 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <!-- pedra coberta de musgo -->
-  <ellipse cx="50" cy="70" rx="34" ry="12" fill="#241d17" opacity="0.35"/>
-  <path d="M20 60C18 42 30 28 50 28C70 28 82 42 80 60C80 69 66 76 50 76C34 76 20 69 20 60Z" fill="#55632c"/>
-  <g fill="#6c7b3c">
-    <circle cx="33" cy="40" r="7.5"/>
-    <circle cx="50" cy="31" r="6.5"/>
-    <circle cx="67" cy="40" r="7.5"/>
-    <circle cx="24" cy="55" r="6"/>
-    <circle cx="76" cy="55" r="6"/>
-    <circle cx="41" cy="46" r="5"/>
-    <circle cx="59" cy="46" r="5"/>
+  <!-- pedra com musgo: pedra cinza bem visivel por baixo, musgo como "gorro" por cima -->
+  <ellipse cx="50" cy="78" rx="33" ry="10" fill="#241d17" opacity="0.25"/>
+  <path d="M19 60C15 40 30 24 50 24C70 24 85 40 81 60C84 71 68 80 50 80C32 80 16 71 19 60Z" fill="#96897a"/>
+  <path d="M19 60C15 40 30 24 50 24C70 24 85 40 81 60C77 54 70 49 70 49C70 49 60 68 50 68C40 68 30 49 30 49C30 49 23 54 19 60Z" fill="#7d7161"/>
+  <path d="M23 56C21 40 33 28 50 28C67 28 79 40 77 56C71 46 60 40 50 40C40 40 29 46 23 56Z" fill="#5b6a30"/>
+  <g fill="#6f7f3e">
+    <circle cx="36" cy="36" r="6"/>
+    <circle cx="50" cy="30" r="5.5"/>
+    <circle cx="64" cy="36" r="6"/>
+    <circle cx="28" cy="47" r="5"/>
+    <circle cx="72" cy="47" r="5"/>
   </g>
-  <g fill="#8a9c5b">
-    <circle cx="39" cy="36" r="2.6"/>
-    <circle cx="61" cy="38" r="2.2"/>
-    <circle cx="50" cy="50" r="2.4"/>
-    <circle cx="29" cy="52" r="2"/>
+  <g fill="#93a35c">
+    <circle cx="40" cy="34" r="2.2"/>
+    <circle cx="58" cy="33" r="2"/>
+    <circle cx="49" cy="44" r="2"/>
+  </g>
+  <g fill="#5b6a30" opacity="0.85">
+    <circle cx="26" cy="58" r="3.5"/>
+    <circle cx="75" cy="60" r="3"/>
   </g>
 </svg>

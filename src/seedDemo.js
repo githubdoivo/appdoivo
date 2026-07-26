@@ -23,11 +23,11 @@ const NAMES = [
 // So these never assume a specific person is present nearby (no "to your
 // left/right/in front of you" - the game doesn't work that way).
 const CONSEQUENCES_PENDING = [
-  'Wear one item of clothing inside-out for 30 minutes.',
-  'Only speak by singing until the next consequence.',
-  "If someone's around, let them redraw one of your eyebrows with an eyeliner pencil.",
-  'Freeze like a statue every time someone says your name.',
-  'Give a genuine compliment to everyone around you right now.',
+  'Give the closest person a pedicure.',
+  'Confess the last time you lied.',
+  'Let the nearest person pick an accessory for you to wear the rest of the night.',
+  'Sit on someone\'s lap until the next consequence drops.',
+  'Use your best pickup line on a stranger in the room.',
 ];
 
 export function seedDemo() {

@@ -62,7 +62,6 @@
             <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
           </form>
           <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
-          <button id="copy-all-users" type="button" class="small ghost" style="margin-top:10px" data-i18n="copy_all">Copiar tudo</button>
           <div id="users-list" class="user-list"></div>
         </div>
 
@@ -87,17 +86,14 @@
             <span data-i18n="voting_state">Estado atual</span>:
             <strong id="voting-state-label" class="voting-state">--</strong>
           </p>
+          <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" id="voting-open-btn" class="ghost" data-i18n="voting_open_btn">Abrir votação</button>
             <button type="button" id="voting-close-btn" class="ghost" data-i18n="voting_close_btn">Encerrar e publicar</button>
             <button type="button" id="voting-reset-btn" class="ghost" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
-          </div>
-          <span id="voting-msg" class="muted"></span>
-
-          <p class="help" data-i18n="reveal_phase_help">Explicação</p>
-          <div class="voting-controls">
             <button type="button" id="reveal-next-btn" class="ghost" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
           </div>
+          <span id="voting-msg" class="muted"></span>
           <span id="reveal-phase-msg" class="muted"></span>
         </div>
 
