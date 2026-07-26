@@ -202,7 +202,7 @@ function renderUsersList(users) {
             ${esc(u.name)}
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
-          <div class="user-row-token">${esc(u.token)}</div>
+          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
         </div>
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
@@ -216,6 +216,20 @@ function renderUsersList(users) {
 
   $('users-list').querySelectorAll('[data-copy-user]').forEach((b) => {
     b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
+  });
+
+  // Keys are censored by default (someone glancing at a screen share
+  // shouldn't see everyone's access keys) - click to reveal/hide. Copy
+  // always works with the real value regardless of this toggle.
+  $('users-list').querySelectorAll('[data-reveal-token]').forEach((el) => {
+    const toggle = () => {
+      const revealed = el.classList.toggle('censored') === false;
+      el.textContent = revealed ? el.dataset.token : '••••••••••••';
+    };
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
   });
 
   $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {

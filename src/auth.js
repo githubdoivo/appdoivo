@@ -1,5 +1,6 @@
 import db from './db.js';
 import { hashToken } from './tokens.js';
+import { checkAuthAttempt } from './rateLimit.js';
 
 /**
  * Token authentication middleware.
@@ -16,6 +17,14 @@ export function authenticate(req, res, next) {
 
   const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) {
+    // Shares /auth/login's rate-limit budget - guessing tokens against any
+    // endpoint that accepts a Bearer token is throttled the same way,
+    // instead of only the dedicated login route.
+    const result = checkAuthAttempt(req.ip);
+    if (result.blocked) {
+      res.set('Retry-After', String(result.retryAfter));
+      return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
+    }
     return res.status(401).json({ error: 'Token invalido.' });
   }
 

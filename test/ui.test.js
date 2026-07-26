@@ -216,6 +216,34 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
   await context.close();
 });
 
+test('access keys are censored by default and reveal on click, but the real value is always copyable', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/admin.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  const tokenEl = await page.$('.user-row-token');
+  const realToken = await tokenEl.getAttribute('data-token');
+  const shownBefore = await tokenEl.textContent();
+  assert.notEqual(shownBefore, realToken, 'access key should be censored by default');
+  assert.match(shownBefore, /^•+$/, 'censored key should render as dots');
+
+  await tokenEl.click();
+  const shownAfter = await tokenEl.textContent();
+  assert.equal(shownAfter, realToken, 'clicking the censored key should reveal the real value');
+
+  await tokenEl.click();
+  const shownHiddenAgain = await tokenEl.textContent();
+  assert.match(shownHiddenAgain, /^•+$/, 'clicking again should re-censor it');
+
+  // Copy must work with the real value regardless of the censored/revealed
+  // display state - it reads data-copy-user on the button, not the toggle.
+  const copyBtn = await page.$('[data-copy-user]');
+  const copyValue = await copyBtn.getAttribute('data-copy-user');
+  assert.equal(copyValue, realToken, 'copy button should carry the real key even while censored');
+
+  await context.close();
+});
+
 /* -------------- Golden rule: non-owner admin UI (regression) ------------- */
 
 test('a non-owner admin never sees the Manage Users tab', async () => {

@@ -186,7 +186,7 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 input[type="password"] { text-transform: none; }
-::placeholder { text-transform: lowercase; }
+::placeholder { text-transform: lowercase; font-weight: 600; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
@@ -390,11 +390,18 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   padding: 22px;
   margin-bottom: 18px;
 }
+/* In light mode, --line-2 is pale enough to blend into the card's own
+   --paper-2 background. In dark mode it reads as a bright, hard outline -
+   most visible at the rounded corners, where a small radius zoomed in
+   looks like a stray bracket rather than a subtle edge. Blend it toward
+   the card's own background, same treatment as the tab-row border. */
+html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 45%, var(--paper-2)); }
 .card h2 { font-size: 1.15rem; font-style: italic; font-weight: 500; margin-bottom: 6px; }
 
 .hero-line {
   font-family: var(--serif);
   font-style: italic;
+  font-weight: 600;
   font-size: 1.5rem;
   color: var(--ink-soft);
   margin: 2px 0 20px;
@@ -488,7 +495,9 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   color: var(--rata);
   word-break: break-all;
   text-align: right;
+  cursor: pointer;
 }
+.user-row-token.censored { letter-spacing: 2px; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }

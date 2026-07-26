@@ -382,3 +382,17 @@ test('an invalid language value falls back to pt', async () => {
   const me = await api('GET', '/me', { token: ADMIN });
   assert.equal(me.data.lang, 'pt');
 });
+
+/* ------------------------------- Rate limiting ------------------------------ */
+// Runs last in the file on purpose: it exhausts this IP's shared
+// login/auth-guess budget, which would make any *later* test expecting a
+// plain 401 for a bad token see 429 instead.
+
+test('guessing tokens against a non-login endpoint is rate-limited too, not just /auth/login', async () => {
+  let lastStatus;
+  for (let i = 0; i < 12; i++) {
+    const r = await api('GET', '/me', { token: `guess-${i}-does-not-exist` });
+    lastStatus = r.status;
+  }
+  assert.equal(lastStatus, 429, 'repeated invalid-token attempts against a non-login endpoint should eventually be rate-limited');
+});
