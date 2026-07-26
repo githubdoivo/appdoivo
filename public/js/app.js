@@ -4,6 +4,7 @@ import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
+import { wireVersionBadge } from './version.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -18,6 +19,7 @@ async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
+  wireVersionBadge();
   // applyNight() is deliberately NOT called here: it sets body.theme-rata,
   // and iOS Safari's rubber-band overscroll paints straight from body's
   // background - a region no child element (including #login's own white

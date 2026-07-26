@@ -4,6 +4,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
+import { wireVersionBadge } from './version.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -51,6 +52,7 @@ async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
+  wireVersionBadge();
   await registerServiceWorker().catch(() => {});
   if (!getToken()) {
     $('auth-error').textContent = t('admin_no_session');
