@@ -229,7 +229,6 @@ function renderUsersList(users) {
         </div>
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
-          <button class="small ghost" data-rename-user="${u.id}" data-current-name="${esc(u.name)}">${t('rename')}</button>
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
@@ -252,19 +251,6 @@ function renderUsersList(users) {
     el.addEventListener('click', toggle);
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-    });
-  });
-
-  $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {
-    b.addEventListener('click', async () => {
-      const next = prompt(t('rename_prompt'), b.dataset.currentName)?.trim();
-      if (!next || next === b.dataset.currentName) return;
-      try {
-        await api(`/admin/users/${b.dataset.renameUser}/name`, { method: 'PATCH', body: { name: next } });
-        loadUsers();
-      } catch (err) {
-        alert(err.message);
-      }
     });
   });
 
