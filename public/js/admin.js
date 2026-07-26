@@ -207,6 +207,7 @@ function renderUsersList(users) {
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
           <button class="small ghost" data-rename-user="${u.id}" data-current-name="${esc(u.name)}">${t('rename')}</button>
+          <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>
@@ -223,6 +224,19 @@ function renderUsersList(users) {
       if (!next || next === b.dataset.currentName) return;
       try {
         await api(`/admin/users/${b.dataset.renameUser}/name`, { method: 'PATCH', body: { name: next } });
+        loadUsers();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+
+  $('users-list').querySelectorAll('[data-regen-user]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      if (!confirm(t('confirm_regen_key'))) return;
+      try {
+        const u = await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
+        alert(t('key_regenerated', { name: u.name, token: u.token }));
         loadUsers();
       } catch (err) {
         alert(err.message);

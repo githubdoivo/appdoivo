@@ -331,9 +331,10 @@ a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
-/* Notification bell: opacity visually tells on from off, not just the
-   title/aria-label. Dim when off, full strength (+ accent border) once on. */
-#notif-btn.active { border-color: var(--rata); }
+/* Notification bell: a soft accent-tinted highlight signals "on" - a full
+   solid-color border read as a stark outline (especially --rata's minty
+   green in light mode), so this is a gentle background tint instead. */
+#notif-btn.active { background: color-mix(in srgb, var(--rata) 18%, transparent); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 

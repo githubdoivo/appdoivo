@@ -55,12 +55,15 @@ db.exec(`
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  -- Ephemeral open chat: messages expire after 5 minutes or once there are
-  -- more than 20, whichever comes first (see src/chat.js).
+  -- Ephemeral open chat ("the Wall"): only the 20 most recent messages are
+  -- ever kept (see src/chat.js). user_id is kept for internal reference
+  -- only - the API never exposes the real author, just a random
+  -- pseudonym assigned per message (the "pseudonym" column).
   CREATE TABLE IF NOT EXISTS messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text       TEXT NOT NULL,
+    pseudonym  TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 `);
@@ -133,6 +136,13 @@ if (!columnExists('users', 'tutorial_seen')) {
 // can be sent in their own language instead of a fixed default.
 if (!columnExists('users', 'lang')) {
   db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'pt'");
+}
+
+// Migration: the Wall's random per-message pseudonym, replacing the real
+// author. Existing (soon-to-be-pruned anyway, since the Wall only ever
+// keeps 20 messages) rows just get an empty one until they age out.
+if (!columnExists('messages', 'pseudonym')) {
+  db.exec("ALTER TABLE messages ADD COLUMN pseudonym TEXT NOT NULL DEFAULT ''");
 }
 
 // Migration: per-day voting -> per-night voting.

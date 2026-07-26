@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import { revealRandomConsequence } from './consequences.js';
-import { pruneMessages } from './chat.js';
 import { getTimezone } from './time.js';
 
 /**
@@ -8,9 +7,8 @@ import { getTimezone } from './time.js';
  *  - Every 2 hours (minute 0) between 16:00 and 04:00: reveals a random
  *    consequence and notifies. No reveals 05:00-15:00. Hourly was too much
  *    to keep track of, so this is spaced out to every other hour.
- *  - Every minute: expires chat messages older than 5 minutes, even when
- *    nobody's posting (postMessage/listMessages also prune on their own,
- *    this just keeps things tidy between activity).
+ * The Wall has no time-based expiry (just the 20-most-recent cap, applied
+ * inline on every post/read in chat.js), so it needs no scheduled job.
  * (Voting is controlled manually by the admin, not on a schedule.)
  */
 export function startScheduler() {
@@ -27,14 +25,6 @@ export function startScheduler() {
       }
     } catch (err) {
       console.error('[cron] Error in hourly job:', err);
-    }
-  }, { timezone: tz });
-
-  cron.schedule('* * * * *', () => {
-    try {
-      pruneMessages();
-    } catch (err) {
-      console.error('[cron] Error pruning chat messages:', err);
     }
   }, { timezone: tz });
 

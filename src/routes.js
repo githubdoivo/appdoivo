@@ -196,6 +196,20 @@ router.patch('/admin/users/:id/name', (req, res) => {
   res.json({ ok: true, id, name });
 });
 
+// Issues a brand-new access key for a user (e.g. their old one was derived
+// from a stale/short name before a rename, or they think it leaked).
+// Invalidates the previous key immediately - the caller is responsible for
+// getting the new one to them.
+router.post('/admin/users/:id/regenerate-token', (req, res) => {
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  const token = generateUserToken(user.name);
+  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+    .run(hashToken(token), encryptToken(token), id);
+  res.json({ ok: true, id, name: user.name, token });
+});
+
 router.delete('/admin/users/:id', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT is_owner FROM users WHERE id = ?').get(id);
