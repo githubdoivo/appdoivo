@@ -190,6 +190,29 @@ input[type="password"] { text-transform: none; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
+/* Show/hide toggle inside a password input (e.g. the login access key). */
+.password-field { position: relative; }
+.password-field input { padding-right: 46px; }
+button.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+}
+button.password-toggle:hover { background: transparent; color: var(--ink); }
+.password-toggle svg { width: 19px; height: 19px; }
+.password-toggle .icon-eye-off { display: none; }
+.password-toggle.visible .icon-eye { display: none; }
+.password-toggle.visible .icon-eye-off { display: block; }
+
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -256,15 +279,15 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    tab or night theme, but still adapts to light/dark mode so it never
    washes out against either background. The fallback matches the old
    fixed color, for the brief moment before applyMode() runs. */
-.brand .brand-name { font-family: var(--script); font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: var(--brand, #a96b4b); }
+.brand .brand-name { font-family: var(--script); font-weight: 700; font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: var(--brand, #a96b4b); }
 .brand .badge,
 .user-row-name .badge {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
   font-size: 0.64rem;
-  font-weight: 600;
-  border: 1px solid var(--clay);
+  font-weight: 700;
+  border: 1.5px solid var(--clay);
   color: var(--clay);
   padding: 3px 9px;
   border-radius: 999px;
@@ -338,6 +361,13 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
 }
 .tab:hover { background: transparent; color: var(--ink); }
 .tab.active { color: var(--ink); border-bottom-color: var(--clay); }
+
+/* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
+   under "Votos da noite" in admin). The page-level .tab component above is
+   sized for primary navigation and reads as oversized/heavy at this
+   secondary, in-card scale. */
+#votes-night-tabs { gap: 16px; margin-bottom: 14px; }
+#votes-night-tabs .tab { font-size: 0.95rem; padding: 2px 0 8px; border-bottom-width: 1.5px; }
 
 /* --------------------------------- Cards --------------------------------- */
 
