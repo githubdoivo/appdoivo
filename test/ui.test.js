@@ -158,6 +158,22 @@ test('#login ships hidden in the raw HTML (no flash before auth check resolves)'
   assert.ok(match[1].split(/\s+/).includes('hidden'), '#login is not hidden by default - it will flash before auth resolves');
 });
 
+// Regression: body used to get theme-rata applied unconditionally on boot,
+// before the login/auth check resolved - #login's own white background
+// couldn't fully mask it, since iOS Safari's rubber-band overscroll paints
+// straight from body's background, a region no child element can cover.
+test('body carries no night-theme class while the login screen is showing', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)');
+
+  const bodyClasses = await page.evaluate(() => document.body.className);
+  assert.doesNotMatch(bodyClasses, /theme-(rata|furnished|swamp|mural)/, `body should carry no night-theme class pre-login, got: "${bodyClasses}"`);
+
+  await context.close();
+});
+
 /* --------------------- Role badge colors (regression) --------------------- */
 // owner / admin / user must each render in a visually distinct color.
 

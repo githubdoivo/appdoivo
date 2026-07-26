@@ -16,7 +16,11 @@ async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
-  applyNight();
+  // applyNight() is deliberately NOT called here: it sets body.theme-rata,
+  // and iOS Safari's rubber-band overscroll paints straight from body's
+  // background - a region no child element (including #login's own white
+  // background) can cover. Only apply it once the app itself is shown
+  // (see showApp()), so the login screen never carries a night theme.
   await registerServiceWorker().catch(() => {});
   const token = getToken();
   if (!token) return showLogin();
@@ -37,6 +41,7 @@ function showLogin() {
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  applyNight();
   if (me.isAdmin) {
     const adminBadge = $('admin-badge');
     adminBadge.textContent = me.isOwner ? 'owner' : 'admin';
