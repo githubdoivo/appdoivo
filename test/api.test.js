@@ -152,31 +152,6 @@ test('the owner can never be removed', async () => {
   assert.equal(del.status, 400);
 });
 
-test('a user can be renamed', async () => {
-  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Typo Nmae' } });
-  const rename = await api('PATCH', `/admin/users/${created.data.id}/name`, { token: ADMIN, body: { name: 'Fixed Name' } });
-  assert.equal(rename.status, 200);
-
-  const users = await api('GET', '/admin/users', { token: ADMIN });
-  const found = users.data.find((u) => u.id === created.data.id);
-  assert.equal(found.name, 'Fixed Name');
-});
-
-test('renaming a non-existent user returns 404', async () => {
-  const r = await api('PATCH', '/admin/users/999999/name', { token: ADMIN, body: { name: 'Anyone' } });
-  assert.equal(r.status, 404);
-});
-
-test('a non-owner admin cannot rename users', async () => {
-  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Renamable' } });
-  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
-
-  const rename = await api('PATCH', `/admin/users/${created.data.id}/name`, { token: userToken, body: { name: 'Hijacked' } });
-  assert.equal(rename.status, 403);
-
-  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
-});
-
 test("regenerating a user's key issues a new one and invalidates the old", async () => {
   const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Regenerable' } });
   const oldToken = created.data.token;

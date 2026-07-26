@@ -213,21 +213,7 @@ router.post('/admin/users', (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid, name, token });
 });
 
-// Fixes a typo or updates a display name - there was previously no way to
-// correct a user's name after creation short of deleting and recreating them
-// (which would also generate them a new access key).
-router.patch('/admin/users/:id/name', (req, res) => {
-  const id = Number(req.params.id);
-  const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
-  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
-  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
-  db.prepare("UPDATE users SET name = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(name, id);
-  res.json({ ok: true, id, name });
-});
-
-// Issues a brand-new access key for a user (e.g. their old one was derived
-// from a stale/short name before a rename, or they think it leaked).
+// Issues a brand-new access key for a user (e.g. they think it leaked).
 // Invalidates the previous key immediately - the caller is responsible for
 // getting the new one to them.
 router.post('/admin/users/:id/regenerate-token', (req, res) => {
