@@ -61,10 +61,9 @@
             <button id="copy-all-users" type="button" class="small ghost" data-i18n="copy_all">Copiar tudo</button>
           </div>
           <form id="user-form" class="inline" style="margin-top:12px">
-            <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Nome do utilizador" />
+            <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Nome do utilizador ou procurar..." autocomplete="off" />
             <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
           </form>
-          <input id="user-search" type="search" data-i18n-ph="user_search_ph" placeholder="Procurar utilizador..." style="margin-top:10px" />
           <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
           <div id="users-list" class="user-list"></div>
         </div>

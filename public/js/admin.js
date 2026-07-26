@@ -252,17 +252,21 @@ function renderUsersList(users) {
   });
 }
 
-// Live search: filters the list once 3+ characters are typed. If nothing
-// matches, the typed text is offered straight to the create form (this is
-// clearly a new person, not someone already in the list).
+// The name input doubles as a live search: below 4 characters it's treated
+// as "not enough to judge yet" (full list shown, create disabled). At 4+
+// characters it filters the list; if nothing matches, this is clearly a
+// new person rather than someone already here, so create becomes the only
+// sensible action. If something DOES match, creating is disabled on
+// purpose - act on the existing user via its row buttons instead (copy,
+// rename, remove, etc.), rather than risking an accidental duplicate.
 function applyUserSearch() {
-  const term = $('user-search').value.trim();
+  const term = $('user-name-input').value.trim();
   const createBtn = $('user-form').querySelector('button[type="submit"]');
 
   if (term.length <= 3) {
     renderUsersList(allUsers);
     $('user-search-hint').classList.add('hidden');
-    createBtn.disabled = !$('user-name-input').value.trim();
+    createBtn.disabled = true;
     return;
   }
 
@@ -271,10 +275,7 @@ function applyUserSearch() {
 
   const noMatch = matches.length === 0;
   $('user-search-hint').classList.toggle('hidden', !noMatch);
-  if (noMatch) {
-    $('user-name-input').value = term;
-    createBtn.disabled = false;
-  }
+  createBtn.disabled = !noMatch;
 }
 
 async function loadUsers() {
@@ -287,11 +288,7 @@ async function loadUsers() {
   };
 }
 
-$('user-search').addEventListener('input', applyUserSearch);
-
-$('user-name-input').addEventListener('input', () => {
-  $('user-form').querySelector('button[type="submit"]').disabled = !$('user-name-input').value.trim();
-});
+$('user-name-input').addEventListener('input', applyUserSearch);
 
 $('user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -300,7 +297,6 @@ $('user-form').addEventListener('submit', async (e) => {
   try {
     const u = await api('/admin/users', { method: 'POST', body: { name } });
     $('user-name-input').value = '';
-    $('user-search').value = '';
     $('user-search-hint').classList.add('hidden');
     $('user-form').querySelector('button[type="submit"]').disabled = true;
     alert(t('user_created', { name: u.name, token: u.token }));
