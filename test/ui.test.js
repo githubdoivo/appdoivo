@@ -202,6 +202,31 @@ test('owner, admin and user role badges each render in a distinct color', async 
   await api('DELETE', `/admin/users/${toPromote.id}`, { token: ADMIN });
 });
 
+test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  await page.fill('#user-name-input', 'Zzz Session Tester');
+  await page.click('#user-form button[type="submit"]');
+  const alertOk = page.locator('.modal-actions button');
+  await alertOk.first().waitFor({ timeout: 5000 });
+  await alertOk.first().click();
+  await page.waitForTimeout(300);
+
+  const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  // "Zzz Session Tester" sorts last alphabetically, so finding it right
+  // after the owner (index 1) proves the session-local recency float is
+  // actually happening, not just alphabetical order.
+  assert.equal(names[1], 'Zzz Session Tester', 'the just-created user should be pinned near the top this session');
+
+  await context.close();
+  const created = await api('GET', '/admin/users', { token: ADMIN });
+  const tester = created.find((u) => u.name === 'Zzz Session Tester');
+  await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
+});
+
 /* --------------- Manage Users key layout (regression) --------------- */
 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
@@ -218,11 +243,18 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
   await context.close();
 });
 
-test('access keys are censored by default and reveal on click, but the real value is always copyable', async () => {
+test('access keys are censored by default, reveal on click, and copy automatically at the same time', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  // Spy on the clipboard instead of relying on real OS clipboard access,
+  // which needs permissions that aren't reliably grantable in WebKit.
+  await page.evaluate(() => {
+    window.__copied = null;
+    navigator.clipboard.writeText = (text) => { window.__copied = text; return Promise.resolve(); };
+  });
 
   const tokenEl = await page.$('.user-row-token');
   const realToken = await tokenEl.getAttribute('data-token');
@@ -231,36 +263,46 @@ test('access keys are censored by default and reveal on click, but the real valu
   assert.match(shownBefore, /^•+$/, 'censored key should render as dots');
 
   await tokenEl.click();
+  await page.waitForTimeout(50);
   const shownAfter = await tokenEl.textContent();
   assert.equal(shownAfter, realToken, 'clicking the censored key should reveal the real value');
+  const copiedOnReveal = await page.evaluate(() => window.__copied);
+  assert.equal(copiedOnReveal, realToken, 'clicking to reveal should also copy the real key automatically');
 
   await tokenEl.click();
   const shownHiddenAgain = await tokenEl.textContent();
   assert.match(shownHiddenAgain, /^•+$/, 'clicking again should re-censor it');
-
-  // Copy must work with the real value regardless of the censored/revealed
-  // display state - it reads data-copy-user on the button, not the toggle.
-  const copyBtn = await page.$('[data-copy-user]');
-  const copyValue = await copyBtn.getAttribute('data-copy-user');
-  assert.equal(copyValue, realToken, 'copy button should carry the real key even while censored');
 
   await context.close();
 });
 
 /* -------------- Golden rule: non-owner admin UI (regression) ------------- */
 
-test('a non-owner admin only gets voting control and reveal-consequence, nothing else', async () => {
+test('a non-owner admin gets voting control, reveal-consequence, and a self-only Users view', async () => {
   const promoted = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'nonowneradmin' } });
   await api('PATCH', `/admin/users/${promoted.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  const usersTabHidden = await page.$eval('[data-atab="users"]', (el) => el.classList.contains('hidden'));
-  assert.ok(usersTabHidden, 'non-owner admin can see the Manage Users tab');
+  // Sees the Users tab now (so they can get familiar with it), but the API
+  // only ever returns their own row - see GET /admin/users - so there's
+  // nothing here to further lock down on the frontend.
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  const rows = await page.$$('#users-list .user-row');
+  assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
+  const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
+  assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
 
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
   assert.ok(wallTabHidden, 'non-owner admin can see the Wall tab');
+
+  const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
+  assert.ok(searchCardHidden, 'non-owner admin can create/search users (owner-only on the backend)');
+
+  const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
+  assert.ok(resetCardHidden, 'non-owner admin can reset event content (owner-only on the backend)');
 
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
   assert.ok(timezoneCardHidden, 'non-owner admin can see the timezone settings card');
@@ -294,6 +336,9 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
 
   const panelVisible = await page.$eval('#atab-settings', (el) => !el.classList.contains('hidden'));
   assert.ok(panelVisible, 'the Settings panel should be the one shown by default for a plain user');
+
+  const changeKeyCardVisible = await page.$eval('#change-key-card', (el) => !el.classList.contains('hidden'));
+  assert.ok(changeKeyCardVisible, 'plain user (no Users tab access) should still see the change-key form');
 
   const roleBadgeHidden = await page.$eval('#role-badge', (el) => el.classList.contains('hidden'));
   assert.ok(roleBadgeHidden, 'plain user should get no role badge, same as the main app');

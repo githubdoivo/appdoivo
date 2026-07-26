@@ -38,7 +38,9 @@ export function currentHour(tz = getTimezone()) {
   return parseInt(h, 10) % 24;
 }
 
-/** Voting status of a night, controlled by the admin: 'open' | 'closed'. */
+/** Status of a night's Best Outfit, controlled by the admin:
+ * 'registration' (contestants can enter) | 'open' (voting) | 'closed' (results). */
 export function nightStatus(night) {
-  return getSetting(`voting_status_${night}`, 'closed') === 'open' ? 'open' : 'closed';
+  const status = getSetting(`voting_status_${night}`, 'closed');
+  return status === 'registration' || status === 'open' ? status : 'closed';
 }

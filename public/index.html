@@ -23,7 +23,7 @@
       <p class="tagline" data-i18n="tagline">Bem-vindo. Introduz a tua chave de acesso.</p>
       <form id="login-form">
         <div class="password-field">
-          <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="off" required />
+          <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
           <button type="button" id="token-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
             <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -65,19 +65,12 @@
           </svg>
         </button>
         <button id="lang-toggle" class="icon-btn lang-toggle" title="Language" aria-label="Language">EN</button>
-        <a id="settings-link" href="/settings.html" class="icon-btn hidden" title="Definições" aria-label="Definições">
+        <a id="settings-link" href="/settings.html" class="icon-btn hidden" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </a>
-        <button id="logout-btn" class="icon-btn" title="Sair" aria-label="Sair">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
       </div>
     </header>
 
@@ -102,7 +95,7 @@
         <div id="suggest-area" style="margin-top:12px">
           <form id="suggest-form">
             <textarea id="suggest-text" maxlength="200" rows="3" data-i18n-ph="rata_suggest_ph" placeholder="Escreve a tua consequência de hoje..."></textarea>
-            <button type="submit" style="margin-top:10px" data-i18n="send">Enviar</button>
+            <button type="submit" class="small" style="margin-top:10px" data-i18n="send">Enviar</button>
           </form>
         </div>
         <p id="suggest-msg" class="muted" style="margin-top:10px"></p>
@@ -122,6 +115,12 @@
             <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
           </div>
         </div>
+      </div>
+
+      <div class="card hidden" id="register-card">
+        <h2 data-i18n="outfit_register_title">A tua candidatura</h2>
+        <p class="help" data-i18n="outfit_register_help">Explicação</p>
+        <div id="register-area" style="margin-top:12px"></div>
       </div>
 
       <div class="card">

@@ -18,6 +18,8 @@ import {
 import {
   contestantsForNight,
   myVoteForNight,
+  myContestantForNight,
+  registerContestant,
   castVote,
   resultsForNight,
   visibleResultsForNight,
@@ -49,8 +51,12 @@ router.get('/version', (req, res) => {
 });
 
 // Validates a token and returns the user.
+// Keys are always lowercase (generated that way, and self-service changes
+// are forced lowercase below) - normalizing the typed value here makes
+// login case-insensitive in practice, so a phone keyboard auto-capitalizing
+// the first letter doesn't lock someone out.
 router.post('/auth/login', loginRateLimit, (req, res) => {
-  const token = (req.body?.token || '').trim();
+  const token = (req.body?.token || '').trim().toLowerCase();
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
   const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
@@ -82,14 +88,16 @@ router.post('/me/lang', (req, res) => {
 // token itself (e.g. a device left logged in shouldn't let a stranger
 // silently take over the account). New key must be letters/numbers only.
 router.post('/me/change-token', (req, res) => {
-  const currentToken = String(req.body?.currentToken || '');
-  const newToken = String(req.body?.newToken || '').trim();
+  const currentToken = String(req.body?.currentToken || '').toLowerCase();
+  // Keys are always lowercase (see /auth/login) - forcing it here too means
+  // the stored key stays canonical regardless of how it was typed/pasted.
+  const newToken = String(req.body?.newToken || '').trim().toLowerCase();
 
   const user = db.prepare('SELECT token_hash FROM users WHERE id = ?').get(req.user.id);
   if (hashToken(currentToken) !== user.token_hash) {
     return res.status(401).json({ error: 'Chave atual incorreta.' });
   }
-  if (!/^[A-Za-z0-9]+$/.test(newToken)) {
+  if (!/^[a-z0-9]+$/.test(newToken)) {
     return res.status(400).json({ error: 'A nova chave só pode ter letras e números.' });
   }
   if (newToken.length < 4) {
@@ -144,11 +152,37 @@ router.get('/votes/status', (req, res) => {
   res.json({
     night,
     status,
+    // Whether this night has ever gone through registration/open at least
+    // once - lets the frontend tell "hasn't started yet" (status defaults
+    // to 'closed' before anything happens) apart from "voting closed after
+    // running" (status is 'closed' again, but this time for real).
+    started: getSetting(`voting_started_${night}`) === '1',
     contestants: contestantsForNight(night),
     myVote: myVoteForNight(req.user.id, night),
+    myContestant: myContestantForNight(req.user.id, night),
     results,
     resultsPhase: phase,
   });
+});
+
+// Self-registration for Best Outfit: everyone (not just admins) can enter
+// their own persona/creature-of-the-night, optionally teamed up with
+// another user (picked via /users/basic) - see registerContestant() for
+// the duo-matching and vote-merging rules.
+router.post('/outfit/register', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
+});
+
+// Minimal user list (id + name only, no tokens/roles) for the "team up with"
+// picker on Best Outfit registration - every logged-in user can see it.
+router.get('/users/basic', (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, name FROM users WHERE id != ? ORDER BY name COLLATE NOCASE'
+  ).all(req.user.id);
+  res.json(rows);
 });
 
 router.post('/votes', (req, res) => {
@@ -197,16 +231,18 @@ router.post('/push/unsubscribe', (req, res) => {
 
 router.use('/admin', requireAdmin);
 
-// Golden rule: nobody but the owner can see other users' access keys, so
-// user management (which exposes them) is locked down beyond plain admin.
-router.use('/admin/users', requireOwner);
-
-// Users
+// Golden rule: nobody but the owner can see OTHER users' access keys, so
+// every mutation below (create/rename/regenerate/promote/remove) is locked
+// down beyond plain admin. The list itself is the one exception: a regular
+// admin can see it too, filtered down to just their own row - lets them get
+// familiar with the Users tab/their own entry without exposing anyone
+// else's secrets.
 router.get('/admin/users', (req, res) => {
   const users = db.prepare(
-    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, updated_at DESC'
+    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, name COLLATE NOCASE ASC'
   ).all();
-  res.json(users.map((u) => ({
+  const visible = req.user.isOwner ? users : users.filter((u) => u.id === req.user.id);
+  res.json(visible.map((u) => ({
     id: u.id,
     name: u.name,
     token: decryptToken(u.token_enc),
@@ -216,6 +252,8 @@ router.get('/admin/users', (req, res) => {
   })));
 });
 
+router.use('/admin/users', requireOwner);
+
 router.post('/admin/users', (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
@@ -224,6 +262,19 @@ router.post('/admin/users', (req, res) => {
     "INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(name, hashToken(token), encryptToken(token));
   res.status(201).json({ id: info.lastInsertRowid, name, token });
+});
+
+// Fixes a typo or updates a display name - there was previously no way to
+// correct a user's name after creation short of deleting and recreating them
+// (which would also generate them a new access key).
+router.patch('/admin/users/:id/name', (req, res) => {
+  const id = Number(req.params.id);
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  db.prepare("UPDATE users SET name = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(name, id);
+  res.json({ ok: true, id, name });
 });
 
 // Issues a brand-new access key for a user (e.g. they think it leaked).
@@ -304,9 +355,17 @@ router.post('/admin/reset-content', requireOwner, (req, res) => {
   res.json({ ok: true });
 });
 
-// Votes for a night (full admin view)
+// Votes for a night. Same golden rule as the Wall's real-name mapping:
+// only the owner sees who voted for whom - a regular admin only gets the
+// aggregate tally/ranking, the same numbers that go public on the Best
+// Outfit page once results are revealed. No individual-vote data should
+// leak to a role that isn't the owner.
 router.get('/admin/votes', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
+  const results = resultsForNight(night);
+  if (!req.user.isOwner) {
+    return res.json({ night, results });
+  }
   const rows = db.prepare(`
     SELECT v.id, v.night, u.name AS voter, c.name AS contestant, v.created_at
     FROM votes v
@@ -315,7 +374,7 @@ router.get('/admin/votes', (req, res) => {
     WHERE v.night = ?
     ORDER BY v.created_at
   `).all(night);
-  res.json({ night, votes: rows, results: resultsForNight(night) });
+  res.json({ night, votes: rows, results });
 });
 
 // Consequences (full view)
@@ -335,12 +394,18 @@ router.post('/admin/consequences/reveal', async (req, res) => {
   res.json({ ok: true, revealed });
 });
 
-// Contestants for a night
+// Contestants for a night. registered_by/partner_name are set only for
+// self-registered entries (see registerContestant() in votes.js) - admin-
+// added contestants leave both null, so the owner can tell them apart.
 router.get('/admin/contestants', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
-  const rows = db.prepare(
-    'SELECT id, name, night FROM contestants WHERE night = ? ORDER BY name'
-  ).all(night);
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
+  `).all(night);
   res.json({ night, contestants: rows });
 });
 
@@ -352,6 +417,17 @@ router.post('/admin/contestants', (req, res) => {
     'INSERT INTO contestants (name, night) VALUES (?, ?)'
   ).run(name, night);
   res.status(201).json({ id: info.lastInsertRowid, name, night });
+});
+
+// Renames a contestant (e.g. fixing a typo in a self-registered entry, or
+// just reviewing/cleaning up submissions before opening voting).
+router.patch('/admin/contestants/:id', (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  if (name.length > 60) return res.status(400).json({ error: 'Maximo 60 caracteres.' });
+  const info = db.prepare('UPDATE contestants SET name = ? WHERE id = ?').run(name, Number(req.params.id));
+  if (info.changes === 0) return res.status(404).json({ error: 'Concorrente nao encontrado.' });
+  res.json({ ok: true });
 });
 
 router.delete('/admin/contestants/:id', (req, res) => {
@@ -391,10 +467,29 @@ router.get('/admin/voting', (req, res) => {
   });
 });
 
+// Opens registration: contestants can self-enter (see POST /outfit/register).
+// Voting options stay hidden from everyone until the admin explicitly moves
+// on to /open, once they've reviewed/cleaned up the submissions. Wipes any
+// votes already cast - reopening registration means a new round is starting
+// (maybe a new contestant joins, maybe it's a full redo), so votes tied to
+// the previous roster would otherwise linger and skew a later re-tally.
+// Contestants themselves are untouched - the admin edits/removes those
+// directly in the Contestants table.
+router.post('/admin/voting/:night/registration', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  setSetting(`voting_status_${night}`, 'registration');
+  setSetting(`voting_started_${night}`, '1');
+  resetResultsPhase(night);
+  res.json({ ok: true, night, votingStatus: 'registration' });
+});
+
 router.post('/admin/voting/:night/open', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'open');
+  setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });
@@ -431,6 +526,7 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'open');
+  setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });

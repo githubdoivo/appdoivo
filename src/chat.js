@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import db from './db.js';
 
-const MAX_MESSAGES = 20;
+const MAX_MESSAGES = 15;
 const MAX_TEXT_LENGTH = 300;
 
 // Furnished-themed object + swamp-themed whimsical/magical being (e.g.
@@ -40,8 +40,8 @@ function getOrAssignPseudonym(userId) {
   return pseudonym;
 }
 
-/** Trims down to the 20 most recent messages. No time-based expiry - the
- * Wall just always shows whatever the last 20 posts were. */
+/** Trims down to the 15 most recent messages. No time-based expiry - the
+ * Wall just always shows whatever the last 15 posts were. */
 export function pruneMessages() {
   db.exec(`
     DELETE FROM messages WHERE id NOT IN (

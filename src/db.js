@@ -189,6 +189,23 @@ db.exec(`
     ON votes(user_id, night);
 `);
 
+// Migration: self-registered contestants (Best Outfit). A contestant can
+// optionally be linked to the user(s) who entered themselves - solo
+// (user_id only) or as a duo (user_id + partner_user_id), so the app can
+// stop someone entering twice and can merge a duo's voting rights into one
+// shared vote per night (see registerContestant()/castVote() in votes.js).
+// Admin-added contestants (the original flow) leave both columns NULL.
+if (!columnExists('contestants', 'user_id')) {
+  db.exec('ALTER TABLE contestants ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+if (!columnExists('contestants', 'partner_user_id')) {
+  db.exec('ALTER TABLE contestants ADD COLUMN partner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_contestant_user_night
+    ON contestants(user_id, night) WHERE user_id IS NOT NULL;
+`);
+
 /** Generates a secure, readable token. */
 export function generateToken() {
   return randomBytes(24).toString('base64url');

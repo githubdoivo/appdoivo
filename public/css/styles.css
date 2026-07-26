@@ -64,6 +64,8 @@ html.mode-light {
   --danger:   #d98a7a;
   --brand:    #6b3420;
   --role-owner: #8a4630;
+  --role-admin: #3f7d1f;
+  --role-user:  #1f6d78;
 }
 
 html.mode-dark {
@@ -83,6 +85,8 @@ html.mode-dark {
   --danger:   #c4685a;
   --brand:    #e2a878;
   --role-owner: #a96b4b;
+  --role-admin: #8fd167;
+  --role-user:  #6fd6e0;
 }
 
 * { box-sizing: border-box; }
@@ -217,6 +221,10 @@ input[type="password"] { text-transform: none; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
+/* A Rata's suggestion box and the Wall's message field read as too thick
+   at the generic input padding - thinner here specifically. */
+#suggest-text, #chat-text { padding: 9px 12px; }
+
 /* Show/hide toggle inside a password input (e.g. the login access key). */
 .password-field { position: relative; }
 .password-field input { padding-right: 46px; }
@@ -326,11 +334,14 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   border-radius: 999px;
 }
 /* Role badges: owner / admin / user, each its own color. */
-/* Hardcoded, not var(--clay/--outfit/--rata): each role keeps exactly one
-   color everywhere it appears, regardless of night theme or light/dark mode. */
+/* Not var(--clay/--outfit/--rata): each role keeps its own hue everywhere it
+   appears, regardless of night theme - but DOES need a light/dark-mode pair
+   (--role-*), same as --role-owner already had. admin/user used to be a
+   single hardcoded dark shade each, which read fine in light mode but was
+   nearly illegible against the dark-mode background. */
 .badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
-.badge.role-admin { border-color: #59662f; color: #59662f; }
-.badge.role-user { border-color: #3f5b54; color: #3f5b54; }
+.badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
+.badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
@@ -356,7 +367,7 @@ button.icon-btn:hover,
 a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
-.lang-toggle { font-size: 0.7rem; letter-spacing: 0.06em; font-weight: 600; text-transform: none; }
+.lang-toggle { font-family: var(--serif); font-style: italic; font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
 
 /* Theme toggle: shows the icon for what you'll switch TO. Light (default)
    shows the moon (switch to dark); dark mode shows the sun (switch to light). */
@@ -448,17 +459,24 @@ html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(-
    the full --ink there instead. */
 html.mode-light .hero-line { color: var(--ink); }
 
-/* bloco de destaque (consequencia atual) */
+/* bloco de destaque (consequencia atual) - a thin 2px border read as too
+   little "highlight" for how much space this box takes up at 1.5rem text,
+   especially for a single short line with lots of empty room around it.
+   A thicker border plus a faint accent-tinted wash (instead of the flat
+   --paper-3 every other box already uses) makes the emphasis match the size. */
 .highlight {
-  background: var(--paper-3);
-  border-left: 2px solid var(--rata);
+  background: color-mix(in srgb, var(--rata) 7%, var(--paper-3));
+  border-left: 5px solid var(--rata);
   padding: 18px 20px;
   font-family: var(--serif);
   font-size: 1.5rem;
   line-height: 1.35;
   color: var(--ink);
 }
-#tab-outfit .highlight { border-left-color: var(--outfit); }
+#tab-outfit .highlight {
+  border-left-color: var(--outfit);
+  background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
+}
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
 
@@ -538,13 +556,29 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   cursor: pointer;
 }
 .user-row-token.censored { letter-spacing: 2px; }
+/* Brief confirmation that a click also copied the key - doesn't touch the
+   text itself (unlike the old copy button, which safely could). */
+.user-row-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
-.inline { display: flex; gap: 8px; margin-bottom: 8px; }
+/* Click-to-rename a contestant in the admin table (see loadContestants()). */
+.contestant-name-edit { cursor: pointer; border-bottom: 1px dotted var(--line); }
+.contestant-name-edit:hover { border-bottom-color: var(--ink-soft); }
+
+/* align-items: center - without it, a flex row stretches every item to
+   match its tallest sibling by default, so a compact button next to a
+   taller input renders at the input's full height regardless of its own
+   (much smaller) padding. Affects every .inline form: chat, admin's
+   create-user, admin's add-contestant. */
+.inline { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 
 .help { font-size: 0.95rem; font-style: italic; color: var(--ink-soft); margin: 0 0 14px; }
+
+/* Search-result chips under the "team up with" input on Best Outfit's
+   self-registration form (see #register-partner-results in app.js). */
+.partner-results { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 /* ------------------------------ Responsivo ------------------------------- */
 
@@ -568,7 +602,12 @@ body { transition: background-color 0.45s ease; }
 
 .voting-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .voting-controls button { width: 100%; }
+/* "Open entries" starts the whole flow (registration -> voting -> closed) -
+   give it its own full-width row instead of sharing the 2-up grid with the
+   other four, which are steps within/after that first one. */
+#voting-registration-btn { grid-column: 1 / -1; }
 .voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
+.voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
 
@@ -719,7 +758,11 @@ html.mode-light body.theme-rata .card {
 body.theme-mural {
   --paper:    #cf9b7c;
   --paper-2:  #d9ac8f;
-  --paper-3:  #e3bfa5;
+  /* Every other theme steps paper -> paper-2 -> paper-3 by a few points of
+     lightness; this one used to jump twice as far, so the chat input (the
+     tab's only paper-3 surface) read as a glaring bright patch instead of
+     a subtle lift. Tightened to match the other themes' rhythm. */
+  --paper-3:  #deb69c;
   --ink:      #3d2216;
   --ink-soft: #7a5138;
   --line:     #a9744f;
@@ -854,6 +897,36 @@ html.mode-dark body.theme-mural .card {
    design elsewhere in the app - override it here so skip/next actually
    match, not just share a flex-basis. */
 .tutorial-actions button.ghost { padding: 12px 20px; font-size: 0.78rem; }
+
+/* ------------------------------ Modal (alert/confirm) ---------------------- */
+/* Same overlay/card treatment as the tutorial above - a custom stand-in for
+   window.alert()/confirm(), so admin actions and error messages read as
+   part of the app instead of a jarring unstyled browser dialog on top of it. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 26px 24px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.modal-message { color: var(--ink); line-height: 1.5; margin: 0 0 20px; white-space: pre-line; }
+.modal-actions { display: flex; align-items: center; gap: 10px; }
+.modal-actions button { flex: 1; padding: 12px 20px; font-size: 0.78rem; }
 
 /* ----------------------------------- Chat ---------------------------------- */
 
