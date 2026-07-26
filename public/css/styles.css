@@ -455,17 +455,24 @@ html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(-
    the full --ink there instead. */
 html.mode-light .hero-line { color: var(--ink); }
 
-/* bloco de destaque (consequencia atual) */
+/* bloco de destaque (consequencia atual) - a thin 2px border read as too
+   little "highlight" for how much space this box takes up at 1.5rem text,
+   especially for a single short line with lots of empty room around it.
+   A thicker border plus a faint accent-tinted wash (instead of the flat
+   --paper-3 every other box already uses) makes the emphasis match the size. */
 .highlight {
-  background: var(--paper-3);
-  border-left: 2px solid var(--rata);
+  background: color-mix(in srgb, var(--rata) 7%, var(--paper-3));
+  border-left: 5px solid var(--rata);
   padding: 18px 20px;
   font-family: var(--serif);
   font-size: 1.5rem;
   line-height: 1.35;
   color: var(--ink);
 }
-#tab-outfit .highlight { border-left-color: var(--outfit); }
+#tab-outfit .highlight {
+  border-left-color: var(--outfit);
+  background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
+}
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
 
@@ -558,7 +565,12 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .contestant-name-edit { cursor: pointer; border-bottom: 1px dotted var(--line); }
 .contestant-name-edit:hover { border-bottom-color: var(--ink-soft); }
 
-.inline { display: flex; gap: 8px; margin-bottom: 8px; }
+/* align-items: center - without it, a flex row stretches every item to
+   match its tallest sibling by default, so a compact button next to a
+   taller input renders at the input's full height regardless of its own
+   (much smaller) padding. Affects every .inline form: chat, admin's
+   create-user, admin's add-contestant. */
+.inline { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 

@@ -117,11 +117,10 @@ export const translations = {
     modal_cancel: 'cancelar',
     modal_confirm: 'confirmar',
     // Fixed, non-translated tab name (like "A Rata"/"Best Outfit"/"Wall").
+    // "User" covers both sides of this tab: your own account (change key,
+    // logout) and, for the owner, managing other users.
     users_title: 'Users',
-    // Just self-service key change + logout, not app-wide config (that
-    // lives under the A Rata tab's timezone card) - "Profile" reads truer
-    // than "Settings" for what's actually in here.
-    tab_settings: 'Perfil',
+    tab_settings: 'User',
     user_name_ph: 'Procura ou cria um utilizador...',
     create_user: 'Criar',
     user_search_no_match: 'Não encontrado - podes criar este utilizador.',
@@ -280,7 +279,7 @@ export const translations = {
     modal_cancel: 'cancel',
     modal_confirm: 'confirm',
     users_title: 'Users',
-    tab_settings: 'Profile',
+    tab_settings: 'User',
     user_name_ph: 'Search or create a user...',
     create_user: 'Create',
     user_search_no_match: "Not found - you can create this user.",
