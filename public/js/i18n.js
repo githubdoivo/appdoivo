@@ -71,7 +71,7 @@ export const translations = {
     theme_swamp: 'Swamp',
     // Notif
     notif_enabled_msg: 'Notificações ativadas!',
-    notif_already_on_msg: 'As notificações já estão ativas!',
+    notif_disabled_msg: 'Notificações desativadas.',
     notif_unsupported_msg: 'Falta só isto: Partilhar → Adicionar ao Ecrã Principal, e depois abre a app a partir daí.',
     notif_server_msg: 'As notificações não estão configuradas no servidor.',
     // Admin
@@ -204,7 +204,7 @@ export const translations = {
     theme_furnished: 'Furnished',
     theme_swamp: 'Swamp',
     notif_enabled_msg: 'Notifications enabled!',
-    notif_already_on_msg: 'Notifications are already on!',
+    notif_disabled_msg: 'Notifications turned off.',
     notif_unsupported_msg: 'One last thing: Share → Add to Home Screen, then open the app from there.',
     notif_server_msg: 'Notifications are not configured on the server.',
     admin_no_session: 'No session. Log in to the app first.',

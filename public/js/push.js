@@ -38,6 +38,20 @@ export function pushSupport() {
   return Notification.permission; // default | granted | denied
 }
 
+/**
+ * Whether THIS device currently has an active push subscription. Distinct
+ * from Notification.permission ('granted' can't be revoked by the site
+ * once given - it stays granted even after we unsubscribe), so this is
+ * the actual source of truth for the button's on/off state.
+ */
+async function isSubscribed() {
+  if (Notification.permission !== 'granted') return false;
+  const reg = swRegistration || (await registerServiceWorker());
+  if (!reg) return false;
+  const sub = await reg.pushManager.getSubscription();
+  return !!sub;
+}
+
 /** Pede permissao e subscreve o push. Devolve true se subscrito. */
 export async function enablePush() {
   const support = pushSupport();
@@ -65,8 +79,21 @@ export async function enablePush() {
   return true;
 }
 
+/** Unsubscribes this device. Notification.permission stays 'granted' (the
+ * site can't revoke that), but no more pushes reach this device until
+ * enablePush() runs again - which needs no new permission prompt. */
+export async function disablePush() {
+  const reg = swRegistration || (await registerServiceWorker());
+  if (!reg) return;
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub) return;
+  const endpoint = sub.endpoint;
+  await sub.unsubscribe();
+  try { await api('/push/unsubscribe', { method: 'POST', body: { endpoint } }); } catch { /* best effort */ }
+}
+
 /** Updates a notif icon button (any page) to match current support/state. */
-export function refreshNotifButton(btnId = 'notif-btn') {
+export async function refreshNotifButton(btnId = 'notif-btn') {
   const notifBtn = document.getElementById(btnId);
   if (!notifBtn) return;
   const state = pushSupport();
@@ -77,26 +104,28 @@ export function refreshNotifButton(btnId = 'notif-btn') {
   }
 
   notifBtn.classList.remove('hidden');
-  const isOn = state === 'granted';
   const needsHomeScreen = state === 'ios-add-home';
+  const isOn = state === 'granted' && (await isSubscribed());
   notifBtn.classList.toggle('active', isOn);
   const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
   notifBtn.title = label;
   notifBtn.setAttribute('aria-label', label);
 }
 
-/** Wires a notif icon button's click handler (any page). */
+/** Wires a notif icon button's click handler (any page): a real toggle -
+ * on while off enables, on while on disables (see disablePush()). */
 export function wireNotifButton(btnId = 'notif-btn') {
   const notifBtn = document.getElementById(btnId);
   if (!notifBtn) return;
   notifBtn.addEventListener('click', async () => {
-    if (pushSupport() === 'granted') {
-      alert(t('notif_already_on_msg'));
-      return;
-    }
     try {
-      const ok = await enablePush();
-      if (ok) alert(t('notif_enabled_msg'));
+      if (await isSubscribed()) {
+        await disablePush();
+        alert(t('notif_disabled_msg'));
+      } else {
+        const ok = await enablePush();
+        if (ok) alert(t('notif_enabled_msg'));
+      }
     } catch { /* mensagens tratadas acima */ }
     refreshNotifButton(btnId);
   });
