@@ -315,11 +315,6 @@ function applyUserSearch() {
 async function loadUsers() {
   allUsers = await api('/admin/users');
   applyUserSearch();
-
-  $('copy-all-users').onclick = () => {
-    const lines = allUsers.filter((u) => !u.is_admin).map((u) => `${u.name}: ${u.token}`).join('\n');
-    copyToClipboard(lines, $('copy-all-users'));
-  };
 }
 
 $('user-name-input').addEventListener('input', applyUserSearch);

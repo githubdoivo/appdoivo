@@ -397,7 +397,7 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    most visible at the rounded corners, where a small radius zoomed in
    looks like a stray bracket rather than a subtle edge. Blend it toward
    the card's own background, same treatment as the tab-row border. */
-html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 45%, var(--paper-2)); }
+html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
 .card h2 { font-size: 1.15rem; font-style: italic; font-weight: 500; margin-bottom: 6px; }
 
 .hero-line {
@@ -528,7 +528,8 @@ body { transition: background-color 0.45s ease; }
 
 /* ================= Controlo de votacao (painel admin) =================== */
 
-.voting-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.voting-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.voting-controls button { width: 100%; }
 .voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
