@@ -174,16 +174,21 @@ export function generateToken() {
   return randomBytes(24).toString('base64url');
 }
 
+/** Strips a name down to the plain-ASCII, lowercase base used by every token. */
+function tokenBase(name) {
+  return String(name)
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '') || 'user';
+}
+
 /**
  * Generates a memorable per-user token: their name plus a random 4-digit
  * suffix (e.g. "rito8749"), easier to type/remember than an opaque string.
  * Retries on the rare collision (checked via the token's lookup hash).
  */
 export function generateUserToken(name) {
-  const base = String(name)
-    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '') || 'user';
+  const base = tokenBase(name);
 
   let token;
   do {
@@ -192,6 +197,21 @@ export function generateUserToken(name) {
   } while (db.prepare('SELECT 1 FROM users WHERE token_hash = ?').get(hashToken(token)));
 
   return token;
+}
+
+/**
+ * Deterministic variant for QA's demo-seed template (see seedDemo.js): the
+ * same name always produces the same token across every reseed, since QA's
+ * database resets on every deploy. Without this, a tester's access key
+ * would change on every single deploy, forcing a re-send every time -
+ * whereas prod's real users don't need this, their DB persists.
+ */
+export function generateDemoUserToken(name) {
+  const base = tokenBase(name);
+  let hash = 0;
+  for (const ch of base) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const digits = String(hash % 10000).padStart(4, '0');
+  return `${base}${digits}`;
 }
 
 /** Reads a setting with a default value. */
