@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import db from './db.js';
 import { authenticate, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
@@ -33,7 +36,17 @@ import { listMessages, postMessage } from './chat.js';
 
 const router = Router();
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version: appVersion } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+
 /* ---------------------------------- Auth --------------------------------- */
+
+// App version shown as a small on-screen reference (see version.js), so QA
+// vs prod mismatches are obvious when reporting a bug. Public - no need to
+// be logged in to see it (the login screen shows it too).
+router.get('/version', (req, res) => {
+  res.json({ version: appVersion });
+});
 
 // Validates a token and returns the user.
 router.post('/auth/login', loginRateLimit, (req, res) => {
