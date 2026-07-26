@@ -346,6 +346,31 @@ test('posting and reading a chat message', async () => {
   assert.match(found.author, /^[a-z]+$/);
 });
 
+test("a user's Wall pseudonym stays the same across multiple posts", async () => {
+  await api('POST', '/chat/messages', { token: userToken, body: { text: 'stable-1' } });
+  await api('POST', '/chat/messages', { token: userToken, body: { text: 'stable-2' } });
+
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  const msg1 = list.data.messages.find((m) => m.text === 'stable-1');
+  const msg2 = list.data.messages.find((m) => m.text === 'stable-2');
+  assert.ok(msg1 && msg2, 'both messages should be in the list');
+  assert.equal(msg1.author, msg2.author, 'the same user should get the same pseudonym on every post');
+});
+
+test('the Wall name<->pseudonym mapping is owner-only', async () => {
+  const forbidden = await api('GET', '/admin/wall-pseudonyms', { token: userToken });
+  assert.equal(forbidden.status, 403);
+
+  const ok = await api('GET', '/admin/wall-pseudonyms', { token: ADMIN });
+  assert.equal(ok.status, 200);
+  const entry = ok.data.find((r) => r.name === 'Ivo');
+  assert.ok(entry, 'the posting user should show up in the mapping');
+
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  const theirMsg = list.data.messages.find((m) => m.text === 'stable-1');
+  assert.equal(entry.pseudonym, theirMsg.author, 'the mapping should match what actually shows on the Wall');
+});
+
 test('an empty chat message is rejected', async () => {
   const r = await api('POST', '/chat/messages', { token: ADMIN, body: { text: '   ' } });
   assert.equal(r.status, 400);
@@ -381,4 +406,18 @@ test('an invalid language value falls back to pt', async () => {
   assert.equal(r.status, 200);
   const me = await api('GET', '/me', { token: ADMIN });
   assert.equal(me.data.lang, 'pt');
+});
+
+/* ------------------------------- Rate limiting ------------------------------ */
+// Runs last in the file on purpose: it exhausts this IP's shared
+// login/auth-guess budget, which would make any *later* test expecting a
+// plain 401 for a bad token see 429 instead.
+
+test('guessing tokens against a non-login endpoint is rate-limited too, not just /auth/login', async () => {
+  let lastStatus;
+  for (let i = 0; i < 12; i++) {
+    const r = await api('GET', '/me', { token: `guess-${i}-does-not-exist` });
+    lastStatus = r.status;
+  }
+  assert.equal(lastStatus, 429, 'repeated invalid-token attempts against a non-login endpoint should eventually be rate-limited');
 });

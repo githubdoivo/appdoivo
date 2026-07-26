@@ -251,6 +251,20 @@ router.patch('/admin/users/:id/admin', (req, res) => {
   res.json({ ok: true, is_admin: isAdmin });
 });
 
+/* ---------------------------------- Wall ---------------------------------- */
+// Owner-only: the Wall is anonymous to everyone else, including other
+// admins - only the owner can see who's behind each pseudonym.
+
+router.get('/admin/wall-pseudonyms', requireOwner, (req, res) => {
+  const rows = db.prepare(`
+    SELECT name, wall_pseudonym
+    FROM users
+    WHERE wall_pseudonym IS NOT NULL
+    ORDER BY name ASC
+  `).all();
+  res.json(rows.map((r) => ({ name: r.name, pseudonym: r.wall_pseudonym })));
+});
+
 // Owner-only: wipe game content (contestants, votes, consequences) to start
 // a fresh event, without touching user accounts/keys. Production data is
 // otherwise permanent (persistent volume, never reset on deploy).

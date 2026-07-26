@@ -26,7 +26,8 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     tutorial_seen INTEGER NOT NULL DEFAULT 0,
-    lang TEXT NOT NULL DEFAULT 'pt'
+    lang TEXT NOT NULL DEFAULT 'pt',
+    wall_pseudonym TEXT
   );
 
   CREATE TABLE IF NOT EXISTS consequences (
@@ -138,11 +139,20 @@ if (!columnExists('users', 'lang')) {
   db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'pt'");
 }
 
-// Migration: the Wall's random per-message pseudonym, replacing the real
-// author. Existing (soon-to-be-pruned anyway, since the Wall only ever
-// keeps 20 messages) rows just get an empty one until they age out.
+// Migration: the Wall's per-message pseudonym, replacing the real author
+// (mirrors users.wall_pseudonym at post time). Existing (soon-to-be-pruned
+// anyway, since the Wall only ever keeps 20 messages) rows just get an
+// empty one until they age out.
 if (!columnExists('messages', 'pseudonym')) {
   db.exec("ALTER TABLE messages ADD COLUMN pseudonym TEXT NOT NULL DEFAULT ''");
+}
+
+// Migration: a stable per-user Wall pseudonym (assigned lazily on first
+// post - see getOrAssignPseudonym() in chat.js), replacing what used to
+// be a fresh random one on every single message. Nullable: most users
+// never post, so there's nothing to assign until they do.
+if (!columnExists('users', 'wall_pseudonym')) {
+  db.exec('ALTER TABLE users ADD COLUMN wall_pseudonym TEXT');
 }
 
 // Migration: per-day voting -> per-night voting.

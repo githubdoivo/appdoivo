@@ -2,6 +2,7 @@ import { api, getToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
+import { wireLogoEasterEgg } from './logoEasterEgg.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -61,6 +62,7 @@ async function boot() {
     }
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
+    wireLogoEasterEgg(me.name);
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
@@ -71,6 +73,10 @@ async function boot() {
   roleBadge.classList.toggle('role-admin', !isOwner);
   if (!isOwner) {
     document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
+    document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
+    // A regular admin can run voting and reveal consequences, but broader
+    // configuration (timezone) stays owner-only.
+    $('timezone-card').classList.add('hidden');
     selectAdminTab('rata');
   }
   $('admin-content').classList.remove('hidden');
@@ -202,7 +208,7 @@ function renderUsersList(users) {
             ${esc(u.name)}
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
-          <div class="user-row-token">${esc(u.token)}</div>
+          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
         </div>
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
@@ -216,6 +222,20 @@ function renderUsersList(users) {
 
   $('users-list').querySelectorAll('[data-copy-user]').forEach((b) => {
     b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
+  });
+
+  // Keys are censored by default (someone glancing at a screen share
+  // shouldn't see everyone's access keys) - click to reveal/hide. Copy
+  // always works with the real value regardless of this toggle.
+  $('users-list').querySelectorAll('[data-reveal-token]').forEach((el) => {
+    const toggle = () => {
+      const revealed = el.classList.toggle('censored') === false;
+      el.textContent = revealed ? el.dataset.token : '••••••••••••';
+    };
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
   });
 
   $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {
@@ -409,13 +429,22 @@ async function loadConsequences() {
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }
 
+async function loadWallPseudonyms() {
+  const rows = await api('/admin/wall-pseudonyms');
+  $('wall-pseudonyms-table').innerHTML = rows.length
+    ? `<tr><th>${t('col_name')}</th><th>${t('col_pseudonym')}</th></tr>` +
+      rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.pseudonym)}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_wall_pseudonyms')}</td></tr>`;
+}
+
 /* --------------------------------- Tabs ---------------------------------- */
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'outfit', 'rata'].forEach((name) => {
+  ['users', 'outfit', 'rata', 'wall'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
+  if (tab === 'wall' && isOwner) loadWallPseudonyms();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

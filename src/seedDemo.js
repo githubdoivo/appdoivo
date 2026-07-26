@@ -1,14 +1,14 @@
-// Populates demo users + consequences. Idempotent - only adds data for
-// tables that are still empty, so it's safe to call on every boot (used
-// automatically in QA via SEED_DEMO=true, see server.js).
-//
-// Contestants are intentionally NOT seeded here - they're event-specific
-// and should always start empty on every deploy, added fresh by the admin.
-// Only the user list is a stable template (real names), so QA login
-// credentials are always ready without losing/regenerating them.
+// Populates demo users + consequences + contestants. Idempotent - only adds
+// data for tables that are still empty, so it's safe to call on every boot
+// (used automatically in QA via SEED_DEMO=true, see server.js). Contestants
+// are normally event-specific and only ever added manually by the owner -
+// that's still true in production (SEED_DEMO is never set there). QA is the
+// one exception: 5 contestants per night are seeded automatically from the
+// demo user template, so Best Outfit is testable without manual setup.
 import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
+import { NIGHTS } from './nights.js';
 
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
@@ -68,5 +68,16 @@ export function seedDemo() {
       insCons.run(demoUsers[(i + 1) % demoUsers.length], text, day, 'pending');
     });
     console.log(`[seed-demo] Added 1 revealed consequence and ${CONSEQUENCES_PENDING.length} pending.`);
+  }
+
+  // 3) Contestants (QA convenience only - prod never sets SEED_DEMO, so the
+  // owner always adds contestants manually there) -----------------------------
+  const contestantCount = db.prepare('SELECT COUNT(*) AS n FROM contestants').get().n;
+  if (contestantCount === 0) {
+    const insContestant = db.prepare('INSERT INTO contestants (name, night) VALUES (?, ?)');
+    NIGHTS.forEach((night, i) => {
+      NAMES.slice(i * 5, i * 5 + 5).forEach((name) => insContestant.run(name, night));
+    });
+    console.log(`[seed-demo] Registered 5 contestants for each night (${NIGHTS.join(', ')}).`);
   }
 }

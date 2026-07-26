@@ -2,6 +2,7 @@ import { api, getToken, setToken, clearToken } from './api.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
+import { wireLogoEasterEgg } from './logoEasterEgg.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -38,10 +39,12 @@ function showLogin() {
   $('app').classList.add('hidden');
 }
 
+
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   applyNight();
+  wireLogoEasterEgg(me.name);
   if (me.isAdmin) {
     const adminBadge = $('admin-badge');
     adminBadge.textContent = me.isOwner ? 'owner' : 'admin';

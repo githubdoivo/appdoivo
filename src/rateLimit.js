@@ -4,11 +4,14 @@
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
 
+// Shared across /auth/login AND every other endpoint's failed-token check
+// (see checkAuthAttempt / auth.js) - a single per-IP budget for "guess a
+// token", not a separate one per code path. Otherwise an attacker could
+// dodge /auth/login's limit entirely by guessing tokens against any other
+// authenticated endpoint instead, which accepts the same Bearer token.
 const attempts = new Map(); // ip -> { count, resetAt }
 
-/** Blocks an IP after too many requests within the time window (login brute-force guard). */
-export function loginRateLimit(req, res, next) {
-  const ip = req.ip;
+function checkAndCount(ip) {
   const now = Date.now();
   let entry = attempts.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -16,9 +19,28 @@ export function loginRateLimit(req, res, next) {
     attempts.set(ip, entry);
   }
   if (entry.count >= MAX_ATTEMPTS) {
-    res.set('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
-    return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
+    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   }
   entry.count++;
+  return { blocked: false };
+}
+
+/** Blocks an IP after too many requests within the time window (login brute-force guard). */
+export function loginRateLimit(req, res, next) {
+  const result = checkAndCount(req.ip);
+  if (result.blocked) {
+    res.set('Retry-After', String(result.retryAfter));
+    return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
+  }
   next();
+}
+
+/**
+ * Same budget, for a single failed-token attempt against any endpoint
+ * (not just /auth/login). Only call this when a token actually fails to
+ * resolve to a user - never on successful/authenticated requests, or
+ * normal API usage by real users would get throttled.
+ */
+export function checkAuthAttempt(ip) {
+  return checkAndCount(ip);
 }
