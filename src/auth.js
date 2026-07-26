@@ -15,7 +15,10 @@ export function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Token em falta.' });
   }
 
-  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang FROM users WHERE token_hash = ?').get(hashToken(token));
+  // Keys are always lowercase (see /auth/login) - normalize here too, since
+  // the frontend just replays whatever was typed at login on every
+  // subsequent request.
+  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang FROM users WHERE token_hash = ?').get(hashToken(String(token).toLowerCase()));
   if (!user) {
     // Shares /auth/login's rate-limit budget - guessing tokens against any
     // endpoint that accepts a Bearer token is throttled the same way,

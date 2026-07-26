@@ -1,4 +1,4 @@
-import { api, getToken, setToken } from './api.js';
+import { api, getToken, setToken, clearToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
@@ -123,6 +123,11 @@ function updateLangUI() {
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
 wireNotifButton('notif-btn');
+
+$('logout-btn').addEventListener('click', () => {
+  clearToken();
+  location.href = '/';
+});
 
 $('lang-toggle').addEventListener('click', () => {
   setLang(getLang() === 'pt' ? 'en' : 'pt');
@@ -301,18 +306,19 @@ function renderUsersList(users) {
   });
 }
 
-// The name input doubles as a live search: below 4 characters it's treated
-// as "not enough to judge yet" (full list shown, create disabled). At 4+
-// characters it filters the list; if nothing matches, this is clearly a
-// new person rather than someone already here, so create becomes the only
-// sensible action. If something DOES match, creating is disabled on
-// purpose - act on the existing user via its row buttons instead (copy,
-// rename, remove, etc.), rather than risking an accidental duplicate.
+// The name input doubles as a live search: below 3 characters it's treated
+// as "not enough to judge yet" (full list shown, create disabled). At 3+
+// characters it filters the list (e.g. "Rui" already matches) - if nothing
+// matches, this is clearly a new person rather than someone already here,
+// so create becomes the only sensible action. If something DOES match,
+// creating is disabled on purpose - act on the existing user via its row
+// buttons instead (copy, rename, remove, etc.), rather than risking an
+// accidental duplicate.
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
   const createBtn = $('user-form').querySelector('button[type="submit"]');
 
-  if (term.length <= 3) {
+  if (term.length < 3) {
     renderUsersList(allUsers);
     $('user-search-hint').classList.add('hidden');
     createBtn.disabled = true;

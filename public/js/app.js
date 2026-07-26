@@ -173,10 +173,8 @@ $('login-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('logout-btn').addEventListener('click', () => {
-  clearToken();
-  location.reload();
-});
+// Logout itself lives on the Settings page now (settings.js) - it's rare
+// enough not to need a permanent topbar icon slot on every page.
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -398,6 +396,9 @@ function renderRegistration(data) {
       registerMode = b.dataset.mode;
       modeButtons.forEach((x) => x.classList.toggle('active', x === b));
       $('register-partner-wrap').classList.toggle('hidden', registerMode !== 'duo');
+      // Duo entries register both people under one name, so the field asks
+      // for "your (both's)" name instead of "your" name.
+      $('register-name').placeholder = t(registerMode === 'duo' ? 'outfit_register_ph_duo' : 'outfit_register_ph');
       if (registerMode === 'solo') {
         registerPartnerId = null;
         $('register-partner-search').value = '';
@@ -457,9 +458,9 @@ async function loadVotes() {
     let statusKey;
     if (data.status === 'registration') statusKey = 'outfit_registration_open';
     else if (data.status === 'open') statusKey = 'outfit_open';
+    else if (!data.started) statusKey = 'outfit_wait';
     else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
-    else if (data.status === 'closed') statusKey = 'outfit_closed';
-    else statusKey = 'outfit_wait';
+    else statusKey = 'outfit_closed';
     $('voting-status').textContent = t(statusKey);
 
     if (data.status === 'open' && !data.myVote) {

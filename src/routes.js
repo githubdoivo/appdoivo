@@ -51,8 +51,12 @@ router.get('/version', (req, res) => {
 });
 
 // Validates a token and returns the user.
+// Keys are always lowercase (generated that way, and self-service changes
+// are forced lowercase below) - normalizing the typed value here makes
+// login case-insensitive in practice, so a phone keyboard auto-capitalizing
+// the first letter doesn't lock someone out.
 router.post('/auth/login', loginRateLimit, (req, res) => {
-  const token = (req.body?.token || '').trim();
+  const token = (req.body?.token || '').trim().toLowerCase();
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
   const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
@@ -84,14 +88,16 @@ router.post('/me/lang', (req, res) => {
 // token itself (e.g. a device left logged in shouldn't let a stranger
 // silently take over the account). New key must be letters/numbers only.
 router.post('/me/change-token', (req, res) => {
-  const currentToken = String(req.body?.currentToken || '');
-  const newToken = String(req.body?.newToken || '').trim();
+  const currentToken = String(req.body?.currentToken || '').toLowerCase();
+  // Keys are always lowercase (see /auth/login) - forcing it here too means
+  // the stored key stays canonical regardless of how it was typed/pasted.
+  const newToken = String(req.body?.newToken || '').trim().toLowerCase();
 
   const user = db.prepare('SELECT token_hash FROM users WHERE id = ?').get(req.user.id);
   if (hashToken(currentToken) !== user.token_hash) {
     return res.status(401).json({ error: 'Chave atual incorreta.' });
   }
-  if (!/^[A-Za-z0-9]+$/.test(newToken)) {
+  if (!/^[a-z0-9]+$/.test(newToken)) {
     return res.status(400).json({ error: 'A nova chave só pode ter letras e números.' });
   }
   if (newToken.length < 4) {
@@ -146,6 +152,11 @@ router.get('/votes/status', (req, res) => {
   res.json({
     night,
     status,
+    // Whether this night has ever gone through registration/open at least
+    // once - lets the frontend tell "hasn't started yet" (status defaults
+    // to 'closed' before anything happens) apart from "voting closed after
+    // running" (status is 'closed' again, but this time for real).
+    started: getSetting(`voting_started_${night}`) === '1',
     contestants: contestantsForNight(night),
     myVote: myVoteForNight(req.user.id, night),
     myContestant: myContestantForNight(req.user.id, night),
@@ -433,11 +444,18 @@ router.get('/admin/voting', (req, res) => {
 
 // Opens registration: contestants can self-enter (see POST /outfit/register).
 // Voting options stay hidden from everyone until the admin explicitly moves
-// on to /open, once they've reviewed/cleaned up the submissions.
+// on to /open, once they've reviewed/cleaned up the submissions. Wipes any
+// votes already cast - reopening registration means a new round is starting
+// (maybe a new contestant joins, maybe it's a full redo), so votes tied to
+// the previous roster would otherwise linger and skew a later re-tally.
+// Contestants themselves are untouched - the admin edits/removes those
+// directly in the Contestants table.
 router.post('/admin/voting/:night/registration', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'registration');
+  setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
 });
@@ -446,6 +464,7 @@ router.post('/admin/voting/:night/open', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'open');
+  setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });
@@ -482,6 +501,7 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'open');
+  setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
 });

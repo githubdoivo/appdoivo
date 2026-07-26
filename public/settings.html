@@ -153,7 +153,7 @@
           <p class="help" data-i18n="change_key_help">Explicação</p>
           <form id="change-key-form">
             <div class="password-field">
-              <input id="current-key-input" type="password" data-i18n-ph="current_key_ph" placeholder="Chave atual" autocomplete="off" required />
+              <input id="current-key-input" type="password" data-i18n-ph="current_key_ph" placeholder="Chave atual" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
               <button type="button" id="current-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -166,7 +166,7 @@
               </button>
             </div>
             <div class="password-field" style="margin-top:10px">
-              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" required pattern="[A-Za-z0-9]+" />
+              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" />
               <button type="button" id="new-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -181,6 +181,11 @@
             <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
           </form>
           <span id="change-key-msg" class="muted"></span>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="logout_title">Sessão</h2>
+          <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
         </div>
       </div>
     </div>
