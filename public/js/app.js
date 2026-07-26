@@ -137,6 +137,17 @@ $('theme-toggle').addEventListener('click', () => toggleMode());
 
 /* -------------------------------- Login ---------------------------------- */
 
+$('token-toggle').addEventListener('click', () => {
+  const input = $('token-input');
+  const btn = $('token-toggle');
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  btn.classList.toggle('visible', !showing);
+  const label = showing ? 'Mostrar' : 'Ocultar';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+});
+
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const token = $('token-input').value.trim();
