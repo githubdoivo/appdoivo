@@ -18,6 +18,8 @@ import {
 import {
   contestantsForNight,
   myVoteForNight,
+  myContestantForNight,
+  registerContestant,
   castVote,
   resultsForNight,
   visibleResultsForNight,
@@ -146,9 +148,30 @@ router.get('/votes/status', (req, res) => {
     status,
     contestants: contestantsForNight(night),
     myVote: myVoteForNight(req.user.id, night),
+    myContestant: myContestantForNight(req.user.id, night),
     results,
     resultsPhase: phase,
   });
+});
+
+// Self-registration for Best Outfit: everyone (not just admins) can enter
+// their own persona/creature-of-the-night, optionally teamed up with
+// another user (picked via /users/basic) - see registerContestant() for
+// the duo-matching and vote-merging rules.
+router.post('/outfit/register', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
+});
+
+// Minimal user list (id + name only, no tokens/roles) for the "team up with"
+// picker on Best Outfit registration - every logged-in user can see it.
+router.get('/users/basic', (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, name FROM users WHERE id != ? ORDER BY name COLLATE NOCASE'
+  ).all(req.user.id);
+  res.json(rows);
 });
 
 router.post('/votes', (req, res) => {
@@ -335,12 +358,18 @@ router.post('/admin/consequences/reveal', async (req, res) => {
   res.json({ ok: true, revealed });
 });
 
-// Contestants for a night
+// Contestants for a night. registered_by/partner_name are set only for
+// self-registered entries (see registerContestant() in votes.js) - admin-
+// added contestants leave both null, so the owner can tell them apart.
 router.get('/admin/contestants', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
-  const rows = db.prepare(
-    'SELECT id, name, night FROM contestants WHERE night = ? ORDER BY name'
-  ).all(night);
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
+  `).all(night);
   res.json({ night, contestants: rows });
 });
 
@@ -352,6 +381,17 @@ router.post('/admin/contestants', (req, res) => {
     'INSERT INTO contestants (name, night) VALUES (?, ?)'
   ).run(name, night);
   res.status(201).json({ id: info.lastInsertRowid, name, night });
+});
+
+// Renames a contestant (e.g. fixing a typo in a self-registered entry, or
+// just reviewing/cleaning up submissions before opening voting).
+router.patch('/admin/contestants/:id', (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  if (name.length > 60) return res.status(400).json({ error: 'Maximo 60 caracteres.' });
+  const info = db.prepare('UPDATE contestants SET name = ? WHERE id = ?').run(name, Number(req.params.id));
+  if (info.changes === 0) return res.status(404).json({ error: 'Concorrente nao encontrado.' });
+  res.json({ ok: true });
 });
 
 router.delete('/admin/contestants/:id', (req, res) => {
@@ -389,6 +429,17 @@ router.get('/admin/voting', (req, res) => {
       resultsPhase: getResultsPhase(night),
     })),
   });
+});
+
+// Opens registration: contestants can self-enter (see POST /outfit/register).
+// Voting options stay hidden from everyone until the admin explicitly moves
+// on to /open, once they've reviewed/cleaned up the submissions.
+router.post('/admin/voting/:night/registration', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  setSetting(`voting_status_${night}`, 'registration');
+  resetResultsPhase(night);
+  res.json({ ok: true, night, votingStatus: 'registration' });
 });
 
 router.post('/admin/voting/:night/open', (req, res) => {

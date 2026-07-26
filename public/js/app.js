@@ -63,7 +63,12 @@ function showApp(me) {
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
   loadConsequences();
-  loadVotes();
+  // Best Outfit's own data loads when its tab is actually selected (see
+  // selectTab()) - not here too. It used to double-load unconditionally,
+  // which was harmless when the outfit tab was just static vote buttons,
+  // but now that it has a live registration form, a late-resolving response
+  // from this redundant call could silently wipe out text someone's mid-
+  // typing (the newer selectTab() load re-renders the same DOM nodes).
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
 }
@@ -339,6 +344,106 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
   });
 });
 
+/* --------------------------- Candidatura (Best Outfit) ------------------- */
+// Self-registration, only shown while the admin has this night in the
+// 'registration' phase (see nightStatus() in src/time.js). Solo or teamed up
+// with another user picked from /users/basic - a duo shares one contestant
+// entry and one combined vote for the night (see castVote() server-side).
+
+let registerMode = 'solo';
+let registerPartnerId = null;
+let usersCache = null;
+
+async function ensureUsersCache() {
+  if (!usersCache) usersCache = await api('/users/basic');
+  return usersCache;
+}
+
+function renderRegistration(data) {
+  const card = $('register-card');
+  const area = $('register-area');
+  if (data.status !== 'registration') {
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+
+  if (data.myContestant) {
+    const msg = data.myContestant.partnerName
+      ? t('outfit_registered_with', { name: esc(data.myContestant.name), partner: esc(data.myContestant.partnerName) })
+      : t('outfit_registered_as', { name: esc(data.myContestant.name) });
+    area.innerHTML = `<p class="highlight">${msg}</p>`;
+    return;
+  }
+
+  registerMode = 'solo';
+  registerPartnerId = null;
+  area.innerHTML = `
+    <form id="register-form">
+      <div class="theme-switch" id="register-mode-switch">
+        <button type="button" data-mode="solo" class="active">${t('outfit_register_solo')}</button>
+        <button type="button" data-mode="duo">${t('outfit_register_duo')}</button>
+      </div>
+      <div id="register-partner-wrap" class="hidden" style="margin-top:10px">
+        <input id="register-partner-search" type="text" placeholder="${esc(t('outfit_register_partner_ph'))}" autocomplete="off" />
+        <div id="register-partner-results" class="partner-results"></div>
+      </div>
+      <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
+      <button type="submit" style="margin-top:10px">${t('outfit_register_btn')}</button>
+    </form>`;
+
+  const modeButtons = area.querySelectorAll('#register-mode-switch button');
+  modeButtons.forEach((b) => {
+    b.addEventListener('click', () => {
+      registerMode = b.dataset.mode;
+      modeButtons.forEach((x) => x.classList.toggle('active', x === b));
+      $('register-partner-wrap').classList.toggle('hidden', registerMode !== 'duo');
+      if (registerMode === 'solo') {
+        registerPartnerId = null;
+        $('register-partner-search').value = '';
+        $('register-partner-results').innerHTML = '';
+      }
+    });
+  });
+
+  const searchInput = $('register-partner-search');
+  const resultsEl = $('register-partner-results');
+  searchInput.addEventListener('input', async () => {
+    registerPartnerId = null;
+    const term = searchInput.value.trim().toLowerCase();
+    if (term.length < 2) { resultsEl.innerHTML = ''; return; }
+    const users = await ensureUsersCache();
+    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-partner-id="${u.id}">${esc(u.name)}</button>`).join('');
+    resultsEl.querySelectorAll('[data-partner-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        registerPartnerId = Number(btn.dataset.partnerId);
+        searchInput.value = btn.textContent;
+        resultsEl.innerHTML = '';
+      });
+    });
+  });
+
+  $('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('register-name').value.trim();
+    if (!name) return;
+    if (registerMode === 'duo' && !registerPartnerId) {
+      await showAlert(t('outfit_register_partner_required'));
+      return;
+    }
+    try {
+      await api('/outfit/register', {
+        method: 'POST',
+        body: { name, night: getNight(), partnerUserId: registerMode === 'duo' ? registerPartnerId : null },
+      });
+      loadVotes();
+    } catch (err) {
+      await showAlert(err.message);
+    }
+  });
+}
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -346,9 +451,12 @@ async function loadVotes() {
     const data = await api(`/votes/status?night=${encodeURIComponent(night)}`);
     const results = Array.isArray(data.results) ? data.results : [];
 
-    // Status controlled by the admin: open / closed-pending-reveal / closed.
+    renderRegistration(data);
+
+    // Status controlled by the admin: registration / open / closed-pending-reveal / closed.
     let statusKey;
-    if (data.status === 'open') statusKey = 'outfit_open';
+    if (data.status === 'registration') statusKey = 'outfit_registration_open';
+    else if (data.status === 'open') statusKey = 'outfit_open';
     else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
     else if (data.status === 'closed') statusKey = 'outfit_closed';
     else statusKey = 'outfit_wait';

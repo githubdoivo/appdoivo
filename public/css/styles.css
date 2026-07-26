@@ -540,11 +540,19 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .user-row-token.censored { letter-spacing: 2px; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
+/* Click-to-rename a contestant in the admin table (see loadContestants()). */
+.contestant-name-edit { cursor: pointer; border-bottom: 1px dotted var(--line); }
+.contestant-name-edit:hover { border-bottom-color: var(--ink-soft); }
+
 .inline { display: flex; gap: 8px; margin-bottom: 8px; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 
 .help { font-size: 0.95rem; font-style: italic; color: var(--ink-soft); margin: 0 0 14px; }
+
+/* Search-result chips under the "team up with" input on Best Outfit's
+   self-registration form (see #register-partner-results in app.js). */
+.partner-results { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 /* ------------------------------ Responsivo ------------------------------- */
 
@@ -569,6 +577,7 @@ body { transition: background-color 0.45s ease; }
 .voting-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .voting-controls button { width: 100%; }
 .voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
+.voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
 

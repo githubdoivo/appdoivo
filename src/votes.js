@@ -39,9 +39,76 @@ export function myVoteForNight(userId, night) {
   ).get(userId, night) || null;
 }
 
+/** The OTHER user_id sharing this user's contestant entry for a night
+ * (their duo partner), if they're registered as a duo. Null if solo or not
+ * registered at all. */
+function duoPartnerId(userId, night) {
+  const row = db.prepare(
+    'SELECT user_id, partner_user_id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+  ).get(night, userId, userId);
+  if (!row) return null;
+  return row.user_id === userId ? row.partner_user_id : row.user_id;
+}
+
+/** The contestant entry this user registered (solo or as part of a duo)
+ * for a night, if any - used to show "you're entered as X" instead of the
+ * registration form. */
+export function myContestantForNight(userId, night) {
+  const row = db.prepare(`
+    SELECT c.id, c.name, c.user_id, u1.name AS registrant_name, u2.name AS partner_name
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? AND (c.user_id = ? OR c.partner_user_id = ?)
+  `).get(night, userId, userId);
+  if (!row) return null;
+  const partnerName = row.user_id === userId ? row.partner_name : row.registrant_name;
+  return { id: row.id, name: row.name, partnerName: partnerName || null };
+}
+
+/**
+ * Self-registers the caller as a Best Outfit contestant for a night. Pass
+ * partnerUserId to team up with another user (picked from /users/basic on
+ * the frontend, not typed) - both then share one contestant entry, and one
+ * combined vote for the night between them (see castVote()). Returns
+ * { ok, id, name } or { error }.
+ */
+export function registerContestant(userId, night, name, partnerUserId) {
+  if (!isNight(night)) return { error: 'Noite invalida.' };
+  if (nightStatus(night) !== 'registration') return { error: 'As candidaturas desta noite nao estao abertas.' };
+
+  const already = db.prepare(
+    'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+  ).get(night, userId, userId);
+  if (already) return { error: 'Ja estas inscrito/a nesta noite.' };
+
+  const trimmedName = String(name || '').trim();
+  if (!trimmedName) return { error: 'Escreve o nome da tua personagem.' };
+  if (trimmedName.length > 60) return { error: 'Maximo 60 caracteres.' };
+
+  let partnerId = null;
+  if (partnerUserId) {
+    partnerId = Number(partnerUserId);
+    if (partnerId === userId) return { error: 'Nao podes candidatar-te contigo mesmo/a.' };
+    const partner = db.prepare('SELECT id FROM users WHERE id = ?').get(partnerId);
+    if (!partner) return { error: 'Utilizador invalido.' };
+    const partnerTaken = db.prepare(
+      'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+    ).get(night, partnerId, partnerId);
+    if (partnerTaken) return { error: 'Essa pessoa ja esta inscrita nesta noite.' };
+  }
+
+  const info = db.prepare(
+    'INSERT INTO contestants (name, night, user_id, partner_user_id) VALUES (?, ?, ?, ?)'
+  ).run(trimmedName, night, userId, partnerId);
+  return { ok: true, id: info.lastInsertRowid, name: trimmedName };
+}
+
 /**
  * Records a vote for a night. Validates the night, the voting status, the
- * contestant and duplicates. Returns { ok } or { error }.
+ * contestant and duplicates. A duo (see registerContestant()) shares one
+ * combined vote - once either partner votes, the other is blocked. Returns
+ * { ok } or { error }.
  */
 export function castVote(userId, contestantId, night) {
   if (!isNight(night)) {
@@ -63,6 +130,14 @@ export function castVote(userId, contestantId, night) {
   ).get(userId, night);
   if (existing) {
     return { error: 'Ja votaste nesta noite.' };
+  }
+
+  const partnerId = duoPartnerId(userId, night);
+  if (partnerId) {
+    const partnerVoted = db.prepare('SELECT id FROM votes WHERE user_id = ? AND night = ?').get(partnerId, night);
+    if (partnerVoted) {
+      return { error: 'Tu e o teu par ja usaram o vosso voto conjunto esta noite.' };
+    }
   }
 
   db.prepare(

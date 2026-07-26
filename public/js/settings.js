@@ -152,20 +152,27 @@ const NEXT_REVEAL_LABEL = {
   all: 'reveal_next_btn_done',
 };
 
+const VOTING_STATE_LABEL = {
+  registration: 'voting_is_registration',
+  open: 'voting_is_open',
+  closed: 'voting_is_closed',
+};
+
 async function loadVotingState() {
   const { nights } = await api('/admin/voting');
   const night = currentNight();
   const info = nights.find((n) => n.night === night);
-  const open = info?.status === 'open';
+  const status = info?.status || 'closed';
   const label = $('voting-state-label');
-  label.textContent = open ? t('voting_is_open') : t('voting_is_closed');
-  label.classList.toggle('is-open', open);
-  label.classList.toggle('is-closed', !open);
+  label.textContent = t(VOTING_STATE_LABEL[status]);
+  label.classList.toggle('is-registration', status === 'registration');
+  label.classList.toggle('is-open', status === 'open');
+  label.classList.toggle('is-closed', status === 'closed');
 
   const phase = info?.resultsPhase || 'hidden';
   const revealBtn = $('reveal-next-btn');
   revealBtn.textContent = t(NEXT_REVEAL_LABEL[phase]);
-  revealBtn.disabled = phase === 'all' || open;
+  revealBtn.disabled = phase === 'all' || status !== 'closed';
 }
 
 async function setVoting(action) {
@@ -173,8 +180,10 @@ async function setVoting(action) {
   await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
   loadVotingState();
   loadVotes();
+  loadContestants();
 }
 
+$('voting-registration-btn').addEventListener('click', () => setVoting('registration'));
 $('voting-open-btn').addEventListener('click', () => setVoting('open'));
 $('voting-close-btn').addEventListener('click', () => setVoting('close'));
 $('voting-reset-btn').addEventListener('click', async () => {
@@ -358,15 +367,64 @@ $('reset-content-btn').addEventListener('click', async () => {
 async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
   $('contestants-table').innerHTML = contestants.length
-    ? `<tr><th>${t('col_name')}</th><th></th></tr>` + contestants.map((c) => `
-        <tr><td>${esc(c.name)}</td>
-        <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td></tr>`).join('')
+    ? `<tr><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
+        const who = c.partner_name
+          ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
+          : c.registered_by ? esc(c.registered_by) : '-';
+        return `
+        <tr>
+          <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span></td>
+          <td class="muted">${who}</td>
+          <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td>
+        </tr>`;
+      }).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
 
   $('contestants-table').querySelectorAll('[data-del-contestant]').forEach((b) => {
     b.addEventListener('click', async () => {
+      if (!(await showConfirm(t('confirm_remove_contestant')))) return;
       await api(`/admin/contestants/${b.dataset.delContestant}`, { method: 'DELETE' });
       loadContestants();
+    });
+  });
+
+  // Click a contestant's name to rename it in place - e.g. fixing a typo in
+  // a self-registered entry while reviewing submissions before opening
+  // voting. Same click-to-act convention as the access-key reveal toggle
+  // in the Users tab.
+  $('contestants-table').querySelectorAll('[data-edit-contestant]').forEach((el) => {
+    const startEdit = () => {
+      const currentName = el.dataset.name;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentName;
+      input.maxLength = 60;
+      el.replaceWith(input);
+      input.focus();
+      input.select();
+      let settled = false;
+      const commit = async () => {
+        if (settled) return;
+        settled = true;
+        const newName = input.value.trim();
+        if (newName && newName !== currentName) {
+          try {
+            await api(`/admin/contestants/${el.dataset.editContestant}`, { method: 'PATCH', body: { name: newName } });
+          } catch (err) {
+            await showAlert(err.message);
+          }
+        }
+        loadContestants();
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { settled = true; loadContestants(); }
+      });
+    };
+    el.addEventListener('click', startEdit);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
     });
   });
 }
