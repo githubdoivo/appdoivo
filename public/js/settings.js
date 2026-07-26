@@ -85,16 +85,19 @@ async function boot() {
   // plain user only gets the "Settings" tab (change their own key); the
   // rest of this scoping matches the main admin panel's existing rules.
   if (!isAdmin) {
-    ['users', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['outfit', 'rata', 'wall'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
   } else if (!isOwner) {
-    document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
     document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     // A regular admin can run voting and reveal consequences, but broader
     // configuration (timezone) stays owner-only.
     $('timezone-card').classList.add('hidden');
   }
+  // User management lives inside the Profile tab now (not its own tab) -
+  // only the owner sees it, same rule as before, just a visibility toggle
+  // on a block instead of a whole separate tab.
+  $('owner-user-management').classList.toggle('hidden', !isOwner);
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
   selectAdminTab('settings');
@@ -247,7 +250,7 @@ function renderUsersList(users) {
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
+          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>
       </div>`).join('')
@@ -506,7 +509,7 @@ async function loadWallPseudonyms() {
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();

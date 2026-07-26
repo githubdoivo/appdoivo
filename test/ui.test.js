@@ -184,7 +184,7 @@ test('owner, admin and user role badges each render in a distinct color', async 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
+  await page.click('[data-atab="settings"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
@@ -207,7 +207,7 @@ test('owner, admin and user role badges each render in a distinct color', async 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
+  await page.click('[data-atab="settings"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
@@ -221,7 +221,7 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
 test('access keys are censored by default and reveal on click, but the real value is always copyable', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
+  await page.click('[data-atab="settings"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenEl = await page.$('.user-row-token');
@@ -256,8 +256,8 @@ test('a non-owner admin only gets voting control and reveal-consequence, nothing
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  const usersTabHidden = await page.$eval('[data-atab="users"]', (el) => el.classList.contains('hidden'));
-  assert.ok(usersTabHidden, 'non-owner admin can see the Manage Users tab');
+  const userMgmtHidden = await page.$eval('#owner-user-management', (el) => el.classList.contains('hidden'));
+  assert.ok(userMgmtHidden, 'non-owner admin can see the Manage Users section');
 
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
   assert.ok(wallTabHidden, 'non-owner admin can see the Wall tab');
@@ -285,7 +285,7 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, plain.token, '/settings.html');
 
-  for (const tab of ['users', 'outfit', 'rata', 'wall']) {
+  for (const tab of ['outfit', 'rata', 'wall']) {
     const hidden = await page.$eval(`[data-atab="${tab}"]`, (el) => el.classList.contains('hidden'));
     assert.ok(hidden, `plain user should not see the ${tab} tab`);
   }
@@ -294,6 +294,9 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
 
   const panelVisible = await page.$eval('#atab-settings', (el) => !el.classList.contains('hidden'));
   assert.ok(panelVisible, 'the Settings panel should be the one shown by default for a plain user');
+
+  const userMgmtHidden = await page.$eval('#owner-user-management', (el) => el.classList.contains('hidden'));
+  assert.ok(userMgmtHidden, 'plain user should not see the Manage Users section');
 
   const roleBadgeHidden = await page.$eval('#role-badge', (el) => el.classList.contains('hidden'));
   assert.ok(roleBadgeHidden, 'plain user should get no role badge, same as the main app');

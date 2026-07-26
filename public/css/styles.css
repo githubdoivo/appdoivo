@@ -64,6 +64,8 @@ html.mode-light {
   --danger:   #d98a7a;
   --brand:    #6b3420;
   --role-owner: #8a4630;
+  --role-admin: #3f7d1f;
+  --role-user:  #1f6d78;
 }
 
 html.mode-dark {
@@ -83,6 +85,8 @@ html.mode-dark {
   --danger:   #c4685a;
   --brand:    #e2a878;
   --role-owner: #a96b4b;
+  --role-admin: #8fd167;
+  --role-user:  #6fd6e0;
 }
 
 * { box-sizing: border-box; }
@@ -326,11 +330,14 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   border-radius: 999px;
 }
 /* Role badges: owner / admin / user, each its own color. */
-/* Hardcoded, not var(--clay/--outfit/--rata): each role keeps exactly one
-   color everywhere it appears, regardless of night theme or light/dark mode. */
+/* Not var(--clay/--outfit/--rata): each role keeps its own hue everywhere it
+   appears, regardless of night theme - but DOES need a light/dark-mode pair
+   (--role-*), same as --role-owner already had. admin/user used to be a
+   single hardcoded dark shade each, which read fine in light mode but was
+   nearly illegible against the dark-mode background. */
 .badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
-.badge.role-admin { border-color: #59662f; color: #59662f; }
-.badge.role-user { border-color: #3f5b54; color: #3f5b54; }
+.badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
+.badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
@@ -516,6 +523,13 @@ html.mode-light .hero-line { color: var(--ink); }
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+
+/* .ghost's padding/font are sized for compact row actions - too easy to
+   miss as a standalone action on its own line. Bump it to a normal
+   button's size (same trick as .tutorial-actions button.ghost) while
+   keeping the outline look, so it's clearly there without competing with
+   a solid primary button like "guardar" right above it. */
+#logout-btn { padding: 12px 20px; font-size: 0.78rem; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }

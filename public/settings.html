@@ -49,30 +49,10 @@
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
         <button class="tab active" data-atab="settings" data-i18n="tab_settings">Profile</button>
-        <button class="tab" data-atab="users" data-i18n="users_title">Users</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
-
-      <!-- Separador: Utilizadores -->
-      <div id="atab-users" class="tab-panel hidden">
-        <div class="card">
-          <form id="user-form" class="inline">
-            <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
-            <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
-          </form>
-          <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
-          <div id="users-list" class="user-list"></div>
-        </div>
-
-        <div class="card">
-          <h2 data-i18n="reset_content_title">Zona perigosa</h2>
-          <p class="help" data-i18n="reset_content_help">Explicação</p>
-          <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
-          <span id="reset-content-msg" class="muted"></span>
-        </div>
-      </div>
 
       <!-- Separador: Best Outfit -->
       <div id="atab-outfit" class="tab-panel hidden">
@@ -183,7 +163,26 @@
           <span id="change-key-msg" class="muted"></span>
         </div>
 
-        <button id="logout-btn" class="ghost small" data-i18n="logout">Sair</button>
+        <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
+
+        <!-- Gestao de utilizadores: so o dono da conta ve isto (ver settings.js) -->
+        <div id="owner-user-management" class="hidden" style="margin-top:24px">
+          <div class="card">
+            <form id="user-form" class="inline">
+              <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
+              <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
+            </form>
+            <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
+            <div id="users-list" class="user-list"></div>
+          </div>
+
+          <div class="card">
+            <h2 data-i18n="reset_content_title">Zona perigosa</h2>
+            <p class="help" data-i18n="reset_content_help">Explicação</p>
+            <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
+            <span id="reset-content-msg" class="muted"></span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
