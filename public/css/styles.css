@@ -221,6 +221,10 @@ input[type="password"] { text-transform: none; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
+/* A Rata's suggestion box and the Wall's message field read as too thick
+   at the generic input padding - thinner here specifically. */
+#suggest-text, #chat-text { padding: 9px 12px; }
+
 /* Show/hide toggle inside a password input (e.g. the login access key). */
 .password-field { position: relative; }
 .password-field input { padding-right: 46px; }

@@ -95,10 +95,6 @@ async function boot() {
     // configuration (timezone) stays owner-only.
     $('timezone-card').classList.add('hidden');
   }
-  // The owner already changes their own key from their own row in the
-  // Users tab - the standalone change-key form is only needed by everyone
-  // else, who has no access to that list.
-  $('change-key-card').classList.toggle('hidden', isOwner);
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
   selectAdminTab('settings');
@@ -251,6 +247,7 @@ function renderUsersList(users) {
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
+          ${u.is_owner ? `<button class="small ghost" data-change-own-key="${u.id}">${t('change_own_key_btn')}</button>` : ''}
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>
@@ -288,6 +285,44 @@ function renderUsersList(users) {
     });
   });
 
+  // Owner's own row: unlike "nova chave" (random) above, this lets the
+  // owner type the exact key they want (e.g. "moss" -> "rock"), same as
+  // the standalone change-key form everyone else uses - just inline here
+  // instead of its own section, since the owner's tab is this list.
+  $('users-list').querySelectorAll('[data-change-own-key]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const row = b.closest('.user-row');
+      if (row.querySelector('.own-key-form')) return;
+      const form = document.createElement('form');
+      form.className = 'own-key-form';
+      form.style.marginTop = '10px';
+      form.innerHTML = `
+        <input type="password" class="own-key-current" placeholder="${esc(t('current_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+        <input type="password" class="own-key-new" placeholder="${esc(t('new_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" style="margin-top:8px" />
+        <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
+          <button type="submit" class="small">${t('save')}</button>
+          <button type="button" class="small ghost own-key-cancel">${t('modal_cancel')}</button>
+        </div>`;
+      row.appendChild(form);
+      form.querySelector('.own-key-current').focus();
+      form.querySelector('.own-key-cancel').addEventListener('click', () => form.remove());
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const currentToken = form.querySelector('.own-key-current').value.trim();
+        const newToken = form.querySelector('.own-key-new').value.trim();
+        try {
+          await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
+          setToken(newToken);
+          form.remove();
+          await showAlert(t('key_changed_msg'));
+          loadUsers();
+        } catch (err) {
+          await showAlert(err.message);
+        }
+      });
+    });
+  });
+
   $('users-list').querySelectorAll('[data-del-user]').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!(await showConfirm(t('confirm_remove_user'), { danger: true }))) return;
@@ -302,6 +337,7 @@ function renderUsersList(users) {
       if (!(await showConfirm(t(makingAdmin ? 'confirm_make_admin' : 'confirm_remove_admin_role')))) return;
       try {
         await api(`/admin/users/${b.dataset.toggleAdmin}/admin`, { method: 'PATCH', body: { isAdmin: makingAdmin } });
+        markRecent(Number(b.dataset.toggleAdmin));
         loadUsers();
       } catch (err) {
         await showAlert(err.message);
@@ -318,19 +354,41 @@ function renderUsersList(users) {
 // creating is disabled on purpose - act on the existing user via its row
 // buttons instead (copy, rename, remove, etc.), rather than risking an
 // accidental duplicate.
+// The base list from the server is alphabetical (owner first), which stays
+// stable and easy to scan. Whoever you just created or changed the role of
+// in THIS session floats to the top instead (most recent first), so the
+// thing you just did is immediately visible without hunting for it - but
+// that's a session-local nicety, not a permanent sort, so it resets on
+// reload rather than permanently reordering the list for next time.
+const recentUserIds = [];
+function markRecent(id) {
+  const i = recentUserIds.indexOf(id);
+  if (i !== -1) recentUserIds.splice(i, 1);
+  recentUserIds.unshift(id);
+}
+function withRecentFirst(users) {
+  const owner = users.filter((u) => u.is_owner);
+  const rest = users.filter((u) => !u.is_owner);
+  const recent = recentUserIds
+    .map((id) => rest.find((u) => u.id === id))
+    .filter(Boolean);
+  const others = rest.filter((u) => !recentUserIds.includes(u.id));
+  return [...owner, ...recent, ...others];
+}
+
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
   const createBtn = $('user-form').querySelector('button[type="submit"]');
 
   if (term.length < 3) {
-    renderUsersList(allUsers);
+    renderUsersList(withRecentFirst(allUsers));
     $('user-search-hint').classList.add('hidden');
     createBtn.disabled = true;
     return;
   }
 
   const matches = allUsers.filter((u) => u.name.toLowerCase().includes(term.toLowerCase()));
-  renderUsersList(matches);
+  renderUsersList(withRecentFirst(matches));
 
   const noMatch = matches.length === 0;
   $('user-search-hint').classList.toggle('hidden', !noMatch);
@@ -353,6 +411,7 @@ $('user-form').addEventListener('submit', async (e) => {
     $('user-name-input').value = '';
     $('user-search-hint').classList.add('hidden');
     $('user-form').querySelector('button[type="submit"]').disabled = true;
+    markRecent(u.id);
     await showAlert(t('user_created', { name: u.name, token: u.token }));
     loadUsers();
   } catch (err) {
@@ -454,11 +513,16 @@ $('contestant-form').addEventListener('submit', async (e) => {
 let votesNight = 'furnished';
 
 async function loadVotes() {
+  // votes (who voted for whom) is owner-only - a regular admin only gets
+  // results (the same tally that goes public on Best Outfit later), so
+  // `votes` is simply absent from the response for them.
   const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
-  const votesHtml = votes.length
-    ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
-      votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
-    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+  const votesHtml = votes
+    ? (votes.length
+      ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
+        votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
+      : `<tr><td class="muted">${t('no_votes')}</td></tr>`)
+    : '';
   const resultsHtml = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')

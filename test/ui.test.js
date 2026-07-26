@@ -202,14 +202,29 @@ test('owner, admin and user role badges each render in a distinct color', async 
   await api('DELETE', `/admin/users/${toPromote.id}`, { token: ADMIN });
 });
 
-test('owner has no standalone change-key form - they use their own row in Users instead', async () => {
+test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
-  const changeKeyCardHidden = await page.$eval('#change-key-card', (el) => el.classList.contains('hidden'));
-  assert.ok(changeKeyCardHidden, 'owner should not see the standalone change-key form');
+  await page.fill('#user-name-input', 'Zzz Session Tester');
+  await page.click('#user-form button[type="submit"]');
+  const alertOk = page.locator('.modal-actions button');
+  await alertOk.first().waitFor({ timeout: 5000 });
+  await alertOk.first().click();
+  await page.waitForTimeout(300);
+
+  const names = await page.$$eval('.user-row-name', (els) => els.map((e) => e.childNodes[0].textContent.trim()));
+  // "Zzz Session Tester" sorts last alphabetically, so finding it right
+  // after the owner (index 1) proves the session-local recency float is
+  // actually happening, not just alphabetical order.
+  assert.equal(names[1], 'Zzz Session Tester', 'the just-created user should be pinned near the top this session');
 
   await context.close();
+  const created = await api('GET', '/admin/users', { token: ADMIN });
+  const tester = created.find((u) => u.name === 'Zzz Session Tester');
+  await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
 });
 
 /* --------------- Manage Users key layout (regression) --------------- */

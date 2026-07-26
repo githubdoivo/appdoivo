@@ -238,7 +238,7 @@ router.use('/admin/users', requireOwner);
 // Users
 router.get('/admin/users', (req, res) => {
   const users = db.prepare(
-    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, updated_at DESC'
+    'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, name COLLATE NOCASE ASC'
   ).all();
   res.json(users.map((u) => ({
     id: u.id,
@@ -338,9 +338,17 @@ router.post('/admin/reset-content', requireOwner, (req, res) => {
   res.json({ ok: true });
 });
 
-// Votes for a night (full admin view)
+// Votes for a night. Same golden rule as the Wall's real-name mapping:
+// only the owner sees who voted for whom - a regular admin only gets the
+// aggregate tally/ranking, the same numbers that go public on the Best
+// Outfit page once results are revealed. No individual-vote data should
+// leak to a role that isn't the owner.
 router.get('/admin/votes', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
+  const results = resultsForNight(night);
+  if (!req.user.isOwner) {
+    return res.json({ night, results });
+  }
   const rows = db.prepare(`
     SELECT v.id, v.night, u.name AS voter, c.name AS contestant, v.created_at
     FROM votes v
@@ -349,7 +357,7 @@ router.get('/admin/votes', (req, res) => {
     WHERE v.night = ?
     ORDER BY v.created_at
   `).all(night);
-  res.json({ night, votes: rows, results: resultsForNight(night) });
+  res.json({ night, votes: rows, results });
 });
 
 // Consequences (full view)

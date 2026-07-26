@@ -78,23 +78,24 @@ test('a normal user cannot access the admin panel', async () => {
   assert.equal(r.status, 403);
 });
 
-test('Manage Users list: owner pinned first, then most recently created/updated', async () => {
-  const older = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Older' } });
-  const newer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Newer' } });
+// The server always returns a stable alphabetical order (owner pinned
+// first) - that's what "importing from DB" should look like. Floating a
+// just-created/just-changed user to the top is a session-local nicety the
+// frontend layers on top (see recentUserIds/withRecentFirst() in
+// settings.js) rather than a permanent server-side sort, so it isn't
+// exercised here - it needs a real page, not just the API.
+test('Manage Users list: owner pinned first, then alphabetical by name', async () => {
+  const zebra = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zzz Zebra' } });
+  const apple = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Aaa Apple' } });
 
-  const list1 = await api('GET', '/admin/users', { token: ADMIN });
-  assert.equal(list1.data[0].is_owner, true, 'owner must be first');
-  assert.equal(list1.data[1].id, newer.data.id, 'most recently created user comes right after the owner');
+  const list = await api('GET', '/admin/users', { token: ADMIN });
+  assert.equal(list.data[0].is_owner, true, 'owner must be first');
+  const nonOwnerNames = list.data.filter((u) => !u.is_owner).map((u) => u.name);
+  const alphabetical = [...nonOwnerNames].sort((a, b) => a.localeCompare(b));
+  assert.deepEqual(nonOwnerNames, alphabetical, 'everyone but the owner should be in alphabetical order');
 
-  // Touch "older" (role change) so it becomes the most recently updated.
-  await api('PATCH', `/admin/users/${older.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  await api('PATCH', `/admin/users/${older.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
-
-  const list2 = await api('GET', '/admin/users', { token: ADMIN });
-  assert.equal(list2.data[1].id, older.data.id, 'the user just updated moves back to the top');
-
-  await api('DELETE', `/admin/users/${older.data.id}`, { token: ADMIN });
-  await api('DELETE', `/admin/users/${newer.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${zebra.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${apple.data.id}`, { token: ADMIN });
 });
 
 test('promoting a user grants admin access, but not owner-only Manage Users access', async () => {
@@ -216,6 +217,22 @@ test('admin opens the night and each user votes once', async () => {
 
   const v2 = await api('POST', '/votes', { token: userToken, body: { contestantId, night: NIGHT } });
   assert.equal(v2.status, 400); // already voted this night
+});
+
+test('who-voted-for-whom is owner-only; a regular admin only gets the aggregate results', async () => {
+  const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Non Owner Admin' } });
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const asOwner = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
+  assert.ok(Array.isArray(asOwner.data.votes), 'owner should see the individual voter -> contestant breakdown');
+  assert.ok(Array.isArray(asOwner.data.results), 'owner should also see the aggregate results');
+
+  const asAdmin = await api('GET', `/admin/votes?night=${NIGHT}`, { token: nonOwnerAdmin.data.token });
+  assert.equal(asAdmin.data.votes, undefined, 'a non-owner admin must not see who voted for whom');
+  assert.ok(Array.isArray(asAdmin.data.results), 'a non-owner admin should still see the aggregate results');
+
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
 });
 
 test('nights are independent: voting in another night is possible', async () => {

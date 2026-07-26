@@ -48,14 +48,14 @@
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
-        <button class="tab active" data-atab="settings" data-i18n="tab_settings">User</button>
+        <button class="tab active" data-atab="settings" data-i18n="tab_settings">Settings</button>
         <button class="tab" data-atab="users" data-i18n="users_title">Users</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
-      <!-- Separador: Utilizadores -->
+      <!-- Separador: Utilizadores (so o dono da conta) -->
       <div id="atab-users" class="tab-panel hidden">
         <div class="card">
           <form id="user-form" class="inline">
@@ -88,11 +88,11 @@
           </p>
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" id="voting-registration-btn" class="ghost" data-i18n="voting_registration_btn">Abrir candidaturas</button>
-            <button type="button" id="voting-open-btn" class="ghost" data-i18n="voting_open_btn">Abrir votação</button>
-            <button type="button" id="voting-close-btn" class="ghost" data-i18n="voting_close_btn">Encerrar e publicar</button>
-            <button type="button" id="voting-reset-btn" class="ghost" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
-            <button type="button" id="reveal-next-btn" class="ghost" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
+            <button type="button" id="voting-registration-btn" data-i18n="voting_registration_btn">Abrir candidaturas</button>
+            <button type="button" id="voting-open-btn" data-i18n="voting_open_btn">Abrir votação</button>
+            <button type="button" id="voting-close-btn" data-i18n="voting_close_btn">Encerrar e publicar</button>
+            <button type="button" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
+            <button type="button" id="reveal-next-btn" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
           </div>
           <span id="voting-msg" class="muted"></span>
           <span id="reveal-phase-msg" class="muted"></span>
@@ -146,11 +146,8 @@
         </div>
       </div>
 
-      <!-- Separador: Definições (todos os utilizadores) -->
+      <!-- Separador: Definições (todos os utilizadores, incluindo o dono) -->
       <div id="atab-settings" class="tab-panel">
-        <!-- O dono ja pode mudar a sua propria chave a partir da propria
-             linha na lista de Utilizadores (ver settings.js) - este cartao
-             fica so para quem nao tem acesso a essa lista. -->
         <div class="card" id="change-key-card">
           <h2 data-i18n="change_key_title">Mudar chave de acesso</h2>
           <p class="help" data-i18n="change_key_help">Explicação</p>

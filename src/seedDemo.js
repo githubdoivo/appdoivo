@@ -38,18 +38,28 @@ export function seedDemo() {
   // stripped of them, e.g. "Carla Mendes" -> "carlamendes1234". Uses the
   // deterministic generateDemoUserToken (not the random generateUserToken)
   // so a tester's key stays the same across every QA reseed/deploy.
-  const nonAdmin = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
+  // Keyed on is_owner (not is_admin) - the owner is the only row that never
+  // came from this NAMES loop, and unlike is_admin it never changes for a
+  // demo user afterwards (whether from the NAMES[0] pre-promotion below or
+  // an ad hoc promotion during testing), so this stays an accurate "have I
+  // already seeded" check no matter how many demo users get promoted later.
+  const seededCount = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_owner = 0').get().n;
   const demoUsers = [];
-  if (nonAdmin < NAMES.length) {
-    const insU = db.prepare("INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
-    for (const name of NAMES) {
+  if (seededCount < NAMES.length) {
+    const insU = db.prepare("INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
+    NAMES.forEach((name, i) => {
       const tok = generateDemoUserToken(name);
-      const info = insU.run(name, hashToken(tok), encryptToken(tok));
+      // QA's DB is ephemeral (resets every deploy) - without this, promoting
+      // someone to admin to test admin-only flows gets wiped on the very
+      // next deploy. NAMES[0] is always pre-promoted so there's a stable
+      // non-owner admin tester available immediately after every reseed.
+      const isAdmin = i === 0 ? 1 : 0;
+      const info = insU.run(name, hashToken(tok), encryptToken(tok), isAdmin);
       demoUsers.push(info.lastInsertRowid);
-    }
-    console.log(`[seed-demo] Created ${NAMES.length} demo users.`);
+    });
+    console.log(`[seed-demo] Created ${NAMES.length} demo users (${NAMES[0]} pre-promoted to admin for testing).`);
   } else {
-    db.prepare('SELECT id FROM users WHERE is_admin = 0').all().forEach((u) => demoUsers.push(u.id));
+    db.prepare('SELECT id FROM users WHERE is_owner = 0').all().forEach((u) => demoUsers.push(u.id));
   }
 
   // 2) Consequences ------------------------------------------------------------

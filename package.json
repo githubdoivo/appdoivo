@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Web app com duas features: consequencias (rata) e votos.",
   "type": "module",
   "main": "src/server.js",
