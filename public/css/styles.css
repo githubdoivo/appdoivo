@@ -356,7 +356,7 @@ button.icon-btn:hover,
 a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
-.lang-toggle { font-size: 0.7rem; letter-spacing: 0.06em; font-weight: 600; text-transform: none; }
+.lang-toggle { font-family: var(--serif); font-style: italic; font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
 
 /* Theme toggle: shows the icon for what you'll switch TO. Light (default)
    shows the moon (switch to dark); dark mode shows the sun (switch to light). */
@@ -719,7 +719,11 @@ html.mode-light body.theme-rata .card {
 body.theme-mural {
   --paper:    #cf9b7c;
   --paper-2:  #d9ac8f;
-  --paper-3:  #e3bfa5;
+  /* Every other theme steps paper -> paper-2 -> paper-3 by a few points of
+     lightness; this one used to jump twice as far, so the chat input (the
+     tab's only paper-3 surface) read as a glaring bright patch instead of
+     a subtle lift. Tightened to match the other themes' rhythm. */
+  --paper-3:  #deb69c;
   --ink:      #3d2216;
   --ink-soft: #7a5138;
   --line:     #a9744f;
@@ -854,6 +858,36 @@ html.mode-dark body.theme-mural .card {
    design elsewhere in the app - override it here so skip/next actually
    match, not just share a flex-basis. */
 .tutorial-actions button.ghost { padding: 12px 20px; font-size: 0.78rem; }
+
+/* ------------------------------ Modal (alert/confirm) ---------------------- */
+/* Same overlay/card treatment as the tutorial above - a custom stand-in for
+   window.alert()/confirm(), so admin actions and error messages read as
+   part of the app instead of a jarring unstyled browser dialog on top of it. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 26px 24px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.modal-message { color: var(--ink); line-height: 1.5; margin: 0 0 20px; white-space: pre-line; }
+.modal-actions { display: flex; align-items: center; gap: 10px; }
+.modal-actions button { flex: 1; padding: 12px 20px; font-size: 0.78rem; }
 
 /* ----------------------------------- Chat ---------------------------------- */
 

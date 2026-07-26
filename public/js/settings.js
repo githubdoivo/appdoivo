@@ -5,6 +5,7 @@ import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './pu
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
+import { showAlert, showConfirm } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -117,7 +118,7 @@ function reloadAll() {
 // switch TO, not the one that's active.
 
 function updateLangUI() {
-  $('lang-toggle').textContent = getLang() === 'pt' ? 'EN' : 'PT';
+  $('lang-toggle').textContent = getLang() === 'pt' ? 'en' : 'pt';
 }
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
@@ -176,8 +177,8 @@ async function setVoting(action) {
 
 $('voting-open-btn').addEventListener('click', () => setVoting('open'));
 $('voting-close-btn').addEventListener('click', () => setVoting('close'));
-$('voting-reset-btn').addEventListener('click', () => {
-  if (!confirm(t('confirm_reset'))) return;
+$('voting-reset-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_reset')))) return;
   setVoting('reset');
 });
 
@@ -258,20 +259,20 @@ function renderUsersList(users) {
 
   $('users-list').querySelectorAll('[data-regen-user]').forEach((b) => {
     b.addEventListener('click', async () => {
-      if (!confirm(t('confirm_regen_key'))) return;
+      if (!(await showConfirm(t('confirm_regen_key')))) return;
       try {
         const u = await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
-        alert(t('key_regenerated', { name: u.name, token: u.token }));
+        await showAlert(t('key_regenerated', { name: u.name, token: u.token }));
         loadUsers();
       } catch (err) {
-        alert(err.message);
+        await showAlert(err.message);
       }
     });
   });
 
   $('users-list').querySelectorAll('[data-del-user]').forEach((b) => {
     b.addEventListener('click', async () => {
-      if (!confirm(t('confirm_remove_user'))) return;
+      if (!(await showConfirm(t('confirm_remove_user'), { danger: true }))) return;
       await api(`/admin/users/${b.dataset.delUser}`, { method: 'DELETE' });
       loadUsers();
     });
@@ -280,12 +281,12 @@ function renderUsersList(users) {
   $('users-list').querySelectorAll('[data-toggle-admin]').forEach((b) => {
     b.addEventListener('click', async () => {
       const makingAdmin = b.dataset.next === '1';
-      if (!confirm(t(makingAdmin ? 'confirm_make_admin' : 'confirm_remove_admin_role'))) return;
+      if (!(await showConfirm(t(makingAdmin ? 'confirm_make_admin' : 'confirm_remove_admin_role')))) return;
       try {
         await api(`/admin/users/${b.dataset.toggleAdmin}/admin`, { method: 'PATCH', body: { isAdmin: makingAdmin } });
         loadUsers();
       } catch (err) {
-        alert(err.message);
+        await showAlert(err.message);
       }
     });
   });
@@ -333,15 +334,15 @@ $('user-form').addEventListener('submit', async (e) => {
     $('user-name-input').value = '';
     $('user-search-hint').classList.add('hidden');
     $('user-form').querySelector('button[type="submit"]').disabled = true;
-    alert(t('user_created', { name: u.name, token: u.token }));
+    await showAlert(t('user_created', { name: u.name, token: u.token }));
     loadUsers();
   } catch (err) {
-    alert(err.message);
+    await showAlert(err.message);
   }
 });
 
 $('reset-content-btn').addEventListener('click', async () => {
-  if (!confirm(t('confirm_reset_content'))) return;
+  if (!(await showConfirm(t('confirm_reset_content'), { danger: true }))) return;
   try {
     await api('/admin/reset-content', { method: 'POST' });
     $('reset-content-msg').textContent = t('reset_content_done_msg');

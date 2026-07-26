@@ -1,6 +1,7 @@
 // Service worker registration and Web Push subscription.
 import { api } from './api.js';
 import { t } from './i18n.js';
+import { showAlert } from './modal.js';
 
 let swRegistration = null;
 
@@ -56,7 +57,7 @@ async function isSubscribed() {
 export async function enablePush() {
   const support = pushSupport();
   if (support === 'unsupported' || support === 'ios-add-home') {
-    alert(t('notif_unsupported_msg'));
+    await showAlert(t('notif_unsupported_msg'));
     return false;
   }
 
@@ -65,7 +66,7 @@ export async function enablePush() {
 
   const { publicKey, enabled } = await api('/push/vapid-public-key');
   if (!enabled || !publicKey) {
-    alert(t('notif_server_msg'));
+    await showAlert(t('notif_server_msg'));
     return false;
   }
 
@@ -121,10 +122,10 @@ export function wireNotifButton(btnId = 'notif-btn') {
     try {
       if (await isSubscribed()) {
         await disablePush();
-        alert(t('notif_disabled_msg'));
+        await showAlert(t('notif_disabled_msg'));
       } else {
         const ok = await enablePush();
-        if (ok) alert(t('notif_enabled_msg'));
+        if (ok) await showAlert(t('notif_enabled_msg'));
       }
     } catch { /* mensagens tratadas acima */ }
     refreshNotifButton(btnId);

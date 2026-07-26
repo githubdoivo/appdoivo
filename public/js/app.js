@@ -5,6 +5,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
+import { showAlert } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -134,7 +135,7 @@ $('tutorial-skip').addEventListener('click', () => endTutorial());
 // switch TO, not the one that's active.
 
 function updateLangUI() {
-  $('lang-toggle').textContent = getLang() === 'pt' ? 'EN' : 'PT';
+  $('lang-toggle').textContent = getLang() === 'pt' ? 'en' : 'pt';
 }
 
 $('lang-toggle').addEventListener('click', () => {
@@ -244,7 +245,7 @@ $('chat-form').addEventListener('submit', async (e) => {
     await loadChat();
     $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
   } catch (err) {
-    alert(err.message);
+    await showAlert(err.message);
   }
 });
 
@@ -393,7 +394,7 @@ async function vote(contestantId) {
     await api('/votes', { method: 'POST', body: { contestantId, night: getNight() } });
     loadVotes();
   } catch (err) {
-    alert(err.message);
+    await showAlert(err.message);
   }
 }
 

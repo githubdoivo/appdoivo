@@ -59,7 +59,7 @@ export function seedDemo() {
     // one already revealed (shows up as the "current consequence")
     const revealedId = insCons.run(
       demoUsers[0],
-      'Do your best animal impression for 1 minute - you choose which animal.',
+      'Act like a rat for 5 minutes.',
       day, 'used'
     ).lastInsertRowid;
     db.prepare("UPDATE consequences SET revealed_at = datetime('now') WHERE id = ?").run(revealedId);
