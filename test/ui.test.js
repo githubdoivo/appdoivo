@@ -332,8 +332,9 @@ test('first-session tutorial shows once, steps through, then never shows again',
   let activeDots = await page.$$eval('.tutorial-dots .dot.active', (els) => els.length);
   assert.equal(activeDots, 1, 'exactly one dot should be active at a time');
 
-  // Step through every step via "next".
-  for (let i = 0; i < 4; i++) {
+  // Step through every step via "next" (6 total steps, so 5 clicks to
+  // reach the last one; the final "finish" click happens after the loop).
+  for (let i = 0; i < 5; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);
