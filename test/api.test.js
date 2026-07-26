@@ -177,6 +177,22 @@ test('a non-owner admin cannot rename users', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
+test("regenerating a user's key issues a new one and invalidates the old", async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Regenerable' } });
+  const oldToken = created.data.token;
+
+  const regen = await api('POST', `/admin/users/${created.data.id}/regenerate-token`, { token: ADMIN });
+  assert.equal(regen.status, 200);
+  assert.notEqual(regen.data.token, oldToken);
+  assert.match(regen.data.token, /^regenerable\d{4}$/);
+
+  const oldLogin = await api('GET', '/me', { token: oldToken });
+  assert.equal(oldLogin.status, 401);
+
+  const newLogin = await api('GET', '/me', { token: regen.data.token });
+  assert.equal(newLogin.status, 200);
+});
+
 /* ----------------------------- Consequences ------------------------------ */
 
 test('you can only suggest 1 consequence per day', async () => {
@@ -324,7 +340,10 @@ test('posting and reading a chat message', async () => {
   assert.equal(list.status, 200);
   const found = list.data.messages.find((m) => m.text === 'ola pessoal');
   assert.ok(found, 'posted message should appear in the list');
-  assert.equal(found.author, 'Test Admin');
+  // The Wall is anonymous - author is a random pseudonym, never the real
+  // poster's name or user id.
+  assert.notEqual(found.author, 'Test Admin');
+  assert.match(found.author, /^[a-z]+$/);
 });
 
 test('an empty chat message is rejected', async () => {
