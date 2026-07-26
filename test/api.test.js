@@ -107,9 +107,12 @@ test('promoting a user grants admin access, but not owner-only Manage Users acce
   const votes = await api('GET', '/admin/votes', { token: userToken });
   assert.equal(votes.status, 200);
 
-  // Golden rule: only the owner sees other users' access keys.
+  // Golden rule: only the owner sees other users' access keys - a
+  // non-owner admin can load the list, but only ever gets their own row.
   const users = await api('GET', '/admin/users', { token: userToken });
-  assert.equal(users.status, 403);
+  assert.equal(users.status, 200);
+  assert.equal(users.data.length, 1);
+  assert.equal(users.data[0].id, userId);
 });
 
 test('demoting revokes admin access', async () => {
@@ -151,6 +154,47 @@ test('the owner can never be removed', async () => {
   const me = await api('GET', '/me', { token: ADMIN });
   const del = await api('DELETE', `/admin/users/${me.data.id}`, { token: ADMIN });
   assert.equal(del.status, 400);
+});
+
+test('a user can be renamed', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Typo Nmae' } });
+  const rename = await api('PATCH', `/admin/users/${created.data.id}/name`, { token: ADMIN, body: { name: 'Fixed Name' } });
+  assert.equal(rename.status, 200);
+
+  const users = await api('GET', '/admin/users', { token: ADMIN });
+  const found = users.data.find((u) => u.id === created.data.id);
+  assert.equal(found.name, 'Fixed Name');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('renaming a non-existent user returns 404', async () => {
+  const r = await api('PATCH', '/admin/users/999999/name', { token: ADMIN, body: { name: 'Anyone' } });
+  assert.equal(r.status, 404);
+});
+
+test('a non-owner admin cannot rename users', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Renamable' } });
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const rename = await api('PATCH', `/admin/users/${created.data.id}/name`, { token: userToken, body: { name: 'Hijacked' } });
+  assert.equal(rename.status, 403);
+
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('a non-owner admin sees the Users list filtered to only their own row', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Someone Else' } });
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const list = await api('GET', '/admin/users', { token: userToken });
+  assert.equal(list.status, 200);
+  assert.equal(list.data.length, 1, 'non-owner admin should only see their own row');
+  assert.equal(list.data[0].id, userId);
+
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
 });
 
 test("regenerating a user's key issues a new one and invalidates the old", async () => {

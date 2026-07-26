@@ -89,8 +89,15 @@ async function boot() {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
   } else if (!isOwner) {
-    document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
+    // A regular admin can see the Users tab too, but the API only ever
+    // gives them their own row (see GET /admin/users) - so nobody else's
+    // key is ever exposed here, they just get to see the tab exist and
+    // their own entry in it. Creating users and resetting event content
+    // are owner-only actions on the backend regardless, so hide both
+    // instead of showing controls that would just 403 if clicked.
     document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
+    $('user-search-card').classList.add('hidden');
+    $('reset-content-card').classList.add('hidden');
     // A regular admin can run voting and reveal consequences, but broader
     // configuration (timezone) stays owner-only.
     $('timezone-card').classList.add('hidden');
@@ -107,7 +114,7 @@ async function boot() {
 function reloadAll() {
   loadSettings();
   loadVotingState();
-  if (isOwner) loadUsers();
+  loadUsers();
   loadContestants();
   loadVotes();
   loadConsequences();
@@ -239,36 +246,78 @@ function renderUsersList(users) {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            ${esc(u.name)}
+            <span class="user-row-name-text">${esc(u.name)}</span>
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
         </div>
+        ${isOwner ? `
         <div class="row-actions">
-          <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
+          <button class="small ghost" data-rename-user="${u.id}" data-current-name="${esc(u.name)}">${t('rename')}</button>
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
           ${u.is_owner ? `<button class="small ghost" data-change-own-key="${u.id}">${t('change_own_key_btn')}</button>` : ''}
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
-        </div>
+        </div>` : ''}
       </div>`).join('')
     : `<p class="muted">${t('no_users')}</p>`;
 
-  $('users-list').querySelectorAll('[data-copy-user]').forEach((b) => {
-    b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
-  });
-
   // Keys are censored by default (someone glancing at a screen share
-  // shouldn't see everyone's access keys) - click to reveal/hide. Copy
-  // always works with the real value regardless of this toggle.
+  // shouldn't see everyone's access keys) - click to reveal/hide. Every
+  // click also copies the real value to the clipboard, so revealing and
+  // copying are the same action instead of two separate controls.
   $('users-list').querySelectorAll('[data-reveal-token]').forEach((el) => {
-    const toggle = () => {
+    const toggle = async () => {
       const revealed = el.classList.toggle('censored') === false;
       el.textContent = revealed ? el.dataset.token : '••••••••••••';
+      // No btn arg - that path swaps textContent to "copiado!", which would
+      // overwrite the token we just displayed instead of just confirming
+      // the copy. A brief border flash confirms it without touching the text.
+      await copyToClipboard(el.dataset.token);
+      el.classList.add('just-copied');
+      setTimeout(() => el.classList.remove('just-copied'), 600);
     };
     el.addEventListener('click', toggle);
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  // Rename is a button (not click-the-name) - it edits the name in place
+  // right next to it, same inline-input pattern as the admin contestant
+  // rename above.
+  $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const nameEl = b.closest('.user-row').querySelector('.user-row-name-text');
+      if (nameEl.tagName === 'INPUT') return; // already editing
+      const currentName = b.dataset.currentName;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentName;
+      input.maxLength = 60;
+      input.className = 'user-row-name-text';
+      nameEl.replaceWith(input);
+      input.focus();
+      input.select();
+      let settled = false;
+      const commit = async () => {
+        if (settled) return;
+        settled = true;
+        const newName = input.value.trim();
+        if (newName && newName !== currentName) {
+          try {
+            await api(`/admin/users/${b.dataset.renameUser}/name`, { method: 'PATCH', body: { name: newName } });
+          } catch (err) {
+            await showAlert(err.message);
+          }
+        }
+        loadUsers();
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { settled = true; loadUsers(); }
+      });
     });
   });
 

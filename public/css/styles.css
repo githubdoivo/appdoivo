@@ -535,13 +535,6 @@ html.mode-light .hero-line { color: var(--ink); }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 
-/* .ghost's padding/font are sized for compact row actions - too easy to
-   miss as a standalone action on its own line. Bump it to a normal
-   button's size (same trick as .tutorial-actions button.ghost) while
-   keeping the outline look, so it's clearly there without competing with
-   a solid primary button like "guardar" right above it. */
-#logout-btn { padding: 12px 20px; font-size: 0.78rem; }
-
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
@@ -563,6 +556,9 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   cursor: pointer;
 }
 .user-row-token.censored { letter-spacing: 2px; }
+/* Brief confirmation that a click also copied the key - doesn't touch the
+   text itself (unlike the old copy button, which safely could). */
+.user-row-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
 /* Click-to-rename a contestant in the admin table (see loadContestants()). */

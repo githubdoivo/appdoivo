@@ -55,18 +55,23 @@
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
-      <!-- Separador: Utilizadores (so o dono da conta) -->
+      <!-- Separador: Utilizadores (visivel a qualquer admin, mas a API so
+           devolve mais do que a propria linha, e so aceita escrita, para o
+           dono da conta - ver GET/POST/PATCH/DELETE /admin/users em routes.js) -->
       <div id="atab-users" class="tab-panel hidden">
-        <div class="card">
+        <div class="card" id="user-search-card">
           <form id="user-form" class="inline">
             <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
             <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
           </form>
           <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
-          <div id="users-list" class="user-list"></div>
         </div>
 
         <div class="card">
+          <div id="users-list" class="user-list"></div>
+        </div>
+
+        <div class="card" id="reset-content-card">
           <h2 data-i18n="reset_content_title">Zona perigosa</h2>
           <p class="help" data-i18n="reset_content_help">Explicação</p>
           <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
@@ -178,12 +183,13 @@
                 </svg>
               </button>
             </div>
-            <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
+            <div class="card-head" style="margin-top:12px">
+              <button type="submit" class="small" data-i18n="save">Guardar</button>
+              <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
+            </div>
           </form>
           <span id="change-key-msg" class="muted"></span>
         </div>
-
-        <button id="logout-btn" class="ghost" data-i18n="logout">Sair</button>
       </div>
     </div>
   </section>

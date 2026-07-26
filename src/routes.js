@@ -231,16 +231,18 @@ router.post('/push/unsubscribe', (req, res) => {
 
 router.use('/admin', requireAdmin);
 
-// Golden rule: nobody but the owner can see other users' access keys, so
-// user management (which exposes them) is locked down beyond plain admin.
-router.use('/admin/users', requireOwner);
-
-// Users
+// Golden rule: nobody but the owner can see OTHER users' access keys, so
+// every mutation below (create/rename/regenerate/promote/remove) is locked
+// down beyond plain admin. The list itself is the one exception: a regular
+// admin can see it too, filtered down to just their own row - lets them get
+// familiar with the Users tab/their own entry without exposing anyone
+// else's secrets.
 router.get('/admin/users', (req, res) => {
   const users = db.prepare(
     'SELECT id, name, token_enc, is_admin, is_owner, created_at FROM users ORDER BY is_owner DESC, name COLLATE NOCASE ASC'
   ).all();
-  res.json(users.map((u) => ({
+  const visible = req.user.isOwner ? users : users.filter((u) => u.id === req.user.id);
+  res.json(visible.map((u) => ({
     id: u.id,
     name: u.name,
     token: decryptToken(u.token_enc),
@@ -250,6 +252,8 @@ router.get('/admin/users', (req, res) => {
   })));
 });
 
+router.use('/admin/users', requireOwner);
+
 router.post('/admin/users', (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
@@ -258,6 +262,19 @@ router.post('/admin/users', (req, res) => {
     "INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(name, hashToken(token), encryptToken(token));
   res.status(201).json({ id: info.lastInsertRowid, name, token });
+});
+
+// Fixes a typo or updates a display name - there was previously no way to
+// correct a user's name after creation short of deleting and recreating them
+// (which would also generate them a new access key).
+router.patch('/admin/users/:id/name', (req, res) => {
+  const id = Number(req.params.id);
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  db.prepare("UPDATE users SET name = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(name, id);
+  res.json({ ok: true, id, name });
 });
 
 // Issues a brand-new access key for a user (e.g. they think it leaked).
