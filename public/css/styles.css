@@ -345,6 +345,11 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* In light mode, --line is pale enough to blend into the paper background
+   on its own. In dark mode it reads as a bright, hard "limit" line across
+   the whole tab row - blend it toward the background so it stays a subtle
+   separator instead of a stark bar. */
+html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, var(--paper)); }
 .tab {
   flex: 0 0 auto;
   background: transparent;
