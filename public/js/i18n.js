@@ -27,7 +27,6 @@ export const translations = {
     enter: 'Entrar',
     // Header
     logout: 'Sair',
-    logout_title: 'Sessão',
     admin: 'Admin',
     notif_enable: 'Notificações',
     notif_on: 'Notificações ativas',
@@ -119,7 +118,10 @@ export const translations = {
     modal_confirm: 'confirmar',
     // Fixed, non-translated tab name (like "A Rata"/"Best Outfit"/"Wall").
     users_title: 'Users',
-    tab_settings: 'Settings',
+    // Just self-service key change + logout, not app-wide config (that
+    // lives under the A Rata tab's timezone card) - "Profile" reads truer
+    // than "Settings" for what's actually in here.
+    tab_settings: 'Perfil',
     user_name_ph: 'Procura ou cria um utilizador...',
     create_user: 'Criar',
     user_search_no_match: 'Não encontrado - podes criar este utilizador.',
@@ -197,7 +199,6 @@ export const translations = {
     access_key: 'Access key',
     enter: 'Enter',
     logout: 'Log out',
-    logout_title: 'Session',
     admin: 'Admin',
     notif_enable: 'Notifications',
     notif_on: 'Notifications on',
@@ -281,7 +282,7 @@ export const translations = {
     modal_cancel: 'cancel',
     modal_confirm: 'confirm',
     users_title: 'Users',
-    tab_settings: 'Settings',
+    tab_settings: 'Profile',
     user_name_ph: 'Search or create a user...',
     create_user: 'Create',
     user_search_no_match: "Not found - you can create this user.",
