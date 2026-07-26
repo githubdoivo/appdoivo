@@ -48,23 +48,21 @@
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
-        <button class="tab active" data-atab="users" data-i18n="users_title">Gerir Utilizadores</button>
+        <button class="tab active" data-atab="users" data-i18n="users_title">Utilizadores</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
+        <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
       <!-- Separador: Utilizadores -->
       <div id="atab-users" class="tab-panel">
         <div class="card">
-          <div class="card-head">
-            <h2 data-i18n="users_title">Gerir Utilizadores</h2>
-            <button id="copy-all-users" type="button" class="small ghost" data-i18n="copy_all">Copiar tudo</button>
-          </div>
-          <form id="user-form" class="inline" style="margin-top:12px">
+          <form id="user-form" class="inline">
             <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
             <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
           </form>
           <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
+          <button id="copy-all-users" type="button" class="small ghost" style="margin-top:10px" data-i18n="copy_all">Copiar tudo</button>
           <div id="users-list" class="user-list"></div>
         </div>
 
@@ -90,7 +88,7 @@
             <strong id="voting-state-label" class="voting-state">--</strong>
           </p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" id="voting-open-btn" data-i18n="voting_open_btn">Abrir votação</button>
+            <button type="button" id="voting-open-btn" class="ghost" data-i18n="voting_open_btn">Abrir votação</button>
             <button type="button" id="voting-close-btn" class="ghost" data-i18n="voting_close_btn">Encerrar e publicar</button>
             <button type="button" id="voting-reset-btn" class="ghost" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
           </div>
@@ -98,7 +96,7 @@
 
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls">
-            <button type="button" id="reveal-next-btn" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
+            <button type="button" id="reveal-next-btn" class="ghost" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
           </div>
           <span id="reveal-phase-msg" class="muted"></span>
         </div>
@@ -127,18 +125,27 @@
         <div class="card">
           <h2 data-i18n="rata_admin_title">A Rata</h2>
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
-          <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência agora</button>
+          <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência</button>
           <span id="reveal-msg" class="muted"></span>
           <div class="table-scroll"><table id="consequences-table" style="margin-top:16px"></table></div>
         </div>
 
-        <div class="card">
+        <div class="card" id="timezone-card">
           <h2 data-i18n="timezone">Fuso horário</h2>
           <form id="settings-form" style="margin-top:12px">
             <input id="timezone" type="text" placeholder="Europe/Lisbon" />
             <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
             <span id="settings-msg" class="muted"></span>
           </form>
+        </div>
+      </div>
+
+      <!-- Separador: Wall (owner only) -->
+      <div id="atab-wall" class="tab-panel hidden">
+        <div class="card">
+          <h2 data-i18n="wall_pseudonyms_title">Quem é quem na Wall</h2>
+          <p class="help" data-i18n="wall_pseudonyms_help">Explicação</p>
+          <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>
         </div>
       </div>
     </div>

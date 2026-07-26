@@ -27,3 +27,22 @@ test('generateDemoUserToken differs across different names', () => {
   const b = generateDemoUserToken('Bob Builder');
   assert.notEqual(a, b);
 });
+
+test('seedDemo registers 5 contestants per night, from the demo user template', async () => {
+  const { seedDemo } = await import('../src/seedDemo.js');
+  const { default: db } = await import('../src/db.js');
+  const { NIGHTS } = await import('../src/nights.js');
+
+  seedDemo();
+
+  for (const night of NIGHTS) {
+    const rows = db.prepare('SELECT name FROM contestants WHERE night = ?').all(night);
+    assert.equal(rows.length, 5, `expected 5 contestants for ${night}, got ${rows.length}`);
+  }
+
+  // Calling it again (simulating another boot with the same DB) must not
+  // duplicate contestants - it's idempotent, same as the users/consequences seeding.
+  seedDemo();
+  const total = db.prepare('SELECT COUNT(*) AS n FROM contestants').get().n;
+  assert.equal(total, 5 * NIGHTS.length, 'contestants should not be duplicated on a second seedDemo() call');
+});

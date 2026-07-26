@@ -7,8 +7,11 @@ const MAX_TEXT_LENGTH = 300;
 // Furnished-themed object + swamp-themed whimsical/magical being (e.g.
 // "chair" + "wisp" -> "chairwisp") - not literal swamp fauna, but the
 // murky, folklore-ish creatures a swamp conjures, matching the app's own
-// Best Outfit night themes. The Wall is anonymous, so every message gets
-// a random one of these instead of the real poster's name.
+// Best Outfit night themes. The Wall is anonymous to everyone but the
+// owner (see admin.js's Wall-pseudonyms table), so every USER (not every
+// message) gets one of these instead of their real name - stable across
+// all their posts, so people stay recognizable to each other by their
+// pseudonym without exposing who they actually are.
 const FURNISHED_OBJECTS = [
   'chair', 'lamp', 'rug', 'sofa', 'curtain', 'mirror', 'vase', 'shelf',
   'candle', 'cushion', 'teapot', 'drawer', 'doormat', 'clock', 'stool',
@@ -26,6 +29,17 @@ function randomPseudonym() {
   return `${object}${being}`;
 }
 
+/** Returns this user's Wall pseudonym, assigning one the first time they
+ * ever post (stored on users.wall_pseudonym, reused forever after). */
+function getOrAssignPseudonym(userId) {
+  const row = db.prepare('SELECT wall_pseudonym FROM users WHERE id = ?').get(userId);
+  if (row?.wall_pseudonym) return row.wall_pseudonym;
+
+  const pseudonym = randomPseudonym();
+  db.prepare('UPDATE users SET wall_pseudonym = ? WHERE id = ?').run(pseudonym, userId);
+  return pseudonym;
+}
+
 /** Trims down to the 20 most recent messages. No time-based expiry - the
  * Wall just always shows whatever the last 20 posts were. */
 export function pruneMessages() {
@@ -36,8 +50,8 @@ export function pruneMessages() {
   `);
 }
 
-/** Current (already-pruned) messages, oldest first. "author" is always a
- * random pseudonym assigned at post time, never the real poster. */
+/** Current (already-pruned) messages, oldest first. "author" is each
+ * poster's stable pseudonym, never their real name. */
 export function listMessages() {
   pruneMessages();
   return db.prepare(`
@@ -53,7 +67,7 @@ export function postMessage(userId, text) {
   if (!trimmed) return { error: 'Mensagem vazia.' };
   if (trimmed.length > MAX_TEXT_LENGTH) return { error: `Mensagem demasiado longa (max ${MAX_TEXT_LENGTH} caracteres).` };
 
-  db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, trimmed, randomPseudonym());
+  db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, trimmed, getOrAssignPseudonym(userId));
   pruneMessages();
   return { ok: true };
 }

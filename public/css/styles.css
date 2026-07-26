@@ -338,9 +338,11 @@ html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 /* Notification bell: a soft accent-tinted highlight signals "on" - a full
-   solid-color border read as a stark outline (especially --rata's minty
-   green in light mode), so this is a gentle background tint instead. */
-#notif-btn.active { background: color-mix(in srgb, var(--rata) 18%, transparent); }
+   solid-color border read as a stark outline, so this is a gentle
+   background tint instead. Uses --clay (the app's warm brand accent,
+   same as the logo/badges), not --rata - --rata is minty green in light
+   mode, which read as an odd, unrelated color for this button. */
+#notif-btn.active { background: color-mix(in srgb, var(--clay) 18%, transparent); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 
