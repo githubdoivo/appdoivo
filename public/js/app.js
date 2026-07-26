@@ -68,6 +68,7 @@ const TUTORIAL_STEPS = [
   ['tutorial_1_title', 'tutorial_1_text'],
   ['tutorial_2_title', 'tutorial_2_text'],
   ['tutorial_3_title', 'tutorial_3_text'],
+  ['tutorial_wall_title', 'tutorial_wall_text'],
   ['tutorial_4_title', 'tutorial_4_text'],
   ['tutorial_5_title', 'tutorial_5_text'],
 ];

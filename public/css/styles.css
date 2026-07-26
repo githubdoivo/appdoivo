@@ -273,7 +273,13 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   margin-bottom: 18px;
   gap: 12px;
 }
-.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+/* align-items: center, not baseline - the cursive brand-name font
+   (line-height: 0.8) doesn't have predictable baseline metrics, so
+   baseline-aligning it against the small role badge could put the badge
+   noticeably off relative to the logo depending on font-load timing/
+   rendering engine. Center alignment doesn't depend on font metrics at
+   all, so it's consistent everywhere. */
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* Uses --brand (declared on <html> alongside mode-light/mode-dark, not
    var(--clay)): the logo keeps one identity color regardless of active
    tab or night theme, but still adapts to light/dark mode so it never
