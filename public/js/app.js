@@ -3,6 +3,7 @@ import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './pu
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
+import { wirePasswordToggle } from './passwordToggle.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -148,16 +149,7 @@ $('theme-toggle').addEventListener('click', () => toggleMode());
 
 /* -------------------------------- Login ---------------------------------- */
 
-$('token-toggle').addEventListener('click', () => {
-  const input = $('token-input');
-  const btn = $('token-toggle');
-  const showing = input.type === 'text';
-  input.type = showing ? 'password' : 'text';
-  btn.classList.toggle('visible', !showing);
-  const label = showing ? 'Mostrar' : 'Ocultar';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-});
+wirePasswordToggle('token-input', 'token-toggle');
 
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();

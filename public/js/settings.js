@@ -3,6 +3,7 @@ import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
+import { wirePasswordToggle } from './passwordToggle.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -78,21 +79,22 @@ async function boot() {
   }
 
   // This page is now open to every logged-in user, not just admins - a
-  // plain user only gets the "Definições" tab (change their own key); the
+  // plain user only gets the "Settings" tab (change their own key); the
   // rest of this scoping matches the main admin panel's existing rules.
   if (!isAdmin) {
     ['users', 'outfit', 'rata', 'wall'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
-    selectAdminTab('settings');
   } else if (!isOwner) {
     document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
     document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     // A regular admin can run voting and reveal consequences, but broader
     // configuration (timezone) stays owner-only.
     $('timezone-card').classList.add('hidden');
-    selectAdminTab('rata');
   }
+  // Whoever you are, tapping the settings icon should always land you on
+  // "Settings" first - admins/owner can still switch to their other tabs.
+  selectAdminTab('settings');
   $('admin-content').classList.remove('hidden');
   refreshNotifButton('notif-btn');
   wireChangeKeyForm();
@@ -369,7 +371,7 @@ async function loadContestants() {
   $('contestants-table').innerHTML = contestants.length
     ? `<tr><th>${t('col_name')}</th><th></th></tr>` + contestants.map((c) => `
         <tr><td>${esc(c.name)}</td>
-        <td><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td></tr>`).join('')
+        <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td></tr>`).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
 
   $('contestants-table').querySelectorAll('[data-del-contestant]').forEach((b) => {
@@ -466,6 +468,8 @@ document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
 // the current key as confirmation, new key is letters/numbers only.
 
 function wireChangeKeyForm() {
+  wirePasswordToggle('current-key-input', 'current-key-toggle');
+  wirePasswordToggle('new-key-input', 'new-key-toggle');
   $('change-key-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const currentToken = $('current-key-input').value.trim();
