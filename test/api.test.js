@@ -371,6 +371,42 @@ test('the Wall name<->pseudonym mapping is owner-only', async () => {
   assert.equal(entry.pseudonym, theirMsg.author, 'the mapping should match what actually shows on the Wall');
 });
 
+test('a user can change their own access key, given the correct current one', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Selfservice' } });
+  const oldToken = created.data.token;
+
+  const wrongOld = await api('POST', '/me/change-token', {
+    token: oldToken, body: { currentToken: 'notthecurrentone', newToken: 'newkey1234' },
+  });
+  assert.equal(wrongOld.status, 401);
+
+  const badChars = await api('POST', '/me/change-token', {
+    token: oldToken, body: { currentToken: oldToken, newToken: 'has-a-dash!' },
+  });
+  assert.equal(badChars.status, 400);
+
+  const ok = await api('POST', '/me/change-token', {
+    token: oldToken, body: { currentToken: oldToken, newToken: 'newkey1234' },
+  });
+  assert.equal(ok.status, 200);
+
+  const oldStillWorks = await api('GET', '/me', { token: oldToken });
+  assert.equal(oldStillWorks.status, 401, 'old key should stop working after the change');
+
+  const newWorks = await api('GET', '/me', { token: 'newkey1234' });
+  assert.equal(newWorks.status, 200, 'new key should work immediately');
+});
+
+test('changing to a key that already belongs to someone else is rejected', async () => {
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'KeyOwnerA' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'KeyOwnerB' } });
+
+  const collision = await api('POST', '/me/change-token', {
+    token: b.data.token, body: { currentToken: b.data.token, newToken: a.data.token },
+  });
+  assert.equal(collision.status, 409);
+});
+
 test('an empty chat message is rejected', async () => {
   const r = await api('POST', '/chat/messages', { token: ADMIN, body: { text: '   ' } });
   assert.equal(r.status, 400);

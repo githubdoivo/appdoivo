@@ -97,7 +97,9 @@ export const translations = {
     timezone: 'Fuso horário',
     save: 'Guardar',
     saved: 'Guardado.',
-    users_title: 'Utilizadores',
+    // Fixed, non-translated tab name (like "A Rata"/"Best Outfit"/"Wall").
+    users_title: 'Users',
+    tab_settings: 'Settings',
     user_name_ph: 'Procura ou cria um utilizador...',
     create_user: 'Criar',
     user_search_no_match: 'Não encontrado - podes criar este utilizador.',
@@ -148,6 +150,11 @@ export const translations = {
     wall_pseudonyms_help: 'Só o dono da conta vê esta correspondência - para todos os outros, a Wall é anónima.',
     col_pseudonym: 'Pseudónimo',
     no_wall_pseudonyms: 'Ainda ninguém afixou nada.',
+    change_key_title: 'Mudar chave de acesso',
+    change_key_help: 'só letras e números, sem espaços ou caracteres especiais.',
+    current_key_ph: 'Chave atual',
+    new_key_ph: 'Nova chave',
+    key_changed_msg: 'Chave alterada com sucesso.',
   },
   en: {
     // Tutorial (first session)
@@ -235,6 +242,7 @@ export const translations = {
     save: 'Save',
     saved: 'Saved.',
     users_title: 'Users',
+    tab_settings: 'Settings',
     user_name_ph: 'Search or create a user...',
     create_user: 'Create',
     user_search_no_match: "Not found - you can create this user.",
@@ -285,6 +293,11 @@ export const translations = {
     wall_pseudonyms_help: 'Only the account owner sees this - for everyone else, the Wall is anonymous.',
     col_pseudonym: 'Pseudonym',
     no_wall_pseudonyms: 'Nobody has posted yet.',
+    change_key_title: 'Change access key',
+    change_key_help: 'letters and numbers only, no spaces or special characters.',
+    current_key_ph: 'Current key',
+    new_key_ph: 'New key',
+    key_changed_msg: 'Key changed successfully.',
   },
 };
 

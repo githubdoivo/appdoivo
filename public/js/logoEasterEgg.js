@@ -1,6 +1,6 @@
 // Easter egg: triple-click the "appdoivo" logo (any page) to swap it for
 // "appde<firstname>", e.g. "appdediogo" for Fábio Nunes. Click three more
-// times to revert. Shared between app.js and admin.js since both have
+// times to revert. Shared between app.js and settings.js since both have
 // their own .brand-name logo.
 let wired = false;
 

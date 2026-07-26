@@ -64,6 +64,36 @@ router.post('/me/lang', (req, res) => {
   res.json({ ok: true });
 });
 
+// Self-service key change - open to every logged-in user, not admin-gated.
+// Requires the current key as an extra confirmation layer beyond the bearer
+// token itself (e.g. a device left logged in shouldn't let a stranger
+// silently take over the account). New key must be letters/numbers only.
+router.post('/me/change-token', (req, res) => {
+  const currentToken = String(req.body?.currentToken || '');
+  const newToken = String(req.body?.newToken || '').trim();
+
+  const user = db.prepare('SELECT token_hash FROM users WHERE id = ?').get(req.user.id);
+  if (hashToken(currentToken) !== user.token_hash) {
+    return res.status(401).json({ error: 'Chave atual incorreta.' });
+  }
+  if (!/^[A-Za-z0-9]+$/.test(newToken)) {
+    return res.status(400).json({ error: 'A nova chave só pode ter letras e números.' });
+  }
+  if (newToken.length < 4) {
+    return res.status(400).json({ error: 'A nova chave deve ter pelo menos 4 caracteres.' });
+  }
+
+  const newHash = hashToken(newToken);
+  const collision = db.prepare('SELECT id FROM users WHERE token_hash = ? AND id != ?').get(newHash, req.user.id);
+  if (collision) {
+    return res.status(409).json({ error: 'Essa chave já está em uso. Escolhe outra.' });
+  }
+
+  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+    .run(newHash, encryptToken(newToken), req.user.id);
+  res.json({ ok: true });
+});
+
 /* ------------------------------ Consequences ----------------------------- */
 
 // Suggest one consequence per day.

@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
   <!-- pedra com musgo: pedra cinza bem visivel por baixo, musgo como "gorro" por cima -->
+  <style>
+    .icon-bg { fill: #e7ded2; }
+    @media (prefers-color-scheme: dark) {
+      .icon-bg { fill: #1c1712; }
+    }
+  </style>
+  <rect class="icon-bg" width="100" height="100" rx="22"/>
   <ellipse cx="50" cy="78" rx="33" ry="10" fill="#241d17" opacity="0.25"/>
   <path d="M19 60C15 40 30 24 50 24C70 24 85 40 81 60C84 71 68 80 50 80C32 80 16 71 19 60Z" fill="#96897a"/>
   <path d="M19 60C15 40 30 24 50 24C70 24 85 40 81 60C77 54 70 49 70 49C70 49 60 68 50 68C40 68 30 49 30 49C30 49 23 54 19 60Z" fill="#7d7161"/>
