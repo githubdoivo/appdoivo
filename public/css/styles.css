@@ -62,7 +62,7 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
-  --brand:    #8a4630;
+  --brand:    #6b3420;
   --role-owner: #8a4630;
 }
 
@@ -349,12 +349,13 @@ a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
-/* Notification bell: a soft accent-tinted highlight signals "on" - a full
-   solid-color border read as a stark outline, so this is a gentle
-   background tint instead. Uses --clay (the app's warm brand accent,
-   same as the logo/badges), not --rata - --rata is minty green in light
-   mode, which read as an odd, unrelated color for this button. */
-#notif-btn.active { background: color-mix(in srgb, var(--clay) 18%, transparent); }
+/* Notification bell: when ON, it looks like every other icon button
+   (conformity - nothing to act on). When OFF, a soft accent tint draws
+   the eye, signaling "click to turn this on" instead of the reverse.
+   Uses --clay (the app's warm brand accent, same as the logo/badges),
+   not --rata - --rata is minty green in light mode, an odd, unrelated
+   color for this button. */
+#notif-btn:not(.active):not(.hidden) { background: color-mix(in srgb, var(--clay) 18%, transparent); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -387,6 +388,11 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
 }
 .tab:hover { background: transparent; color: var(--ink); }
 .tab.active { color: var(--ink); border-bottom-color: var(--clay); }
+/* A Rata shares --clay with every other tab, making its active underline
+   indistinguishable from Wall's right next to it. Rats are grey - give
+   it its own neutral grey accent instead. */
+[data-tab="rata"].active,
+[data-atab="rata"].active { border-bottom-color: #83807a; }
 
 /* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
    under "Votos da noite" in admin). The page-level .tab component above is
@@ -421,6 +427,11 @@ html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(-
   margin: 2px 0 20px;
   line-height: 1.3;
 }
+/* --ink-soft is deliberately muted for de-emphasized text, but that reads
+   as too faint for this subtitle-sized line in light mode specifically
+   (dark mode's --ink-soft already has enough contrast on its own). Use
+   the full --ink there instead. */
+html.mode-light .hero-line { color: var(--ink); }
 
 /* bloco de destaque (consequencia atual) */
 .highlight {
@@ -845,4 +856,5 @@ html.mode-dark body.theme-mural .card {
 .chat-msg-author { font-family: var(--body); font-size: 0.66rem; text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
 .chat-msg-time { font-family: var(--body); font-size: 0.62rem; color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
-.chat-empty { color: var(--ink-soft); font-style: italic; font-size: 0.92rem; }
+.chat-empty { color: var(--ink-soft); font-style: italic; font-weight: 600; font-size: 0.92rem; }
+html.mode-light .chat-empty { color: var(--ink); }

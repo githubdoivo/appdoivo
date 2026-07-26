@@ -184,6 +184,7 @@ test('owner, admin and user role badges each render in a distinct color', async 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
@@ -206,6 +207,7 @@ test('owner, admin and user role badges each render in a distinct color', async 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
@@ -219,6 +221,7 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
 test('access keys are censored by default and reveal on click, but the real value is always copyable', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenEl = await page.$('.user-row-token');
