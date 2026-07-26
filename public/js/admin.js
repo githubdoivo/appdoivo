@@ -191,9 +191,9 @@ $('settings-form').addEventListener('submit', async (e) => {
 
 /* ------------------------------ Utilizadores ----------------------------- */
 
-async function loadUsers() {
-  const users = await api('/admin/users');
+let allUsers = [];
 
+function renderUsersList(users) {
   $('users-list').innerHTML = users.length
     ? users.map((u) => `
       <div class="user-row">
@@ -206,6 +206,7 @@ async function loadUsers() {
         </div>
         <div class="row-actions">
           <button class="small ghost" data-copy-user="${esc(u.token)}">${t('copy')}</button>
+          <button class="small ghost" data-rename-user="${u.id}" data-current-name="${esc(u.name)}">${t('rename')}</button>
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? t('remove_admin_role') : t('make_admin')}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>
@@ -214,6 +215,19 @@ async function loadUsers() {
 
   $('users-list').querySelectorAll('[data-copy-user]').forEach((b) => {
     b.addEventListener('click', () => copyToClipboard(b.dataset.copyUser, b));
+  });
+
+  $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const next = prompt(t('rename_prompt'), b.dataset.currentName)?.trim();
+      if (!next || next === b.dataset.currentName) return;
+      try {
+        await api(`/admin/users/${b.dataset.renameUser}/name`, { method: 'PATCH', body: { name: next } });
+        loadUsers();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
   });
 
   $('users-list').querySelectorAll('[data-del-user]').forEach((b) => {
@@ -236,12 +250,48 @@ async function loadUsers() {
       }
     });
   });
+}
+
+// Live search: filters the list once 3+ characters are typed. If nothing
+// matches, the typed text is offered straight to the create form (this is
+// clearly a new person, not someone already in the list).
+function applyUserSearch() {
+  const term = $('user-search').value.trim();
+  const createBtn = $('user-form').querySelector('button[type="submit"]');
+
+  if (term.length <= 3) {
+    renderUsersList(allUsers);
+    $('user-search-hint').classList.add('hidden');
+    createBtn.disabled = !$('user-name-input').value.trim();
+    return;
+  }
+
+  const matches = allUsers.filter((u) => u.name.toLowerCase().includes(term.toLowerCase()));
+  renderUsersList(matches);
+
+  const noMatch = matches.length === 0;
+  $('user-search-hint').classList.toggle('hidden', !noMatch);
+  if (noMatch) {
+    $('user-name-input').value = term;
+    createBtn.disabled = false;
+  }
+}
+
+async function loadUsers() {
+  allUsers = await api('/admin/users');
+  applyUserSearch();
 
   $('copy-all-users').onclick = () => {
-    const lines = users.filter((u) => !u.is_admin).map((u) => `${u.name}: ${u.token}`).join('\n');
+    const lines = allUsers.filter((u) => !u.is_admin).map((u) => `${u.name}: ${u.token}`).join('\n');
     copyToClipboard(lines, $('copy-all-users'));
   };
 }
+
+$('user-search').addEventListener('input', applyUserSearch);
+
+$('user-name-input').addEventListener('input', () => {
+  $('user-form').querySelector('button[type="submit"]').disabled = !$('user-name-input').value.trim();
+});
 
 $('user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -250,6 +300,9 @@ $('user-form').addEventListener('submit', async (e) => {
   try {
     const u = await api('/admin/users', { method: 'POST', body: { name } });
     $('user-name-input').value = '';
+    $('user-search').value = '';
+    $('user-search-hint').classList.add('hidden');
+    $('user-form').querySelector('button[type="submit"]').disabled = true;
     alert(t('user_created', { name: u.name, token: u.token }));
     loadUsers();
   } catch (err) {
