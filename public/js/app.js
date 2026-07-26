@@ -51,10 +51,12 @@ function showApp(me) {
     adminBadge.classList.toggle('role-owner', me.isOwner);
     adminBadge.classList.toggle('role-admin', !me.isOwner);
     adminBadge.classList.remove('hidden');
-    $('admin-link').classList.remove('hidden');
   }
   // Plain (non-admin) users get no badge near the logo at all - only
   // owner/admin are flagged there. Manage Users still shows every role.
+  // The settings link (change my own key, plus admin tabs if applicable)
+  // is open to everyone now, not just admins.
+  $('settings-link').classList.remove('hidden');
   refreshNotifButton();
   loadConsequences();
   loadVotes();

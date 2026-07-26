@@ -36,7 +36,7 @@
 }
 
 /* ==================== Dark / light mode (UI chrome) ======================
-   A global preference for screens with no active night theme (admin.html,
+   A global preference for screens with no active night theme (settings.html,
    and the main app before/without a specific Best Outfit/Rata look).
    Declared on <html> (not body) as plain custom properties, so it only
    ever wins through normal inheritance: the moment a night theme is
@@ -63,6 +63,7 @@ html.mode-light {
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
   --brand:    #8a4630;
+  --role-owner: #8a4630;
 }
 
 html.mode-dark {
@@ -81,6 +82,7 @@ html.mode-dark {
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
   --brand:    #e2a878;
+  --role-owner: #a96b4b;
 }
 
 * { box-sizing: border-box; }
@@ -106,6 +108,15 @@ body {
 
 .muted { color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
 .error { color: var(--danger); min-height: 1.2em; font-style: italic; }
+/* Sits directly on the busy cover photo (not a paper/card surface like
+   #auth-error), so plain italic text was too easy to miss - a solid chip
+   gives it real contrast regardless of what's behind it. */
+#login-error:not(:empty) {
+  color: #7a2416;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+}
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
 
@@ -126,11 +137,12 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   margin-left: calc(50% - 50vw);
   padding: 0;
   /* Fallback for any sliver the cover photo doesn't reach (aspect-ratio
-     edge cases, overscroll) - white reads as a clean edge; the dark
-     rata background (active by default pre-login) did not. The
+     edge cases, overscroll) - same warm brown as the key-entry field's
+     own background (--paper-3 below), so an overscroll bounce reads as
+     part of the same design instead of a stray white/dark flash. The
      min-height above is what actually stops body (still theme-rata
      pre-login) from ever showing below a shorter #login box. */
-  background-color: #fff;
+  background-color: #241d17;
   --ink: #ece5d5;
   --ink-soft: #c7bca3;
   --line: rgba(236, 229, 213, 0.35);
@@ -301,7 +313,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 /* Role badges: owner / admin / user, each its own color. */
 /* Hardcoded, not var(--clay/--outfit/--rata): each role keeps exactly one
    color everywhere it appears, regardless of night theme or light/dark mode. */
-.badge.role-owner { border-color: #a96b4b; color: #a96b4b; }
+.badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
 .badge.role-admin { border-color: #59662f; color: #59662f; }
 .badge.role-user { border-color: #3f5b54; color: #3f5b54; }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto

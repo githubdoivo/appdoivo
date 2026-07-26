@@ -8,7 +8,7 @@ const MAX_TEXT_LENGTH = 300;
 // "chair" + "wisp" -> "chairwisp") - not literal swamp fauna, but the
 // murky, folklore-ish creatures a swamp conjures, matching the app's own
 // Best Outfit night themes. The Wall is anonymous to everyone but the
-// owner (see admin.js's Wall-pseudonyms table), so every USER (not every
+// owner (see settings.js's Wall-pseudonyms table), so every USER (not every
 // message) gets one of these instead of their real name - stable across
 // all their posts, so people stay recognizable to each other by their
 // pseudonym without exposing who they actually are.

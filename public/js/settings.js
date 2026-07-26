@@ -1,4 +1,4 @@
-import { api, getToken } from './api.js';
+import { api, getToken, setToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
@@ -44,6 +44,7 @@ let adminPromotionEnabled = false;
 // Golden rule: nobody but the owner sees other users' access keys, so
 // non-owner admins ("testers") don't get the Manage Users tab at all.
 let isOwner = false;
+let isAdmin = false;
 
 async function boot() {
   applyMode();
@@ -54,24 +55,37 @@ async function boot() {
     $('auth-error').textContent = t('admin_no_session');
     return;
   }
+  let me;
   try {
-    const me = await api('/me');
-    if (!me.isAdmin) {
-      $('auth-error').textContent = t('admin_only');
-      return;
-    }
+    me = await api('/me');
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
+    isAdmin = !!me.isAdmin;
     wireLogoEasterEgg(me.name);
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
   }
+
   const roleBadge = $('role-badge');
-  roleBadge.textContent = isOwner ? 'owner' : 'admin';
-  roleBadge.classList.toggle('role-owner', isOwner);
-  roleBadge.classList.toggle('role-admin', !isOwner);
-  if (!isOwner) {
+  if (isAdmin) {
+    roleBadge.textContent = isOwner ? 'owner' : 'admin';
+    roleBadge.classList.toggle('role-owner', isOwner);
+    roleBadge.classList.toggle('role-admin', !isOwner);
+  } else {
+    // Plain users get no badge near the logo, same as the main app.
+    roleBadge.classList.add('hidden');
+  }
+
+  // This page is now open to every logged-in user, not just admins - a
+  // plain user only gets the "Definições" tab (change their own key); the
+  // rest of this scoping matches the main admin panel's existing rules.
+  if (!isAdmin) {
+    ['users', 'outfit', 'rata', 'wall'].forEach((tab) => {
+      document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
+    });
+    selectAdminTab('settings');
+  } else if (!isOwner) {
     document.querySelector('#admin-tabs [data-atab="users"]').classList.add('hidden');
     document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     // A regular admin can run voting and reveal consequences, but broader
@@ -81,7 +95,8 @@ async function boot() {
   }
   $('admin-content').classList.remove('hidden');
   refreshNotifButton('notif-btn');
-  reloadAll();
+  wireChangeKeyForm();
+  if (isAdmin) reloadAll();
 }
 
 function reloadAll() {
@@ -436,7 +451,7 @@ async function loadWallPseudonyms() {
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'outfit', 'rata', 'wall'].forEach((name) => {
+  ['users', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
@@ -445,6 +460,28 @@ function selectAdminTab(tab) {
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
+
+/* ------------------------------ Change key -------------------------------- */
+// Self-service, open to every logged-in user (not admin-gated) - requires
+// the current key as confirmation, new key is letters/numbers only.
+
+function wireChangeKeyForm() {
+  $('change-key-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const currentToken = $('current-key-input').value.trim();
+    const newToken = $('new-key-input').value.trim();
+    $('change-key-msg').textContent = '';
+    try {
+      await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
+      setToken(newToken);
+      $('current-key-input').value = '';
+      $('new-key-input').value = '';
+      $('change-key-msg').textContent = t('key_changed_msg');
+    } catch (err) {
+      $('change-key-msg').textContent = err.message;
+    }
+  });
+}
 
 boot();
 
