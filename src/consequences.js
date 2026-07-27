@@ -20,7 +20,7 @@ export async function revealRandomConsequence() {
 
   db.prepare(`
     UPDATE consequences
-    SET status = 'used', revealed_at = datetime('now')
+    SET status = 'used', revealed_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(pick.id);
 

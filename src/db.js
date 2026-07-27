@@ -37,7 +37,7 @@ db.exec(`
     day        TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'pending',
     revealed_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
   -- A user can only suggest one consequence per day
   CREATE UNIQUE INDEX IF NOT EXISTS idx_consequence_user_day

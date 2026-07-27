@@ -235,6 +235,27 @@ test('with nothing pending, reveal returns 404', async () => {
   assert.equal(r.status, 404);
 });
 
+test('the admin consequences list is sorted most-recently-touched first, so a fresh reveal jumps to the top', async () => {
+  const posterA = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Consequence Poster A' } });
+  const posterB = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Consequence Poster B' } });
+  await api('POST', '/consequences', { token: posterA.data.token, body: { text: 'Older suggestion' } });
+  await api('POST', '/consequences', { token: posterB.data.token, body: { text: 'Newer suggestion' } });
+
+  const before = await api('GET', '/admin/consequences', { token: ADMIN });
+  const newerIndex = before.data.findIndex((c) => c.text === 'Newer suggestion');
+  const olderIndex = before.data.findIndex((c) => c.text === 'Older suggestion');
+  assert.ok(newerIndex < olderIndex, 'the most recently suggested one should sort above the older one');
+
+  const revealed = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  assert.equal(revealed.status, 200);
+
+  const after = await api('GET', '/admin/consequences', { token: ADMIN });
+  assert.equal(after.data[0].id, revealed.data.revealed.id, 'whichever consequence was just revealed should now be first, regardless of which one it was');
+
+  await api('DELETE', `/admin/users/${posterA.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${posterB.data.id}`, { token: ADMIN });
+});
+
 /* -------------------------------- Voting --------------------------------- */
 
 const NIGHT = 'furnished';

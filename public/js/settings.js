@@ -648,9 +648,9 @@ document.querySelectorAll('#votes-night-tabs .tab').forEach((btn) => {
 /* ------------------------------ Rata Game -------------------------------- */
 
 $('reveal-btn').addEventListener('click', async () => {
+  $('reveal-msg').textContent = '';
   try {
-    const r = await api('/admin/consequences/reveal', { method: 'POST' });
-    $('reveal-msg').textContent = t('revealed_msg', { text: r.revealed.text });
+    await api('/admin/consequences/reveal', { method: 'POST' });
     loadConsequences();
   } catch (err) {
     $('reveal-msg').textContent = err.message;
@@ -659,6 +659,12 @@ $('reveal-btn').addEventListener('click', async () => {
 
 async function loadConsequences() {
   const rows = await api('/admin/consequences');
+  // rows are sorted most-recently-touched first (see GET /admin/consequences),
+  // so the first 'used' one encountered is simply the current one.
+  const revealed = rows.find((c) => c.status === 'used');
+  $('revealed-consequence').classList.toggle('hidden', !revealed);
+  if (revealed) $('revealed-consequence').textContent = revealed.text;
+
   $('consequences-table').innerHTML = rows.length
     ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
       rows.map((c) => `<tr>

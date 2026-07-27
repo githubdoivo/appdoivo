@@ -144,8 +144,12 @@ router.post('/consequences', (req, res) => {
   const existing = mySuggestionToday(req.user.id);
   if (existing) return res.status(409).json({ error: 'Ja sugeriste uma consequencia hoje.' });
 
+  // Explicit millisecond-precision timestamp rather than relying on the
+  // table's own DEFAULT - that only takes effect for tables created fresh
+  // after this fix, and would silently stay at second-only precision (see
+  // GET /admin/consequences's sort) on any database that already existed.
   db.prepare(
-    'INSERT INTO consequences (user_id, text, day) VALUES (?, ?, ?)'
+    "INSERT INTO consequences (user_id, text, day, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(req.user.id, text, today());
   res.status(201).json({ ok: true });
 });
@@ -412,10 +416,13 @@ router.get('/admin/votes', (req, res) => {
 
 // Consequences (full view)
 router.get('/admin/consequences', (req, res) => {
+  // Most recently touched first - a pending one sorts by when it was
+  // suggested, but the moment it's revealed it jumps to the top too
+  // (revealed_at, once set, is always more recent than created_at).
   const rows = db.prepare(`
     SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author
     FROM consequences c JOIN users u ON u.id = c.user_id
-    ORDER BY c.status = 'pending' DESC, c.created_at DESC
+    ORDER BY COALESCE(c.revealed_at, c.created_at) DESC
   `).all();
   res.json(rows);
 });
