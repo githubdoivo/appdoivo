@@ -6,8 +6,8 @@ export async function wireVersionBadge() {
   if (!el) return;
   try {
     const res = await fetch('/api/version');
-    const { version } = await res.json();
-    if (version) el.textContent = `v${version}`;
+    const { version, env } = await res.json();
+    if (version) el.textContent = env ? `${env} v${version}` : `v${version}`;
   } catch {
     // Not worth surfacing - it's a reference detail, not a feature.
   }

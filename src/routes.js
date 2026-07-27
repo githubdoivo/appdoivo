@@ -36,6 +36,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote } from './plaza.js';
 
 const router = Router();
 
@@ -46,9 +47,11 @@ const { version: appVersion } = JSON.parse(readFileSync(join(__dirname, '..', 'p
 
 // App version shown as a small on-screen reference (see version.js), so QA
 // vs prod mismatches are obvious when reporting a bug. Public - no need to
-// be logged in to see it (the login screen shows it too).
+// be logged in to see it (the login screen shows it too). APP_ENV is only
+// ever set to "qa" (see fly.qa.toml) - prod leaves it unset, so the badge
+// only ever gets an env label on QA, never a redundant "prod" one.
 router.get('/version', (req, res) => {
-  res.json({ version: appVersion });
+  res.json({ version: appVersion, env: process.env.APP_ENV || null });
 });
 
 // Validates a token and returns the user.
@@ -89,7 +92,11 @@ router.post('/auth/claim-key', loginRateLimit, (req, res) => {
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
-  res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
+  res.json({
+    ...req.user,
+    adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
+    plazaEnabled: process.env.ENABLE_PLAZA === 'true',
+  });
 });
 
 router.post('/me/tutorial-seen', (req, res) => {
@@ -138,25 +145,54 @@ router.post('/me/change-token', (req, res) => {
 });
 
 /* ---------------------------------- Plaza --------------------------------- */
-// A pinned note from the owner (welcome message, wifi password, schedule,
-// whatever) shown to everyone on the Plaza tab - the app's landing page.
+// Owner/admin-authored feed shown on the Plaza tab - the app's landing
+// page. Two post types: a plain note (welcome message, wifi password,
+// house rules, release notes) and a poll (e.g. picking a dinner spot),
+// most-recent-first. Any admin can post, not just the owner.
+//
+// Gated behind ENABLE_PLAZA - it's being reworked from a single pinned
+// note into this real posts feed, so it stays QA-only (see fly.qa.toml)
+// until that's ready, rather than living on prod mid-rebuild. Same
+// on/off-by-env-var pattern as ENABLE_ADMIN_PROMOTION/SEED_DEMO.
 
-router.get('/plaza-note', (req, res) => {
-  res.json({ note: getSetting('plaza_note', '') });
+router.get('/plaza-posts', (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  res.json({ posts: listPlazaPosts(req.user.id) });
 });
 
-router.put('/admin/plaza-note', requireOwner, async (req, res) => {
-  const note = String(req.body?.note ?? '').trim();
-  setSetting('plaza_note', note);
-  res.json({ ok: true, note });
-  if (note) {
-    await broadcast({
-      title: { pt: 'Plaza', en: 'Plaza' },
-      body: { pt: 'o anfitrião deixou uma nova nota na Plaza.', en: 'your host left a new note on the Plaza.' },
-      tag: 'plaza-note',
-      url: '/?tab=plaza',
-    });
-  }
+router.get('/admin/plaza-posts', requireAdmin, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  res.json({ posts: listPlazaPostsForAdmin() });
+});
+
+router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  const result = createPlazaPost(req.user.id, req.body || {});
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+  const isPoll = req.body?.type === 'poll';
+  await broadcast({
+    title: { pt: 'Plaza', en: 'Plaza' },
+    body: isPoll
+      ? { pt: 'nova sondagem na Plaza - vem votar.', en: 'new poll on the Plaza - come vote.' }
+      : { pt: 'o anfitrião deixou uma nova nota na Plaza.', en: 'your host left a new note on the Plaza.' },
+    tag: 'plaza-note',
+    url: '/?tab=plaza',
+  });
+});
+
+router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  const result = deletePlazaPost(Number(req.params.id));
+  if (result.error) return res.status(404).json({ error: result.error });
+  res.json(result);
+});
+
+router.post('/plaza-posts/:id/vote', (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  const result = castPlazaVote(req.user.id, Number(req.params.id), Number(req.body?.optionId));
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ posts: listPlazaPosts(req.user.id) });
 });
 
 /* ------------------------------ Consequences ----------------------------- */

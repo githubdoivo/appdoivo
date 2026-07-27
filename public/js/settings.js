@@ -48,6 +48,7 @@ let adminPromotionEnabled = false;
 // non-owner admins ("testers") don't get the Manage Users tab at all.
 let isOwner = false;
 let isAdmin = false;
+let plazaEnabled = false;
 
 async function boot() {
   applyMode();
@@ -65,10 +66,18 @@ async function boot() {
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
+    plazaEnabled = !!me.plazaEnabled;
     wireLogoEasterEgg(me.name);
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
+  }
+
+  // Plaza is mid-rebuild (single note -> real posts feed), so it's
+  // QA-only for now (see ENABLE_PLAZA in src/routes.js) - hidden for
+  // everyone, owner included, regardless of the role-based rules below.
+  if (!plazaEnabled) {
+    document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
 
   const roleBadge = $('role-badge');
@@ -82,29 +91,35 @@ async function boot() {
   }
 
   // This page is now open to every logged-in user, not just admins - a
-  // plain user only gets the "Settings" tab (change their own key); the
-  // rest of this scoping matches the main admin panel's existing rules.
+  // plain user only gets the "Settings" tab (change their own key, no
+  // user-management section); the rest of this scoping matches the main
+  // admin panel's existing rules.
   if (!isAdmin) {
-    ['users', 'plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
-  } else if (!isOwner) {
-    // A regular admin can see the Users tab too, but the API only ever
-    // gives them their own row (see GET /admin/users) - so nobody else's
-    // key is ever exposed here, they just get to see the tab exist and
-    // their own entry in it. Creating users and resetting event content
-    // are owner-only actions on the backend regardless, so hide both
-    // instead of showing controls that would just 403 if clicked.
-    $('user-search-card').classList.add('hidden');
-    $('reset-content-card').classList.add('hidden');
-    // The Wall tab (pseudonym mapping + its timezone card) was opened up to
-    // regular admins temporarily so testers could see it existed - that's
-    // done now, so it's owner-only again, whole tab hidden rather than just
-    // the sensitive card within it.
-    document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
-    // The Plaza note is owner-only end to end (backend requireOwner too) -
-    // hide the whole tab rather than a control that would just 403.
-    document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
+    $('users-management').classList.add('hidden');
+  } else {
+    // User management now lives inside Settings (below change-key), not
+    // its own tab - any admin sees it, same as before.
+    $('users-management').classList.remove('hidden');
+    if (!isOwner) {
+      // A regular admin can see the Users list too, but the API only ever
+      // gives them their own row (see GET /admin/users) - so nobody else's
+      // key is ever exposed here, they just get to see it exist and their
+      // own entry in it. Creating users and resetting event content are
+      // owner-only actions on the backend regardless, so hide both instead
+      // of showing controls that would just 403 if clicked.
+      $('user-search-card').classList.add('hidden');
+      $('reset-content-card').classList.add('hidden');
+      // The Wall tab (pseudonym mapping + its timezone card) was opened up to
+      // regular admins temporarily so testers could see it existed - that's
+      // done now, so it's owner-only again, whole tab hidden rather than just
+      // the sensitive card within it.
+      document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
+      // Any admin - not just the owner - can now post to Plaza (see
+      // requireAdmin on PUT /admin/plaza-note), so the tab stays visible.
+    }
   }
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
@@ -151,12 +166,15 @@ $('lang-toggle').addEventListener('click', () => {
 
 // Night currently selected in the panel (scope of controls/contestants/votes).
 function currentNight() {
-  return $('admin-night')?.value || 'furnished';
+  return $('admin-night-switch')?.querySelector('.active')?.dataset.night || 'furnished';
 }
 
-$('admin-night').addEventListener('change', () => {
-  loadVotingState();
-  loadContestants();
+$('admin-night-switch').querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+    loadVotingState();
+    loadContestants();
+  });
 });
 
 // What clicking "reveal next" will do, keyed by the *current* phase.
@@ -376,9 +394,11 @@ function renderUsersList(users) {
   $('users-list').querySelectorAll('[data-regen-user]').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!(await showConfirm(t('confirm_regen_key')))) return;
+      // No need to show/copy the new key here anymore - regenerating also
+      // reopens first-time name-search retrieval (see keyClaim.js), so the
+      // person just finds their own name again and claims it themselves.
       try {
-        const u = await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
-        await showAlert(t('key_regenerated', { name: u.name, token: u.token }));
+        await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
         loadUsers();
       } catch (err) {
         await showAlert(err.message);
@@ -733,23 +753,87 @@ async function loadWallPseudonyms() {
 }
 
 /* --------------------------------- Plaza ---------------------------------- */
-// Owner-only note pinned to everyone's Plaza landing page (see GET
-// /plaza-note in app.js). Saving broadcasts a notification.
+// Owner/admin-authored feed on everyone's Plaza landing page (see GET
+// /plaza-posts in app.js). Two post types: a plain note, or a poll with
+// 2-6 options. Publishing broadcasts a notification.
 
-async function loadPlazaNote() {
-  const { note } = await api('/plaza-note');
-  $('plaza-note-input').value = note;
+const MAX_POLL_OPTIONS = 6;
+let plazaPostType = 'note';
+
+$('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    plazaPostType = btn.dataset.postType;
+    $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+  });
+});
+
+$('plaza-add-option-btn').addEventListener('click', () => {
+  const inputs = $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input');
+  if (inputs.length >= MAX_POLL_OPTIONS) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'plaza-poll-option-input';
+  input.placeholder = t('plaza_option_ph');
+  input.maxLength = 60;
+  input.style.marginTop = '8px';
+  $('plaza-add-option-btn').before(input);
+});
+
+async function loadPlazaPosts() {
+  const { posts } = await api('/admin/plaza-posts');
+  $('plaza-posts-list').innerHTML = posts.length
+    ? posts.map((p) => `
+      <div class="user-row">
+        <div class="user-row-top">
+          <div class="user-row-name">
+            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_note')}</span>
+            <span class="muted">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</span>
+          </div>
+        </div>
+        <p style="margin:8px 0 0">${esc(p.text)}</p>
+        ${p.type === 'poll' ? `
+        <ul class="muted" style="margin:8px 0 0;padding-left:18px">
+          ${p.options.map((o) => {
+            const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
+            return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
+          }).join('')}
+        </ul>` : ''}
+        <div class="row-actions">
+          <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
+        </div>
+      </div>`).join('')
+    : `<p class="muted">${t('plaza_no_posts')}</p>`;
+
+  $('plaza-posts-list').querySelectorAll('[data-del-post]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      if (!(await showConfirm(t('plaza_confirm_delete_post')))) return;
+      try {
+        await api(`/admin/plaza-posts/${b.dataset.delPost}`, { method: 'DELETE' });
+        loadPlazaPosts();
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
 }
 
-$('plaza-note-form').addEventListener('submit', async (e) => {
+$('plaza-post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  $('plaza-note-msg').textContent = '';
+  $('plaza-post-msg').textContent = '';
+  const text = $('plaza-post-text').value;
+  const options = plazaPostType === 'poll'
+    ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
+    : undefined;
   try {
-    await api('/admin/plaza-note', { method: 'PUT', body: { note: $('plaza-note-input').value } });
-    $('plaza-note-msg').textContent = t('saved');
-    setTimeout(() => ($('plaza-note-msg').textContent = ''), 2000);
+    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
+    $('plaza-post-text').value = '';
+    $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
+    $('plaza-post-msg').textContent = t('saved');
+    setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
+    loadPlazaPosts();
   } catch (err) {
-    $('plaza-note-msg').textContent = err.message;
+    $('plaza-post-msg').textContent = err.message;
   }
 });
 
@@ -757,11 +841,11 @@ $('plaza-note-form').addEventListener('submit', async (e) => {
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
-  if (tab === 'plaza' && isOwner) loadPlazaNote();
+  if (tab === 'plaza' && isAdmin) loadPlazaPosts();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

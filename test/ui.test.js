@@ -18,6 +18,7 @@ process.env.ADMIN_TOKEN = 'ui-test-admin-token';
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
+process.env.ENABLE_PLAZA = 'true';
 
 const { default: app } = await import('../src/app.js');
 
@@ -190,7 +191,7 @@ test('a first-time user can find their name, claim their key, and get logged str
   await page.waitForSelector('#login:not(.hidden)');
 
   await page.click('#find-key-link');
-  await page.fill('#find-key-input', 'playwright newcomer');
+  await page.fill('#token-input', 'playwright newcomer');
   await page.waitForSelector('.find-key-result', { timeout: 5000 });
   await page.click('.find-key-result');
 
@@ -214,8 +215,8 @@ test('a first-time user can find their name, claim their key, and get logged str
 
 /* --------------------------------- Plaza ----------------------------------- */
 
-test('Plaza opens by default, shows a saved owner note, and lets the owner edit it', async () => {
-  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'wifi: mossycottage' } });
+test('Plaza opens by default and shows a posted note in the feed', async () => {
+  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'wifi: mossycottage' } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
@@ -223,21 +224,44 @@ test('Plaza opens by default, shows a saved owner note, and lets the owner edit 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
   assert.ok(plazaActive, 'Plaza should be the tab shown right after logging in');
 
-  await page.waitForFunction(() => document.getElementById('plaza-note-text').textContent.length > 0);
-  const noteVisible = await page.$eval('#plaza-note-card', (el) => !el.classList.contains('hidden'));
-  assert.ok(noteVisible, 'a non-empty owner note should show on Plaza');
-  const noteText = await page.$eval('#plaza-note-text', (el) => el.textContent);
+  await page.waitForSelector('.plaza-post-note', { timeout: 5000 });
+  const noteText = await page.$eval('.plaza-post-note .plaza-post-text', (el) => el.textContent);
   assert.equal(noteText, 'wifi: mossycottage');
 
-  await page.goto(base + '/settings.html');
-  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+  await context.close();
+  await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+});
+
+test('Plaza admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="plaza"]');
-  await page.waitForFunction(() => document.getElementById('plaza-note-input').value.length > 0);
-  const inputValue = await page.$eval('#plaza-note-input', (el) => el.value);
-  assert.equal(inputValue, 'wifi: mossycottage', 'the admin editor should be pre-filled with the current note');
+  await page.waitForSelector('#plaza-post-form', { timeout: 5000 });
+
+  await page.click('[data-post-type="poll"]');
+  await page.fill('#plaza-post-text', 'Where for dinner?');
+  const optionInputs = page.locator('.plaza-poll-option-input');
+  await optionInputs.nth(0).fill('Pizza');
+  await optionInputs.nth(1).fill('Sushi');
+  await page.click('#plaza-post-form button[type="submit"]');
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: 5000 });
+
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('.plaza-post-poll', { timeout: 5000 });
+
+  const questionText = await page.$eval('.plaza-post-poll .plaza-post-text', (el) => el.textContent);
+  assert.equal(questionText, 'Where for dinner?');
+
+  await page.click('.plaza-poll-option:has-text("Pizza")');
+  await page.waitForFunction(() => document.querySelector('.plaza-poll-option.voted')?.textContent.includes('Pizza'));
+  const pizzaPct = await page.$eval('.plaza-poll-option.voted .plaza-poll-option-pct', (el) => el.textContent);
+  assert.equal(pizzaPct, '100%');
 
   await context.close();
-  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
+  const { posts } = await api('GET', '/plaza-posts', { token: ADMIN });
+  const created = posts.find((p) => p.text === 'Where for dinner?');
+  await api('DELETE', `/admin/plaza-posts/${created.id}`, { token: ADMIN });
 });
 
 /* --------------------- Role badge colors (regression) --------------------- */
@@ -250,7 +274,6 @@ test('owner, admin and user role badges each render in a distinct color', async 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
@@ -271,7 +294,6 @@ test('owner, admin and user role badges each render in a distinct color', async 
 test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.fill('#user-name-input', 'Zzz Session Tester');
@@ -298,7 +320,6 @@ test('clicking a user\'s name renames it in place - no separate rename button', 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   // Anchor on the token div, not the name span - the span itself gets
@@ -328,7 +349,6 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.fill('#user-name-input', 'cesar session');
@@ -345,7 +365,6 @@ test('Manage Users role filter narrows the list to just that role', async () => 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.click('#user-role-filter [data-role="owner"]');
@@ -377,7 +396,6 @@ test('Manage Users role filter narrows the list to just that role', async () => 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
@@ -391,7 +409,6 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
 test('access keys are censored by default, reveal on click, and copy automatically at the same time', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   // Spy on the clipboard instead of relying on real OS clipboard access,
@@ -430,10 +447,9 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  // Sees the Users tab now (so they can get familiar with it), but the API
-  // only ever returns their own row - see GET /admin/users - so there's
-  // nothing here to further lock down on the frontend.
-  await page.click('[data-atab="users"]');
+  // Sees user management inside Settings now (so they can get familiar with
+  // it), but the API only ever returns their own row - see GET /admin/users -
+  // so there's nothing here to further lock down on the frontend.
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
   const rows = await page.$$('#users-list .user-row');
   assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
@@ -455,7 +471,7 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
-  assert.ok(plazaTabHidden, 'non-owner admin cannot write the Plaza note (owner-only end to end)');
+  assert.ok(!plazaTabHidden, 'non-owner admin can also post to Plaza now');
 
   // Voting control (Best Look) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
@@ -481,7 +497,7 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, plain.token, '/settings.html');
 
-  for (const tab of ['users', 'plaza', 'outfit', 'rata', 'wall']) {
+  for (const tab of ['plaza', 'outfit', 'rata', 'wall']) {
     const hidden = await page.$eval(`[data-atab="${tab}"]`, (el) => el.classList.contains('hidden'));
     assert.ok(hidden, `plain user should not see the ${tab} tab`);
   }
@@ -492,7 +508,10 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   assert.ok(panelVisible, 'the Settings panel should be the one shown by default for a plain user');
 
   const changeKeyCardVisible = await page.$eval('#change-key-card', (el) => !el.classList.contains('hidden'));
-  assert.ok(changeKeyCardVisible, 'plain user (no Users tab access) should still see the change-key form');
+  assert.ok(changeKeyCardVisible, 'plain user (no user-management access) should still see the change-key form');
+
+  const usersManagementHidden = await page.$eval('#users-management', (el) => el.classList.contains('hidden'));
+  assert.ok(usersManagementHidden, 'plain user should not see the user-management section');
 
   const roleBadgeHidden = await page.$eval('#role-badge', (el) => el.classList.contains('hidden'));
   assert.ok(roleBadgeHidden, 'plain user should get no role badge, same as the main app');
@@ -546,6 +565,28 @@ test('reloading the page always opens on Plaza, regardless of the last tab used'
   await context.close();
 });
 
+test('with ENABLE_PLAZA off (prod default), Plaza is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
+  process.env.ENABLE_PLAZA = 'false';
+  try {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/');
+
+    const plazaTabHidden = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('hidden'));
+    assert.ok(plazaTabHidden, 'Plaza tab should be hidden in the main app when the flag is off');
+    const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
+    assert.ok(rataActive, 'A Rata should be the landing tab instead of Plaza when Plaza is disabled');
+
+    await page.goto(`${base}/settings.html`);
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+    const plazaAdminTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
+    assert.ok(plazaAdminTabHidden, 'Plaza admin tab should be hidden even for the owner when the flag is off');
+
+    await context.close();
+  } finally {
+    process.env.ENABLE_PLAZA = 'true';
+  }
+});
+
 /* --------------------- Font loading (regression) -------------------- */
 // A render-blocking CSS @import caused a visible reflow on font swap; fonts
 // must load via a <link> in <head> instead, in parallel with styles.css.
@@ -556,6 +597,32 @@ test('fonts load via a <link> in <head>, not a render-blocking @import', async (
 
   const css = await (await fetch(base + '/css/styles.css')).text();
   assert.doesNotMatch(css, /@import\s+url\(['"]?https:\/\/fonts\.googleapis\.com/, 'styles.css still render-blocks on a Google Fonts @import');
+});
+
+/* ------------------------- Version badge (regression) ---------------------- */
+// APP_ENV is only ever set to "qa" (see fly.qa.toml) - prod leaves it unset,
+// so the badge shows a bare "vX.Y.Z" there and "qa vX.Y.Z" on QA, making the
+// environment obvious at a glance on both the login screen and the app.
+
+test('version badge shows a "qa" label when APP_ENV=qa, and stays a bare version otherwise', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForFunction(() => document.getElementById('version-badge').textContent.length > 0);
+  const prodLabel = await page.$eval('#version-badge', (el) => el.textContent);
+  assert.match(prodLabel, /^v\d+\.\d+\.\d+$/, 'with APP_ENV unset, the badge should be a bare version, no env label');
+
+  process.env.APP_ENV = 'qa';
+  try {
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('version-badge').textContent.startsWith('qa '));
+    const qaLabel = await page.$eval('#version-badge', (el) => el.textContent);
+    assert.match(qaLabel, /^qa v\d+\.\d+\.\d+$/, 'with APP_ENV=qa, the badge should be prefixed "qa "');
+  } finally {
+    delete process.env.APP_ENV;
+  }
+
+  await context.close();
 });
 
 /* --------------------------- Dark/light mode ------------------------------ */

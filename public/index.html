@@ -35,16 +35,11 @@
             </svg>
           </button>
         </div>
-        <button type="submit" data-i18n="enter">Entrar</button>
+        <button type="submit" id="login-submit-btn" data-i18n="enter">Entrar</button>
       </form>
       <p id="login-error" class="error"></p>
       <button type="button" id="find-key-link" class="link-btn" data-i18n="find_key_link">Ainda não tens a tua chave?</button>
-
-      <div id="find-key-area" class="hidden">
-        <input id="find-key-input" type="text" data-i18n-ph="find_key_ph" placeholder="Escreve o teu nome..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-        <div id="find-key-results"></div>
-        <button type="button" id="find-key-back" class="link-btn" data-i18n="find_key_back">Já tenho a minha chave</button>
-      </div>
+      <div id="find-key-results"></div>
     </div>
   </section>
 
@@ -88,35 +83,12 @@
       <button class="tab" data-tab="chat" data-i18n="tab_chat">Chat</button>
     </nav>
 
-    <!-- Plaza: landing page - host notes (pinned, if any) + a quick glance
-         at what's happening across A Rata/Best Look/Wall right now, styled
-         like a daily front page rather than app cards. -->
+    <!-- Plaza: landing page - a feed of owner/admin-authored posts (notes
+         + polls), most-recent-first. No masthead - the tab bar already
+         says "plaza", so a repeated title/dateline/rule was redundant. -->
     <div id="tab-plaza" class="tab-panel">
-      <header class="plaza-masthead">
-        <p class="plaza-dateline" id="plaza-dateline"></p>
-        <h1 class="plaza-title" data-i18n="tab_plaza">Plaza</h1>
-        <p class="plaza-tagline" data-i18n="plaza_hero">O que se passa agora.</p>
-      </header>
-
-      <div class="plaza-notice hidden" id="plaza-note-card">
-        <span class="plaza-eyebrow" data-i18n="plaza_note_title">Notas do anfitrião</span>
-        <div id="plaza-note-text" class="plaza-notice-text"></div>
-      </div>
-
-      <button type="button" class="plaza-item" data-goto-tab="rata">
-        <span class="plaza-eyebrow" data-i18n="tab_rata">A Rata</span>
-        <p id="plaza-rata-summary" class="plaza-headline"></p>
-      </button>
-
-      <button type="button" class="plaza-item" data-goto-tab="outfit">
-        <span class="plaza-eyebrow" data-i18n="tab_outfit">Best Look</span>
-        <p id="plaza-outfit-summary" class="plaza-headline"></p>
-      </button>
-
-      <button type="button" class="plaza-item" data-goto-tab="chat">
-        <span class="plaza-eyebrow" data-i18n="tab_chat">Wall</span>
-        <p id="plaza-wall-summary" class="plaza-headline"></p>
-      </button>
+      <div id="plaza-feed" class="plaza-feed"></div>
+      <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
     </div>
 
     <!-- Rata Game -->

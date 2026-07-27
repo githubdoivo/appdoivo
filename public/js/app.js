@@ -13,6 +13,11 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
 ));
 
 let currentTab = 'plaza';
+// Set from /me in showApp() - Plaza is mid-rebuild (single note -> real
+// posts feed), so it's QA-only until that's done (see ENABLE_PLAZA in
+// src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
+// before /me resolves; showApp() corrects it immediately after.
+let plazaEnabled = true;
 
 /* ------------------------------- Arranque -------------------------------- */
 
@@ -47,6 +52,9 @@ function showLogin() {
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  plazaEnabled = !!me.plazaEnabled;
+  document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
+  if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name);
   if (me.isAdmin) {
@@ -62,7 +70,7 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
-  loadPlaza();
+  if (plazaEnabled) loadPlaza();
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -164,6 +172,7 @@ wirePasswordToggle('token-input', 'token-toggle');
 
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (findKeyMode) return;
   const token = $('token-input').value.trim();
   $('login-error').textContent = '';
   try {
@@ -180,21 +189,29 @@ $('login-form').addEventListener('submit', async (e) => {
 // own account by name (see GET /auth/unclaimed-users) and claim its key
 // (see POST /auth/claim-key). Once claimed - by this flow or by ever
 // logging in for real - the account no longer shows up here.
-$('find-key-link').addEventListener('click', () => {
-  $('login-form').classList.add('hidden');
-  $('login-error').textContent = '';
-  $('find-key-link').classList.add('hidden');
-  $('find-key-area').classList.remove('hidden');
-  $('find-key-input').focus();
-});
+// Reuses the same #token-input slot in place (placeholder + type swap)
+// instead of revealing a separate area below it, so clicking the link
+// never shifts the page layout.
+let findKeyMode = false;
 
-$('find-key-back').addEventListener('click', () => {
-  $('find-key-area').classList.add('hidden');
-  $('find-key-input').value = '';
+function setFindKeyMode(on) {
+  findKeyMode = on;
+  const input = $('token-input');
+  $('login-error').textContent = '';
   $('find-key-results').innerHTML = '';
-  $('login-form').classList.remove('hidden');
-  $('find-key-link').classList.remove('hidden');
-});
+  input.value = '';
+  input.type = on ? 'text' : 'password';
+  input.setAttribute('data-i18n-ph', on ? 'find_key_ph' : 'access_key');
+  input.placeholder = t(on ? 'find_key_ph' : 'access_key');
+  $('token-toggle').classList.toggle('hidden', on);
+  $('token-toggle').classList.remove('visible');
+  $('login-submit-btn').classList.toggle('hidden', on);
+  $('find-key-link').setAttribute('data-i18n', on ? 'find_key_back' : 'find_key_link');
+  $('find-key-link').textContent = t(on ? 'find_key_back' : 'find_key_link');
+  if (on) input.focus();
+}
+
+$('find-key-link').addEventListener('click', () => setFindKeyMode(!findKeyMode));
 
 async function copyToClipboard(text) {
   try {
@@ -212,9 +229,10 @@ async function copyToClipboard(text) {
 }
 
 let findKeyTimer = null;
-$('find-key-input').addEventListener('input', () => {
+$('token-input').addEventListener('input', () => {
+  if (!findKeyMode) return;
   clearTimeout(findKeyTimer);
-  const name = $('find-key-input').value.trim();
+  const name = $('token-input').value.trim();
   if (name.length < 3) {
     $('find-key-results').innerHTML = '';
     return;
@@ -230,8 +248,8 @@ $('find-key-input').addEventListener('input', () => {
           try {
             const r = await api('/auth/claim-key', { method: 'POST', body: { userId: Number(b.dataset.claimUser) } });
             await copyToClipboard(r.token);
+            setFindKeyMode(false); // reset back to the normal login form for next time
             await showAlert(t('find_key_revealed_msg', { name: r.name, token: r.token }));
-            $('find-key-back').click(); // reset back to the normal login form for next time
             setToken(r.token);
             const me = await api('/me');
             showApp(me);
@@ -336,7 +354,7 @@ function applyDeepLinkParams() {
   if (night && NIGHTS.includes(night)) {
     localStorage.setItem(NIGHT_KEY, night);
   }
-  if (TABS.includes(tab)) {
+  if (TABS.includes(tab) && (tab !== 'plaza' || plazaEnabled)) {
     selectTab(tab);
   }
   history.replaceState({}, '', location.pathname);
@@ -367,42 +385,66 @@ function timeAgo(dbTimestamp) {
   return t(day === 1 ? 'time_ago_day' : 'time_ago_days', { n: day });
 }
 
+// Renders one post as either a plain-note "torn column" or a poll "magazine
+// card" (see .plaza-post-note/.plaza-post-poll in styles.css) - the two
+// banner styles the owner asked for so a glance tells notes and polls apart.
+function renderPlazaPost(post) {
+  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_note_label');
+  const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
+
+  if (post.type !== 'poll') {
+    return `
+      <article class="plaza-post plaza-post-note">
+        <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+        <p class="plaza-post-text">${esc(post.text)}</p>
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
+
+  const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
+  const optionsHtml = post.options.map((o) => {
+    const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
+    const voted = post.myOptionId === o.id;
+    return `
+      <button type="button" class="plaza-poll-option${voted ? ' voted' : ''}" data-vote-post="${post.id}" data-vote-option="${o.id}">
+        <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
+        <span class="plaza-poll-option-label">${esc(o.label)}</span>
+        <span class="plaza-poll-option-pct">${pct}%</span>
+      </button>`;
+  }).join('');
+
+  return `
+    <article class="plaza-post plaza-post-poll">
+      <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+      <p class="plaza-post-text">${esc(post.text)}</p>
+      <div class="plaza-poll-options">${optionsHtml}</div>
+      <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
+    </article>`;
+}
+
+function renderPlazaFeed(posts) {
+  $('plaza-feed').innerHTML = posts.map(renderPlazaPost).join('');
+  $('plaza-feed-empty').classList.toggle('hidden', posts.length > 0);
+  $('plaza-feed').querySelectorAll('[data-vote-post]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const { posts: updated } = await api(`/plaza-posts/${btn.dataset.votePost}/vote`, {
+          method: 'POST',
+          body: { optionId: Number(btn.dataset.voteOption) },
+        });
+        renderPlazaFeed(updated);
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
+}
+
 async function loadPlaza() {
-  // Newspaper dateline, e.g. "quarta-feira, 27 de julho" / "Wednesday, July 27".
-  $('plaza-dateline').textContent = new Intl.DateTimeFormat(getLang() === 'pt' ? 'pt-PT' : 'en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
-
   try {
-    const { note } = await api('/plaza-note');
-    $('plaza-note-card').classList.toggle('hidden', !note);
-    $('plaza-note-text').textContent = note;
+    const { posts } = await api('/plaza-posts');
+    renderPlazaFeed(posts);
   } catch { /* transient - leaves whatever was last shown */ }
-
-  try {
-    const data = await api('/consequences/current');
-    $('plaza-rata-summary').textContent = data.current ? data.current.text : t('rata_none');
-  } catch { /* transient */ }
-
-  try {
-    const data = await api(`/votes/status?night=${encodeURIComponent(getNight())}`);
-    let statusKey;
-    if (!data.started) statusKey = 'plaza_outfit_wait';
-    else if (data.status === 'registration') statusKey = 'plaza_outfit_registration';
-    else if (data.status === 'open') statusKey = 'plaza_outfit_voting';
-    else if (data.resultsPhase === 'hidden') statusKey = 'plaza_outfit_closed_pending';
-    else if (data.resultsPhase === 'all') statusKey = 'plaza_outfit_done';
-    else statusKey = 'plaza_outfit_revealing';
-    $('plaza-outfit-summary').textContent = t(statusKey);
-  } catch { /* transient */ }
-
-  try {
-    const { messages } = await api('/chat/messages');
-    const last = messages[messages.length - 1];
-    $('plaza-wall-summary').textContent = last ? t('plaza_wall_last', { time: timeAgo(last.created_at) }) : t('chat_empty');
-  } catch { /* transient */ }
 }
 
 /* ------------------------------- Rata Game ------------------------------- */

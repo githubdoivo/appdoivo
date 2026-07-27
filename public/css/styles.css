@@ -217,15 +217,15 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 }
 .link-btn:hover { color: var(--ink); }
 
-#find-key-area {
+#find-key-results {
   width: 100%;
   max-width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   margin-top: 4px;
 }
-#find-key-results { display: flex; flex-direction: column; gap: 6px; }
+#find-key-results:empty { display: none; margin-top: 0; }
 .find-key-result {
   width: 100%;
   text-align: left;
@@ -298,12 +298,26 @@ select {
 }
 select:hover { border-color: var(--clay); }
 
+/* Night picker atop Best Look admin - governs contestants/votes/voter-log
+   below it too, not just the voting-control card, so it sits outside any
+   single card. Reuses the main app's .theme-switch component instead of a
+   <select>, but this page never gets a body.theme-outfit class (no per-
+   night reskin here), so var(--ot) is never set - fill the active state
+   with the general accent instead. */
+.night-switch { margin-bottom: 18px; }
+.night-switch button.active { background: var(--clay); color: var(--paper-3); }
+.night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
+
 label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
 /* -------------------------------- Botoes --------------------------------- */
 
 button, .btn {
   cursor: pointer;
+  /* iOS Safari draws its own translucent rounded-rect "tap highlight" over
+     any tapped button, regardless of `outline` - that's the "square limit"
+     that shows up on a tab tap even with the focus ring itself suppressed. */
+  -webkit-tap-highlight-color: transparent;
   border: 1px solid var(--ink);
   border-radius: var(--radius);
   padding: 12px 20px;
@@ -466,19 +480,34 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   padding: 4px 0 12px;
   font-family: var(--serif);
   font-size: 1.35rem;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: lowercase;
   letter-spacing: 0.01em;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 .tab:hover { background: transparent; color: var(--ink); }
-.tab.active { color: var(--ink); border-bottom-color: var(--clay); }
+/* Selected state is color + weight + underline only - no enclosing box.
+   The general button rule further up gives every button a 4px
+   border-radius; combined with a <button>'s native appearance in WebKit,
+   that radius alone gets rendered as a full rounded rectangle around the
+   tab (all four sides) even though only the bottom border is actually
+   visible - overriding both to zero/none removes it, leaving just the
+   underline. */
+.tab { -webkit-appearance: none; appearance: none; border-radius: 0; }
+.tab:focus, .tab:focus-visible { outline: none; }
+.tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
+/* --clay reads pale/salmon against the light-mode paper - too soft to
+   read as "selected" at a glance. Darken it specifically for light mode;
+   dark mode's warmer gold clay already has enough contrast as-is. */
+html.mode-light { --clay-active: #b5624a; }
 /* A Rata shares --clay with every other tab, making its active underline
    indistinguishable from Wall's right next to it. Rats are grey - give
    it its own neutral grey accent instead. */
 [data-tab="rata"].active,
 [data-atab="rata"].active { border-bottom-color: #83807a; }
+html.mode-light [data-tab="rata"].active,
+html.mode-light [data-atab="rata"].active { border-bottom-color: #5c5952; }
 
 /* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
    under "Votos da noite" in admin). The page-level .tab component above is
@@ -890,43 +919,6 @@ html.mode-dark body.theme-plaza {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23e8e2d3' fill-opacity='0.05'/%3E%3C/svg%3E");
 }
 
-.plaza-masthead { text-align: center; padding: 6px 0 22px; border-bottom: 4px double var(--clay); margin-bottom: 24px; }
-.plaza-dateline {
-  font-family: var(--body);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin: 0 0 6px;
-}
-.plaza-title {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 600;
-  font-size: 2.6rem;
-  color: var(--clay);
-  margin: 0;
-  text-wrap: balance;
-}
-.plaza-tagline { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 6px 0 0; }
-
-/* Notice + glance items read as brief front-page columns - a kicker label
-   above a headline-style line - not bordered app cards. */
-.plaza-notice, .plaza-item {
-  appearance: none;
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  padding: 16px 0;
-  font: inherit;
-  color: inherit;
-}
-.plaza-item { cursor: pointer; }
-.plaza-item:last-of-type { border-bottom: 1px solid var(--line); }
 .plaza-eyebrow {
   display: block;
   font-family: var(--body);
@@ -936,23 +928,60 @@ html.mode-dark body.theme-plaza {
   text-transform: uppercase;
   color: var(--clay);
 }
-.plaza-headline {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 1.2rem;
-  color: var(--ink);
-  margin: 6px 0 0;
-  text-wrap: balance;
-}
-.plaza-item:hover .plaza-headline { color: var(--clay-2); }
-.plaza-notice-text {
+
+/* Plaza feed: most-recent-first posts, two banner styles so a glance tells
+   a note from a poll - a plain torn front-page column for notes, a boxed
+   "magazine spread" card for polls (the interactive one). */
+.plaza-feed { display: flex; flex-direction: column; }
+.plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
+.plaza-post:first-child { border-top: none; padding-top: 0; }
+.plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
   color: var(--ink);
-  margin-top: 8px;
+  margin: 8px 0 0;
   padding-left: 14px;
   border-left: 3px solid var(--clay);
+  text-wrap: balance;
 }
+.plaza-byline { font-family: var(--body); font-size: 0.78rem; font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+
+.plaza-post-poll {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin: 10px 0;
+}
+.plaza-post-poll.plaza-post:first-child { margin-top: 0; }
+.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+
+.plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.plaza-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.plaza-poll-option.voted { border-color: var(--clay); }
+.plaza-poll-option-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--clay) 18%, transparent);
+  transition: width 0.3s ease;
+}
+.plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
+.plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {
