@@ -342,14 +342,22 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
   assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
 
+  // The Wall tab itself is visible now (so any admin can fix the timezone
+  // there), but who's-behind-each-pseudonym stays owner-only.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(wallTabHidden, 'non-owner admin can see the Wall tab');
+  assert.ok(!wallTabHidden, 'non-owner admin should be able to see the Wall tab (for its timezone setting)');
+
+  await page.click('[data-atab="wall"]');
+  const pseudonymsCardHidden = await page.$eval('#wall-pseudonyms-card', (el) => el.classList.contains('hidden'));
+  assert.ok(pseudonymsCardHidden, 'non-owner admin must not see who is behind each Wall pseudonym');
+  const wallTimezoneVisible = await page.$eval('#timezone-wall-card', (el) => !el.classList.contains('hidden'));
+  assert.ok(wallTimezoneVisible, 'non-owner admin should see the timezone setting on the Wall tab');
 
   const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
-  assert.ok(searchCardHidden, 'non-owner admin can create/search users (owner-only on the backend)');
+  assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');
 
   const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
-  assert.ok(resetCardHidden, 'non-owner admin can reset event content (owner-only on the backend)');
+  assert.ok(resetCardHidden, 'non-owner admin cannot reset event content (owner-only on the backend)');
 
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
@@ -413,6 +421,33 @@ test('?tab=&night= deep-links land on the right tab/night, then clean the URL', 
   assert.ok(outfitActive, 'deep link did not select the outfit tab');
   assert.ok(swampTheme, 'deep link did not apply the swamp night');
   assert.equal(cleanedUrl, '', 'query params were not cleaned up after applying the deep link');
+  await context.close();
+});
+
+test('a Wall notification\'s ?tab=chat deep link actually opens the Wall', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.goto(`${base}/?tab=chat`);
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
+  assert.ok(chatActive, '?tab=chat should select the Wall tab, same as rata/outfit already do');
+  await context.close();
+});
+
+test('reloading the page keeps you on the tab you were last on', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.click('[data-tab="chat"]');
+  await page.waitForTimeout(200);
+
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
+  assert.ok(chatActive, 'a reload should restore the last-open tab, not always bounce back to A Rata');
   await context.close();
 });
 

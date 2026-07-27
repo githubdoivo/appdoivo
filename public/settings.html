@@ -59,6 +59,7 @@
            devolve mais do que a propria linha, e so aceita escrita, para o
            dono da conta - ver GET/POST/PATCH/DELETE /admin/users em routes.js) -->
       <div id="atab-users" class="tab-panel hidden">
+        <h2 data-i18n="user_control_title" style="margin-bottom:12px">Controlo dos utilizadores</h2>
         <div class="card" id="user-search-card">
           <form id="user-form" class="inline">
             <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
@@ -68,8 +69,7 @@
         </div>
 
         <div class="card">
-          <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
-          <div id="users-list" class="user-list" style="margin-top:12px"></div>
+          <div id="users-list" class="user-list"></div>
         </div>
 
         <div class="card" id="reset-content-card">
@@ -149,9 +149,19 @@
         </div>
       </div>
 
-      <!-- Separador: Wall (owner only) -->
+      <!-- Separador: Wall (visivel a qualquer admin - so a tabela de
+           pseudonimos, mais abaixo, fica reservada ao dono da conta) -->
       <div id="atab-wall" class="tab-panel hidden">
-        <div class="card">
+        <div class="card" id="timezone-wall-card">
+          <h2 data-i18n="timezone">Fuso horário</h2>
+          <form id="settings-form-wall" style="margin-top:12px">
+            <input id="timezone-wall" type="text" placeholder="Europe/Lisbon" />
+            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
+            <span id="settings-msg-wall" class="muted"></span>
+          </form>
+        </div>
+
+        <div class="card" id="wall-pseudonyms-card">
           <h2 data-i18n="wall_pseudonyms_title">Quem é quem na Wall</h2>
           <p class="help" data-i18n="wall_pseudonyms_help">Explicação</p>
           <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>

@@ -95,9 +95,11 @@ async function boot() {
     // their own entry in it. Creating users and resetting event content
     // are owner-only actions on the backend regardless, so hide both
     // instead of showing controls that would just 403 if clicked.
-    document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     $('user-search-card').classList.add('hidden');
     $('reset-content-card').classList.add('hidden');
+    // Same for the Wall tab: the timezone setting there is fine for any
+    // admin, but who's-behind-each-pseudonym stays owner-only.
+    $('wall-pseudonyms-card').classList.add('hidden');
   }
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
@@ -234,25 +236,35 @@ $('voting-reset-btn').addEventListener('click', async () => {
 
 /* ------------------------------ Definicoes ------------------------------- */
 
+// There's only one timezone setting, but it's edited from two places now -
+// A Rata (where it drives the day rollover) and Wall (added so any admin,
+// not just the owner, can fix it without needing the A Rata tab). Both
+// inputs always show the same value.
 async function loadSettings() {
   const s = await api('/admin/settings');
   $('timezone').value = s.timezone;
+  $('timezone-wall').value = s.timezone;
 }
 
-$('settings-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+async function saveTimezone(value, msgEl) {
   try {
-    await api('/admin/settings', {
-      method: 'PUT',
-      body: {
-        timezone: $('timezone').value.trim(),
-      },
-    });
-    $('settings-msg').textContent = t('saved');
-    setTimeout(() => ($('settings-msg').textContent = ''), 2000);
+    await api('/admin/settings', { method: 'PUT', body: { timezone: value.trim() } });
+    msgEl.textContent = t('saved');
+    setTimeout(() => (msgEl.textContent = ''), 2000);
+    loadSettings();
   } catch (err) {
-    $('settings-msg').textContent = err.message;
+    msgEl.textContent = err.message;
   }
+}
+
+$('settings-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveTimezone($('timezone').value, $('settings-msg'));
+});
+
+$('settings-form-wall').addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveTimezone($('timezone-wall').value, $('settings-msg-wall'));
 });
 
 /* ------------------------------ Utilizadores ----------------------------- */
