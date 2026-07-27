@@ -39,6 +39,8 @@ db.exec(`
     status     TEXT NOT NULL DEFAULT 'pending',
     revealed_at TEXT,
     assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    done_at TEXT,
+    approved_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
   -- A user can only suggest one consequence per day
@@ -226,14 +228,17 @@ db.exec(`
 // Migration: tracks whether a user has ever retrieved their key - via a
 // real login (see authenticate() in auth.js) or via the first-time
 // name-search flow (see keyClaim.js). NULL means still eligible for that
-// flow. Existing accounts predate the feature and already have their key
-// through other means (Ivo messaging them directly), so they're backfilled
-// as already-claimed here, once, the moment the column is added - accounts
-// created after this point start unclaimed by default (no backfill runs
-// again on later boots, since the column will already exist).
+// flow. Only the owner is backfilled as already-claimed here (they set
+// the app up themselves and must never be searchable) - every other
+// pre-existing account is left NULL/searchable rather than assumed
+// already-handled, since there's no reliable way to tell who actually
+// got their key already vs who's still waiting (a prior version of this
+// migration blanket-stamped every user, which silently broke the search
+// for guests who'd been pre-created but never actually given their key -
+// caught on 2026-07-27 when a whole prod guest list came back unsearchable).
 if (!columnExists('users', 'key_claimed_at')) {
   db.exec('ALTER TABLE users ADD COLUMN key_claimed_at TEXT');
-  db.exec("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now')");
+  db.exec("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE is_owner = 1");
 }
 
 // Migration: per-day voting -> per-night voting.
@@ -301,6 +306,18 @@ if (!columnExists('plaza_posts', 'pinned_at')) {
 // suggested the consequence, not who has to do it.
 if (!columnExists('consequences', 'assigned_user_id')) {
   db.exec('ALTER TABLE consequences ADD COLUMN assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+
+// Migration: two-step completion tracking - done_at is the assigned
+// user's own self-report ("I did it"), approved_at is the owner
+// confirming it actually happened. Kept as two separate nullable
+// timestamps (not a single status enum) to match revealed_at/pinned_at's
+// pattern, and because approved_at implies done_at but not vice versa.
+if (!columnExists('consequences', 'done_at')) {
+  db.exec('ALTER TABLE consequences ADD COLUMN done_at TEXT');
+}
+if (!columnExists('consequences', 'approved_at')) {
+  db.exec('ALTER TABLE consequences ADD COLUMN approved_at TEXT');
 }
 
 /** Generates a secure, readable token. */

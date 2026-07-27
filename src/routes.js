@@ -12,9 +12,12 @@ import { NIGHTS, isNight, DEFAULT_NIGHT } from './nights.js';
 import {
   revealRandomConsequence,
   currentConsequence,
+  revealedConsequences,
   pendingCount,
   mySuggestionToday,
   assignConsequenceUser,
+  markConsequenceDone,
+  approveConsequence,
 } from './consequences.js';
 import {
   contestantsForNight,
@@ -238,6 +241,22 @@ router.get('/consequences/current', (req, res) => {
     pending: pendingCount(),
     mySuggestion: mySuggestionToday(req.user.id),
   });
+});
+
+// Public tracking list - every revealed consequence, who was assigned,
+// and whether it's done/approved. Visible to every logged-in user (not
+// admin-gated) since the whole point is social pressure via visibility.
+router.get('/consequences/revealed', (req, res) => {
+  res.json({ consequences: revealedConsequences() });
+});
+
+// Self-report: the assigned user marks their own consequence as done.
+// Still needs the owner's approval (see PATCH .../approve) before it
+// shows as done to everyone else.
+router.post('/consequences/:id/mark-done', (req, res) => {
+  const result = markConsequenceDone(Number(req.params.id), req.user.id);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true, consequence: result.consequence });
 });
 
 /* --------------------------------- Votes --------------------------------- */
@@ -499,7 +518,8 @@ router.get('/admin/consequences', (req, res) => {
   // (revealed_at, once set, is always more recent than created_at).
   const rows = db.prepare(`
     SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author,
-           c.assigned_user_id, a.name AS assignedName
+           c.assigned_user_id, a.name AS assignedName,
+           c.done_at, c.approved_at
     FROM consequences c
     JOIN users u ON u.id = c.user_id
     LEFT JOIN users a ON a.id = c.assigned_user_id
@@ -515,18 +535,29 @@ router.post('/admin/consequences/reveal', async (req, res) => {
   res.json({ ok: true, revealed });
 });
 
-// Owner-only: records who's actually holding the rata for a revealed
-// consequence - only the owner can see this at the party and enter it, it
-// can't be inferred from anything in the app.
-router.patch('/admin/consequences/:id/assign', requireOwner, (req, res) => {
+// Any admin (not owner-only) records who's actually holding the rata for
+// a revealed consequence - whoever's at the party when it's noticed can
+// enter it, it can't be inferred from anything in the app. Not tied to
+// "who has it right now" - can be set any time after the reveal, since
+// that's easier to keep track of than requiring it at the exact moment.
+// Approving that it was actually done, below, is owner-only though.
+router.patch('/admin/consequences/:id/assign', async (req, res) => {
   const userId = req.body?.userId === null ? null : Number(req.body?.userId);
   if (userId !== null) {
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
     if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
   }
-  const updated = assignConsequenceUser(Number(req.params.id), userId);
+  const updated = await assignConsequenceUser(Number(req.params.id), userId);
   if (!updated) return res.status(404).json({ error: 'Consequencia nao encontrada.' });
   res.json({ ok: true, consequence: updated });
+});
+
+// Owner-only: confirms a consequence the assigned user self-reported as
+// done actually happened - only then does it show as done to everyone.
+router.patch('/admin/consequences/:id/approve', requireOwner, (req, res) => {
+  const result = approveConsequence(Number(req.params.id));
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true, consequence: result.consequence });
 });
 
 // Contestants for a night. registered_by/partner_name are set only for

@@ -13,6 +13,10 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
 ));
 
 let currentTab = 'plaza';
+// Set from /me in showApp() - lets the Rata history tell "assigned to
+// me" apart from "assigned to someone else" so only the actual assignee
+// sees a mark-as-done button on their own entry.
+let myUserId = null;
 // Set from /me in showApp() - Plaza is mid-rebuild (single note -> real
 // posts feed), so it's QA-only until that's done (see ENABLE_PLAZA in
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
@@ -52,6 +56,7 @@ function showLogin() {
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  myUserId = me.id;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
@@ -76,6 +81,7 @@ function showApp(me) {
   // switch, not polling - it isn't the visible tab yet.
   if (plazaEnabled) startPlazaPolling();
   loadConsequences();
+  loadRataHistory();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
   // which was harmless when the outfit tab was just static vote buttons,
@@ -521,10 +527,50 @@ async function loadPlaza() {
 // scheduled cron (or an admin's manual reveal) shows up without a manual reload.
 let rataPollTimer = null;
 
+function rataStatusBadge(c) {
+  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
+  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
+  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+}
+
+async function loadRataHistory() {
+  try {
+    const { consequences } = await api('/consequences/revealed');
+    $('rata-history').innerHTML = consequences.length
+      ? consequences.map((c) => {
+        const status = rataStatusBadge(c);
+        const assignedLine = c.assignedName ? t('rata_assigned_to', { name: esc(c.assignedName) }) : t('rata_unassigned');
+        const canMarkDone = c.assigned_user_id === myUserId && !c.done_at;
+        return `<div class="rata-history-item">
+          <p class="rata-history-text">${esc(c.text)}</p>
+          <div class="rata-history-meta">
+            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+            <span class="muted">${assignedLine}</span>
+          </div>
+          ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
+        </div>`;
+      }).join('')
+      : `<p class="muted">${t('rata_history_empty')}</p>`;
+  } catch { /* transient - leaves whatever was last shown */ }
+}
+
+$('rata-history').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-mark-done]');
+  if (!btn) return;
+  if (!(await showConfirm(t('rata_mark_done_confirm')))) return;
+  try {
+    await api(`/consequences/${btn.dataset.markDone}/mark-done`, { method: 'POST' });
+    loadRataHistory();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+});
+
 function startRataPolling() {
   loadConsequences();
+  loadRataHistory();
   if (rataPollTimer) return;
-  rataPollTimer = setInterval(loadConsequences, 5000);
+  rataPollTimer = setInterval(() => { loadConsequences(); loadRataHistory(); }, 5000);
 }
 
 function stopRataPolling() {
@@ -538,13 +584,6 @@ async function loadConsequences() {
   try {
     const data = await api('/consequences/current');
     $('current-consequence').textContent = data.current ? data.current.text : t('rata_none');
-    if (data.current) {
-      $('consequence-holder').textContent = data.current.assignedName
-        ? t('rata_holder', { name: data.current.assignedName })
-        : t('rata_holder_unknown');
-    } else {
-      $('consequence-holder').textContent = '';
-    }
     $('pending-line').textContent = t('rata_pending', { n: data.pending });
 
     if (data.mySuggestion) {
