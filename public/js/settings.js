@@ -789,11 +789,11 @@ async function loadPlazaPosts() {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
+            <span class="badge${p.type === 'poll' ? ' type-poll' : ' type-announcement'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
-            <span class="muted">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</span>
           </div>
         </div>
+        <p class="muted" style="margin:4px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
         <p style="margin:8px 0 0">${esc(p.text)}</p>
         ${p.type === 'poll' ? `
         <ul class="muted" style="margin:8px 0 0;padding-left:18px">

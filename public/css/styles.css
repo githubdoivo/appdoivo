@@ -74,6 +74,8 @@ html.mode-light {
   --role-owner: #8a4630;
   --role-admin: #3f7d1f;
   --role-user:  #1f6d78;
+  --type-announcement: #8a6a1f;
+  --type-poll: #6b4c8a;
 }
 
 html.mode-dark {
@@ -95,6 +97,8 @@ html.mode-dark {
   --role-owner: #a96b4b;
   --role-admin: #8fd167;
   --role-user:  #6fd6e0;
+  --type-announcement: #d4b04a;
+  --type-poll: #b294d6;
 }
 
 * { box-sizing: border-box; }
@@ -413,6 +417,12 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
 .badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
 .badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
+
+/* Publication-type badges (Regular/Poll on the Wall admin list) - own
+   colors, deliberately outside the role palette above so a post type is
+   never visually confused with a user role. */
+.badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
+.badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
