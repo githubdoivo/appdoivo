@@ -73,6 +73,50 @@ test('admin creates a user', async () => {
   userId = r.data.id;
 });
 
+/* --------------------- First-time key retrieval (register) --------------- */
+
+test('a brand-new user is searchable by name until they claim their key', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zélia Cunha' } });
+
+  const tooShort = await api('GET', '/auth/unclaimed-users?name=ze');
+  assert.equal(tooShort.data.users.length, 0, 'below 3 characters should return nothing');
+
+  const accentless = await api('GET', '/auth/unclaimed-users?name=zelia');
+  assert.ok(accentless.data.users.some((u) => u.id === created.data.id), 'plain-ASCII "zelia" should match "Zélia"');
+
+  const claim = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(claim.status, 200);
+  assert.equal(claim.data.token, created.data.token);
+
+  const again = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(again.status, 400, 'a key can only ever be claimed once');
+
+  const afterClaim = await api('GET', '/auth/unclaimed-users?name=zelia');
+  assert.ok(!afterClaim.data.users.some((u) => u.id === created.data.id), 'claimed users disappear from search');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('logging in for real also closes the first-time key retrieval, even without using it', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Rogério Vale' } });
+
+  const before = await api('GET', '/auth/unclaimed-users?name=rogerio');
+  assert.ok(before.data.users.some((u) => u.id === created.data.id));
+
+  // A real authenticated request (not the claim flow) with their actual key.
+  await api('GET', '/me', { token: created.data.token });
+
+  const after = await api('GET', '/auth/unclaimed-users?name=rogerio');
+  assert.ok(!after.data.users.some((u) => u.id === created.data.id), 'a real login should close this even if the claim endpoint was never used');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('the owner is never searchable via first-time key retrieval', async () => {
+  const r = await api('GET', '/auth/unclaimed-users?name=test');
+  assert.ok(!r.data.users.some((u) => u.name === 'Test Admin'), 'the owner already has their key from setup');
+});
+
 test('a normal user cannot access the admin panel', async () => {
   const r = await api('GET', '/admin/users', { token: userToken });
   assert.equal(r.status, 403);

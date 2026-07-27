@@ -27,7 +27,8 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     tutorial_seen INTEGER NOT NULL DEFAULT 0,
     lang TEXT NOT NULL DEFAULT 'pt',
-    wall_pseudonym TEXT
+    wall_pseudonym TEXT,
+    key_claimed_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS consequences (
@@ -186,6 +187,19 @@ db.exec(`
     AND NOT EXISTS (SELECT 1 FROM wall_pseudonym_history h WHERE h.user_id = u.id)
 `);
 
+// Migration: tracks whether a user has ever retrieved their key - via a
+// real login (see authenticate() in auth.js) or via the first-time
+// name-search flow (see keyClaim.js). NULL means still eligible for that
+// flow. Existing accounts predate the feature and already have their key
+// through other means (Ivo messaging them directly), so they're backfilled
+// as already-claimed here, once, the moment the column is added - accounts
+// created after this point start unclaimed by default (no backfill runs
+// again on later boots, since the column will already exist).
+if (!columnExists('users', 'key_claimed_at')) {
+  db.exec('ALTER TABLE users ADD COLUMN key_claimed_at TEXT');
+  db.exec("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now')");
+}
+
 // Migration: per-day voting -> per-night voting.
 // Older databases had contestants/votes with a 'day' column. Voting is now per
 // night (furnished/swamp), so the old tables are dropped (voting data is
@@ -310,8 +324,10 @@ export function seed({ adminToken, adminName, timezone }) {
   let admin = db.prepare('SELECT * FROM users WHERE is_admin = 1').get();
   if (!admin) {
     const token = adminToken || generateToken();
+    // The owner already knows their own key from setup - never eligible
+    // for the first-time name-search key retrieval (see keyClaim.js).
     const info = db.prepare(
-      "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+      "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at, key_claimed_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
     admin = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     return { admin, created: true, token };

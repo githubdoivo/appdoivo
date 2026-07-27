@@ -35,6 +35,7 @@ import {
   broadcast,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
+import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 
 const router = Router();
 
@@ -60,7 +61,28 @@ router.post('/auth/login', loginRateLimit, (req, res) => {
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
   const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
+  // Proves they know their key - same claimed-key stamp authenticate()
+  // applies (see auth.js), so they stop showing up in the first-time
+  // name-search flow (keyClaim.js) from here on.
+  db.prepare("UPDATE users SET key_claimed_at = COALESCE(key_claimed_at, strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE id = ?").run(user.id);
   res.json({ id: user.id, name: user.name, isAdmin: !!user.is_admin });
+});
+
+// First-time key retrieval: lets someone who's never logged in find their
+// own account by name and get their key, instead of the owner having to
+// message everyone individually. Public and unauthenticated by necessity -
+// they don't have a key yet. Search itself isn't rate-limited (it doesn't
+// reveal a secret, just names of accounts nobody's claimed yet, and needs
+// 3+ characters); claiming the actual key shares the login attempt budget,
+// same as guessing a token would.
+router.get('/auth/unclaimed-users', (req, res) => {
+  res.json({ users: searchUnclaimedUsers(req.query.name) });
+});
+
+router.post('/auth/claim-key', loginRateLimit, (req, res) => {
+  const result = claimKey(Number(req.body?.userId));
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
 });
 
 // Everything below requires authentication.

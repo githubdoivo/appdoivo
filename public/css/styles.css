@@ -202,6 +202,44 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
 
+/* Text-only button - "forgot my key" / "back to login" links, not a
+   bordered button competing with the real Entrar submit. */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: var(--ink-soft);
+  font-family: var(--body);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--ink); }
+
+#find-key-area {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+#find-key-results { display: flex; flex-direction: column; gap: 6px; }
+.find-key-result {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--paper-3);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.find-key-result:hover { border-color: var(--clay); }
+
 /* -------------------------------- Inputs --------------------------------- */
 
 input, textarea, select {

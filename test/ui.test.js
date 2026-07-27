@@ -174,6 +174,39 @@ test('body carries no night-theme class while the login screen is showing', asyn
   await context.close();
 });
 
+/* --------------------- First-time key retrieval (register) --------------- */
+
+test('a first-time user can find their name, claim their key, and get logged straight in', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Playwright Newcomer' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)');
+
+  await page.click('#find-key-link');
+  await page.fill('#find-key-input', 'playwright newcomer');
+  await page.waitForSelector('.find-key-result', { timeout: 5000 });
+  await page.click('.find-key-result');
+
+  const modal = page.locator('.modal-overlay:not(.hidden)');
+  await modal.waitFor({ timeout: 5000 });
+  const revealed = await page.locator('.modal-message').textContent();
+  assert.match(revealed, /playwright newcomer/i, 'the modal should show the claimed account\'s name');
+  await page.locator('.modal-actions button').first().click();
+
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  const me = await page.evaluate(async () => {
+    const token = localStorage.getItem('appivo_token');
+    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } });
+    return res.json();
+  });
+  assert.equal(me.name, 'Playwright Newcomer', 'the auto-login after claiming should be the claimed account');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
 /* --------------------- Role badge colors (regression) --------------------- */
 // owner / admin / user must each render in a visually distinct color.
 

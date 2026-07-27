@@ -179,6 +179,58 @@ $('login-form').addEventListener('submit', async (e) => {
   }
 });
 
+// First-time key retrieval: for someone who's never logged in, find their
+// own account by name (see GET /auth/unclaimed-users) and claim its key
+// (see POST /auth/claim-key). Once claimed - by this flow or by ever
+// logging in for real - the account no longer shows up here.
+$('find-key-link').addEventListener('click', () => {
+  $('login-form').classList.add('hidden');
+  $('login-error').textContent = '';
+  $('find-key-link').classList.add('hidden');
+  $('find-key-area').classList.remove('hidden');
+  $('find-key-input').focus();
+});
+
+$('find-key-back').addEventListener('click', () => {
+  $('find-key-area').classList.add('hidden');
+  $('find-key-input').value = '';
+  $('find-key-results').innerHTML = '';
+  $('login-form').classList.remove('hidden');
+  $('find-key-link').classList.remove('hidden');
+});
+
+let findKeyTimer = null;
+$('find-key-input').addEventListener('input', () => {
+  clearTimeout(findKeyTimer);
+  const name = $('find-key-input').value.trim();
+  if (name.length < 3) {
+    $('find-key-results').innerHTML = '';
+    return;
+  }
+  findKeyTimer = setTimeout(async () => {
+    try {
+      const { users } = await api(`/auth/unclaimed-users?name=${encodeURIComponent(name)}`);
+      $('find-key-results').innerHTML = users.length
+        ? users.map((u) => `<button type="button" class="find-key-result" data-claim-user="${u.id}">${esc(u.name)}</button>`).join('')
+        : `<p class="muted">${t('find_key_no_match')}</p>`;
+      $('find-key-results').querySelectorAll('[data-claim-user]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          try {
+            const r = await api('/auth/claim-key', { method: 'POST', body: { userId: Number(b.dataset.claimUser) } });
+            await showAlert(t('find_key_revealed_msg', { name: r.name, token: r.token }));
+            $('find-key-back').click(); // reset back to the normal login form for next time
+            setToken(r.token);
+            const me = await api('/me');
+            showApp(me);
+          } catch (err) {
+            await showAlert(err.message);
+          }
+        });
+      });
+    } catch { /* transient network hiccup - next keystroke retries */ }
+  }, 300);
+});
+
 // Logout itself lives on the Settings page now (settings.js) - it's rare
 // enough not to need a permanent topbar icon slot on every page.
 
