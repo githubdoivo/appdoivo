@@ -60,7 +60,10 @@ html.mode-light {
   --paper-2:  #faf5f7;
   --paper-3:  #fdfafc;
   --ink:      #4a3f4d;
-  --ink-soft: #8d7f92;
+  /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
+     italic/muted text (.muted, .help, table cells) this drives all over
+     Settings and the admin panel. Darkened to ~5:1. */
+  --ink-soft: #756980;
   --line:     #e3d4e0;
   --line-2:   #ecdfe8;
   --rata:     #8fbfae;
@@ -907,7 +910,10 @@ body.theme-mural {
      a subtle lift. Tightened to match the other themes' rhythm. */
   --paper-3:  #deb69c;
   --ink:      #3d2216;
-  --ink-soft: #7a5138;
+  /* Was #7a5138 (~3.7:1 against --paper-3) - failed WCAG AA for the
+     italic/muted text (bylines, help text) this drives on the Wall tab.
+     Darkened to ~5.3:1. */
+  --ink-soft: #5c3c29;
   --line:     #a9744f;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
@@ -967,9 +973,11 @@ body.theme-plaza {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-plaza {
-  --paper:    #1f1a0e;
-  --paper-2:  #26200f;
-  --paper-3:  #2e2712;
+  /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
+     plain brown-black. Lifted + more saturated so it reads as dark gold. */
+  --paper:    #2b2107;
+  --paper-2:  #342809;
+  --paper-3:  #3e300c;
   --ink:      #f0e0ac;
   --ink-soft: #b8a06a;
   --line:     #4a3d1f;
@@ -977,7 +985,7 @@ html.mode-dark body.theme-plaza {
   --clay:     #e0a83a;
   --clay-2:   #edc06a;
   --rata:     #e0a83a;
-  background-color: #1f1a0e;
+  background-color: #2b2107;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
