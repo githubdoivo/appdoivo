@@ -234,6 +234,19 @@ $('voting-reset-btn').addEventListener('click', async () => {
   }
 });
 
+$('voting-reset-all-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_reset_all'), { danger: true }))) return;
+  $('voting-msg').textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/reset-all`, { method: 'POST' });
+    loadVotingState();
+    loadVotes();
+    loadContestants();
+  } catch (err) {
+    $('voting-msg').textContent = err.message;
+  }
+});
+
 /* ------------------------------ Definicoes ------------------------------- */
 
 // There's only one timezone setting, but it's edited from two places now -

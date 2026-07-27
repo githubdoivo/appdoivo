@@ -561,6 +561,8 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   }
 });
 
+// Reset voting: wipes this night's votes and reopens voting, but keeps the
+// contestant roster - for redoing a vote without making everyone re-enter.
 router.post('/admin/voting/:night/reset', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
@@ -569,6 +571,19 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
+});
+
+// Reset all: wipes the contestant roster too (cascades to votes), and
+// returns the night to its never-started state - a true blank slate, for
+// when the whole night needs redoing from scratch, entries included.
+router.post('/admin/voting/:night/reset-all', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  db.prepare('DELETE FROM contestants WHERE night = ?').run(night);
+  setSetting(`voting_status_${night}`, 'closed');
+  setSetting(`voting_started_${night}`, '0');
+  resetResultsPhase(night);
+  res.json({ ok: true, night, votingStatus: 'closed' });
 });
 
 export default router;

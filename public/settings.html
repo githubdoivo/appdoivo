@@ -61,17 +61,14 @@
       <div id="atab-users" class="tab-panel hidden">
         <div class="card">
           <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
-        </div>
-        <div class="card" id="user-search-card">
-          <form id="user-form" class="inline">
-            <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
-            <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
-          </form>
-          <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
-        </div>
-
-        <div class="card">
-          <div id="users-list" class="user-list"></div>
+          <div id="user-search-card" style="margin-top:12px">
+            <form id="user-form" class="inline">
+              <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
+              <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
+            </form>
+            <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
+          </div>
+          <div id="users-list" class="user-list" style="margin-top:16px"></div>
         </div>
 
         <div class="card" id="reset-content-card">
@@ -96,8 +93,9 @@
           </p>
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar noite</button>
-            <button type="button" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
+            <button type="button" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
+            <button type="button" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
+            <button type="button" id="voting-reset-all-btn" class="danger" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>
           <span id="voting-msg" class="muted"></span>
         </div>

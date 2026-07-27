@@ -600,12 +600,8 @@ body { transition: background-color 0.45s ease; }
 
 /* ================= Controlo de votacao (painel admin) =================== */
 
-.voting-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.voting-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .voting-controls button { width: 100%; }
-/* "Open entries" starts the whole flow (registration -> voting -> closed) -
-   give it its own full-width row instead of sharing the 2-up grid with the
-   other four, which are steps within/after that first one. */
-#voting-registration-btn { grid-column: 1 / -1; }
 .voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }

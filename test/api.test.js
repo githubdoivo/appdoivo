@@ -349,6 +349,23 @@ test('reset clears the night votes and reopens voting', async () => {
   assert.equal(v.status, 201);
 });
 
+test('reset-all clears votes AND contestants, back to a never-started night', async () => {
+  const other = 'swamp'; // already has a contestant + a vote from earlier tests
+  const before = await api('GET', `/admin/contestants?night=${other}`, { token: ADMIN });
+  assert.ok(before.data.contestants.length > 0, 'test setup: swamp should already have a contestant');
+
+  const resetAll = await api('POST', `/admin/voting/${other}/reset-all`, { token: ADMIN });
+  assert.equal(resetAll.status, 200);
+  assert.equal(resetAll.data.votingStatus, 'closed');
+
+  const contestants = await api('GET', `/admin/contestants?night=${other}`, { token: ADMIN });
+  assert.equal(contestants.data.contestants.length, 0, 'reset-all should wipe the contestant roster too');
+
+  const voting = await api('GET', '/admin/voting', { token: ADMIN });
+  const night = voting.data.nights.find((n) => n.night === other);
+  assert.equal(night.started, false, 'reset-all should return the night to its never-started state');
+});
+
 /* --------------------------- Owner content reset -------------------------- */
 // Wipes contestants/votes/consequences - runs last so it doesn't disturb
 // the shared state the tests above rely on.

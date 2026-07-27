@@ -113,6 +113,10 @@ export async function refreshNotifButton(btnId = 'notif-btn') {
   notifBtn.setAttribute('aria-label', label);
 }
 
+// Shown at most once, ever - after that, toggling notifications on/off is
+// just a plain toggle with no repeated nagging.
+const HOME_TIP_SHOWN_KEY = 'appivo_home_tip_shown';
+
 /** Wires a notif icon button's click handler (any page): a real toggle -
  * on while off enables, on while on disables (see disablePush()). */
 export function wireNotifButton(btnId = 'notif-btn') {
@@ -129,8 +133,10 @@ export function wireNotifButton(btnId = 'notif-btn') {
           await showAlert(t('notif_enabled_msg'));
           // Push works in a plain browser tab too, but it's far more
           // reliable (and feels like a real app) once installed to the
-          // home screen - worth a nudge right after someone opts in.
-          if (!isStandalone()) {
+          // home screen - worth a nudge right after someone opts in, but
+          // only the first time they ever hit this (not every toggle).
+          if (!isStandalone() && !localStorage.getItem(HOME_TIP_SHOWN_KEY)) {
+            localStorage.setItem(HOME_TIP_SHOWN_KEY, '1');
             await showAlert(t(isIOS() ? 'notif_add_home_tip_ios' : 'notif_add_home_tip_other'));
           }
         }
