@@ -9,6 +9,7 @@ import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
 import { NIGHTS } from './nights.js';
+import { createPlazaPost } from './plaza.js';
 
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
@@ -89,5 +90,21 @@ export function seedDemo() {
       NAMES.slice(i * 5, i * 5 + 5).forEach((name) => insContestant.run(name, night));
     });
     console.log(`[seed-demo] Registered 5 contestants for each night (${NIGHTS.join(', ')}).`);
+  }
+
+  // 4) Wall posts (QA convenience only - lets ENABLE_PLAZA be checked
+  // without publishing anything by hand first) --------------------------------
+  const plazaPostCount = db.prepare('SELECT COUNT(*) AS n FROM plaza_posts').get().n;
+  if (plazaPostCount === 0 && demoUsers.length) {
+    createPlazaPost(demoUsers[0], {
+      type: 'announcement',
+      text: 'Bem-vindos à festa! Password do wifi: party-wifi-2026.',
+    });
+    createPlazaPost(demoUsers[0], {
+      type: 'poll',
+      text: 'Qual foi o melhor momento da noite até agora?',
+      options: ['A Rata', 'Best Look', 'A Plaza', 'Ainda não sei'],
+    });
+    console.log('[seed-demo] Added 1 Wall announcement and 1 poll.');
   }
 }
