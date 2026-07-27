@@ -562,6 +562,53 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   await context.close();
 });
 
+/* --------------------- Live role sync (regression) ------------------------ */
+
+test('a role change made by the owner syncs to an already-open session automatically, on both the main app and Settings', async () => {
+  const target = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Watch Test' } });
+  await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+
+  // Main app: admin badge should be showing, then disappear once demoted -
+  // no manual reload, just the periodic /me poll (see startRoleWatcher()
+  // in app.js) picking up the change.
+  const mainPage = await context.newPage();
+  await mainPage.clock.install();
+  await mainPage.goto(base + '/');
+  await mainPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
+  await mainPage.goto(base + '/');
+  await mainPage.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  const mainLangBtn = await mainPage.$('#tutorial-lang-pt');
+  if (mainLangBtn && await mainLangBtn.isVisible()) {
+    await mainLangBtn.click();
+    await mainPage.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
+    await mainPage.click('#tutorial-skip');
+  }
+  assert.ok(await mainPage.$eval('#admin-badge', (el) => !el.classList.contains('hidden')), 'should start with the admin badge showing');
+
+  // Settings page: same story, its own independent watcher.
+  const settingsPage = await context.newPage();
+  await settingsPage.clock.install();
+  await settingsPage.goto(base + '/settings.html');
+  await settingsPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
+  await settingsPage.goto(base + '/settings.html');
+  await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+  assert.ok(await settingsPage.$eval('#role-badge', (el) => !el.classList.contains('hidden')), 'should start with the role badge showing');
+
+  await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+
+  await mainPage.clock.fastForward('00:31');
+  await mainPage.waitForSelector('#admin-badge.hidden', { state: 'attached', timeout: 5000 });
+
+  await settingsPage.clock.fastForward('00:31');
+  await settingsPage.waitForSelector('#role-badge.hidden', { state: 'attached', timeout: 5000 });
+  assert.ok(await settingsPage.$eval('[data-atab="settings"]', (el) => !el.classList.contains('hidden')), 'demoted user should be back to only seeing the Settings tab');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${target.id}`, { token: ADMIN });
+});
+
 /* ------------------- Notification deep-link (regression) ----------------- */
 
 test('?tab=&night= deep-links land on the right tab/night, then clean the URL', async () => {

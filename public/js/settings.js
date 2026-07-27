@@ -132,6 +132,30 @@ async function boot() {
   refreshNotifButton('notif-btn');
   wireChangeKeyForm();
   if (isAdmin) reloadAll();
+  startRoleWatcher();
+}
+
+// Polls /me every 30s for a role change (promoted, demoted, or removed
+// entirely) made by the owner while this page is already open - same
+// mechanism as app.js's own watcher. A mismatch reloads the page, the
+// simplest way to get every role-dependent bit of this page (badge,
+// which admin tabs show, Manage Users access) back in sync.
+let roleWatchTimer = null;
+function startRoleWatcher() {
+  if (roleWatchTimer) return;
+  roleWatchTimer = setInterval(async () => {
+    try {
+      const fresh = await api('/me');
+      if (!!fresh.isAdmin !== isAdmin || !!fresh.isOwner !== isOwner) {
+        location.reload();
+      }
+    } catch (err) {
+      if (err.status === 401) {
+        clearToken();
+        location.reload();
+      }
+    }
+  }, 30000);
 }
 
 function reloadAll() {

@@ -17,6 +17,12 @@ let currentTab = 'plaza';
 // me" apart from "assigned to someone else" so only the actual assignee
 // sees a mark-as-done button on their own entry.
 let myUserId = null;
+// Set from /me in showApp(), re-checked periodically (see
+// startRoleWatcher()) so a role change made by the owner while someone's
+// mid-session (promoted, demoted, or removed) takes effect for them
+// automatically instead of only after their next manual reload.
+let myIsAdmin = false;
+let myIsOwner = false;
 // Set from /me in showApp() - Plaza is mid-rebuild (single note -> real
 // posts feed), so it's QA-only until that's done (see ENABLE_PLAZA in
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
@@ -57,6 +63,8 @@ function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   myUserId = me.id;
+  myIsAdmin = !!me.isAdmin;
+  myIsOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
@@ -94,6 +102,33 @@ function showApp(me) {
   // allowed to land somewhere else.
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
+  startRoleWatcher();
+}
+
+// Polls /me every 30s for a role change (promoted, demoted, or removed
+// entirely) made by the owner while this session is already open. A
+// mismatch reloads the page - simplest way to get every role-dependent
+// bit of UI (admin badge, settings tabs, Manage Users access) back in
+// sync, rather than patching each one individually. A 401 means the
+// account was deleted or its key regenerated - same treatment as boot()'s
+// own auth failure handling, just triggered mid-session instead of at load.
+let roleWatchTimer = null;
+function startRoleWatcher() {
+  if (roleWatchTimer) return;
+  roleWatchTimer = setInterval(async () => {
+    try {
+      const fresh = await api('/me');
+      if (!!fresh.isAdmin !== myIsAdmin || !!fresh.isOwner !== myIsOwner) {
+        location.reload();
+      }
+    } catch (err) {
+      if (err.status === 401) {
+        clearToken();
+        location.reload();
+      }
+      // other errors are transient - next poll retries
+    }
+  }, 30000);
 }
 
 /* ------------------------------- Tutorial --------------------------------- */
