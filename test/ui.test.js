@@ -393,7 +393,7 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
 });
 
-test('Manage Users role filter narrows the list to just that role', async () => {
+test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not exclusive', async () => {
   const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Filter Test User' } });
 
   const context = await iphoneContext('iPhone 13');
@@ -404,21 +404,34 @@ test('Manage Users role filter narrows the list to just that role', async () => 
   await page.waitForTimeout(200);
   const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
   assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
-  const ownerPillActive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => el.classList.contains('active'));
-  assert.ok(ownerPillActive, 'the clicked pill should show as active');
+  const allPillInactiveAfterOwner = await page.$eval('#user-role-filter [data-role="all"]', (el) => !el.classList.contains('active'));
+  assert.ok(allPillInactiveAfterOwner, '"all roles" should deactivate once a specific role is picked');
 
+  // Adding "user" on top of "owner" should widen the view (OR), not
+  // replace it - both pills stay active, and both roles show up.
   await page.click('#user-role-filter [data-role="user"]');
   await page.waitForTimeout(200);
+  const ownerStillActive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => el.classList.contains('active'));
+  const userNowActive = await page.$eval('#user-role-filter [data-role="user"]', (el) => el.classList.contains('active'));
+  assert.ok(ownerStillActive && userNowActive, 'picking a second role should add to the filter, not replace it');
   const userRows = await page.$$eval('#users-list .user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
-  assert.ok(userRows.includes('Role Filter Test User'), 'filtering to "user" should include the plain user just created');
-  assert.ok(!userRows.includes('UI Test Admin'), 'filtering to "user" should exclude the owner');
-  const ownerPillInactive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => !el.classList.contains('active'));
-  assert.ok(ownerPillInactive, 'only one pill should be active at a time');
+  assert.ok(userRows.includes('Role Filter Test User'), 'owner+user filter should include the plain user just created');
+  assert.ok(userRows.includes('UI Test Admin'), 'owner+user filter should still include the owner');
+  const badgesOwnerUser = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(!badgesOwnerUser.includes('admin'), 'owner+user filter should exclude admins');
 
-  await page.click('#user-role-filter [data-role="all"]');
+  // All three selected should show everyone - same as "all roles", not an
+  // empty/narrow result from ANDing three mutually-exclusive roles together.
+  await page.click('#user-role-filter [data-role="admin"]');
   await page.waitForTimeout(200);
-  const allRows = await page.$$('#users-list .user-row');
-  assert.ok(allRows.length >= 2, 'switching back to "all roles" should restore the full list');
+  const allThreeRows = await page.$$('#users-list .user-row');
+  const unfilteredRows = await (async () => {
+    await page.click('#user-role-filter [data-role="all"]');
+    await page.waitForTimeout(200);
+    const rows = await page.$$('#users-list .user-row');
+    return rows.length;
+  })();
+  assert.equal(allThreeRows.length, unfilteredRows, 'owner+admin+user selected together should match the unfiltered count');
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });

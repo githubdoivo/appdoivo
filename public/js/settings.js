@@ -511,9 +511,13 @@ function roleOf(u) {
 // Role filter narrows the VIEW only - it never affects whether "create"
 // is offered, which is purely about whether the typed name already
 // exists (creating always makes a plain user regardless of this filter).
-let roleFilter = 'all';
+// Owner/admin/user are independent, cumulative (OR) toggles - picking more
+// than one widens the view rather than narrowing it to users matching all
+// of them at once (which for mutually-exclusive roles would always be
+// empty). An empty set means no filter is active, same as "all roles".
+const roleFilter = new Set();
 function byRole(users) {
-  return roleFilter === 'all' ? users : users.filter((u) => roleOf(u) === roleFilter);
+  return roleFilter.size === 0 ? users : users.filter((u) => roleFilter.has(roleOf(u)));
 }
 
 function applyUserSearch() {
@@ -545,8 +549,16 @@ $('user-name-input').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
-    roleFilter = btn.dataset.role;
-    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    if (btn.dataset.role === 'all') {
+      roleFilter.clear();
+    } else if (roleFilter.has(btn.dataset.role)) {
+      roleFilter.delete(btn.dataset.role);
+    } else {
+      roleFilter.add(btn.dataset.role);
+    }
+    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => {
+      b.classList.toggle('active', b.dataset.role === 'all' ? roleFilter.size === 0 : roleFilter.has(b.dataset.role));
+    });
     applyUserSearch();
   });
 });
