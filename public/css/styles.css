@@ -1028,7 +1028,7 @@ html.mode-dark body.theme-plaza {
   font-weight: 700;
   font-size: var(--text-xs);
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--clay);
 }
 
@@ -1051,21 +1051,25 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
 
-.plaza-post-announcement.pinned {
+.plaza-post-announcement {
   background: var(--paper-2);
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-announcement.pinned:first-child { margin-top: 0; }
+.plaza-post-announcement:first-child { margin-top: 0; }
+/* Boxed like a poll now (was a plain unboxed "torn column" that read as
+   an afterthought next to the poll's card) - pinning still upgrades the
+   border to stand out further, same as polls. */
+.plaza-post-announcement.pinned { border-color: var(--clay); }
 .plaza-pinned-badge {
   display: inline-block;
   font-family: var(--body);
   font-weight: 700;
   font-size: var(--text-xs);
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--paper-3);
   background: var(--clay);
   border-radius: 999px;

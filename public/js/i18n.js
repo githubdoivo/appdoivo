@@ -133,7 +133,7 @@ export const translations = {
     admin_only: 'Acesso restrito ao administrador.',
     plaza_admin_title: 'Nova publicação',
     plaza_admin_help: 'Aparece no feed da Wall para todos. Publicar envia uma notificação.',
-    plaza_type_announcement: 'Regular',
+    plaza_type_announcement: 'Anúncio',
     plaza_type_poll: 'Poll',
     plaza_post_text_ph: 'Mensagem de boas-vindas, palavra-passe do wifi, horário da noite...',
     plaza_poll_question_ph: 'Pergunta do poll...',
