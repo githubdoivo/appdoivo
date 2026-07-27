@@ -37,13 +37,34 @@ export async function revealRandomConsequence() {
 /** Returns the currently revealed consequence (the most recent one). */
 export function currentConsequence() {
   return db.prepare(`
-    SELECT c.id, c.text, c.revealed_at, u.name AS author
+    SELECT c.id, c.text, c.revealed_at, u.name AS author,
+           c.assigned_user_id, a.name AS assignedName
     FROM consequences c
     JOIN users u ON u.id = c.user_id
+    LEFT JOIN users a ON a.id = c.assigned_user_id
     WHERE c.status = 'used'
     ORDER BY c.revealed_at DESC
     LIMIT 1
   `).get() || null;
+}
+
+/**
+ * Owner sets who's actually holding the rata when a consequence is
+ * revealed - only known by looking around the party at that moment, so it
+ * can't be inferred automatically.
+ */
+export function assignConsequenceUser(consequenceId, userId) {
+  const consequence = db.prepare(`SELECT id FROM consequences WHERE id = ? AND status = 'used'`).get(consequenceId);
+  if (!consequence) return null;
+  db.prepare('UPDATE consequences SET assigned_user_id = ? WHERE id = ?').run(userId, consequenceId);
+  return db.prepare(`
+    SELECT c.id, c.text, c.revealed_at, u.name AS author,
+           c.assigned_user_id, a.name AS assignedName
+    FROM consequences c
+    JOIN users u ON u.id = c.user_id
+    LEFT JOIN users a ON a.id = c.assigned_user_id
+    WHERE c.id = ?
+  `).get(consequenceId);
 }
 
 /** Number of consequences still to be revealed. */

@@ -5,7 +5,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
-import { showAlert } from './modal.js';
+import { showAlert, showConfirm } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -70,7 +70,11 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
-  if (plazaEnabled) loadPlaza();
+  // Plaza/Wall is the default landing tab (see currentTab above) - starts
+  // polling immediately, same as any other tab does once it's the one
+  // showing. A Rata's own load below is just a preload for a smooth first
+  // switch, not polling - it isn't the visible tab yet.
+  if (plazaEnabled) startPlazaPolling();
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -277,11 +281,10 @@ function selectTab(tab) {
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
   applyNight();
-  if (currentTab === 'plaza') loadPlaza();
-  if (currentTab === 'rata') loadConsequences();
-  if (currentTab === 'outfit') loadVotes();
-  if (currentTab === 'chat') startChatPolling();
-  else stopChatPolling();
+  if (currentTab === 'plaza') startPlazaPolling(); else stopPlazaPolling();
+  if (currentTab === 'rata') startRataPolling(); else stopRataPolling();
+  if (currentTab === 'outfit') startOutfitPolling(); else stopOutfitPolling();
+  if (currentTab === 'chat') startChatPolling(); else stopChatPolling();
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {
@@ -485,6 +488,23 @@ function renderPlazaFeed(posts) {
   });
 }
 
+// Polled while the tab is open, same as chat, so a new/pinned post or a
+// poll's live tally shows up without a manual reload.
+let plazaPollTimer = null;
+
+function startPlazaPolling() {
+  loadPlaza();
+  if (plazaPollTimer) return;
+  plazaPollTimer = setInterval(loadPlaza, 4000);
+}
+
+function stopPlazaPolling() {
+  if (plazaPollTimer) {
+    clearInterval(plazaPollTimer);
+    plazaPollTimer = null;
+  }
+}
+
 async function loadPlaza() {
   try {
     const { posts } = await api('/plaza-posts');
@@ -493,11 +513,34 @@ async function loadPlaza() {
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
+// Polled while the tab is open, so a consequence revealed by the hourly
+// cron (or an admin's manual reveal) shows up without a manual reload.
+let rataPollTimer = null;
+
+function startRataPolling() {
+  loadConsequences();
+  if (rataPollTimer) return;
+  rataPollTimer = setInterval(loadConsequences, 5000);
+}
+
+function stopRataPolling() {
+  if (rataPollTimer) {
+    clearInterval(rataPollTimer);
+    rataPollTimer = null;
+  }
+}
 
 async function loadConsequences() {
   try {
     const data = await api('/consequences/current');
     $('current-consequence').textContent = data.current ? data.current.text : t('rata_none');
+    if (data.current) {
+      $('consequence-holder').textContent = data.current.assignedName
+        ? t('rata_holder', { name: data.current.assignedName })
+        : t('rata_holder_unknown');
+    } else {
+      $('consequence-holder').textContent = '';
+    }
     $('pending-line').textContent = t('rata_pending', { n: data.pending });
 
     if (data.mySuggestion) {
@@ -593,6 +636,13 @@ function renderRegistration(data) {
   }
   card.classList.remove('hidden');
 
+  // Now that Best Look polls for updates (see startOutfitPolling()), a
+  // refresh landing mid-keystroke would otherwise wipe out whatever the
+  // user is typing into the name/partner-search fields below - skip the
+  // re-render entirely while focus is inside this form, nothing about
+  // their own not-yet-submitted entry could have changed anyway.
+  if (area.contains(document.activeElement)) return;
+
   if (data.myContestant) {
     const msg = data.myContestant.partnerName
       ? t('outfit_registered_with', { name: esc(data.myContestant.name), partner: esc(data.myContestant.partnerName) })
@@ -672,6 +722,25 @@ function renderRegistration(data) {
   });
 }
 
+// Polled while the tab is open, so the admin opening/closing voting or
+// advancing the results reveal shows up without a manual reload. Skips
+// clobbering an in-progress registration entry - see the activeElement
+// guard in renderRegistration().
+let outfitPollTimer = null;
+
+function startOutfitPolling() {
+  loadVotes();
+  if (outfitPollTimer) return;
+  outfitPollTimer = setInterval(loadVotes, 4000);
+}
+
+function stopOutfitPolling() {
+  if (outfitPollTimer) {
+    clearInterval(outfitPollTimer);
+    outfitPollTimer = null;
+  }
+}
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -692,12 +761,16 @@ async function loadVotes() {
 
     if (data.status === 'open' && !data.myVote) {
       area.innerHTML = data.contestants.length
-        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}">${esc(c.name)}</button>`).join('')
+        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
-        b.addEventListener('click', () => vote(Number(b.dataset.id)));
+        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.name));
       });
-    } else if (data.status === 'open' && data.myVote) {
+    } else if (data.myVote) {
+      // Once cast, a vote is final (see castVote() server-side) and this
+      // stays the vote area's content for the rest of the night - closed/
+      // pending-results no longer overwrites it with a generic status
+      // message, so "who did I vote for" stays visible throughout.
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(chosen.name) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -725,7 +798,11 @@ async function loadVotes() {
   }
 }
 
-async function vote(contestantId) {
+async function vote(contestantId, name) {
+  // A vote is final the moment it's submitted (see castVote() server-side,
+  // same rule as Plaza polls) - confirm first, since there's no changing
+  // your mind after.
+  if (!(await showConfirm(t('outfit_confirm_vote', { name })))) return;
   try {
     await api('/votes', { method: 'POST', body: { contestantId, night: getNight() } });
     loadVotes();

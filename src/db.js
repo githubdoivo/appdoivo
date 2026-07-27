@@ -38,6 +38,7 @@ db.exec(`
     day        TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'pending',
     revealed_at TEXT,
+    assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
   -- A user can only suggest one consequence per day
@@ -291,6 +292,15 @@ db.exec(`
 // multiple pins by most-recently-pinned first.
 if (!columnExists('plaza_posts', 'pinned_at')) {
   db.exec('ALTER TABLE plaza_posts ADD COLUMN pinned_at TEXT');
+}
+
+// Migration: who's actually holding the rata for a given consequence, set
+// by the owner after the fact (they have to look around the party and see
+// who has it at the moment it's revealed - nothing about this can be
+// inferred automatically). Separate from user_id, which is whoever
+// suggested the consequence, not who has to do it.
+if (!columnExists('consequences', 'assigned_user_id')) {
+  db.exec('ALTER TABLE consequences ADD COLUMN assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 }
 
 /** Generates a secure, readable token. */

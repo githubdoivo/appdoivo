@@ -14,6 +14,7 @@ import {
   currentConsequence,
   pendingCount,
   mySuggestionToday,
+  assignConsequenceUser,
 } from './consequences.js';
 import {
   contestantsForNight,
@@ -497,8 +498,11 @@ router.get('/admin/consequences', (req, res) => {
   // suggested, but the moment it's revealed it jumps to the top too
   // (revealed_at, once set, is always more recent than created_at).
   const rows = db.prepare(`
-    SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author
-    FROM consequences c JOIN users u ON u.id = c.user_id
+    SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author,
+           c.assigned_user_id, a.name AS assignedName
+    FROM consequences c
+    JOIN users u ON u.id = c.user_id
+    LEFT JOIN users a ON a.id = c.assigned_user_id
     ORDER BY COALESCE(c.revealed_at, c.created_at) DESC
   `).all();
   res.json(rows);
@@ -509,6 +513,20 @@ router.post('/admin/consequences/reveal', async (req, res) => {
   const revealed = await revealRandomConsequence();
   if (!revealed) return res.status(404).json({ error: 'Nao ha consequencias pendentes - ja foi tudo revelado.' });
   res.json({ ok: true, revealed });
+});
+
+// Owner-only: records who's actually holding the rata for a revealed
+// consequence - only the owner can see this at the party and enter it, it
+// can't be inferred from anything in the app.
+router.patch('/admin/consequences/:id/assign', requireOwner, (req, res) => {
+  const userId = req.body?.userId === null ? null : Number(req.body?.userId);
+  if (userId !== null) {
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  }
+  const updated = assignConsequenceUser(Number(req.params.id), userId);
+  if (!updated) return res.status(404).json({ error: 'Consequencia nao encontrada.' });
+  res.json({ ok: true, consequence: updated });
 });
 
 // Contestants for a night. registered_by/partner_name are set only for

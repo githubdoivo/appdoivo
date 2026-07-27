@@ -711,14 +711,39 @@ async function loadConsequences() {
   $('revealed-consequence').classList.toggle('hidden', !revealed);
   if (revealed) $('revealed-consequence').textContent = revealed.text;
 
+  // Owner-only: who's actually holding the rata right now, entered by hand
+  // since it can't be inferred from anything in the app - only the owner
+  // walking around the party knows.
+  $('consequence-assign').classList.toggle('hidden', !revealed || !isOwner);
+  if (revealed && isOwner) {
+    const users = await api('/admin/users');
+    const select = $('consequence-assign-select');
+    select.innerHTML = `<option value="">${t('rata_assign_placeholder')}</option>` +
+      users.map((u) => `<option value="${u.id}"${u.id === revealed.assigned_user_id ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+    select.dataset.consequenceId = revealed.id;
+  }
+
   $('consequences-table').innerHTML = rows.length
     ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
       rows.map((c) => `<tr>
-        <td>${esc(c.text)}</td><td>${esc(c.author)}</td>
+        <td>${esc(c.text)}${c.assignedName ? `<br><span class="muted">${t('rata_holder', { name: esc(c.assignedName) })}</span>` : ''}</td>
+        <td>${esc(c.author)}</td>
         <td class="muted">${esc(formatEuDate(c.day))}</td>
         <td>${c.status === 'used' ? t('status_used') : t('status_pending')}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }
+
+$('consequence-assign-select').addEventListener('change', async (e) => {
+  const consequenceId = e.target.dataset.consequenceId;
+  const userId = e.target.value ? Number(e.target.value) : null;
+  $('consequence-assign-msg').textContent = '';
+  try {
+    await api(`/admin/consequences/${consequenceId}/assign`, { method: 'PATCH', body: { userId } });
+    $('consequence-assign-msg').textContent = t('rata_assign_saved');
+  } catch (err) {
+    $('consequence-assign-msg').textContent = err.message;
+  }
+});
 
 // Older pseudonyms stay listed (not just the current one) - a re-roll
 // doesn't erase who was who for messages already posted under the old one.

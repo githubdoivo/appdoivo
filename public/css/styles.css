@@ -708,7 +708,13 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 /* ------------------------------ Responsivo ------------------------------- */
 
 @media (max-width: 480px) {
-  body { font-size: 17px; }
+  /* Most small text (badges, muted captions, help text, table cells,
+     buttons) is sized in rem, which tracks the root element's font-size,
+     not body's - so bumping body alone left all of that stuck at the
+     browser's plain 16px default. Raising html's font-size scales that
+     whole tier up together with the bigger body copy below. */
+  html { font-size: 18px; }
+  body { font-size: 19px; }
   .brand .brand-name { font-size: 1.9rem; }
   .tabs { gap: 20px; }
   .tab { font-size: 1.2rem; }
