@@ -138,14 +138,15 @@ router.post('/me/change-token', (req, res) => {
 });
 
 /* ---------------------------------- Plaza --------------------------------- */
-// A pinned note from the owner (welcome message, wifi password, schedule,
-// whatever) shown to everyone on the Plaza tab - the app's landing page.
+// A pinned note from the host team (welcome message, wifi password,
+// schedule, whatever) shown to everyone on the Plaza tab - the app's
+// landing page. Any admin can post/edit it, not just the owner.
 
 router.get('/plaza-note', (req, res) => {
   res.json({ note: getSetting('plaza_note', '') });
 });
 
-router.put('/admin/plaza-note', requireOwner, async (req, res) => {
+router.put('/admin/plaza-note', requireAdmin, async (req, res) => {
   const note = String(req.body?.note ?? '').trim();
   setSetting('plaza_note', note);
   res.json({ ok: true, note });

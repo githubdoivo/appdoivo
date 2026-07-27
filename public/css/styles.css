@@ -217,15 +217,15 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 }
 .link-btn:hover { color: var(--ink); }
 
-#find-key-area {
+#find-key-results {
   width: 100%;
   max-width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   margin-top: 4px;
 }
-#find-key-results { display: flex; flex-direction: column; gap: 6px; }
+#find-key-results:empty { display: none; margin-top: 0; }
 .find-key-result {
   width: 100%;
   text-align: left;
@@ -298,12 +298,21 @@ select {
 }
 select:hover { border-color: var(--clay); }
 
+/* Night picker atop Best Look admin - governs contestants/votes/voter-log
+   below it too, not just the voting-control card, so it sits outside any
+   single card. */
+.night-select { width: auto; min-width: 200px; margin-bottom: 18px; font-weight: 600; }
+
 label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
 /* -------------------------------- Botoes --------------------------------- */
 
 button, .btn {
   cursor: pointer;
+  /* iOS Safari draws its own translucent rounded-rect "tap highlight" over
+     any tapped button, regardless of `outline` - that's the "square limit"
+     that shows up on a tab tap even with the focus ring itself suppressed. */
+  -webkit-tap-highlight-color: transparent;
   border: 1px solid var(--ink);
   border-radius: var(--radius);
   padding: 12px 20px;
@@ -466,19 +475,34 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   padding: 4px 0 12px;
   font-family: var(--serif);
   font-size: 1.35rem;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: lowercase;
   letter-spacing: 0.01em;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 .tab:hover { background: transparent; color: var(--ink); }
-.tab.active { color: var(--ink); border-bottom-color: var(--clay); }
+/* Selected state is color + weight + underline only - no enclosing box.
+   The general button rule further up gives every button a 4px
+   border-radius; combined with a <button>'s native appearance in WebKit,
+   that radius alone gets rendered as a full rounded rectangle around the
+   tab (all four sides) even though only the bottom border is actually
+   visible - overriding both to zero/none removes it, leaving just the
+   underline. */
+.tab { -webkit-appearance: none; appearance: none; border-radius: 0; }
+.tab:focus, .tab:focus-visible { outline: none; }
+.tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
+/* --clay reads pale/salmon against the light-mode paper - too soft to
+   read as "selected" at a glance. Darken it specifically for light mode;
+   dark mode's warmer gold clay already has enough contrast as-is. */
+html.mode-light { --clay-active: #b5624a; }
 /* A Rata shares --clay with every other tab, making its active underline
    indistinguishable from Wall's right next to it. Rats are grey - give
    it its own neutral grey accent instead. */
 [data-tab="rata"].active,
 [data-atab="rata"].active { border-bottom-color: #83807a; }
+html.mode-light [data-tab="rata"].active,
+html.mode-light [data-atab="rata"].active { border-bottom-color: #5c5952; }
 
 /* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
    under "Votos da noite" in admin). The page-level .tab component above is

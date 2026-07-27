@@ -14,7 +14,7 @@ const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
   'Leonor Matos', 'Marta Freitas', 'Ivo Lopes', 'Nádia Barros',
-  'Paula Neves', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
+  'Paula Neves', 'Becky Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
 

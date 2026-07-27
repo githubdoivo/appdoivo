@@ -642,7 +642,7 @@ test('an invalid language value falls back to pt', async () => {
 
 /* ----------------------------------- Plaza ----------------------------------- */
 
-test('Plaza note: any logged-in user can read it, only the owner can write it', async () => {
+test('Plaza note: any logged-in user can read it, any admin (not just the owner) can write it', async () => {
   const forbidden = await api('PUT', '/admin/plaza-note', { token: userToken, body: { note: 'sneaky' } });
   assert.equal(forbidden.status, 403);
 
@@ -653,6 +653,15 @@ test('Plaza note: any logged-in user can read it, only the owner can write it', 
   const read = await api('GET', '/plaza-note', { token: userToken });
   assert.equal(read.status, 200);
   assert.equal(read.data.note, 'welcome! wifi: mossycottage');
+
+  // A regular (non-owner) admin can post to Plaza too now.
+  const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Plaza Admin Poster' } });
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const asAdmin = await api('PUT', '/admin/plaza-note', { token: nonOwnerAdmin.data.token, body: { note: 'admin-posted note' } });
+  assert.equal(asAdmin.status, 200);
+  assert.equal(asAdmin.data.note, 'admin-posted note');
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
 
   // Leave it empty for other tests/manual QA runs that don't expect a note.
   await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });

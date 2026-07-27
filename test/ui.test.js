@@ -190,7 +190,7 @@ test('a first-time user can find their name, claim their key, and get logged str
   await page.waitForSelector('#login:not(.hidden)');
 
   await page.click('#find-key-link');
-  await page.fill('#find-key-input', 'playwright newcomer');
+  await page.fill('#token-input', 'playwright newcomer');
   await page.waitForSelector('.find-key-result', { timeout: 5000 });
   await page.click('.find-key-result');
 
@@ -250,7 +250,6 @@ test('owner, admin and user role badges each render in a distinct color', async 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
@@ -271,7 +270,6 @@ test('owner, admin and user role badges each render in a distinct color', async 
 test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.fill('#user-name-input', 'Zzz Session Tester');
@@ -298,7 +296,6 @@ test('clicking a user\'s name renames it in place - no separate rename button', 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   // Anchor on the token div, not the name span - the span itself gets
@@ -328,7 +325,6 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.fill('#user-name-input', 'cesar session');
@@ -345,7 +341,6 @@ test('Manage Users role filter narrows the list to just that role', async () => 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   await page.click('#user-role-filter [data-role="owner"]');
@@ -377,7 +372,6 @@ test('Manage Users role filter narrows the list to just that role', async () => 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
@@ -391,7 +385,6 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
 test('access keys are censored by default, reveal on click, and copy automatically at the same time', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
   // Spy on the clipboard instead of relying on real OS clipboard access,
@@ -430,10 +423,9 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  // Sees the Users tab now (so they can get familiar with it), but the API
-  // only ever returns their own row - see GET /admin/users - so there's
-  // nothing here to further lock down on the frontend.
-  await page.click('[data-atab="users"]');
+  // Sees user management inside Settings now (so they can get familiar with
+  // it), but the API only ever returns their own row - see GET /admin/users -
+  // so there's nothing here to further lock down on the frontend.
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
   const rows = await page.$$('#users-list .user-row');
   assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
@@ -455,7 +447,7 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
-  assert.ok(plazaTabHidden, 'non-owner admin cannot write the Plaza note (owner-only end to end)');
+  assert.ok(!plazaTabHidden, 'non-owner admin can also post to Plaza now');
 
   // Voting control (Best Look) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
@@ -481,7 +473,7 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, plain.token, '/settings.html');
 
-  for (const tab of ['users', 'plaza', 'outfit', 'rata', 'wall']) {
+  for (const tab of ['plaza', 'outfit', 'rata', 'wall']) {
     const hidden = await page.$eval(`[data-atab="${tab}"]`, (el) => el.classList.contains('hidden'));
     assert.ok(hidden, `plain user should not see the ${tab} tab`);
   }
@@ -492,7 +484,10 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   assert.ok(panelVisible, 'the Settings panel should be the one shown by default for a plain user');
 
   const changeKeyCardVisible = await page.$eval('#change-key-card', (el) => !el.classList.contains('hidden'));
-  assert.ok(changeKeyCardVisible, 'plain user (no Users tab access) should still see the change-key form');
+  assert.ok(changeKeyCardVisible, 'plain user (no user-management access) should still see the change-key form');
+
+  const usersManagementHidden = await page.$eval('#users-management', (el) => el.classList.contains('hidden'));
+  assert.ok(usersManagementHidden, 'plain user should not see the user-management section');
 
   const roleBadgeHidden = await page.$eval('#role-badge', (el) => el.classList.contains('hidden'));
   assert.ok(roleBadgeHidden, 'plain user should get no role badge, same as the main app');

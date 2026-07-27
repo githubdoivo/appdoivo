@@ -82,29 +82,35 @@ async function boot() {
   }
 
   // This page is now open to every logged-in user, not just admins - a
-  // plain user only gets the "Settings" tab (change their own key); the
-  // rest of this scoping matches the main admin panel's existing rules.
+  // plain user only gets the "Settings" tab (change their own key, no
+  // user-management section); the rest of this scoping matches the main
+  // admin panel's existing rules.
   if (!isAdmin) {
-    ['users', 'plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
-  } else if (!isOwner) {
-    // A regular admin can see the Users tab too, but the API only ever
-    // gives them their own row (see GET /admin/users) - so nobody else's
-    // key is ever exposed here, they just get to see the tab exist and
-    // their own entry in it. Creating users and resetting event content
-    // are owner-only actions on the backend regardless, so hide both
-    // instead of showing controls that would just 403 if clicked.
-    $('user-search-card').classList.add('hidden');
-    $('reset-content-card').classList.add('hidden');
-    // The Wall tab (pseudonym mapping + its timezone card) was opened up to
-    // regular admins temporarily so testers could see it existed - that's
-    // done now, so it's owner-only again, whole tab hidden rather than just
-    // the sensitive card within it.
-    document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
-    // The Plaza note is owner-only end to end (backend requireOwner too) -
-    // hide the whole tab rather than a control that would just 403.
-    document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
+    $('users-management').classList.add('hidden');
+  } else {
+    // User management now lives inside Settings (below change-key), not
+    // its own tab - any admin sees it, same as before.
+    $('users-management').classList.remove('hidden');
+    if (!isOwner) {
+      // A regular admin can see the Users list too, but the API only ever
+      // gives them their own row (see GET /admin/users) - so nobody else's
+      // key is ever exposed here, they just get to see it exist and their
+      // own entry in it. Creating users and resetting event content are
+      // owner-only actions on the backend regardless, so hide both instead
+      // of showing controls that would just 403 if clicked.
+      $('user-search-card').classList.add('hidden');
+      $('reset-content-card').classList.add('hidden');
+      // The Wall tab (pseudonym mapping + its timezone card) was opened up to
+      // regular admins temporarily so testers could see it existed - that's
+      // done now, so it's owner-only again, whole tab hidden rather than just
+      // the sensitive card within it.
+      document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
+      // Any admin - not just the owner - can now post to Plaza (see
+      // requireAdmin on PUT /admin/plaza-note), so the tab stays visible.
+    }
   }
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
@@ -376,9 +382,11 @@ function renderUsersList(users) {
   $('users-list').querySelectorAll('[data-regen-user]').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!(await showConfirm(t('confirm_regen_key')))) return;
+      // No need to show/copy the new key here anymore - regenerating also
+      // reopens first-time name-search retrieval (see keyClaim.js), so the
+      // person just finds their own name again and claims it themselves.
       try {
-        const u = await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
-        await showAlert(t('key_regenerated', { name: u.name, token: u.token }));
+        await api(`/admin/users/${b.dataset.regenUser}/regenerate-token`, { method: 'POST' });
         loadUsers();
       } catch (err) {
         await showAlert(err.message);
@@ -757,11 +765,11 @@ $('plaza-note-form').addEventListener('submit', async (e) => {
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
-  if (tab === 'plaza' && isOwner) loadPlazaNote();
+  if (tab === 'plaza' && isAdmin) loadPlazaNote();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

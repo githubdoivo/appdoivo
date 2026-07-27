@@ -164,6 +164,7 @@ wirePasswordToggle('token-input', 'token-toggle');
 
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (findKeyMode) return;
   const token = $('token-input').value.trim();
   $('login-error').textContent = '';
   try {
@@ -180,21 +181,29 @@ $('login-form').addEventListener('submit', async (e) => {
 // own account by name (see GET /auth/unclaimed-users) and claim its key
 // (see POST /auth/claim-key). Once claimed - by this flow or by ever
 // logging in for real - the account no longer shows up here.
-$('find-key-link').addEventListener('click', () => {
-  $('login-form').classList.add('hidden');
-  $('login-error').textContent = '';
-  $('find-key-link').classList.add('hidden');
-  $('find-key-area').classList.remove('hidden');
-  $('find-key-input').focus();
-});
+// Reuses the same #token-input slot in place (placeholder + type swap)
+// instead of revealing a separate area below it, so clicking the link
+// never shifts the page layout.
+let findKeyMode = false;
 
-$('find-key-back').addEventListener('click', () => {
-  $('find-key-area').classList.add('hidden');
-  $('find-key-input').value = '';
+function setFindKeyMode(on) {
+  findKeyMode = on;
+  const input = $('token-input');
+  $('login-error').textContent = '';
   $('find-key-results').innerHTML = '';
-  $('login-form').classList.remove('hidden');
-  $('find-key-link').classList.remove('hidden');
-});
+  input.value = '';
+  input.type = on ? 'text' : 'password';
+  input.setAttribute('data-i18n-ph', on ? 'find_key_ph' : 'access_key');
+  input.placeholder = t(on ? 'find_key_ph' : 'access_key');
+  $('token-toggle').classList.toggle('hidden', on);
+  $('token-toggle').classList.remove('visible');
+  $('login-submit-btn').classList.toggle('hidden', on);
+  $('find-key-link').setAttribute('data-i18n', on ? 'find_key_back' : 'find_key_link');
+  $('find-key-link').textContent = t(on ? 'find_key_back' : 'find_key_link');
+  if (on) input.focus();
+}
+
+$('find-key-link').addEventListener('click', () => setFindKeyMode(!findKeyMode));
 
 async function copyToClipboard(text) {
   try {
@@ -212,9 +221,10 @@ async function copyToClipboard(text) {
 }
 
 let findKeyTimer = null;
-$('find-key-input').addEventListener('input', () => {
+$('token-input').addEventListener('input', () => {
+  if (!findKeyMode) return;
   clearTimeout(findKeyTimer);
-  const name = $('find-key-input').value.trim();
+  const name = $('token-input').value.trim();
   if (name.length < 3) {
     $('find-key-results').innerHTML = '';
     return;
@@ -230,8 +240,8 @@ $('find-key-input').addEventListener('input', () => {
           try {
             const r = await api('/auth/claim-key', { method: 'POST', body: { userId: Number(b.dataset.claimUser) } });
             await copyToClipboard(r.token);
+            setFindKeyMode(false); // reset back to the normal login form for next time
             await showAlert(t('find_key_revealed_msg', { name: r.name, token: r.token }));
-            $('find-key-back').click(); // reset back to the normal login form for next time
             setToken(r.token);
             const me = await api('/me');
             showApp(me);
