@@ -624,7 +624,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `candidaturas abertas - já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `entries are open - you can now register for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-registration',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -639,7 +639,7 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `votação aberta - já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `voting is open - you can now vote for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -655,7 +655,7 @@ router.post('/admin/voting/:night/close', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
     tag: 'outfit-closed',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -666,7 +666,7 @@ const REVEAL_NOTIFY = {
   third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
   second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
   first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
-  all: { pt: 'já podes ver quem venceu o Best Look!', en: 'you can now see who won Best Look!' },
+  all: { pt: 'já podes ver quem venceu o Snatch!', en: 'you can now see who won Snatch!' },
 };
 
 // Advances the results reveal one stage: hidden -> third -> second -> first
@@ -679,7 +679,7 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   res.json({ ok: true, night, resultsPhase: phase });
   if (REVEAL_NOTIFY[phase]) {
     await broadcast({
-      title: { pt: 'Best Look', en: 'Best Look' },
+      title: { pt: 'Snatch', en: 'Snatch' },
       body: REVEAL_NOTIFY[phase],
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
