@@ -174,7 +174,7 @@ test('body carries no night-theme class while the login screen is showing', asyn
   await page.waitForSelector('#login:not(.hidden)');
 
   const bodyClasses = await page.evaluate(() => document.body.className);
-  assert.doesNotMatch(bodyClasses, /theme-(rata|furnished|swamp|mural)/, `body should carry no night-theme class pre-login, got: "${bodyClasses}"`);
+  assert.doesNotMatch(bodyClasses, /theme-(rata|furnished|swamp|mural|plaza)/, `body should carry no night-theme class pre-login, got: "${bodyClasses}"`);
 
   await context.close();
 });

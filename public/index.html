@@ -89,28 +89,33 @@
     </nav>
 
     <!-- Plaza: landing page - host notes (pinned, if any) + a quick glance
-         at what's happening across A Rata/Best Look/Wall right now. -->
+         at what's happening across A Rata/Best Look/Wall right now, styled
+         like a daily front page rather than app cards. -->
     <div id="tab-plaza" class="tab-panel">
-      <p class="hero-line" data-i18n="plaza_hero">O que se passa agora.</p>
+      <header class="plaza-masthead">
+        <p class="plaza-dateline" id="plaza-dateline"></p>
+        <h1 class="plaza-title" data-i18n="tab_plaza">Plaza</h1>
+        <p class="plaza-tagline" data-i18n="plaza_hero">O que se passa agora.</p>
+      </header>
 
-      <div class="card hidden" id="plaza-note-card">
-        <h2 data-i18n="plaza_note_title">Notas do anfitrião</h2>
-        <div id="plaza-note-text" class="highlight" style="margin-top:12px"></div>
+      <div class="plaza-notice hidden" id="plaza-note-card">
+        <span class="plaza-eyebrow" data-i18n="plaza_note_title">Notas do anfitrião</span>
+        <div id="plaza-note-text" class="plaza-notice-text"></div>
       </div>
 
-      <button type="button" class="card plaza-glance" data-goto-tab="rata">
-        <h2 data-i18n="tab_rata">A Rata</h2>
-        <p id="plaza-rata-summary" class="muted" style="margin-top:8px"></p>
+      <button type="button" class="plaza-item" data-goto-tab="rata">
+        <span class="plaza-eyebrow" data-i18n="tab_rata">A Rata</span>
+        <p id="plaza-rata-summary" class="plaza-headline"></p>
       </button>
 
-      <button type="button" class="card plaza-glance" data-goto-tab="outfit">
-        <h2 data-i18n="tab_outfit">Best Look</h2>
-        <p id="plaza-outfit-summary" class="muted" style="margin-top:8px"></p>
+      <button type="button" class="plaza-item" data-goto-tab="outfit">
+        <span class="plaza-eyebrow" data-i18n="tab_outfit">Best Look</span>
+        <p id="plaza-outfit-summary" class="plaza-headline"></p>
       </button>
 
-      <button type="button" class="card plaza-glance" data-goto-tab="chat">
-        <h2 data-i18n="tab_chat">Wall</h2>
-        <p id="plaza-wall-summary" class="muted" style="margin-top:8px"></p>
+      <button type="button" class="plaza-item" data-goto-tab="chat">
+        <span class="plaza-eyebrow" data-i18n="tab_chat">Wall</span>
+        <p id="plaza-wall-summary" class="plaza-headline"></p>
       </button>
     </div>
 

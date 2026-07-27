@@ -351,7 +351,30 @@ wireNotifButton('notif-btn');
 // glance at each other tab's current state - reuses the same endpoints
 // those tabs themselves call, just summarized down to one line each.
 
+// "5 seconds ago" style, from a raw "YYYY-MM-DD HH:MM:SS[.mmm]" UTC
+// timestamp (see formatTimeInZone() server-side for the equivalent
+// HH:MM version - this one needs the actual elapsed time instead).
+function timeAgo(dbTimestamp) {
+  const iso = `${String(dbTimestamp).replace(' ', 'T')}Z`;
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 5) return t('time_just_now');
+  if (sec < 60) return t('time_ago_seconds', { n: sec });
+  const min = Math.round(sec / 60);
+  if (min < 60) return t(min === 1 ? 'time_ago_minute' : 'time_ago_minutes', { n: min });
+  const hr = Math.round(min / 60);
+  if (hr < 24) return t(hr === 1 ? 'time_ago_hour' : 'time_ago_hours', { n: hr });
+  const day = Math.round(hr / 24);
+  return t(day === 1 ? 'time_ago_day' : 'time_ago_days', { n: day });
+}
+
 async function loadPlaza() {
+  // Newspaper dateline, e.g. "quarta-feira, 27 de julho" / "Wednesday, July 27".
+  $('plaza-dateline').textContent = new Intl.DateTimeFormat(getLang() === 'pt' ? 'pt-PT' : 'en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
+
   try {
     const { note } = await api('/plaza-note');
     $('plaza-note-card').classList.toggle('hidden', !note);
@@ -360,24 +383,25 @@ async function loadPlaza() {
 
   try {
     const data = await api('/consequences/current');
-    $('plaza-rata-summary').textContent = data.current ? `"${data.current.text}"` : t('rata_none');
+    $('plaza-rata-summary').textContent = data.current ? data.current.text : t('rata_none');
   } catch { /* transient */ }
 
   try {
     const data = await api(`/votes/status?night=${encodeURIComponent(getNight())}`);
     let statusKey;
-    if (data.status === 'registration') statusKey = 'outfit_registration_open';
-    else if (data.status === 'open') statusKey = 'outfit_open';
-    else if (!data.started) statusKey = 'outfit_wait';
-    else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
-    else statusKey = 'outfit_closed';
+    if (!data.started) statusKey = 'plaza_outfit_wait';
+    else if (data.status === 'registration') statusKey = 'plaza_outfit_registration';
+    else if (data.status === 'open') statusKey = 'plaza_outfit_voting';
+    else if (data.resultsPhase === 'hidden') statusKey = 'plaza_outfit_closed_pending';
+    else if (data.resultsPhase === 'all') statusKey = 'plaza_outfit_done';
+    else statusKey = 'plaza_outfit_revealing';
     $('plaza-outfit-summary').textContent = t(statusKey);
   } catch { /* transient */ }
 
   try {
     const { messages } = await api('/chat/messages');
     const last = messages[messages.length - 1];
-    $('plaza-wall-summary').textContent = last ? `${last.author}: "${last.text}"` : t('chat_empty');
+    $('plaza-wall-summary').textContent = last ? t('plaza_wall_last', { time: timeAgo(last.created_at) }) : t('chat_empty');
   } catch { /* transient */ }
 }
 
@@ -436,6 +460,7 @@ function applyNight() {
   });
   document.body.classList.toggle('theme-rata', currentTab === 'rata');
   document.body.classList.toggle('theme-mural', currentTab === 'chat');
+  document.body.classList.toggle('theme-plaza', currentTab === 'plaza');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
