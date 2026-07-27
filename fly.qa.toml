@@ -14,6 +14,9 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   TIMEZONE = "Europe/Lisbon"
+  # Only set in QA - labels the version badge "qa v1.2.3" instead of just
+  # "v1.2.3", so it's obvious at a glance which environment is open.
+  APP_ENV = "qa"
   # Only set in QA - lets admins promote/revoke other users' admin status.
   # Production never sets this; only the owner has admin access there.
   ENABLE_ADMIN_PROMOTION = "true"

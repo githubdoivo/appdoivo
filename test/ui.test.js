@@ -599,6 +599,32 @@ test('fonts load via a <link> in <head>, not a render-blocking @import', async (
   assert.doesNotMatch(css, /@import\s+url\(['"]?https:\/\/fonts\.googleapis\.com/, 'styles.css still render-blocks on a Google Fonts @import');
 });
 
+/* ------------------------- Version badge (regression) ---------------------- */
+// APP_ENV is only ever set to "qa" (see fly.qa.toml) - prod leaves it unset,
+// so the badge shows a bare "vX.Y.Z" there and "qa vX.Y.Z" on QA, making the
+// environment obvious at a glance on both the login screen and the app.
+
+test('version badge shows a "qa" label when APP_ENV=qa, and stays a bare version otherwise', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForFunction(() => document.getElementById('version-badge').textContent.length > 0);
+  const prodLabel = await page.$eval('#version-badge', (el) => el.textContent);
+  assert.match(prodLabel, /^v\d+\.\d+\.\d+$/, 'with APP_ENV unset, the badge should be a bare version, no env label');
+
+  process.env.APP_ENV = 'qa';
+  try {
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('version-badge').textContent.startsWith('qa '));
+    const qaLabel = await page.$eval('#version-badge', (el) => el.textContent);
+    assert.match(qaLabel, /^qa v\d+\.\d+\.\d+$/, 'with APP_ENV=qa, the badge should be prefixed "qa "');
+  } finally {
+    delete process.env.APP_ENV;
+  }
+
+  await context.close();
+});
+
 /* --------------------------- Dark/light mode ------------------------------ */
 
 test('dark/light mode toggles and persists, and gives each night theme its own dark/light variant', async () => {

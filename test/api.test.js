@@ -51,6 +51,15 @@ async function api(method, path, { token, body } = {}) {
   return { status: res.status, data };
 }
 
+/* -------------------------------- Version --------------------------------- */
+
+test('GET /version is public and reports env: null when APP_ENV is unset (prod default)', async () => {
+  const r = await api('GET', '/version');
+  assert.equal(r.status, 200);
+  assert.ok(r.data.version);
+  assert.equal(r.data.env, null);
+});
+
 /* --------------------------------- Auth ---------------------------------- */
 
 test('login rejects an invalid token', async () => {
