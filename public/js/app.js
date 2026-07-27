@@ -305,6 +305,13 @@ document.querySelectorAll('[data-goto-tab]').forEach((btn) => {
   btn.addEventListener('click', () => selectTab(btn.dataset.gotoTab));
 });
 
+// Logo doubles as a "go home" shortcut, one click from anywhere - lands
+// on Wall, or Rata when Wall is disabled (matches the landing-tab choice
+// showApp() already makes for that same case).
+document.querySelector('.brand-name').addEventListener('click', () => {
+  selectTab(plazaEnabled ? 'plaza' : 'rata');
+});
+
 /* --------------------------------- Chat ----------------------------------- */
 // Open, ephemeral group chat. Polled (not real-time/websocket) - simplest
 // fit for this app's minimal-stack style. Messages expire server-side.
