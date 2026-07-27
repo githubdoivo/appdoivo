@@ -504,13 +504,15 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    read as "selected" at a glance. Darken it specifically for light mode;
    dark mode's warmer gold clay already has enough contrast as-is. */
 html.mode-light { --clay-active: #b5624a; }
-/* A Rata shares --clay with every other tab, making its active underline
-   indistinguishable from Wall's right next to it. Rats are grey - give
-   it its own neutral grey accent instead. */
-[data-tab="rata"].active,
-[data-atab="rata"].active { border-bottom-color: #83807a; }
-html.mode-light [data-tab="rata"].active,
-html.mode-light [data-atab="rata"].active { border-bottom-color: #5c5952; }
+/* Regular pages only: A Rata shares --clay with every other tab there,
+   making its active underline indistinguishable from Wall's right next to
+   it - rats are grey, so it gets its own neutral accent instead. The admin
+   page never switches body theme per tab (unlike the regular pages, whose
+   active-tab color intentionally follows whichever section's theme is
+   open), so every admin tab already renders identically without this -
+   scoped to [data-tab], not [data-atab], on purpose. */
+[data-tab="rata"].active { border-bottom-color: #83807a; }
+html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 /* --------------------------------- Cards --------------------------------- */
 
