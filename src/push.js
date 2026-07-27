@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import db from './db.js';
+import db, { getSetting, setSetting } from './db.js';
 
 let configured = false;
 
@@ -51,15 +51,23 @@ function localize(field, lang) {
  * `lang` (last language they selected in the app; defaults to 'pt').
  * `payload.title`/`payload.body` may be a plain string (sent as-is to
  * everyone) or `{ pt, en }` to localize per recipient. Cleans up invalid
- * subscriptions.
+ * subscriptions. Pass `excludeUserId` to skip a device's own actions
+ * (e.g. don't tell someone their own Wall post "just" appeared).
  */
-export async function broadcast(payload) {
+export async function broadcast(payload, { excludeUserId } = {}) {
   if (!configured) return { sent: 0, failed: 0 };
-  const rows = db.prepare(`
-    SELECT s.endpoint, s.subscription, u.lang
-    FROM push_subscriptions s
-    JOIN users u ON u.id = s.user_id
-  `).all();
+  const rows = excludeUserId
+    ? db.prepare(`
+        SELECT s.endpoint, s.subscription, u.lang
+        FROM push_subscriptions s
+        JOIN users u ON u.id = s.user_id
+        WHERE u.id != ?
+      `).all(excludeUserId)
+    : db.prepare(`
+        SELECT s.endpoint, s.subscription, u.lang
+        FROM push_subscriptions s
+        JOIN users u ON u.id = s.user_id
+      `).all();
   let sent = 0;
   let failed = 0;
 
@@ -83,4 +91,24 @@ export async function broadcast(payload) {
   }));
 
   return { sent, failed };
+}
+
+/**
+ * Notifies everyone once when the running version differs from the last
+ * one this same database ever booted with. First-ever boot (no stored
+ * version yet) just records it silently - nobody needs telling that the
+ * app they're opening for the first time is "new". On QA the DB is
+ * ephemeral (wiped every deploy), so this only ever fires on prod, which
+ * is exactly where it matters.
+ */
+export async function checkVersionUpdate(currentVersion) {
+  const previous = getSetting('app_version', null);
+  setSetting('app_version', currentVersion);
+  if (!previous || previous === currentVersion) return;
+  await broadcast({
+    title: { pt: 'appdoivo foi atualizada', en: 'appdoivo was updated' },
+    body: { pt: 'há novidades - abre a app outra vez para as veres.', en: 'there’s something new - reopen the app to see it.' },
+    tag: 'app-update',
+    url: '/',
+  });
 }

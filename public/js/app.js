@@ -214,10 +214,6 @@ function stopChatPolling() {
   }
 }
 
-function formatChatTime(dateTimeStr) {
-  return (String(dateTimeStr).split(' ')[1] || '').slice(0, 5);
-}
-
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
@@ -228,7 +224,7 @@ async function loadChat() {
         <div class="chat-msg">
           <div class="chat-msg-head">
             <span class="chat-msg-author">${esc(m.author)}</span>
-            <span class="chat-msg-time">${formatChatTime(m.created_at)}</span>
+            <span class="chat-msg-time">${esc(m.time)}</span>
           </div>
           <div class="chat-msg-text">${esc(m.text)}</div>
         </div>`).join('')

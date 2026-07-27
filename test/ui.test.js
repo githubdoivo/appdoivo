@@ -227,6 +227,53 @@ test('Manage Users: a freshly created user floats to the top of this session\'s 
   await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
 });
 
+test('clicking a user\'s name renames it in place - no separate rename button', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Original Name' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  // Anchor on the token div, not the name span - the span itself gets
+  // replaced by an <input> once editing starts, so a locator keyed off
+  // its text would stop matching the row mid-interaction.
+  const row = page.locator('.user-row', { has: page.locator(`[data-token="${created.token}"]`) });
+  await row.locator('.user-row-name-text').click();
+  await row.locator('input.user-row-name-text').fill('Renamed Via Click');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+
+  const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(names.includes('Renamed Via Click'), 'clicking the name should have opened an editable field that saved on Enter');
+  assert.ok(!names.includes('Original Name'), 'the old name should be gone once renamed');
+
+  const renameButtons = await page.locator('.row-actions button', { hasText: /renom|rename/i }).count();
+  assert.equal(renameButtons, 0, 'rename should no longer be a separate button in the row actions');
+
+  await context.close();
+  const updated = await api('GET', '/admin/users', { token: ADMIN });
+  const renamed = updated.find((u) => u.name === 'Renamed Via Click');
+  await api('DELETE', `/admin/users/${renamed.id}`, { token: ADMIN });
+});
+
+test('user search ignores accents - "cesar" finds "César"', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'César Session Search' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  await page.fill('#user-name-input', 'cesar session');
+  await page.waitForTimeout(200);
+  const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(names.includes('César Session Search'), 'plain-ASCII "cesar" should match the accented name');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
 /* --------------- Manage Users key layout (regression) --------------- */
 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
@@ -305,12 +352,16 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(resetCardHidden, 'non-owner admin can reset event content (owner-only on the backend)');
 
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
-  assert.ok(timezoneCardHidden, 'non-owner admin can see the timezone settings card');
+  assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   // Voting control (Best Outfit) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
-  const votingControlsVisible = await page.$eval('#voting-open-btn', (el) => el.getBoundingClientRect().width > 0);
+  const votingControlsVisible = await page.$eval('#voting-advance-btn', (el) => el.getBoundingClientRect().width > 0);
   assert.ok(votingControlsVisible, 'non-owner admin should still see Best Outfit voting control');
+
+  await page.waitForTimeout(300);
+  const voterLogHidden = await page.$eval('#voter-log-card', (el) => el.classList.contains('hidden'));
+  assert.ok(voterLogHidden, 'non-owner admin must not see the who-voted-for-whom card');
 
   await page.click('[data-atab="rata"]');
   const revealBtnVisible = await page.$eval('#reveal-btn', (el) => el.getBoundingClientRect().width > 0);

@@ -98,9 +98,6 @@ async function boot() {
     document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     $('user-search-card').classList.add('hidden');
     $('reset-content-card').classList.add('hidden');
-    // A regular admin can run voting and reveal consequences, but broader
-    // configuration (timezone) stays owner-only.
-    $('timezone-card').classList.add('hidden');
   }
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
@@ -170,46 +167,68 @@ const VOTING_STATE_LABEL = {
   closed: 'voting_is_closed',
 };
 
+// One button drives every stage in order - registration -> open -> closed
+// -> reveal 3rd -> 2nd -> 1st -> all - instead of four separate buttons for
+// stages that never happen out of order anyway. Its label always names the
+// NEXT thing a click will do; a separate reset button is the only way back.
 async function loadVotingState() {
   const { nights } = await api('/admin/voting');
   const night = currentNight();
-  const info = nights.find((n) => n.night === night);
-  const status = info?.status || 'closed';
+  const info = nights.find((n) => n.night === night) || {};
+  const status = info.status || 'closed';
+  const started = !!info.started;
+  const phase = info.resultsPhase || 'hidden';
+
   const label = $('voting-state-label');
   label.textContent = t(VOTING_STATE_LABEL[status]);
   label.classList.toggle('is-registration', status === 'registration');
   label.classList.toggle('is-open', status === 'open');
   label.classList.toggle('is-closed', status === 'closed');
 
-  const phase = info?.resultsPhase || 'hidden';
-  const revealBtn = $('reveal-next-btn');
-  revealBtn.textContent = t(NEXT_REVEAL_LABEL[phase]);
-  revealBtn.disabled = phase === 'all' || status !== 'closed';
+  const btn = $('voting-advance-btn');
+  if (!started) {
+    btn.textContent = t('voting_start_btn');
+    btn.dataset.action = 'registration';
+    btn.disabled = false;
+  } else if (status === 'registration') {
+    btn.textContent = t('voting_open_btn');
+    btn.dataset.action = 'open';
+    btn.disabled = false;
+  } else if (status === 'open') {
+    btn.textContent = t('voting_close_btn');
+    btn.dataset.action = 'close';
+    btn.disabled = false;
+  } else {
+    btn.textContent = t(NEXT_REVEAL_LABEL[phase]);
+    btn.dataset.action = phase === 'all' ? '' : 'reveal-next';
+    btn.disabled = phase === 'all';
+  }
 }
 
-async function setVoting(action) {
+$('voting-advance-btn').addEventListener('click', async () => {
+  const action = $('voting-advance-btn').dataset.action;
+  if (!action) return;
   $('voting-msg').textContent = '';
-  await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
-  loadVotingState();
-  loadVotes();
-  loadContestants();
-}
-
-$('voting-registration-btn').addEventListener('click', () => setVoting('registration'));
-$('voting-open-btn').addEventListener('click', () => setVoting('open'));
-$('voting-close-btn').addEventListener('click', () => setVoting('close'));
-$('voting-reset-btn').addEventListener('click', async () => {
-  if (!(await showConfirm(t('confirm_reset')))) return;
-  setVoting('reset');
+  try {
+    await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
+    loadVotingState();
+    loadVotes();
+    loadContestants();
+  } catch (err) {
+    $('voting-msg').textContent = err.message;
+  }
 });
 
-$('reveal-next-btn').addEventListener('click', async () => {
-  $('reveal-phase-msg').textContent = '';
+$('voting-reset-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_reset')))) return;
+  $('voting-msg').textContent = '';
   try {
-    await api(`/admin/voting/${currentNight()}/reveal-next`, { method: 'POST' });
+    await api(`/admin/voting/${currentNight()}/reset`, { method: 'POST' });
     loadVotingState();
+    loadVotes();
+    loadContestants();
   } catch (err) {
-    $('reveal-phase-msg').textContent = err.message;
+    $('voting-msg').textContent = err.message;
   }
 });
 
@@ -246,17 +265,16 @@ function renderUsersList(users) {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="user-row-name-text">${esc(u.name)}</span>
+            <span class="user-row-name-text${isOwner ? ' name-edit' : ''}"${isOwner ? ` data-rename-user="${u.id}" data-current-name="${esc(u.name)}" role="button" tabindex="0"` : ''}>${esc(u.name)}</span>
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
         </div>
         ${isOwner ? `
         <div class="row-actions">
-          <button class="small ghost" data-rename-user="${u.id}" data-current-name="${esc(u.name)}">${t('rename')}</button>
+          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
           ${u.is_owner ? `<button class="small ghost" data-change-own-key="${u.id}">${t('change_own_key_btn')}</button>` : ''}
-          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>` : ''}
       </div>`).join('')
@@ -283,11 +301,11 @@ function renderUsersList(users) {
     });
   });
 
-  // Rename is a button (not click-the-name) - it edits the name in place
-  // right next to it, same inline-input pattern as the admin contestant
-  // rename above.
+  // Click the name itself to rename it in place - same click-to-act
+  // convention as the admin contestant rename below, instead of a separate
+  // button.
   $('users-list').querySelectorAll('[data-rename-user]').forEach((b) => {
-    b.addEventListener('click', () => {
+    const startEdit = () => {
       const nameEl = b.closest('.user-row').querySelector('.user-row-name-text');
       if (nameEl.tagName === 'INPUT') return; // already editing
       const currentName = b.dataset.currentName;
@@ -318,6 +336,10 @@ function renderUsersList(users) {
         if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
         if (e.key === 'Escape') { settled = true; loadUsers(); }
       });
+    };
+    b.addEventListener('click', startEdit);
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
     });
   });
 
@@ -425,6 +447,12 @@ function withRecentFirst(users) {
   return [...owner, ...recent, ...others];
 }
 
+// Strips accents so "cesar" matches "César" - typing the plain-ASCII form
+// of a name should always find it, not just the exact accented spelling.
+function foldAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
   const createBtn = $('user-form').querySelector('button[type="submit"]');
@@ -436,7 +464,8 @@ function applyUserSearch() {
     return;
   }
 
-  const matches = allUsers.filter((u) => u.name.toLowerCase().includes(term.toLowerCase()));
+  const foldedTerm = foldAccents(term.toLowerCase());
+  const matches = allUsers.filter((u) => foldAccents(u.name.toLowerCase()).includes(foldedTerm));
   renderUsersList(withRecentFirst(matches));
 
   const noMatch = matches.length === 0;
@@ -564,19 +593,22 @@ let votesNight = 'furnished';
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
   // results (the same tally that goes public on Best Outfit later), so
-  // `votes` is simply absent from the response for them.
+  // `votes` is simply absent from the response for them. Shown as two
+  // separate cards: Results (everyone with admin access) and Voting logs
+  // (owner-only, kept last on the page).
   const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
-  const votesHtml = votes
-    ? (votes.length
-      ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
-        votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
-      : `<tr><td class="muted">${t('no_votes')}</td></tr>`)
-    : '';
-  const resultsHtml = results.length
+  $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
-    : '';
-  $('votes-table').innerHTML = votesHtml + resultsHtml;
+    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+
+  $('voter-log-card').classList.toggle('hidden', !votes);
+  if (votes) {
+    $('voter-log-table').innerHTML = votes.length
+      ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
+        votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
+      : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+  }
 }
 
 document.querySelectorAll('#votes-night-tabs .tab').forEach((btn) => {

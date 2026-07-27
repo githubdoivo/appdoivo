@@ -68,7 +68,8 @@
         </div>
 
         <div class="card">
-          <div id="users-list" class="user-list"></div>
+          <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
+          <div id="users-list" class="user-list" style="margin-top:12px"></div>
         </div>
 
         <div class="card" id="reset-content-card">
@@ -93,14 +94,10 @@
           </p>
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" id="voting-registration-btn" data-i18n="voting_registration_btn">Abrir candidaturas</button>
-            <button type="button" id="voting-open-btn" data-i18n="voting_open_btn">Abrir votação</button>
-            <button type="button" id="voting-close-btn" data-i18n="voting_close_btn">Encerrar e publicar</button>
+            <button type="button" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar noite</button>
             <button type="button" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar (nova votação)</button>
-            <button type="button" id="reveal-next-btn" data-i18n="reveal_next_btn_third">Revelar 3º lugar</button>
           </div>
           <span id="voting-msg" class="muted"></span>
-          <span id="reveal-phase-msg" class="muted"></span>
         </div>
 
         <div class="card">
@@ -113,12 +110,22 @@
         </div>
 
         <div class="card">
-          <h2 data-i18n="votes_title">Votos da noite</h2>
+          <h2 data-i18n="votes_title">Resultados da votação</h2>
           <nav class="tabs" id="votes-night-tabs" style="margin-top:12px">
             <button class="tab active" data-vnight="furnished" data-i18n="theme_furnished">Furnished</button>
             <button class="tab" data-vnight="swamp" data-i18n="theme_swamp">Swamp</button>
           </nav>
-          <div class="table-scroll"><table id="votes-table"></table></div>
+          <div class="table-scroll"><table id="results-table"></table></div>
+        </div>
+
+        <!-- Owner-only: same golden rule as the Wall's real-name mapping - a
+             regular admin never sees who voted for whom, only the aggregate
+             results above. Kept last on the page since it's the most
+             sensitive, least-needed-day-to-day thing here. -->
+        <div class="card" id="voter-log-card">
+          <h2 data-i18n="voter_log_title">Registos da votação</h2>
+          <p class="help" data-i18n="voter_log_help">Explicação</p>
+          <div class="table-scroll"><table id="voter-log-table"></table></div>
         </div>
       </div>
 

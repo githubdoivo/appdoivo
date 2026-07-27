@@ -125,7 +125,15 @@ export function wireNotifButton(btnId = 'notif-btn') {
         await showAlert(t('notif_disabled_msg'));
       } else {
         const ok = await enablePush();
-        if (ok) await showAlert(t('notif_enabled_msg'));
+        if (ok) {
+          await showAlert(t('notif_enabled_msg'));
+          // Push works in a plain browser tab too, but it's far more
+          // reliable (and feels like a real app) once installed to the
+          // home screen - worth a nudge right after someone opts in.
+          if (!isStandalone()) {
+            await showAlert(t(isIOS() ? 'notif_add_home_tip_ios' : 'notif_add_home_tip_other'));
+          }
+        }
       }
     } catch { /* mensagens tratadas acima */ }
     refreshNotifButton(btnId);

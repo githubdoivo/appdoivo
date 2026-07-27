@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import db from './db.js';
+import { formatTimeInZone } from './time.js';
 
 const MAX_MESSAGES = 15;
 const MAX_TEXT_LENGTH = 300;
@@ -51,23 +52,38 @@ export function pruneMessages() {
 }
 
 /** Current (already-pruned) messages, oldest first. "author" is each
- * poster's stable pseudonym, never their real name. */
+ * poster's stable pseudonym, never their real name. "time" is created_at
+ * converted from its stored UTC value to the app's configured timezone -
+ * the client must not format created_at itself, or it renders as if it
+ * were already local. */
 export function listMessages() {
   pruneMessages();
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT id, text, created_at, pseudonym AS author
     FROM messages
     ORDER BY id ASC
   `).all();
+  return rows.map((m) => ({ ...m, time: formatTimeInZone(m.created_at) }));
 }
 
-/** Posts a message. Returns { ok } or { error }. */
-export function postMessage(userId, text) {
-  const trimmed = String(text || '').trim();
-  if (!trimmed) return { error: 'Mensagem vazia.' };
-  if (trimmed.length > MAX_TEXT_LENGTH) return { error: `Mensagem demasiado longa (max ${MAX_TEXT_LENGTH} caracteres).` };
+// Lowercases everything - keeps the Wall's tone consistently casual - but
+// otherwise leaves the message untouched, special characters and emoji
+// included.
+function sanitizeMessage(text) {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, trimmed, getOrAssignPseudonym(userId));
+/** Posts a message. Returns { ok, pseudonym } or { error }. */
+export function postMessage(userId, text) {
+  const sanitized = sanitizeMessage(String(text || ''));
+  if (!sanitized) return { error: 'Mensagem vazia.' };
+  if (sanitized.length > MAX_TEXT_LENGTH) return { error: `Mensagem demasiado longa (max ${MAX_TEXT_LENGTH} caracteres).` };
+
+  const pseudonym = getOrAssignPseudonym(userId);
+  db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, sanitized, pseudonym);
   pruneMessages();
-  return { ok: true };
+  return { ok: true, pseudonym };
 }

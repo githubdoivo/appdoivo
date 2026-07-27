@@ -195,17 +195,26 @@ router.post('/votes', (req, res) => {
 });
 
 /* ---------------------------------- Chat ---------------------------------- */
-// Open, ephemeral group chat - messages expire after 5 minutes or once
-// there are more than 20, whichever comes first (see src/chat.js).
+// Open, ephemeral group chat - keeps only the last 15 messages, no time
+// expiry (see src/chat.js).
 
 router.get('/chat/messages', (req, res) => {
   res.json({ messages: listMessages() });
 });
 
-router.post('/chat/messages', (req, res) => {
+router.post('/chat/messages', async (req, res) => {
   const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json({ ok: true });
+  // Announce by pseudonym only - same golden rule as the rest of the Wall,
+  // nobody but the owner learns who's behind a post. Skip the poster's own
+  // device, they don't need telling about their own message.
+  await broadcast({
+    title: { pt: 'nova mensagem na wall', en: 'new message on the wall' },
+    body: { pt: `${result.pseudonym} escreveu algo novo na wall.`, en: `${result.pseudonym} just posted something new on the wall.` },
+    tag: 'wall',
+    url: '/?tab=chat',
+  }, { excludeUserId: req.user.id });
 });
 
 /* ---------------------------------- Push --------------------------------- */
@@ -463,9 +472,14 @@ router.get('/admin/voting', (req, res) => {
       night,
       status: nightStatus(night),
       resultsPhase: getResultsPhase(night),
+      // Lets the admin panel tell "never run yet" apart from "closed after
+      // running" - both report status 'closed' otherwise (see /votes/status).
+      started: getSetting(`voting_started_${night}`) === '1',
     })),
   });
 });
+
+const NIGHT_LABEL = { furnished: 'Furnished', swamp: 'Swamp' };
 
 // Opens registration: contestants can self-enter (see POST /outfit/register).
 // Voting options stay hidden from everyone until the admin explicitly moves
@@ -475,7 +489,7 @@ router.get('/admin/voting', (req, res) => {
 // the previous roster would otherwise linger and skew a later re-tally.
 // Contestants themselves are untouched - the admin edits/removes those
 // directly in the Contestants table.
-router.post('/admin/voting/:night/registration', (req, res) => {
+router.post('/admin/voting/:night/registration', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
@@ -483,42 +497,68 @@ router.post('/admin/voting/:night/registration', (req, res) => {
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
+  await broadcast({
+    title: { pt: 'best outfit: candidaturas abertas', en: 'best outfit: entries open' },
+    body: { pt: `já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `you can now register for ${NIGHT_LABEL[night]} night!` },
+    tag: 'outfit-registration',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
 });
 
-router.post('/admin/voting/:night/open', (req, res) => {
+router.post('/admin/voting/:night/open', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
+  await broadcast({
+    title: { pt: 'best outfit: votação aberta', en: 'best outfit: voting open' },
+    body: { pt: `já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `you can now vote for ${NIGHT_LABEL[night]} night!` },
+    tag: 'outfit-voting',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
 });
 
 // Closing just stops voting - it does NOT reveal anything yet. The admin
 // reveals results in stages afterwards via /reveal-next.
-router.post('/admin/voting/:night/close', (req, res) => {
+router.post('/admin/voting/:night/close', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   setSetting(`voting_status_${night}`, 'closed');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
+  await broadcast({
+    title: { pt: 'best outfit: votação encerrada', en: 'best outfit: voting closed' },
+    body: { pt: `a votação da noite ${NIGHT_LABEL[night]} encerrou - os resultados vêm aí.`, en: `voting for ${NIGHT_LABEL[night]} night is closed - results coming soon.` },
+    tag: 'outfit-closed',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
 });
 
+const REVEAL_NOTIFY = {
+  third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
+  second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
+  first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
+  all: { pt: 'já podes ver quem venceu o Best Outfit!', en: 'you can now see who won Best Outfit!' },
+};
+
 // Advances the results reveal one stage: hidden -> third -> second -> first
-// -> all. The "winner" notification only fires once everyone can be seen.
+// -> all. Every stage past 'hidden' is worth telling people about - that's
+// the whole point of staging it like an awards countdown.
 router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
   const phase = advanceResultsPhase(night);
-  if (phase === 'all') {
+  res.json({ ok: true, night, resultsPhase: phase });
+  if (REVEAL_NOTIFY[phase]) {
     await broadcast({
-      title: { pt: 'resultados revelados', en: 'results revealed' },
-      body: { pt: 'já podes ver quem venceu o Best Outfit!', en: 'you can now see who won Best Outfit!' },
+      title: { pt: 'best outfit', en: 'best outfit' },
+      body: REVEAL_NOTIFY[phase],
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
     });
   }
-  res.json({ ok: true, night, resultsPhase: phase });
 });
 
 router.post('/admin/voting/:night/reset', (req, res) => {

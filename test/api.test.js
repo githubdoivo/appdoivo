@@ -239,6 +239,13 @@ test('with nothing pending, reveal returns 404', async () => {
 
 const NIGHT = 'furnished';
 
+test('a night that has never been opened reports started: false', async () => {
+  const voting = await api('GET', '/admin/voting', { token: ADMIN });
+  const night = voting.data.nights.find((n) => n.night === NIGHT);
+  assert.equal(night.status, 'closed');
+  assert.equal(night.started, false, 'a night with no admin action yet should not look like "closed after running"');
+});
+
 test('voting closed by default blocks the vote', async () => {
   const c = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Concorrente A', night: NIGHT } });
   assert.equal(c.status, 201);
@@ -261,6 +268,10 @@ test('admin opens the night and each user votes once', async () => {
 
   const v2 = await api('POST', '/votes', { token: userToken, body: { contestantId, night: NIGHT } });
   assert.equal(v2.status, 400); // already voted this night
+
+  const voting = await api('GET', '/admin/voting', { token: ADMIN });
+  const night = voting.data.nights.find((n) => n.night === NIGHT);
+  assert.equal(night.started, true, 'once a night has been opened, it should never look "unstarted" again');
 });
 
 test('who-voted-for-whom is owner-only; a regular admin only gets the aggregate results', async () => {
@@ -342,6 +353,15 @@ test('reset clears the night votes and reopens voting', async () => {
 // Wipes contestants/votes/consequences - runs last so it doesn't disturb
 // the shared state the tests above rely on.
 
+test('a non-owner admin can read and change the timezone setting', async () => {
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const get = await api('GET', '/admin/settings', { token: userToken });
+  assert.equal(get.status, 200);
+  const put = await api('PUT', '/admin/settings', { token: userToken, body: { timezone: 'Europe/Lisbon' } });
+  assert.equal(put.status, 200);
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+});
+
 test('a non-owner admin cannot reset event content', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
   const r = await api('POST', '/admin/reset-content', { token: userToken });
@@ -380,6 +400,10 @@ test('posting and reading a chat message', async () => {
   // poster's name or user id.
   assert.notEqual(found.author, 'Test Admin');
   assert.match(found.author, /^[a-z]+$/);
+  // "time" is created_at converted to the configured timezone, not the raw
+  // UTC value - the client must never format created_at itself (see
+  // formatTimeInZone() in time.js).
+  assert.match(found.time, /^\d{2}:\d{2}$/);
 });
 
 test("a user's Wall pseudonym stays the same across multiple posts", async () => {
@@ -391,6 +415,16 @@ test("a user's Wall pseudonym stays the same across multiple posts", async () =>
   const msg2 = list.data.messages.find((m) => m.text === 'stable-2');
   assert.ok(msg1 && msg2, 'both messages should be in the list');
   assert.equal(msg1.author, msg2.author, 'the same user should get the same pseudonym on every post');
+});
+
+test('Wall messages are lowercased, but special characters and emoji survive', async () => {
+  const post = await api('POST', '/chat/messages', { token: ADMIN, body: { text: 'OLÁ Malta!! 😀 <b>test</b> ***' } });
+  assert.equal(post.status, 201);
+
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  const found = list.data.messages.find((m) => m.text.startsWith('olá malta'));
+  assert.ok(found, 'sanitized message should appear in the list');
+  assert.equal(found.text, 'olá malta!! 😀 <b>test</b> ***');
 });
 
 test('the Wall name<->pseudonym mapping is owner-only', async () => {
