@@ -18,6 +18,7 @@ process.env.ADMIN_TOKEN = 'ui-test-admin-token';
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
+process.env.ENABLE_PLAZA = 'true';
 
 const { default: app } = await import('../src/app.js');
 
@@ -539,6 +540,28 @@ test('reloading the page always opens on Plaza, regardless of the last tab used'
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
   assert.ok(plazaActive, 'a reload should always land on Plaza, not wherever was last open');
   await context.close();
+});
+
+test('with ENABLE_PLAZA off (prod default), Plaza is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
+  process.env.ENABLE_PLAZA = 'false';
+  try {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/');
+
+    const plazaTabHidden = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('hidden'));
+    assert.ok(plazaTabHidden, 'Plaza tab should be hidden in the main app when the flag is off');
+    const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
+    assert.ok(rataActive, 'A Rata should be the landing tab instead of Plaza when Plaza is disabled');
+
+    await page.goto(`${base}/settings.html`);
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+    const plazaAdminTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
+    assert.ok(plazaAdminTabHidden, 'Plaza admin tab should be hidden even for the owner when the flag is off');
+
+    await context.close();
+  } finally {
+    process.env.ENABLE_PLAZA = 'true';
+  }
 });
 
 /* --------------------- Font loading (regression) -------------------- */

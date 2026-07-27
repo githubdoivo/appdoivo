@@ -13,6 +13,7 @@ process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
+process.env.ENABLE_PLAZA = 'true';
 
 const { default: app } = await import('../src/app.js');
 
@@ -665,6 +666,19 @@ test('Plaza note: any logged-in user can read it, any admin (not just the owner)
 
   // Leave it empty for other tests/manual QA runs that don't expect a note.
   await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
+});
+
+test('Plaza is gated behind ENABLE_PLAZA - off (prod default) means both endpoints 404', async () => {
+  process.env.ENABLE_PLAZA = 'false';
+  try {
+    const read = await api('GET', '/plaza-note', { token: userToken });
+    assert.equal(read.status, 404);
+
+    const write = await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'should not save' } });
+    assert.equal(write.status, 404);
+  } finally {
+    process.env.ENABLE_PLAZA = 'true';
+  }
 });
 
 /* ------------------------------- Rate limiting ------------------------------ */

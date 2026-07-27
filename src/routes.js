@@ -89,7 +89,11 @@ router.post('/auth/claim-key', loginRateLimit, (req, res) => {
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
-  res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
+  res.json({
+    ...req.user,
+    adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
+    plazaEnabled: process.env.ENABLE_PLAZA === 'true',
+  });
 });
 
 router.post('/me/tutorial-seen', (req, res) => {
@@ -141,12 +145,19 @@ router.post('/me/change-token', (req, res) => {
 // A pinned note from the host team (welcome message, wifi password,
 // schedule, whatever) shown to everyone on the Plaza tab - the app's
 // landing page. Any admin can post/edit it, not just the owner.
+//
+// Gated behind ENABLE_PLAZA - it's being reworked into a real posts feed
+// (notes + polls), so it stays QA-only (see fly.qa.toml) until that's
+// ready, rather than living on prod mid-rebuild. Same on/off-by-env-var
+// pattern as ENABLE_ADMIN_PROMOTION/SEED_DEMO.
 
 router.get('/plaza-note', (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   res.json({ note: getSetting('plaza_note', '') });
 });
 
 router.put('/admin/plaza-note', requireAdmin, async (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const note = String(req.body?.note ?? '').trim();
   setSetting('plaza_note', note);
   res.json({ ok: true, note });

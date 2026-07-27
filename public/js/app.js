@@ -13,6 +13,11 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
 ));
 
 let currentTab = 'plaza';
+// Set from /me in showApp() - Plaza is mid-rebuild (single note -> real
+// posts feed), so it's QA-only until that's done (see ENABLE_PLAZA in
+// src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
+// before /me resolves; showApp() corrects it immediately after.
+let plazaEnabled = true;
 
 /* ------------------------------- Arranque -------------------------------- */
 
@@ -47,6 +52,9 @@ function showLogin() {
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  plazaEnabled = !!me.plazaEnabled;
+  document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
+  if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name);
   if (me.isAdmin) {
@@ -62,7 +70,7 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
-  loadPlaza();
+  if (plazaEnabled) loadPlaza();
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -346,7 +354,7 @@ function applyDeepLinkParams() {
   if (night && NIGHTS.includes(night)) {
     localStorage.setItem(NIGHT_KEY, night);
   }
-  if (TABS.includes(tab)) {
+  if (TABS.includes(tab) && (tab !== 'plaza' || plazaEnabled)) {
     selectTab(tab);
   }
   history.replaceState({}, '', location.pathname);

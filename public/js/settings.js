@@ -48,6 +48,7 @@ let adminPromotionEnabled = false;
 // non-owner admins ("testers") don't get the Manage Users tab at all.
 let isOwner = false;
 let isAdmin = false;
+let plazaEnabled = false;
 
 async function boot() {
   applyMode();
@@ -65,10 +66,18 @@ async function boot() {
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
+    plazaEnabled = !!me.plazaEnabled;
     wireLogoEasterEgg(me.name);
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
+  }
+
+  // Plaza is mid-rebuild (single note -> real posts feed), so it's
+  // QA-only for now (see ENABLE_PLAZA in src/routes.js) - hidden for
+  // everyone, owner included, regardless of the role-based rules below.
+  if (!plazaEnabled) {
+    document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
 
   const roleBadge = $('role-badge');

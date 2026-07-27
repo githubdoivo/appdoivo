@@ -20,6 +20,9 @@ primary_region = "cdg"
   # Only set in QA - the DB is ephemeral here, so auto-load demo/mock data
   # (contestants, votes, consequences) on every boot. Never set in prod.
   SEED_DEMO = "true"
+  # Only set in QA - Plaza is mid-rebuild (single note -> real posts feed),
+  # so it stays off prod until that's done. See routes.js's Plaza section.
+  ENABLE_PLAZA = "true"
 
 [http_service]
   internal_port = 3000
