@@ -391,7 +391,7 @@ function timeAgo(dbTimestamp) {
 // admin Plaza page) already sort first from the API - this just marks them
 // visually so a pin doesn't blend into the rest of the feed.
 function renderPlazaPost(post) {
-  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_announcement_label');
+  const eyebrow = t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement');
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
 
