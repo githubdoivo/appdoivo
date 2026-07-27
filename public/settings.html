@@ -51,7 +51,7 @@
         <button class="tab active" data-atab="settings" data-i18n="tab_settings">Settings</button>
         <button class="tab" data-atab="users" data-i18n="users_title">Users</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
-        <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Outfit</button>
+        <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Look</button>
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
@@ -59,7 +59,9 @@
            devolve mais do que a propria linha, e so aceita escrita, para o
            dono da conta - ver GET/POST/PATCH/DELETE /admin/users em routes.js) -->
       <div id="atab-users" class="tab-panel hidden">
-        <h2 data-i18n="user_control_title" style="margin-bottom:12px">Controlo dos utilizadores</h2>
+        <div class="card">
+          <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
+        </div>
         <div class="card" id="user-search-card">
           <form id="user-form" class="inline">
             <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
@@ -80,7 +82,7 @@
         </div>
       </div>
 
-      <!-- Separador: Best Outfit -->
+      <!-- Separador: Best Look -->
       <div id="atab-outfit" class="tab-panel hidden">
         <div class="card">
           <h2 data-i18n="voting_control_title">Controlo da votação</h2>
@@ -152,6 +154,12 @@
       <!-- Separador: Wall (visivel a qualquer admin - so a tabela de
            pseudonimos, mais abaixo, fica reservada ao dono da conta) -->
       <div id="atab-wall" class="tab-panel hidden">
+        <div class="card" id="wall-pseudonyms-card">
+          <h2 data-i18n="wall_pseudonyms_title">Quem é quem na Wall</h2>
+          <p class="help" data-i18n="wall_pseudonyms_help">Explicação</p>
+          <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>
+        </div>
+
         <div class="card" id="timezone-wall-card">
           <h2 data-i18n="timezone">Fuso horário</h2>
           <form id="settings-form-wall" style="margin-top:12px">
@@ -159,12 +167,6 @@
             <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
             <span id="settings-msg-wall" class="muted"></span>
           </form>
-        </div>
-
-        <div class="card" id="wall-pseudonyms-card">
-          <h2 data-i18n="wall_pseudonyms_title">Quem é quem na Wall</h2>
-          <p class="help" data-i18n="wall_pseudonyms_help">Explicação</p>
-          <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>
         </div>
       </div>
 

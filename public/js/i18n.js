@@ -13,7 +13,7 @@ export const translations = {
     tutorial_1_text: 'um tour rápido.',
     tutorial_2_title: 'a rata',
     tutorial_2_text: 'consequência nova a cada 2 horas, ao acaso. sugere a tua também.',
-    tutorial_3_title: 'best outfit',
+    tutorial_3_title: 'best look',
     tutorial_3_text: 'vota no melhor look da noite, quando a votação estiver aberta.',
     tutorial_wall_title: 'a wall',
     tutorial_wall_text: 'anónimo, aberto, e some-se sozinho.',
@@ -33,7 +33,7 @@ export const translations = {
     notif_ios_add_home: 'Adiciona ao ecrã principal',
     // Tabs
     tab_rata: 'A Rata',
-    tab_outfit: 'Best Outfit',
+    tab_outfit: 'Best Look',
     tab_chat: 'Wall',
     // Mural (parede onde se afixam mensagens ate desaparecerem)
     chat_hero: 'diz o que quiseres - desaparece sozinho.',
@@ -53,7 +53,7 @@ export const translations = {
     send: 'Enviar',
     rata_my: 'A tua sugestão de hoje:',
     rata_one_per_day: 'Só podes sugerir uma por dia.',
-    // Best Outfit
+    // Best Look
     outfit_hero: 'quem deu mais slay esta noite?',
     outfit_voting: 'votação',
     outfit_registration_open: 'as candidaturas estão abertas. inscreve a tua personagem!',
@@ -65,7 +65,7 @@ export const translations = {
     outfit_voted_name: 'Já votaste em {name}.',
     outfit_voted: 'Já votaste nesta noite.',
     outfit_results: 'Resultados',
-    // Candidatura (Best Outfit self-registration)
+    // Candidatura (Best Look self-registration)
     outfit_register_title: 'a tua candidatura',
     outfit_register_help: 'inscreve a tua personagem ou criatura da noite - sozinhe ou em par.',
     outfit_register_solo: 'sozinhe',
@@ -118,7 +118,7 @@ export const translations = {
     modal_ok: 'ok',
     modal_cancel: 'cancelar',
     modal_confirm: 'confirmar',
-    // Fixed, non-translated tab name (like "A Rata"/"Best Outfit"/"Wall").
+    // Fixed, non-translated tab name (like "A Rata"/"Best Look"/"Wall").
     users_title: 'Users',
     tab_settings: 'Settings',
     user_control_title: 'Controlo dos utilizadores',
@@ -187,7 +187,7 @@ export const translations = {
     tutorial_1_text: 'a quick tour.',
     tutorial_2_title: 'a rata',
     tutorial_2_text: 'a random consequence drops every 2 hours. suggest your own too.',
-    tutorial_3_title: 'best outfit',
+    tutorial_3_title: 'best look',
     tutorial_3_text: "vote for the night's best look, when voting's open.",
     tutorial_wall_title: 'the wall',
     tutorial_wall_text: 'anonymous, open, and it vanishes on its own.',
@@ -204,7 +204,7 @@ export const translations = {
     notif_on: 'Notifications on',
     notif_ios_add_home: 'Add to Home Screen',
     tab_rata: 'A Rata',
-    tab_outfit: 'Best Outfit',
+    tab_outfit: 'Best Look',
     tab_chat: 'Wall',
     chat_hero: 'say what you want - it disappears on its own.',
     chat_help: 'only the freshest survive. the rest turns to dust.',
@@ -233,7 +233,7 @@ export const translations = {
     outfit_voted_name: 'You voted for {name}.',
     outfit_voted: 'You have voted this night.',
     outfit_results: 'Results',
-    // Entry (Best Outfit self-registration)
+    // Entry (Best Look self-registration)
     outfit_register_title: 'your entry',
     outfit_register_help: 'register your persona or creature of the night - solo or as a duo.',
     outfit_register_solo: 'solo',

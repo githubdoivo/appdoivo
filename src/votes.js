@@ -67,7 +67,7 @@ export function myContestantForNight(userId, night) {
 }
 
 /**
- * Self-registers the caller as a Best Outfit contestant for a night. Pass
+ * Self-registers the caller as a Best Look contestant for a night. Pass
  * partnerUserId to team up with another user (picked from /users/basic on
  * the frontend, not typed) - both then share one contestant entry, and one
  * combined vote for the night between them (see castVote()). Returns

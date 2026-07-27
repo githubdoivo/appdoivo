@@ -55,7 +55,7 @@ export function formatTimeInZone(dbTimestamp, tz = getTimezone()) {
   }).format(new Date(iso));
 }
 
-/** Status of a night's Best Outfit, controlled by the admin:
+/** Status of a night's Best Look, controlled by the admin:
  * 'registration' (contestants can enter) | 'open' (voting) | 'closed' (results). */
 export function nightStatus(night) {
   const status = getSetting(`voting_status_${night}`, 'closed');

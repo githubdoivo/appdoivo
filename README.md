@@ -5,7 +5,7 @@ A web app (PWA) with two sections:
 1. A Rata - each user suggests one "consequence" per day through a free-text
    form. Every hour a random consequence is drawn, a push notification is sent,
    and everyone sees the same one. Once revealed, it is removed from the draw.
-2. Best Outfit - voting is per NIGHT. This edition has two nights, each with its
+2. Best Look - voting is per NIGHT. This edition has two nights, each with its
    own name and aesthetic: Furnished and Swamp. A switch at the top of Best
    Outfit selects the active night; changing it re-skins the WHOLE page with
    that night's aesthetic (the other sections stay clean). Each night has its

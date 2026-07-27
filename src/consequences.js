@@ -25,8 +25,8 @@ export async function revealRandomConsequence() {
   `).run(pick.id);
 
   await broadcast({
-    title: { pt: 'quem tem a rata?', en: 'who has the rat?' },
-    body: { pt: 'a consequência foi revelada! entra na app agora.', en: 'the consequence was revealed! open the app now.' },
+    title: { pt: 'A Rata', en: 'A Rata' },
+    body: { pt: 'quem tem a rata? a consequência foi revelada! entra na app agora.', en: 'who has the rat? the consequence was revealed - open the app now.' },
     tag: 'consequence',
     url: '/?tab=rata',
   });

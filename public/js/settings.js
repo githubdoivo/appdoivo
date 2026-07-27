@@ -604,7 +604,7 @@ let votesNight = 'furnished';
 
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
-  // results (the same tally that goes public on Best Outfit later), so
+  // results (the same tally that goes public on Best Look later), so
   // `votes` is simply absent from the response for them. Shown as two
   // separate cards: Results (everyone with admin access) and Voting logs
   // (owner-only, kept last on the page).

@@ -3,7 +3,7 @@
 A small PWA for a private group of friends, with two features:
 
 - **A Rata** - every hour a random "consequence" (suggested by users) is revealed and everyone is notified.
-- **Best Outfit** - per-night voting; the admin opens and closes each night, and a ranking is published when a night closes.
+- **Best Look** - per-night voting; the admin opens and closes each night, and a ranking is published when a night closes.
 
 This guide explains how to run it locally, how to host it safely for free, and how to buy a domain.
 
@@ -16,7 +16,7 @@ synced whenever they switch languages in the app):
 - **A Rata (hourly):** when a new consequence is revealed. The consequence
   itself is not shown in the notification, on purpose, so people open the
   app to see it.
-- **Best Outfit (staged reveal):** once the admin has revealed all result
+- **Best Look (staged reveal):** once the admin has revealed all result
   stages (3rd → 2nd → 1st → everyone) for a night, not when voting first
   closes.
 

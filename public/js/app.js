@@ -63,7 +63,7 @@ function showApp(me) {
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
   loadConsequences();
-  // Best Outfit's own data loads when its tab is actually selected (see
+  // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
   // which was harmless when the outfit tab was just static vote buttons,
   // but now that it has a live registration form, a late-resolving response
@@ -307,7 +307,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
   }
 });
 
-/* ------------------------------ Best Outfit ------------------------------ */
+/* ------------------------------ Best Look ------------------------------- */
 
 // Voting is per NIGHT. Each night has its own aesthetic (theme) and its own
 // independent vote. The selector below picks the active night, re-skins the
@@ -324,7 +324,7 @@ function getNight() {
 
 function applyNight() {
   const night = getNight();
-  // The night's theme re-skins the WHOLE page, but only when Best Outfit is active.
+  // The night's theme re-skins the WHOLE page, but only when Best Look is active.
   const onOutfit = currentTab === 'outfit';
   NIGHTS.forEach((n) => {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
@@ -346,7 +346,7 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
   });
 });
 
-/* --------------------------- Candidatura (Best Outfit) ------------------- */
+/* ---------------------------- Candidatura (Best Look) -------------------- */
 // Self-registration, only shown while the admin has this night in the
 // 'registration' phase (see nightStatus() in src/time.js). Solo or teamed up
 // with another user picked from /users/basic - a duo shares one contestant

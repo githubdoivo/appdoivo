@@ -169,7 +169,7 @@ if (columnExists('contestants', 'day') && !columnExists('contestants', 'night'))
 
 // Per-night voting tables (created after the migration).
 db.exec(`
-  -- Contestants per night (Best Outfit). 'night' identifies the night/theme.
+  -- Contestants per night (Best Look). 'night' identifies the night/theme.
   CREATE TABLE IF NOT EXISTS contestants (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL,
@@ -189,7 +189,7 @@ db.exec(`
     ON votes(user_id, night);
 `);
 
-// Migration: self-registered contestants (Best Outfit). A contestant can
+// Migration: self-registered contestants (Best Look). A contestant can
 // optionally be linked to the user(s) who entered themselves - solo
 // (user_id only) or as a duo (user_id + partner_user_id), so the app can
 // stop someone entering twice and can merge a duo's voting rights into one

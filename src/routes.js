@@ -165,7 +165,7 @@ router.get('/votes/status', (req, res) => {
   });
 });
 
-// Self-registration for Best Outfit: everyone (not just admins) can enter
+// Self-registration for Best Look: everyone (not just admins) can enter
 // their own persona/creature-of-the-night, optionally teamed up with
 // another user (picked via /users/basic) - see registerContestant() for
 // the duo-matching and vote-merging rules.
@@ -177,7 +177,7 @@ router.post('/outfit/register', (req, res) => {
 });
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
-// picker on Best Outfit registration - every logged-in user can see it.
+// picker on Best Look registration - every logged-in user can see it.
 router.get('/users/basic', (req, res) => {
   const rows = db.prepare(
     'SELECT id, name FROM users WHERE id != ? ORDER BY name COLLATE NOCASE'
@@ -210,8 +210,8 @@ router.post('/chat/messages', async (req, res) => {
   // nobody but the owner learns who's behind a post. Skip the poster's own
   // device, they don't need telling about their own message.
   await broadcast({
-    title: { pt: 'nova mensagem na wall', en: 'new message on the wall' },
-    body: { pt: `${result.pseudonym} escreveu algo novo na wall.`, en: `${result.pseudonym} just posted something new on the wall.` },
+    title: { pt: 'Wall', en: 'Wall' },
+    body: { pt: `${result.pseudonym} acabou de afixar algo novo na wall.`, en: `${result.pseudonym} just pinned something new into the wall.` },
     tag: 'wall',
     url: '/?tab=chat',
   }, { excludeUserId: req.user.id });
@@ -465,7 +465,7 @@ router.put('/admin/settings', (req, res) => {
   res.json({ ok: true });
 });
 
-// Per-night voting control (Best Outfit): status + open / close / reset.
+// Per-night voting control (Best Look): status + open / close / reset.
 router.get('/admin/voting', (req, res) => {
   res.json({
     nights: NIGHTS.map((night) => ({
@@ -498,8 +498,8 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
   await broadcast({
-    title: { pt: 'best outfit: candidaturas abertas', en: 'best outfit: entries open' },
-    body: { pt: `já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `you can now register for ${NIGHT_LABEL[night]} night!` },
+    title: { pt: 'Best Look', en: 'Best Look' },
+    body: { pt: `candidaturas abertas - já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `entries are open - you can now register for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-registration',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -513,8 +513,8 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
   await broadcast({
-    title: { pt: 'best outfit: votação aberta', en: 'best outfit: voting open' },
-    body: { pt: `já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `you can now vote for ${NIGHT_LABEL[night]} night!` },
+    title: { pt: 'Best Look', en: 'Best Look' },
+    body: { pt: `votação aberta - já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `voting is open - you can now vote for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -529,8 +529,8 @@ router.post('/admin/voting/:night/close', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
   await broadcast({
-    title: { pt: 'best outfit: votação encerrada', en: 'best outfit: voting closed' },
-    body: { pt: `a votação da noite ${NIGHT_LABEL[night]} encerrou - os resultados vêm aí.`, en: `voting for ${NIGHT_LABEL[night]} night is closed - results coming soon.` },
+    title: { pt: 'Best Look', en: 'Best Look' },
+    body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
     tag: 'outfit-closed',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -540,7 +540,7 @@ const REVEAL_NOTIFY = {
   third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
   second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
   first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
-  all: { pt: 'já podes ver quem venceu o Best Outfit!', en: 'you can now see who won Best Outfit!' },
+  all: { pt: 'já podes ver quem venceu o Best Look!', en: 'you can now see who won Best Look!' },
 };
 
 // Advances the results reveal one stage: hidden -> third -> second -> first
@@ -553,7 +553,7 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   res.json({ ok: true, night, resultsPhase: phase });
   if (REVEAL_NOTIFY[phase]) {
     await broadcast({
-      title: { pt: 'best outfit', en: 'best outfit' },
+      title: { pt: 'Best Look', en: 'Best Look' },
       body: REVEAL_NOTIFY[phase],
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,

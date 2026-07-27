@@ -96,7 +96,7 @@ for (const deviceName of IOS_DEVICES) {
     await context.close();
   });
 
-  test(`main app (rata + best outfit + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
+  test(`main app (rata + best look + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
     const context = await iphoneContext(deviceName);
     const page = await loginPage(context, ADMIN, '/');
     const rataOverflow = await horizontalOverflow(page);
@@ -105,7 +105,7 @@ for (const deviceName of IOS_DEVICES) {
     await page.click('[data-tab="outfit"]');
     await page.waitForTimeout(150);
     const outfitOverflow = await horizontalOverflow(page);
-    assert.ok(outfitOverflow <= 1, `"best outfit" tab overflows by ${outfitOverflow}px on ${deviceName}`);
+    assert.ok(outfitOverflow <= 1, `"best look" tab overflows by ${outfitOverflow}px on ${deviceName}`);
 
     await page.click('[data-tab="chat"]');
     await page.waitForTimeout(150);
@@ -362,10 +362,10 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
-  // Voting control (Best Outfit) and reveal-consequence (A Rata) stay available.
+  // Voting control (Best Look) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
   const votingControlsVisible = await page.$eval('#voting-advance-btn', (el) => el.getBoundingClientRect().width > 0);
-  assert.ok(votingControlsVisible, 'non-owner admin should still see Best Outfit voting control');
+  assert.ok(votingControlsVisible, 'non-owner admin should still see Best Look voting control');
 
   await page.waitForTimeout(300);
   const voterLogHidden = await page.$eval('#voter-log-card', (el) => el.classList.contains('hidden'));

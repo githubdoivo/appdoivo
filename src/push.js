@@ -106,7 +106,7 @@ export async function checkVersionUpdate(currentVersion) {
   setSetting('app_version', currentVersion);
   if (!previous || previous === currentVersion) return;
   await broadcast({
-    title: { pt: 'appdoivo foi atualizada', en: 'appdoivo was updated' },
+    title: { pt: 'Atualização', en: 'Update' },
     body: { pt: 'há novidades - abre a app outra vez para as veres.', en: 'there’s something new - reopen the app to see it.' },
     tag: 'app-update',
     url: '/',
