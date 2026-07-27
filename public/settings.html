@@ -66,12 +66,12 @@
               <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
               <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
             </form>
-            <select id="user-role-filter" style="margin-top:8px">
-              <option value="all" data-i18n="role_filter_all">Todos os papéis</option>
-              <option value="owner">owner</option>
-              <option value="admin">admin</option>
-              <option value="user">user</option>
-            </select>
+            <div class="role-pills" id="user-role-filter" style="margin-top:8px">
+              <button type="button" class="role-pill active" data-role="all" data-i18n="role_filter_all">Todos os papéis</button>
+              <button type="button" class="role-pill" data-role="owner">owner</button>
+              <button type="button" class="role-pill" data-role="admin">admin</button>
+              <button type="button" class="role-pill" data-role="user">user</button>
+            </div>
             <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
           </div>
           <div id="users-list" class="user-list" style="margin-top:16px"></div>

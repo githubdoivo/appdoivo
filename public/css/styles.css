@@ -380,6 +380,28 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
 .badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
 .badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
+
+/* Users tab role filter - same pill shape as the role badges, but
+   clickable toggles. Active state fills solid in that role's own color
+   (neutral ink for "all roles"), inactive stays a plain outline. */
+.role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-pill {
+  font-family: var(--body);
+  text-transform: lowercase;
+  letter-spacing: 0.16em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  background: none;
+  border: 1.5px solid var(--line);
+  color: var(--ink-soft);
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.role-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
+.role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
+.role-pill[data-role="user"].active { background: var(--role-user); border-color: var(--role-user); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }

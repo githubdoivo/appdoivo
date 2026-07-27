@@ -29,7 +29,7 @@ export const translations = {
     find_key_ph: 'Escreve o teu nome...',
     find_key_back: 'Já tenho a minha chave',
     find_key_no_match: 'Não encontrado - fala com quem organiza o evento.',
-    find_key_revealed_msg: 'A tua chave, {name}:\n\n{token}\n\n(já copiada para a área de transferência)\n\nGuarda-a num sítio seguro - vais precisar dela sempre que entrares.',
+    find_key_revealed_msg: '{token} copiada! cola-a nas tuas notas.',
     // Header
     logout: 'Sair',
     admin: 'Admin',
@@ -212,7 +212,7 @@ export const translations = {
     find_key_ph: 'Type your name...',
     find_key_back: 'I already have my key',
     find_key_no_match: 'Not found - ask your host.',
-    find_key_revealed_msg: 'Your key, {name}:\n\n{token}\n\n(already copied to your clipboard)\n\nKeep it somewhere safe - you\'ll need it every time you log in.',
+    find_key_revealed_msg: '{token} copied! paste it in your notes.',
     logout: 'Log out',
     admin: 'Admin',
     notif_enable: 'Notifications',

@@ -485,9 +485,9 @@ function roleOf(u) {
 // Role filter narrows the VIEW only - it never affects whether "create"
 // is offered, which is purely about whether the typed name already
 // exists (creating always makes a plain user regardless of this filter).
+let roleFilter = 'all';
 function byRole(users) {
-  const role = $('user-role-filter').value;
-  return role === 'all' ? users : users.filter((u) => roleOf(u) === role);
+  return roleFilter === 'all' ? users : users.filter((u) => roleOf(u) === roleFilter);
 }
 
 function applyUserSearch() {
@@ -516,7 +516,14 @@ async function loadUsers() {
 }
 
 $('user-name-input').addEventListener('input', applyUserSearch);
-$('user-role-filter').addEventListener('change', applyUserSearch);
+
+$('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    roleFilter = btn.dataset.role;
+    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    applyUserSearch();
+  });
+});
 
 $('user-form').addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -192,7 +192,7 @@ test('a first-time user can find their name, claim their key, and get logged str
   const modal = page.locator('.modal-overlay:not(.hidden)');
   await modal.waitFor({ timeout: 5000 });
   const revealed = await page.locator('.modal-message').textContent();
-  assert.match(revealed, /playwright newcomer/i, 'the modal should show the claimed account\'s name');
+  assert.match(revealed, /copiada|copied/i, 'the modal should confirm the key was copied');
   await page.locator('.modal-actions button').first().click();
 
   await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
@@ -315,18 +315,22 @@ test('Manage Users role filter narrows the list to just that role', async () => 
   await page.click('[data-atab="users"]');
   await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
 
-  await page.selectOption('#user-role-filter', 'owner');
+  await page.click('#user-role-filter [data-role="owner"]');
   await page.waitForTimeout(200);
   const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
   assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
+  const ownerPillActive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => el.classList.contains('active'));
+  assert.ok(ownerPillActive, 'the clicked pill should show as active');
 
-  await page.selectOption('#user-role-filter', 'user');
+  await page.click('#user-role-filter [data-role="user"]');
   await page.waitForTimeout(200);
   const userRows = await page.$$eval('#users-list .user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(userRows.includes('Role Filter Test User'), 'filtering to "user" should include the plain user just created');
   assert.ok(!userRows.includes('UI Test Admin'), 'filtering to "user" should exclude the owner');
+  const ownerPillInactive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => !el.classList.contains('active'));
+  assert.ok(ownerPillInactive, 'only one pill should be active at a time');
 
-  await page.selectOption('#user-role-filter', 'all');
+  await page.click('#user-role-filter [data-role="all"]');
   await page.waitForTimeout(200);
   const allRows = await page.$$('#users-list .user-row');
   assert.ok(allRows.length >= 2, 'switching back to "all roles" should restore the full list');
