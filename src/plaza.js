@@ -116,8 +116,12 @@ export function deletePlazaPost(id) {
 }
 
 /**
- * Casts (or changes) a vote on a poll. One vote per user per post - voting
- * again just moves it to the new option. Returns { ok } or { error }.
+ * Casts a vote on a poll. One vote per user per post, permanently - a
+ * second attempt is rejected rather than moving the existing vote. The
+ * SELECT below is the friendly path (a clean error instead of a 500); the
+ * UNIQUE index on (user_id, post_id) is what actually holds under two
+ * simultaneous requests from the same user, caught below as a fallback.
+ * Returns { ok } or { error }.
  */
 export function castPlazaVote(userId, postId, optionId) {
   const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(postId);
@@ -127,9 +131,16 @@ export function castPlazaVote(userId, postId, optionId) {
   const option = db.prepare('SELECT id FROM plaza_poll_options WHERE id = ? AND post_id = ?').get(optionId, postId);
   if (!option) return { error: 'Opção inválida.' };
 
-  db.prepare(`
-    INSERT INTO plaza_poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)
-    ON CONFLICT(user_id, post_id) DO UPDATE SET option_id = excluded.option_id, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-  `).run(postId, optionId, userId);
+  const existing = db.prepare('SELECT id FROM plaza_poll_votes WHERE user_id = ? AND post_id = ?').get(userId, postId);
+  if (existing) return { error: 'Já votaste nesta sondagem.' };
+
+  try {
+    db.prepare('INSERT INTO plaza_poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)').run(postId, optionId, userId);
+  } catch (err) {
+    if (err.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(err.message)) {
+      return { error: 'Já votaste nesta sondagem.' };
+    }
+    throw err;
+  }
   return { ok: true };
 }

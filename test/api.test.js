@@ -678,7 +678,7 @@ test('Plaza notes: any logged-in user can read the feed, any admin (not just the
   await api('DELETE', `/admin/plaza-posts/${asAdmin.data.id}`, { token: ADMIN });
 });
 
-test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote changes it instead of adding another', async () => {
+test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote is rejected rather than moving it', async () => {
   const bad = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Only one'] } });
   assert.equal(bad.status, 400);
 
@@ -701,16 +701,23 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
 
   const vote1 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: pizzaId } });
   assert.equal(vote1.status, 200);
-  let voted = vote1.data.posts.find((p) => p.id === postId);
+  const voted = vote1.data.posts.find((p) => p.id === postId);
   assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 1);
   assert.equal(voted.myOptionId, pizzaId);
 
-  // Voting again for a different option moves the vote, doesn't add one.
+  // A vote is final - trying to switch to a different option is rejected,
+  // and the tally stays exactly as it was after the first vote.
   const vote2 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: sushiId } });
-  voted = vote2.data.posts.find((p) => p.id === postId);
-  assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 0);
-  assert.equal(voted.options.find((o) => o.id === sushiId).votes, 1);
-  assert.equal(voted.myOptionId, sushiId);
+  assert.equal(vote2.status, 400);
+  const after = await api('GET', '/plaza-posts', { token: userToken });
+  const stillPizza = after.data.posts.find((p) => p.id === postId);
+  assert.equal(stillPizza.options.find((o) => o.id === pizzaId).votes, 1);
+  assert.equal(stillPizza.options.find((o) => o.id === sushiId).votes, 0);
+  assert.equal(stillPizza.myOptionId, pizzaId);
+
+  // Same rejection even when re-submitting the option already voted for.
+  const vote3 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: pizzaId } });
+  assert.equal(vote3.status, 400);
 
   const badVote = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: 999999 } });
   assert.equal(badVote.status, 400);

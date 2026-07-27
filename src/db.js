@@ -97,9 +97,9 @@ db.exec(`
     position INTEGER NOT NULL DEFAULT 0
   );
 
-  -- One row per (user, post): voting for a different option in the same
-  -- poll overwrites this row (see castPlazaVote() in routes.js) rather
-  -- than adding a second vote.
+  -- One row per (user, post), enforced below - a vote is final, so
+  -- castPlazaVote() in plaza.js rejects any second attempt rather than
+  -- moving this row to a new option.
   CREATE TABLE IF NOT EXISTS plaza_poll_votes (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id    INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,

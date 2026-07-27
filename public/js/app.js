@@ -402,15 +402,21 @@ function renderPlazaPost(post) {
   }
 
   const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
+  const alreadyVoted = post.myOptionId != null;
   const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
-    const voted = post.myOptionId === o.id;
-    return `
-      <button type="button" class="plaza-poll-option${voted ? ' voted' : ''}" data-vote-post="${post.id}" data-vote-option="${o.id}">
+    const isMine = post.myOptionId === o.id;
+    const classes = `plaza-poll-option${isMine ? ' voted' : ''}${alreadyVoted ? ' readonly' : ''}`;
+    const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
         <span class="plaza-poll-option-label">${esc(o.label)}</span>
-        <span class="plaza-poll-option-pct">${pct}%</span>
-      </button>`;
+        <span class="plaza-poll-option-pct">${pct}%</span>`;
+    // Once you've voted, the choice is locked - render plain divs instead of
+    // buttons so there's nothing left to click, rather than disabling a
+    // button and having to fight its default styles.
+    return alreadyVoted
+      ? `<div class="${classes}">${body}</div>`
+      : `<button type="button" class="${classes}" data-vote-post="${post.id}" data-vote-option="${o.id}">${body}</button>`;
   }).join('');
 
   return `
@@ -435,6 +441,10 @@ function renderPlazaFeed(posts) {
         renderPlazaFeed(updated);
       } catch (err) {
         await showAlert(err.message);
+        // A second tab/click can lose the race against the vote that just
+        // landed - resync from the server so the UI locks to read-only
+        // instead of leaving stale, still-clickable buttons on screen.
+        loadPlaza();
       }
     });
   });

@@ -974,6 +974,7 @@ html.mode-dark body.theme-plaza {
   overflow: hidden;
 }
 .plaza-poll-option.voted { border-color: var(--clay); }
+.plaza-poll-option.readonly { cursor: default; }
 .plaza-poll-option-fill {
   position: absolute;
   inset: 0 auto 0 0;
