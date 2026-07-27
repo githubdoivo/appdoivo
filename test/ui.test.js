@@ -278,7 +278,15 @@ test('Plaza admin can publish a poll from Settings, and a user can vote on it fr
   const questionText = await page.$eval('.plaza-post-poll .plaza-post-text', (el) => el.textContent);
   assert.equal(questionText, 'Where for dinner?');
 
+  // Picking an option only stages it - the submit button starts disabled
+  // and stays disabled until something is picked, nothing is voted yet.
+  const submitBtn = page.locator('.plaza-poll-submit');
+  assert.ok(await submitBtn.isDisabled(), 'submit should start disabled - nothing picked yet');
   await page.click('.plaza-poll-option:has-text("Pizza")');
+  assert.ok(!(await submitBtn.isDisabled()), 'submit should enable once an option is picked');
+  assert.equal(await page.locator('.plaza-poll-option.voted').count(), 0, 'picking an option should not vote by itself');
+
+  await submitBtn.click();
   await page.waitForFunction(() => document.querySelector('.plaza-poll-option.voted')?.textContent.includes('Pizza'));
   const pizzaPct = await page.$eval('.plaza-poll-option.voted .plaza-poll-option-pct', (el) => el.textContent);
   assert.equal(pizzaPct, '100%');

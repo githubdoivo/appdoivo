@@ -998,6 +998,10 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-poll-option.voted { border-color: var(--clay); }
 .plaza-poll-option.readonly { cursor: default; }
+/* Picked but not yet submitted (see the "votar" button below) - dashed,
+   not solid, so a staged choice reads as reversible, unlike .voted's solid
+   border once a vote has actually landed and can't change. */
+.plaza-poll-option.pending { border-style: dashed; border-color: var(--clay); }
 .plaza-poll-option-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -1006,6 +1010,7 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
 .plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+.plaza-poll-submit { margin-top: 12px; }
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {

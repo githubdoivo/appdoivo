@@ -406,10 +406,16 @@ function renderPlazaPost(post) {
 
   const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
   const alreadyVoted = post.myOptionId != null;
+  // A vote is final the instant it's submitted (see castPlazaVote() server-
+  // side) - picking an option here only stages it locally in
+  // pendingPollSelections; nothing reaches the server until "votar" below
+  // is pressed, so a misclick before then costs nothing.
+  const pendingOptionId = pendingPollSelections.get(post.id);
   const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
     const isMine = post.myOptionId === o.id;
-    const classes = `plaza-poll-option${isMine ? ' voted' : ''}${alreadyVoted ? ' readonly' : ''}`;
+    const isPending = !alreadyVoted && pendingOptionId === o.id;
+    const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
     const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
         <span class="plaza-poll-option-label">${esc(o.label)}</span>
@@ -419,34 +425,58 @@ function renderPlazaPost(post) {
     // button and having to fight its default styles.
     return alreadyVoted
       ? `<div class="${classes}">${body}</div>`
-      : `<button type="button" class="${classes}" data-vote-post="${post.id}" data-vote-option="${o.id}">${body}</button>`;
+      : `<button type="button" class="${classes}" data-select-post="${post.id}" data-select-option="${o.id}">${body}</button>`;
   }).join('');
+
+  const submitHtml = alreadyVoted ? '' : `
+      <button type="button" class="small plaza-poll-submit" data-vote-submit="${post.id}" data-vote-option="${pendingOptionId ?? ''}"${pendingOptionId == null ? ' disabled' : ''}>${esc(t('plaza_vote_btn'))}</button>`;
 
   return `
     <article class="plaza-post plaza-post-poll">
       <span class="plaza-eyebrow">${esc(eyebrow)}</span>
       <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
+      ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
     </article>`;
 }
 
+// Poll option picked but not yet submitted, per post id - local-only until
+// "votar" is pressed (see renderPlazaPost()). Cleared once the vote lands.
+const pendingPollSelections = new Map();
+// Last feed rendered, so picking an option can re-render locally (just
+// updating pendingPollSelections) without a round-trip to the server.
+let lastPlazaPosts = [];
+
 function renderPlazaFeed(posts) {
+  lastPlazaPosts = posts;
   $('plaza-feed').innerHTML = posts.map(renderPlazaPost).join('');
   $('plaza-feed-empty').classList.toggle('hidden', posts.length > 0);
-  $('plaza-feed').querySelectorAll('[data-vote-post]').forEach((btn) => {
+
+  $('plaza-feed').querySelectorAll('[data-select-post]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      pendingPollSelections.set(Number(btn.dataset.selectPost), Number(btn.dataset.selectOption));
+      renderPlazaFeed(lastPlazaPosts);
+    });
+  });
+
+  $('plaza-feed').querySelectorAll('[data-vote-submit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      const postId = Number(btn.dataset.voteSubmit);
+      const optionId = Number(btn.dataset.voteOption);
       try {
-        const { posts: updated } = await api(`/plaza-posts/${btn.dataset.votePost}/vote`, {
+        const { posts: updated } = await api(`/plaza-posts/${postId}/vote`, {
           method: 'POST',
-          body: { optionId: Number(btn.dataset.voteOption) },
+          body: { optionId },
         });
+        pendingPollSelections.delete(postId);
         renderPlazaFeed(updated);
       } catch (err) {
         await showAlert(err.message);
+        pendingPollSelections.delete(postId);
         // A second tab/click can lose the race against the vote that just
         // landed - resync from the server so the UI locks to read-only
-        // instead of leaving stale, still-clickable buttons on screen.
+        // instead of leaving stale, still-selectable options on screen.
         loadPlaza();
       }
     });
