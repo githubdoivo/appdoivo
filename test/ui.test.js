@@ -213,16 +213,18 @@ test('a first-time user can find their name, claim their key, and get logged str
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
 });
 
-/* --------------------------------- Plaza ----------------------------------- */
+/* ------------------------- Wall (admin posts/polls) ------------------------ */
+// Internal id/routes/CSS classes stay "plaza" (see tab_plaza in i18n.js for
+// the displayed-vs-internal mapping) - only the label changed to "Wall".
 
-test('Plaza opens by default and shows a posted announcement in the feed', async () => {
+test('Wall opens by default and shows a posted announcement in the feed', async () => {
   const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
-  assert.ok(plazaActive, 'Plaza should be the tab shown right after logging in');
+  assert.ok(plazaActive, 'Wall should be the tab shown right after logging in');
 
   await page.waitForSelector('.plaza-post-announcement', { timeout: 5000 });
   const announcementText = await page.$eval('.plaza-post-announcement .plaza-post-text', (el) => el.textContent);
@@ -232,7 +234,7 @@ test('Plaza opens by default and shows a posted announcement in the feed', async
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
 });
 
-test('Plaza admin can pin an announcement (owner-only), and it floats to the top with a pinned badge', async () => {
+test('Wall admin can pin an announcement (owner-only), and it floats to the top with a pinned badge', async () => {
   const older = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'older announcement' } });
   const newer = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'newer announcement' } });
 
@@ -257,7 +259,7 @@ test('Plaza admin can pin an announcement (owner-only), and it floats to the top
   await api('DELETE', `/admin/plaza-posts/${newer.id}`, { token: ADMIN });
 });
 
-test('Plaza admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
+test('Wall admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="plaza"]');
@@ -404,8 +406,6 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
   await page.waitForTimeout(200);
   const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
   assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
-  const allPillInactiveAfterOwner = await page.$eval('#user-role-filter [data-role="all"]', (el) => !el.classList.contains('active'));
-  assert.ok(allPillInactiveAfterOwner, '"all roles" should deactivate once a specific role is picked');
 
   // Adding "user" on top of "owner" should widen the view (OR), not
   // replace it - both pills stay active, and both roles show up.
@@ -420,18 +420,14 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
   const badgesOwnerUser = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(!badgesOwnerUser.includes('admin'), 'owner+user filter should exclude admins');
 
-  // All three selected should show everyone - same as "all roles", not an
-  // empty/narrow result from ANDing three mutually-exclusive roles together.
+  // All three selected should show everyone - same as no filter at all, not
+  // an empty/narrow result from ANDing three mutually-exclusive roles
+  // together.
   await page.click('#user-role-filter [data-role="admin"]');
   await page.waitForTimeout(200);
   const allThreeRows = await page.$$('#users-list .user-row');
-  const unfilteredRows = await (async () => {
-    await page.click('#user-role-filter [data-role="all"]');
-    await page.waitForTimeout(200);
-    const rows = await page.$$('#users-list .user-row');
-    return rows.length;
-  })();
-  assert.equal(allThreeRows.length, unfilteredRows, 'owner+admin+user selected together should match the unfiltered count');
+  const unfiltered = await api('GET', '/admin/users', { token: ADMIN });
+  assert.equal(allThreeRows.length, unfiltered.length, 'owner+admin+user selected together should match the unfiltered count');
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
@@ -502,10 +498,11 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
   assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
 
-  // The Wall tab was opened up to admins temporarily for testing - it's
-  // owner-only again now, whole tab hidden.
+  // The Plaza (pseudonym-unmasking) admin tab - internal id "wall", see
+  // tab_chat in i18n.js - was opened up to admins temporarily for testing;
+  // it's owner-only again now, whole tab hidden.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(wallTabHidden, 'non-owner admin should no longer see the Wall tab');
+  assert.ok(wallTabHidden, 'non-owner admin should no longer see the Plaza admin tab');
 
   const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
   assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');
@@ -517,7 +514,7 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
-  assert.ok(!plazaTabHidden, 'non-owner admin can also post to Plaza now');
+  assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');
 
   // Voting control (Best Look) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
@@ -584,7 +581,7 @@ test('?tab=&night= deep-links land on the right tab/night, then clean the URL', 
   await context.close();
 });
 
-test('a Wall notification\'s ?tab=chat deep link actually opens the Wall', async () => {
+test('a Plaza notification\'s ?tab=chat deep link actually opens the Plaza', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.goto(`${base}/?tab=chat`);
@@ -592,11 +589,11 @@ test('a Wall notification\'s ?tab=chat deep link actually opens the Wall', async
   await page.waitForTimeout(300);
 
   const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
-  assert.ok(chatActive, '?tab=chat should select the Wall tab, same as rata/outfit already do');
+  assert.ok(chatActive, '?tab=chat should select the Plaza tab, same as rata/outfit already do');
   await context.close();
 });
 
-test('reloading the page always opens on Plaza, regardless of the last tab used', async () => {
+test('reloading the page always opens on Wall, regardless of the last tab used', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.click('[data-tab="chat"]');
@@ -607,25 +604,25 @@ test('reloading the page always opens on Plaza, regardless of the last tab used'
   await page.waitForTimeout(300);
 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
-  assert.ok(plazaActive, 'a reload should always land on Plaza, not wherever was last open');
+  assert.ok(plazaActive, 'a reload should always land on Wall, not wherever was last open');
   await context.close();
 });
 
-test('with ENABLE_PLAZA off (prod default), Plaza is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
+test('with ENABLE_PLAZA off (prod default), Wall is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
   process.env.ENABLE_PLAZA = 'false';
   try {
     const context = await iphoneContext('iPhone 13');
     const page = await loginPage(context, ADMIN, '/');
 
     const plazaTabHidden = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('hidden'));
-    assert.ok(plazaTabHidden, 'Plaza tab should be hidden in the main app when the flag is off');
+    assert.ok(plazaTabHidden, 'Wall tab should be hidden in the main app when the flag is off');
     const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
-    assert.ok(rataActive, 'A Rata should be the landing tab instead of Plaza when Plaza is disabled');
+    assert.ok(rataActive, 'A Rata should be the landing tab instead of Wall when the Plaza feature is disabled');
 
     await page.goto(`${base}/settings.html`);
     await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
     const plazaAdminTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
-    assert.ok(plazaAdminTabHidden, 'Plaza admin tab should be hidden even for the owner when the flag is off');
+    assert.ok(plazaAdminTabHidden, 'Wall admin tab should be hidden even for the owner when the flag is off');
 
     await context.close();
   } finally {
