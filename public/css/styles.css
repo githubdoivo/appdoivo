@@ -720,8 +720,14 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   font-size: 0.8rem;
   color: var(--rata);
   word-break: break-all;
-  text-align: right;
+  text-align: left;
   cursor: pointer;
+  /* Always its own line below the name, not a flex sibling sharing the
+     row - otherwise it only wraps once the name is long enough to push
+     it off, so short names show it inline and long names don't, an
+     inconsistent zig-zag down the list. */
+  flex-basis: 100%;
+  margin-top: 4px;
 }
 .user-row-token.censored { letter-spacing: 2px; }
 /* Brief confirmation that a click also copied the key - doesn't touch the
