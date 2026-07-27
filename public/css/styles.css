@@ -259,6 +259,14 @@ input[type="password"] { text-transform: none; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
+/* Poll option entries in the admin Plaza form (see #plaza-poll-options in
+   settings.html) are a word or two ("Pizza", "Sushi") - the shared input
+   padding above is sized for full-width text like the message textarea
+   next to it, so a short option's placeholder sits in a lot of empty
+   vertical space and reads as oversized next to it. Same font-size as
+   every other input (consistency), just a tighter box for short content. */
+.plaza-poll-option-input { padding: 9px 14px; }
+
 /* A Rata's suggestion box and the Wall's message field read as too thick
    at the generic input padding - thinner here specifically. */
 #suggest-text, #chat-text { padding: 9px 12px; }
