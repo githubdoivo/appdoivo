@@ -67,7 +67,15 @@ router.post('/auth/login', loginRateLimit, (req, res) => {
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
-  res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
+  // wall_pseudonym isn't null until the user's first Wall post (see
+  // getOrAssignPseudonym in chat.js) - fine here, it's their own, not
+  // anyone else's.
+  const row = db.prepare('SELECT wall_pseudonym FROM users WHERE id = ?').get(req.user.id);
+  res.json({
+    ...req.user,
+    wallPseudonym: row.wall_pseudonym,
+    adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
+  });
 });
 
 router.post('/me/tutorial-seen', (req, res) => {
@@ -113,6 +121,16 @@ router.post('/me/change-token', (req, res) => {
   db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
     .run(newHash, encryptToken(newToken), req.user.id);
   res.json({ ok: true });
+});
+
+// Self-service: any logged-in user can re-roll their OWN Wall pseudonym,
+// at most once a day (see resetPseudonym() in chat.js). Distinct from the
+// owner-only /admin/users/:id/wall-pseudonym/reset, which can target
+// anyone - this one only ever touches req.user's own account.
+router.post('/me/wall-pseudonym/reset', (req, res) => {
+  const result = resetPseudonym(req.user.id);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
 });
 
 /* ------------------------------ Consequences ----------------------------- */
@@ -205,7 +223,10 @@ router.get('/chat/messages', (req, res) => {
 router.post('/chat/messages', async (req, res) => {
   const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
-  res.status(201).json({ ok: true });
+  // Their own pseudonym, so the client can show/refresh "your Wall
+  // nickname" right after a first post assigns one - not a golden-rule
+  // leak, it's the poster's own.
+  res.status(201).json({ ok: true, pseudonym: result.pseudonym });
   // Announce by pseudonym only - same golden rule as the rest of the Wall,
   // nobody but the owner learns who's behind a post. Skip the poster's own
   // device, they don't need telling about their own message.

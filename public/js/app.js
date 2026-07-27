@@ -5,7 +5,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
-import { showAlert } from './modal.js';
+import { showAlert, showConfirm } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -62,6 +62,7 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
+  renderMyPseudonym(me.wallPseudonym);
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -220,6 +221,29 @@ function stopChatPolling() {
   }
 }
 
+// Shows the caller's own current Wall pseudonym, with a self-service
+// button to re-roll it (once a day - see POST /me/wall-pseudonym/reset).
+// Nothing to show yet if they haven't posted for the first time.
+function renderMyPseudonym(pseudonym) {
+  const el = $('my-pseudonym-line');
+  if (!pseudonym) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <span>${esc(t('wall_my_pseudonym_label'))} <strong>${esc(pseudonym)}</strong></span>
+    <button type="button" class="small ghost" id="reset-my-pseudonym-btn">${esc(t('wall_reset_pseudonym_btn'))}</button>`;
+  $('reset-my-pseudonym-btn').addEventListener('click', async () => {
+    if (!(await showConfirm(t('confirm_reset_my_pseudonym')))) return;
+    try {
+      const r = await api('/me/wall-pseudonym/reset', { method: 'POST' });
+      renderMyPseudonym(r.pseudonym);
+    } catch (err) {
+      await showAlert(err.message);
+    }
+  });
+}
+
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
@@ -245,8 +269,9 @@ $('chat-form').addEventListener('submit', async (e) => {
   const text = input.value.trim();
   if (!text) return;
   try {
-    await api('/chat/messages', { method: 'POST', body: { text } });
+    const r = await api('/chat/messages', { method: 'POST', body: { text } });
     input.value = '';
+    renderMyPseudonym(r.pseudonym);
     await loadChat();
     $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
   } catch (err) {
