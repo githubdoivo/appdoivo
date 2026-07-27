@@ -117,8 +117,8 @@ async function boot() {
       // done now, so it's owner-only again, whole tab hidden rather than just
       // the sensitive card within it.
       document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
-      // Any admin - not just the owner - can now post to Plaza (see
-      // requireAdmin on PUT /admin/plaza-note), so the tab stays visible.
+      // Any admin - not just the owner - can post to Plaza (see requireAdmin
+      // on POST /admin/plaza-posts), so the tab stays visible.
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -744,11 +744,12 @@ async function loadWallPseudonyms() {
 
 /* --------------------------------- Plaza ---------------------------------- */
 // Owner/admin-authored feed on everyone's Plaza landing page (see GET
-// /plaza-posts in app.js). Two post types: a plain note, or a poll with
-// 2-6 options. Publishing broadcasts a notification.
+// /plaza-posts in app.js). Two post types: a plain announcement, or a poll
+// with 2-6 options. Publishing broadcasts a notification. Pinning an
+// announcement (owner-only) floats it to the top of the feed for everyone.
 
 const MAX_POLL_OPTIONS = 6;
-let plazaPostType = 'note';
+let plazaPostType = 'announcement';
 
 $('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -777,7 +778,8 @@ async function loadPlazaPosts() {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_note')}</span>
+            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
+            ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
             <span class="muted">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</span>
           </div>
         </div>
@@ -790,6 +792,7 @@ async function loadPlazaPosts() {
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
+          ${isOwner && p.type === 'announcement' ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
         </div>
       </div>`).join('')
@@ -800,6 +803,22 @@ async function loadPlazaPosts() {
       if (!(await showConfirm(t('plaza_confirm_delete_post')))) return;
       try {
         await api(`/admin/plaza-posts/${b.dataset.delPost}`, { method: 'DELETE' });
+        loadPlazaPosts();
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
+
+  // Owner-only (see requireOwner on PATCH .../pin) - button only rendered
+  // for the owner above, matching the backend gate rather than a new check.
+  $('plaza-posts-list').querySelectorAll('[data-pin-post]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      try {
+        await api(`/admin/plaza-posts/${b.dataset.pinPost}/pin`, {
+          method: 'PATCH',
+          body: { pinned: b.dataset.pinned !== 'true' },
+        });
         loadPlazaPosts();
       } catch (err) {
         await showAlert(err.message);

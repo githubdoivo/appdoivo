@@ -365,9 +365,8 @@ function applyDeepLinkParams() {
 wireNotifButton('notif-btn');
 
 /* --------------------------------- Plaza ---------------------------------- */
-// Landing tab: the host's pinned note (if any) plus a quick, read-only
-// glance at each other tab's current state - reuses the same endpoints
-// those tabs themselves call, just summarized down to one line each.
+// Landing tab: a feed of owner/admin-authored posts (announcements + polls),
+// pinned ones first. See renderPlazaPost() below.
 
 // "5 seconds ago" style, from a raw "YYYY-MM-DD HH:MM:SS[.mmm]" UTC
 // timestamp (see formatTimeInZone() server-side for the equivalent
@@ -385,17 +384,21 @@ function timeAgo(dbTimestamp) {
   return t(day === 1 ? 'time_ago_day' : 'time_ago_days', { n: day });
 }
 
-// Renders one post as either a plain-note "torn column" or a poll "magazine
-// card" (see .plaza-post-note/.plaza-post-poll in styles.css) - the two
-// banner styles the owner asked for so a glance tells notes and polls apart.
+// Renders one post as either a plain-announcement "torn column" or a poll
+// "magazine card" (see .plaza-post-announcement/.plaza-post-poll in
+// styles.css) - the two banner styles the owner asked for so a glance tells
+// announcements and polls apart. Pinned announcements (owner-only, see the
+// admin Plaza page) already sort first from the API - this just marks them
+// visually so a pin doesn't blend into the rest of the feed.
 function renderPlazaPost(post) {
-  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_note_label');
+  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_announcement_label');
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
+  const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
 
   if (post.type !== 'poll') {
     return `
-      <article class="plaza-post plaza-post-note">
-        <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+      <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
+        <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
         <p class="plaza-post-text">${esc(post.text)}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;

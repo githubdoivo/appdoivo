@@ -79,14 +79,18 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 
-  -- Plaza feed: owner/admin-authored posts, most-recent-first. 'note' is a
-  -- plain announcement (wifi password, house rules, release notes); 'poll'
-  -- adds options for everyone to vote on (e.g. picking a dinner spot).
+  -- Plaza feed: owner/admin-authored posts, most-recent-first. 'announcement'
+  -- is a plain one (wifi password, house rules, release notes); 'poll' adds
+  -- options for everyone to vote on (e.g. picking a dinner spot). Only
+  -- announcements can be pinned (pinned_at set) - owner-only, see
+  -- pinPlazaPost() in plaza.js. Pinned ones float to the top of the feed,
+  -- most-recently-pinned first; multiple can be pinned at once.
   CREATE TABLE IF NOT EXISTS plaza_posts (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     type       TEXT NOT NULL,
     author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text       TEXT NOT NULL,
+    pinned_at  TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 
@@ -281,6 +285,13 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_contestant_user_night
     ON contestants(user_id, night) WHERE user_id IS NOT NULL;
 `);
+
+// Migration: owner-only pinning for Plaza announcements (renamed from
+// "note"). NULL means not pinned; a timestamp both flags it and orders
+// multiple pins by most-recently-pinned first.
+if (!columnExists('plaza_posts', 'pinned_at')) {
+  db.exec('ALTER TABLE plaza_posts ADD COLUMN pinned_at TEXT');
+}
 
 /** Generates a secure, readable token. */
 export function generateToken() {

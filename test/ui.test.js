@@ -215,8 +215,8 @@ test('a first-time user can find their name, claim their key, and get logged str
 
 /* --------------------------------- Plaza ----------------------------------- */
 
-test('Plaza opens by default and shows a posted note in the feed', async () => {
-  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'wifi: mossycottage' } });
+test('Plaza opens by default and shows a posted announcement in the feed', async () => {
+  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
@@ -224,12 +224,37 @@ test('Plaza opens by default and shows a posted note in the feed', async () => {
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
   assert.ok(plazaActive, 'Plaza should be the tab shown right after logging in');
 
-  await page.waitForSelector('.plaza-post-note', { timeout: 5000 });
-  const noteText = await page.$eval('.plaza-post-note .plaza-post-text', (el) => el.textContent);
-  assert.equal(noteText, 'wifi: mossycottage');
+  await page.waitForSelector('.plaza-post-announcement', { timeout: 5000 });
+  const announcementText = await page.$eval('.plaza-post-announcement .plaza-post-text', (el) => el.textContent);
+  assert.equal(announcementText, 'wifi: mossycottage');
 
   await context.close();
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+});
+
+test('Plaza admin can pin an announcement (owner-only), and it floats to the top with a pinned badge', async () => {
+  const older = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'older announcement' } });
+  const newer = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'newer announcement' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: 5000 });
+
+  const olderRow = page.locator('#plaza-posts-list .user-row', { hasText: 'older announcement' });
+  await olderRow.locator('[data-pin-post]').click();
+  await page.waitForFunction(() => document.querySelectorAll('.plaza-pinned-badge').length === 1);
+
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('.plaza-post-announcement.pinned', { timeout: 5000 });
+
+  const firstPostText = await page.$eval('.plaza-post-announcement .plaza-post-text', (el) => el.textContent);
+  assert.equal(firstPostText, 'older announcement', 'the pinned announcement should be first, even though it is older');
+
+  await context.close();
+  await api('DELETE', `/admin/plaza-posts/${older.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${newer.id}`, { token: ADMIN });
 });
 
 test('Plaza admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {

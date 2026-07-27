@@ -6,17 +6,19 @@ const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 
 /**
- * The full Plaza feed, most-recent-first. Each post carries its author's
- * name and, for polls, every option with its live vote tally and whichever
- * option (if any) userId has picked - so the frontend can highlight it and
- * offer "change your vote" instead of "vote" once someone already has.
+ * The full Plaza feed. Pinned announcements come first (most-recently-
+ * pinned first - multiple can be pinned at once), then everything else
+ * most-recent-first. Each post carries its author's name and, for polls,
+ * every option with its live vote tally and whichever option (if any)
+ * userId has picked - so the frontend can highlight it and offer "change
+ * your vote" instead of "vote" once someone already has.
  */
 export function listPlazaPosts(userId) {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
   `).all();
 
   const optionsStmt = db.prepare(`
@@ -45,10 +47,10 @@ export function listPlazaPosts(userId) {
  */
 export function listPlazaPostsForAdmin() {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
   `).all();
 
   const optionsStmt = db.prepare(`
@@ -75,15 +77,15 @@ export function listPlazaPostsForAdmin() {
 }
 
 /**
- * Creates a note or a poll. Notes ignore `options`; polls require 2-6
- * non-empty option labels. Returns { ok, post } or { error }.
+ * Creates an announcement or a poll. Announcements ignore `options`; polls
+ * require 2-6 non-empty option labels. Returns { ok, post } or { error }.
  */
 export function createPlazaPost(authorId, { type, text, options }) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText) return { error: 'Escreve o texto da publicação.' };
   if (trimmedText.length > MAX_TEXT_LENGTH) return { error: `Máximo ${MAX_TEXT_LENGTH} caracteres.` };
 
-  if (type !== 'note' && type !== 'poll') return { error: 'Tipo de publicação inválido.' };
+  if (type !== 'announcement' && type !== 'poll') return { error: 'Tipo de publicação inválido.' };
 
   let cleanOptions = [];
   if (type === 'poll') {
@@ -112,6 +114,26 @@ export function deletePlazaPost(id) {
   const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
   if (!post) return { error: 'Publicação não encontrada.' };
   db.prepare('DELETE FROM plaza_posts WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+/**
+ * Pins or unpins an announcement - owner-only (enforced by the route, see
+ * requireOwner on PATCH /admin/plaza-posts/:id/pin), and only announcements
+ * can be pinned, not polls. Multiple can be pinned at once; pinned_at both
+ * flags it and orders pins by most-recently-pinned first (see
+ * listPlazaPosts()). Returns { ok } or { error }.
+ */
+export function pinPlazaPost(id, pinned) {
+  const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(id);
+  if (!post) return { error: 'Publicação não encontrada.' };
+  if (post.type !== 'announcement') return { error: 'Só é possível fixar anúncios.' };
+
+  if (pinned) {
+    db.prepare("UPDATE plaza_posts SET pinned_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(id);
+  } else {
+    db.prepare('UPDATE plaza_posts SET pinned_at = NULL WHERE id = ?').run(id);
+  }
   return { ok: true };
 }
 

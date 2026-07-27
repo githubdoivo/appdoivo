@@ -36,7 +36,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost } from './plaza.js';
 
 const router = Router();
 
@@ -146,9 +146,11 @@ router.post('/me/change-token', (req, res) => {
 
 /* ---------------------------------- Plaza --------------------------------- */
 // Owner/admin-authored feed shown on the Plaza tab - the app's landing
-// page. Two post types: a plain note (welcome message, wifi password,
-// house rules, release notes) and a poll (e.g. picking a dinner spot),
-// most-recent-first. Any admin can post, not just the owner.
+// page. Two post types: a plain announcement (welcome message, wifi
+// password, house rules, release notes) and a poll (e.g. picking a dinner
+// spot). Any admin can post, not just the owner; only the owner can pin an
+// announcement (see PATCH .../pin below) - pinned ones float to the top of
+// the feed, most-recently-pinned first.
 //
 // Gated behind ENABLE_PLAZA - it's being reworked from a single pinned
 // note into this real posts feed, so it stays QA-only (see fly.qa.toml)
@@ -175,8 +177,8 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
     title: { pt: 'Plaza', en: 'Plaza' },
     body: isPoll
       ? { pt: 'nova sondagem na Plaza - vem votar.', en: 'new poll on the Plaza - come vote.' }
-      : { pt: 'o anfitrião deixou uma nova nota na Plaza.', en: 'your host left a new note on the Plaza.' },
-    tag: 'plaza-note',
+      : { pt: 'o anfitrião deixou um novo anúncio na Plaza.', en: 'your host left a new announcement on the Plaza.' },
+    tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
 });
@@ -185,6 +187,16 @@ router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const result = deletePlazaPost(Number(req.params.id));
   if (result.error) return res.status(404).json({ error: result.error });
+  res.json(result);
+});
+
+// Owner-only: pins or unpins an announcement so it floats to the top of
+// everyone's Plaza feed. Not exposed to regular admins - same reuse of
+// requireOwner as the rest of the golden-rule-gated admin actions.
+router.patch('/admin/plaza-posts/:id/pin', requireOwner, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  const result = pinPlazaPost(Number(req.params.id), !!req.body?.pinned);
+  if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
 });
 

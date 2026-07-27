@@ -925,9 +925,11 @@ html.mode-dark body.theme-plaza {
   color: var(--clay);
 }
 
-/* Plaza feed: most-recent-first posts, two banner styles so a glance tells
-   a note from a poll - a plain torn front-page column for notes, a boxed
-   "magazine spread" card for polls (the interactive one). */
+/* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
+   glance tells an announcement from a poll - a plain torn front-page column
+   for announcements, a boxed "magazine spread" card for polls (the
+   interactive one). A pinned announcement borrows the same boxed treatment
+   so it reads as prominent rather than blending into the column. */
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
 .plaza-post:first-child { border-top: none; padding-top: 0; }
@@ -941,6 +943,29 @@ html.mode-dark body.theme-plaza {
   text-wrap: balance;
 }
 .plaza-byline { font-family: var(--body); font-size: 0.78rem; font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+
+.plaza-post-announcement.pinned {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin: 10px 0;
+}
+.plaza-post-announcement.pinned:first-child { margin-top: 0; }
+.plaza-pinned-badge {
+  display: inline-block;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+  background: var(--clay);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
 
 .plaza-post-poll {
   background: var(--paper-2);
