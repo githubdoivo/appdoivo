@@ -440,16 +440,10 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
   assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
 
-  // The Wall tab itself is visible now (so any admin can fix the timezone
-  // there), but who's-behind-each-pseudonym stays owner-only.
+  // The Wall tab was opened up to admins temporarily for testing - it's
+  // owner-only again now, whole tab hidden.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(!wallTabHidden, 'non-owner admin should be able to see the Wall tab (for its timezone setting)');
-
-  await page.click('[data-atab="wall"]');
-  const pseudonymsCardHidden = await page.$eval('#wall-pseudonyms-card', (el) => el.classList.contains('hidden'));
-  assert.ok(pseudonymsCardHidden, 'non-owner admin must not see who is behind each Wall pseudonym');
-  const wallTimezoneVisible = await page.$eval('#timezone-wall-card', (el) => !el.classList.contains('hidden'));
-  assert.ok(wallTimezoneVisible, 'non-owner admin should see the timezone setting on the Wall tab');
+  assert.ok(wallTabHidden, 'non-owner admin should no longer see the Wall tab');
 
   const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
   assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');

@@ -97,9 +97,11 @@ async function boot() {
     // instead of showing controls that would just 403 if clicked.
     $('user-search-card').classList.add('hidden');
     $('reset-content-card').classList.add('hidden');
-    // Same for the Wall tab: the timezone setting there is fine for any
-    // admin, but who's-behind-each-pseudonym stays owner-only.
-    $('wall-pseudonyms-card').classList.add('hidden');
+    // The Wall tab (pseudonym mapping + its timezone card) was opened up to
+    // regular admins temporarily so testers could see it existed - that's
+    // done now, so it's owner-only again, whole tab hidden rather than just
+    // the sensitive card within it.
+    document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
     // The Plaza note is owner-only end to end (backend requireOwner too) -
     // hide the whole tab rather than a control that would just 403.
     document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
