@@ -78,8 +78,10 @@ function showApp(me) {
   // but now that it has a live registration form, a late-resolving response
   // from this redundant call could silently wipe out text someone's mid-
   // typing (the newer selectTab() load re-renders the same DOM nodes).
-  // Always opens on Plaza - a notification's own ?tab= (handled right
-  // after) is the only thing allowed to land somewhere else.
+  // Always opens on the announcements feed (internally "plaza", now
+  // labeled "Wall" - see the tab nav comment in index.html) - a
+  // notification's own ?tab= (handled right after) is the only thing
+  // allowed to land somewhere else.
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
 }
@@ -544,8 +546,14 @@ function applyNight() {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
   });
   document.body.classList.toggle('theme-rata', currentTab === 'rata');
-  document.body.classList.toggle('theme-mural', currentTab === 'chat');
-  document.body.classList.toggle('theme-plaza', currentTab === 'plaza');
+  // Theme classes follow the DISPLAYED name, not the internal tab id: the
+  // chat feature is now labeled "Plaza" and gets the plaza-motif
+  // background (city-square/agora), while the old plaza/announcements
+  // feature is now labeled "Wall" and gets the mural texture that used to
+  // belong to the chat tab - swapped on purpose, see index.html's tab nav
+  // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
+  document.body.classList.toggle('theme-mural', currentTab === 'plaza');
+  document.body.classList.toggle('theme-plaza', currentTab === 'chat');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });

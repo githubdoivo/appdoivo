@@ -145,8 +145,10 @@ router.post('/me/change-token', (req, res) => {
 });
 
 /* ---------------------------------- Plaza --------------------------------- */
-// Owner/admin-authored feed shown on the Plaza tab - the app's landing
-// page. Two post types: a plain announcement (welcome message, wifi
+// Owner/admin-authored feed shown on the Wall tab (internal name "plaza"
+// stays as-is - only the displayed label changed, see tab_plaza in
+// i18n.js) - the app's landing page. Two post types: a plain announcement
+// (welcome message, wifi
 // password, house rules, release notes) and a poll (e.g. picking a dinner
 // spot). Any admin can post, not just the owner; only the owner can pin a
 // post, either type (see PATCH .../pin below) - pinned ones float to the
@@ -174,10 +176,10 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   res.json(result);
   const isPoll = req.body?.type === 'poll';
   await broadcast({
-    title: { pt: 'Plaza', en: 'Plaza' },
+    title: { pt: 'Wall', en: 'Wall' },
     body: isPoll
-      ? { pt: 'nova sondagem na Plaza - vem votar.', en: 'new poll on the Plaza - come vote.' }
-      : { pt: 'o anfitrião deixou um novo anúncio na Plaza.', en: 'your host left a new announcement on the Plaza.' },
+      ? { pt: 'nova sondagem na Wall - vem votar.', en: 'new poll on the Wall - come vote.' }
+      : { pt: 'o anfitrião deixou um novo anúncio na Wall.', en: 'your host left a new announcement on the Wall.' },
     tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
@@ -292,7 +294,8 @@ router.post('/votes', (req, res) => {
 
 /* ---------------------------------- Chat ---------------------------------- */
 // Open, ephemeral group chat - keeps only the last 15 messages, no time
-// expiry (see src/chat.js).
+// expiry (see src/chat.js). Displayed as "Plaza" now (internal name "chat"
+// stays as-is, see tab_chat in i18n.js).
 
 router.get('/chat/messages', (req, res) => {
   res.json({ messages: listMessages() });
@@ -302,13 +305,13 @@ router.post('/chat/messages', async (req, res) => {
   const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json({ ok: true });
-  // Announce by pseudonym only - same golden rule as the rest of the Wall,
-  // nobody but the owner learns who's behind a post. Skip the poster's own
-  // device, they don't need telling about their own message.
+  // Announce by pseudonym only - same golden rule as the rest of the
+  // Plaza, nobody but the owner learns who's behind a post. Skip the
+  // poster's own device, they don't need telling about their own message.
   await broadcast({
-    title: { pt: 'Wall', en: 'Wall' },
-    body: { pt: `${result.pseudonym} acabou de afixar algo novo na wall.`, en: `${result.pseudonym} just pinned something new into the wall.` },
-    tag: 'wall',
+    title: { pt: 'Plaza', en: 'Plaza' },
+    body: { pt: `${result.pseudonym} acabou de partilhar algo novo na plaza.`, en: `${result.pseudonym} just shared something new in the plaza.` },
+    tag: 'plaza-share',
     url: '/?tab=chat',
   }, { excludeUserId: req.user.id });
 });

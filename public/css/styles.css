@@ -516,9 +516,15 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
 .tab { -webkit-appearance: none; appearance: none; border-radius: 0; }
 .tab:focus, .tab:focus-visible { outline: none; }
 .tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
-/* --clay reads pale/salmon against the light-mode paper - too soft to
-   read as "selected" at a glance. Darken it specifically for light mode;
-   dark mode's warmer gold clay already has enough contrast as-is. */
+/* Fallback only - reachable when no content theme is active (admin never
+   sets one, see settings.js), where the plain light-mode --clay reads
+   pale/salmon against the paper, too soft to read as "selected" at a
+   glance. Every regular-page theme below (furnished/swamp/rata/mural/
+   plaza) sets its own --clay-active matching its own --clay, which - set
+   directly on body, closer in the tree than this html-level default -
+   wins whenever one of those is active, restoring each tab's own color.
+   Dark mode's warmer clays already have enough contrast as-is, no
+   equivalent override needed there. */
 html.mode-light { --clay-active: #b5624a; }
 /* Regular pages only: A Rata shares --clay with every other tab there,
    making its active underline indistinguishable from Wall's right next to
@@ -725,6 +731,7 @@ body.theme-furnished {
   --line-2:   #c0cec6;
   --clay:     #305049;
   --clay-2:   #43655c;
+  --clay-active: #305049;
   --rata:     #305049;
   --ot:       #305049;
   --ot-2:     #43655c;
@@ -746,6 +753,7 @@ body.theme-swamp {
   --line-2:   #bfc7a4;
   --clay:     #55632c;
   --clay-2:   #6c7b3c;
+  --clay-active: #55632c;
   --rata:     #55632c;
   --ot:       #55632c;
   --ot-2:     #6c7b3c;
@@ -868,6 +876,7 @@ body.theme-mural {
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
+  --clay-active: #8f3a26;
   --rata:     #8f3a26;
   background-color: #c48f6d;
   background-image:
@@ -915,6 +924,7 @@ body.theme-plaza {
   --line-2:   #d9d2bf;
   --clay:     #7a2419;
   --clay-2:   #94301f;
+  --clay-active: #7a2419;
   --rata:     #7a2419;
   background-color: #e9e4d6;
   background-image:
