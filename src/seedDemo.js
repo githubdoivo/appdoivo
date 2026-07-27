@@ -4,7 +4,7 @@
 // are normally event-specific and only ever added manually by the owner -
 // that's still true in production (SEED_DEMO is never set there). QA is the
 // one exception: 5 contestants per night are seeded automatically from the
-// demo user template, so Best Look is testable without manual setup.
+// demo user template, so Snatch is testable without manual setup.
 import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
@@ -14,7 +14,7 @@ const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
   'Leonor Matos', 'Marta Freitas', 'Ivo Lopes', 'Nádia Barros',
-  'Paula Neves', 'Becky Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
+  'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
 

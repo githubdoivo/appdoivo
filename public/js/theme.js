@@ -1,5 +1,5 @@
 // Dark/light mode: a global UI-chrome preference, independent of the
-// per-night Best Look/Rata theming (furnished/swamp/rata), which keeps
+// per-night Snatch/Rata theming (furnished/swamp/rata), which keeps
 // its own decorative branding regardless of light/dark choice.
 const KEY = 'appivo_mode';
 

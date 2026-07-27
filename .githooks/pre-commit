@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Blocks a commit if the test suite fails. Wired up automatically via
+# package.json's postinstall (git config core.hooksPath .githooks) - see
+# CONTRIBUTING.md. Plain script on purpose, no husky/dependency: this repo
+# stays dependency-light by policy.
+set -e
+
+echo "Running tests before commit..."
+npm test

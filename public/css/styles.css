@@ -30,6 +30,14 @@
   --radius:   4px;
   --shadow:   0 12px 40px rgba(43, 39, 33, 0.12);
 
+  /* Small-text and heading scale - consolidates what used to be ~15 one-off
+     sizes (0.6-0.78rem for badges/buttons/labels, 1.15-1.5rem for card and
+     section headings) into two tiers each. */
+  --text-xs:   0.66rem;
+  --text-sm:   0.74rem;
+  --heading-sm: 1.2rem;
+  --heading-md: 1.4rem;
+
   --serif:  'Cormorant Garamond', Georgia, serif;
   --body:   'EB Garamond', Georgia, serif;
   --script: 'Italianno', cursive;
@@ -52,7 +60,10 @@ html.mode-light {
   --paper-2:  #faf5f7;
   --paper-3:  #fdfafc;
   --ink:      #4a3f4d;
-  --ink-soft: #8d7f92;
+  /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
+     italic/muted text (.muted, .help, table cells) this drives all over
+     Settings and the admin panel. Darkened to ~5:1. */
+  --ink-soft: #756980;
   --line:     #e3d4e0;
   --line-2:   #ecdfe8;
   --rata:     #8fbfae;
@@ -66,6 +77,8 @@ html.mode-light {
   --role-owner: #8a4630;
   --role-admin: #3f7d1f;
   --role-user:  #1f6d78;
+  --type-announcement: #8a6a1f;
+  --type-poll: #6b4c8a;
 }
 
 html.mode-dark {
@@ -87,6 +100,8 @@ html.mode-dark {
   --role-owner: #a96b4b;
   --role-admin: #8fd167;
   --role-user:  #6fd6e0;
+  --type-announcement: #d4b04a;
+  --type-poll: #b294d6;
 }
 
 * { box-sizing: border-box; }
@@ -116,7 +131,7 @@ body {
   position: fixed;
   right: 10px;
   bottom: calc(6px + env(safe-area-inset-bottom));
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.4;
   letter-spacing: 0.02em;
@@ -259,6 +274,14 @@ input[type="password"] { text-transform: none; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
+/* Poll option entries in the admin Plaza form (see #plaza-poll-options in
+   settings.html) are a word or two ("Pizza", "Sushi") - the shared input
+   padding above is sized for full-width text like the message textarea
+   next to it, so a short option's placeholder sits in a lot of empty
+   vertical space and reads as oversized next to it. Same font-size as
+   every other input (consistency), just a tighter box for short content. */
+.plaza-poll-option-input { padding: 9px 14px; }
+
 /* A Rata's suggestion box and the Wall's message field read as too thick
    at the generic input padding - thinner here specifically. */
 #suggest-text, #chat-text { padding: 9px 12px; }
@@ -298,17 +321,20 @@ select {
 }
 select:hover { border-color: var(--clay); }
 
-/* Night picker atop Best Look admin - governs contestants/votes/voter-log
-   below it too, not just the voting-control card, so it sits outside any
-   single card. Reuses the main app's .theme-switch component instead of a
-   <select>, but this page never gets a body.theme-outfit class (no per-
+/* Night picker atop Best Look admin - the single source of truth for the
+   whole tab (voting control, contestants, results, voter log all read it),
+   so it sits outside any single card. Reuses the main app's .theme-switch
+   component, but this page never gets a body.theme-outfit class (no per-
    night reskin here), so var(--ot) is never set - fill the active state
-   with the general accent instead. */
+   with the general accent instead. Scoped by #id rather than .night-switch:
+   it needs to outrank .theme-switch button.active on specificity, not just
+   source order, or the active label renders as near-white text on a
+   transparent fill - invisible against the page background. */
 .night-switch { margin-bottom: 18px; }
-.night-switch button.active { background: var(--clay); color: var(--paper-3); }
-.night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
+#admin-night-switch button.active,
+#admin-night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
 
-label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+label.field { display: block; margin: 4px 0 2px; font-size: var(--text-sm); font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
 /* -------------------------------- Botoes --------------------------------- */
 
@@ -341,10 +367,10 @@ button.ghost, a.ghost {
   color: var(--ink);
   border: 1px solid var(--line);
   padding: 7px 12px;
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
 }
 button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transparent; }
-button.small { padding: 7px 12px; font-size: 0.64rem; letter-spacing: 0.14em; }
+button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
 button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
@@ -378,7 +404,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   border: 1.5px solid var(--clay);
   color: var(--clay);
@@ -395,15 +421,35 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
 .badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
 
+/* Publication-type badges (Regular/Poll on the Wall admin list) - own
+   colors, deliberately outside the role palette above so a post type is
+   never visually confused with a user role. */
+.badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
+.badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
+
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
    (neutral ink for "all roles"), inactive stays a plain outline. */
 .role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Regular/Poll type + Publish share one row above the message/poll
+   fields, so the type choice (which controls what's shown below) and the
+   submit action both read as form-level controls, not buried under the
+   content. Publish pushed to the far edge via space-between since it's
+   the row's only other child. */
+.plaza-post-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.plaza-post-footer button[type="submit"] { margin-left: auto; }
 .role-pill {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   background: none;
   border: 1.5px solid var(--line);
@@ -466,7 +512,13 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* Scrolling itself is for phones with a narrow viewport - the visible
+     scrollbar track/thumb it drags in on desktop browsers doesn't belong
+     on what's designed as a mobile-first PWA (mobile browsers already
+     auto-hide it). Swipe/scroll still works, just without the chrome. */
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 /* In light mode, --line is pale enough to blend into the paper background
    on its own. In dark mode it reads as a bright, hard "limit" line across
    the whole tab row - blend it toward the background so it stays a subtle
@@ -497,24 +549,25 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
 .tab { -webkit-appearance: none; appearance: none; border-radius: 0; }
 .tab:focus, .tab:focus-visible { outline: none; }
 .tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
-/* --clay reads pale/salmon against the light-mode paper - too soft to
-   read as "selected" at a glance. Darken it specifically for light mode;
-   dark mode's warmer gold clay already has enough contrast as-is. */
+/* Fallback only - reachable when no content theme is active (admin never
+   sets one, see settings.js), where the plain light-mode --clay reads
+   pale/salmon against the paper, too soft to read as "selected" at a
+   glance. Every regular-page theme below (furnished/swamp/rata/mural/
+   plaza) sets its own --clay-active matching its own --clay, which - set
+   directly on body, closer in the tree than this html-level default -
+   wins whenever one of those is active, restoring each tab's own color.
+   Dark mode's warmer clays already have enough contrast as-is, no
+   equivalent override needed there. */
 html.mode-light { --clay-active: #b5624a; }
-/* A Rata shares --clay with every other tab, making its active underline
-   indistinguishable from Wall's right next to it. Rats are grey - give
-   it its own neutral grey accent instead. */
-[data-tab="rata"].active,
-[data-atab="rata"].active { border-bottom-color: #83807a; }
-html.mode-light [data-tab="rata"].active,
-html.mode-light [data-atab="rata"].active { border-bottom-color: #5c5952; }
-
-/* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
-   under "Votos da noite" in admin). The page-level .tab component above is
-   sized for primary navigation and reads as oversized/heavy at this
-   secondary, in-card scale. */
-#votes-night-tabs { gap: 16px; margin-bottom: 14px; }
-#votes-night-tabs .tab { font-size: 0.95rem; padding: 2px 0 8px; border-bottom-width: 1.5px; }
+/* Regular pages only: A Rata shares --clay with every other tab there,
+   making its active underline indistinguishable from Wall's right next to
+   it - rats are grey, so it gets its own neutral accent instead. The admin
+   page never switches body theme per tab (unlike the regular pages, whose
+   active-tab color intentionally follows whichever section's theme is
+   open), so every admin tab already renders identically without this -
+   scoped to [data-tab], not [data-atab], on purpose. */
+[data-tab="rata"].active { border-bottom-color: #83807a; }
+html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 /* --------------------------------- Cards --------------------------------- */
 
@@ -609,7 +662,7 @@ html.mode-light .hero-line { color: var(--ink); }
   min-width: 40px;
 }
 .tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
-.tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+.tier .votes { font-family: var(--body); font-size: var(--text-sm); text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 .tier li:nth-child(-n+3) .name { font-weight: 600; }
 
 /* Podium reveal in progress (before "all"): the row already states its own
@@ -626,7 +679,7 @@ html.mode-light .hero-line { color: var(--ink); }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
+th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: var(--text-xs); color: var(--ink-soft); font-weight: 600; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 /* Lista de utilizadores em cartoes (evita colunas espremidas em mobile) */
@@ -672,7 +725,13 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 /* ------------------------------ Responsivo ------------------------------- */
 
 @media (max-width: 480px) {
-  body { font-size: 17px; }
+  /* Most small text (badges, muted captions, help text, table cells,
+     buttons) is sized in rem, which tracks the root element's font-size,
+     not body's - so bumping body alone left all of that stuck at the
+     browser's plain 16px default. Raising html's font-size scales that
+     whole tier up together with the bigger body copy below. */
+  html { font-size: 18px; }
+  body { font-size: 19px; }
   .brand .brand-name { font-size: 1.9rem; }
   .tabs { gap: 20px; }
   .tab { font-size: 1.2rem; }
@@ -711,6 +770,7 @@ body.theme-furnished {
   --line-2:   #c0cec6;
   --clay:     #305049;
   --clay-2:   #43655c;
+  --clay-active: #305049;
   --rata:     #305049;
   --ot:       #305049;
   --ot-2:     #43655c;
@@ -732,6 +792,7 @@ body.theme-swamp {
   --line-2:   #bfc7a4;
   --clay:     #55632c;
   --clay-2:   #6c7b3c;
+  --clay-active: #55632c;
   --rata:     #55632c;
   --ot:       #55632c;
   --ot-2:     #6c7b3c;
@@ -849,11 +910,15 @@ body.theme-mural {
      a subtle lift. Tightened to match the other themes' rhythm. */
   --paper-3:  #deb69c;
   --ink:      #3d2216;
-  --ink-soft: #7a5138;
+  /* Was #7a5138 (~3.7:1 against --paper-3) - failed WCAG AA for the
+     italic/muted text (bylines, help text) this drives on the Wall tab.
+     Darkened to ~5.3:1. */
+  --ink-soft: #5c3c29;
   --line:     #a9744f;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
+  --clay-active: #8f3a26;
   --rata:     #8f3a26;
   background-color: #c48f6d;
   background-image:
@@ -884,54 +949,62 @@ html.mode-dark body.theme-mural .card {
 }
 
 /* Plaza: a daily-front-page mood - newsprint cream, near-black ink, a
-   broadsheet masthead red, and a faint halftone dot screen instead of
-   the other themes' illustrated patterns (real newsprint texture, not
-   a motif). Applied to <body> only while the Plaza tab is active (see
-   applyNight() in app.js), same mechanism as every other night theme. */
+   broadsheet masthead red - with a faint city-square skyline tile (facade
+   silhouettes, a small fountain, a cobblestone ground line) as the motif,
+   same illustrated-texture technique the other themes use (A Rata's paw
+   prints, Best Look's lattice), just low-opacity enough that it reads as
+   paper grain rather than a foreground illustration - content on top has
+   to stay legible. Applied to <body> only while the Plaza tab is active
+   (see applyNight() in app.js), same mechanism as every other night theme. */
 body.theme-plaza {
-  --paper:    #e9e4d6;
-  --paper-2:  #f1ede1;
-  --paper-3:  #f7f4ea;
-  --ink:      #262220;
-  --ink-soft: #6b625a;
-  --line:     #c9c0ac;
-  --line-2:   #d9d2bf;
-  --clay:     #7a2419;
-  --clay-2:   #94301f;
-  --rata:     #7a2419;
-  background-color: #e9e4d6;
+  --paper:    #e8c97a;
+  --paper-2:  #eed392;
+  --paper-3:  #f3ddac;
+  --ink:      #2e2411;
+  --ink-soft: #6e5a2c;
+  --line:     #c7a659;
+  --line-2:   #d4b876;
+  --clay:     #8a5c00;
+  --clay-2:   #a67815;
+  --clay-active: #8a5c00;
+  --rata:     #8a5c00;
+  background-color: #e8c97a;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23262220' fill-opacity='0.07'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-plaza {
-  --paper:    #1a1815;
-  --paper-2:  #221f1a;
-  --paper-3:  #2a271f;
-  --ink:      #e8e2d3;
-  --ink-soft: #a89d89;
-  --line:     #3a3527;
-  --line-2:   #494332;
-  --clay:     #c2604a;
-  --clay-2:   #d3745c;
-  --rata:     #c2604a;
-  background-color: #1a1815;
+  /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
+     plain brown-black. Lifted + more saturated so it reads as dark gold. */
+  --paper:    #2b2107;
+  --paper-2:  #342809;
+  --paper-3:  #3e300c;
+  --ink:      #f0e0ac;
+  --ink-soft: #b8a06a;
+  --line:     #4a3d1f;
+  --line-2:   #5c4c28;
+  --clay:     #e0a83a;
+  --clay-2:   #edc06a;
+  --rata:     #e0a83a;
+  background-color: #2b2107;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23e8e2d3' fill-opacity='0.05'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 .plaza-eyebrow {
   display: block;
   font-family: var(--body);
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--clay);
 }
 
-/* Plaza feed: most-recent-first posts, two banner styles so a glance tells
-   a note from a poll - a plain torn front-page column for notes, a boxed
-   "magazine spread" card for polls (the interactive one). */
+/* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
+   glance tells an announcement from a poll - a plain torn front-page column
+   for announcements, a boxed "magazine spread" card for polls (the
+   interactive one). A pinned announcement borrows the same boxed treatment
+   so it reads as prominent rather than blending into the column. */
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
 .plaza-post:first-child { border-top: none; padding-top: 0; }
@@ -944,7 +1017,30 @@ html.mode-dark body.theme-plaza {
   border-left: 3px solid var(--clay);
   text-wrap: balance;
 }
-.plaza-byline { font-family: var(--body); font-size: 0.78rem; font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+.plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+
+.plaza-post-announcement.pinned {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin: 10px 0;
+}
+.plaza-post-announcement.pinned:first-child { margin-top: 0; }
+.plaza-pinned-badge {
+  display: inline-block;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+  background: var(--clay);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
 
 .plaza-post-poll {
   background: var(--paper-2);
@@ -955,6 +1051,9 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-post-poll.plaza-post:first-child { margin-top: 0; }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+/* A poll is already boxed - pinning it upgrades the border rather than
+   changing layout, same "stands out" intent as the announcement treatment. */
+.plaza-post-poll.pinned { border-color: var(--clay); }
 
 .plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .plaza-poll-option {
@@ -974,6 +1073,11 @@ html.mode-dark body.theme-plaza {
   overflow: hidden;
 }
 .plaza-poll-option.voted { border-color: var(--clay); }
+.plaza-poll-option.readonly { cursor: default; }
+/* Picked but not yet submitted (see the "votar" button below) - dashed,
+   not solid, so a staged choice reads as reversible, unlike .voted's solid
+   border once a vote has actually landed and can't change. */
+.plaza-poll-option.pending { border-style: dashed; border-color: var(--clay); }
 .plaza-poll-option-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -982,6 +1086,7 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
 .plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+.plaza-poll-submit { margin-top: 12px; }
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {
@@ -1011,7 +1116,7 @@ html.mode-dark body.theme-plaza {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.22em;
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
   color: var(--ot);
 }
 .outfit-theme-eyebrow #outfit-theme-name { font-weight: 600; }
@@ -1031,7 +1136,7 @@ html.mode-dark body.theme-plaza {
   background: transparent;
   color: var(--ink-soft);
   padding: 8px 14px;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
   border-radius: 0;
 }
@@ -1129,8 +1234,8 @@ html.mode-dark body.theme-plaza {
 .chat-msg { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .chat-msg:last-child { border-bottom: none; }
 .chat-msg-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
-.chat-msg-author { font-family: var(--body); font-size: 0.66rem; text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
-.chat-msg-time { font-family: var(--body); font-size: 0.62rem; color: var(--ink-soft); white-space: nowrap; }
+.chat-msg-author { font-family: var(--body); font-size: var(--text-xs); text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
+.chat-msg-time { font-family: var(--body); font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
 .chat-empty { color: var(--ink-soft); font-style: italic; font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }

@@ -652,24 +652,25 @@ test('an invalid language value falls back to pt', async () => {
 
 /* ----------------------------------- Plaza ----------------------------------- */
 
-test('Plaza notes: any logged-in user can read the feed, any admin (not just the owner) can post a note', async () => {
-  const forbidden = await api('POST', '/admin/plaza-posts', { token: userToken, body: { type: 'note', text: 'sneaky' } });
+test('Plaza announcements: any logged-in user can read the feed, any admin (not just the owner) can post one', async () => {
+  const forbidden = await api('POST', '/admin/plaza-posts', { token: userToken, body: { type: 'announcement', text: 'sneaky' } });
   assert.equal(forbidden.status, 403);
 
-  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'welcome! wifi: mossycottage' } });
+  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'welcome! wifi: mossycottage' } });
   assert.equal(create.status, 200);
 
   const read = await api('GET', '/plaza-posts', { token: userToken });
   assert.equal(read.status, 200);
-  const note = read.data.posts.find((p) => p.id === create.data.id);
-  assert.equal(note.type, 'note');
-  assert.equal(note.text, 'welcome! wifi: mossycottage');
-  assert.equal(note.author, 'Test Admin');
+  const announcement = read.data.posts.find((p) => p.id === create.data.id);
+  assert.equal(announcement.type, 'announcement');
+  assert.equal(announcement.text, 'welcome! wifi: mossycottage');
+  assert.equal(announcement.author, 'Test Admin');
+  assert.equal(announcement.pinnedAt, null);
 
   // A regular (non-owner) admin can post to Plaza too now.
   const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Plaza Admin Poster' } });
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  const asAdmin = await api('POST', '/admin/plaza-posts', { token: nonOwnerAdmin.data.token, body: { type: 'note', text: 'admin-posted note' } });
+  const asAdmin = await api('POST', '/admin/plaza-posts', { token: nonOwnerAdmin.data.token, body: { type: 'announcement', text: 'admin-posted announcement' } });
   assert.equal(asAdmin.status, 200);
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
   await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
@@ -678,7 +679,45 @@ test('Plaza notes: any logged-in user can read the feed, any admin (not just the
   await api('DELETE', `/admin/plaza-posts/${asAdmin.data.id}`, { token: ADMIN });
 });
 
-test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote changes it instead of adding another', async () => {
+test('Plaza pinning: owner-only, either post type, pinned ones sort first (most-recently-pinned first)', async () => {
+  const older = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'older announcement' } });
+  const newer = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Pizza', 'Sushi'] } });
+  const unpinned = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'never pinned' } });
+
+  const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Plaza Pin Tester' } });
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  // Not owner - forbidden, regardless of post type.
+  const forbidden = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: nonOwnerAdmin.data.token, body: { pinned: true } });
+  assert.equal(forbidden.status, 403);
+  const forbiddenPoll = await api('PATCH', `/admin/plaza-posts/${newer.data.id}/pin`, { token: nonOwnerAdmin.data.token, body: { pinned: true } });
+  assert.equal(forbiddenPoll.status, 403);
+
+  // Pin the announcement first, then the poll - most-recently-pinned first,
+  // and a poll can be pinned same as an announcement.
+  const pin1 = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
+  assert.equal(pin1.status, 200);
+  const pin2 = await api('PATCH', `/admin/plaza-posts/${newer.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
+  assert.equal(pin2.status, 200);
+
+  const feed = await api('GET', '/plaza-posts', { token: userToken });
+  const pinnedIds = feed.data.posts.filter((p) => p.pinnedAt).map((p) => p.id);
+  assert.deepEqual(pinnedIds, [newer.data.id, older.data.id]);
+  assert.ok(feed.data.posts.findIndex((p) => p.id === older.data.id) < feed.data.posts.findIndex((p) => p.id === unpinned.data.id));
+
+  const unpin = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: ADMIN, body: { pinned: false } });
+  assert.equal(unpin.status, 200);
+  const afterUnpin = await api('GET', '/plaza-posts', { token: userToken });
+  assert.equal(afterUnpin.data.posts.find((p) => p.id === older.data.id).pinnedAt, null);
+
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${older.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${newer.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${unpinned.data.id}`, { token: ADMIN });
+});
+
+test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote is rejected rather than moving it', async () => {
   const bad = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Only one'] } });
   assert.equal(bad.status, 400);
 
@@ -701,16 +740,23 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
 
   const vote1 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: pizzaId } });
   assert.equal(vote1.status, 200);
-  let voted = vote1.data.posts.find((p) => p.id === postId);
+  const voted = vote1.data.posts.find((p) => p.id === postId);
   assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 1);
   assert.equal(voted.myOptionId, pizzaId);
 
-  // Voting again for a different option moves the vote, doesn't add one.
+  // A vote is final - trying to switch to a different option is rejected,
+  // and the tally stays exactly as it was after the first vote.
   const vote2 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: sushiId } });
-  voted = vote2.data.posts.find((p) => p.id === postId);
-  assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 0);
-  assert.equal(voted.options.find((o) => o.id === sushiId).votes, 1);
-  assert.equal(voted.myOptionId, sushiId);
+  assert.equal(vote2.status, 400);
+  const after = await api('GET', '/plaza-posts', { token: userToken });
+  const stillPizza = after.data.posts.find((p) => p.id === postId);
+  assert.equal(stillPizza.options.find((o) => o.id === pizzaId).votes, 1);
+  assert.equal(stillPizza.options.find((o) => o.id === sushiId).votes, 0);
+  assert.equal(stillPizza.myOptionId, pizzaId);
+
+  // Same rejection even when re-submitting the option already voted for.
+  const vote3 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: pizzaId } });
+  assert.equal(vote3.status, 400);
 
   const badVote = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: 999999 } });
   assert.equal(badVote.status, 400);
@@ -719,7 +765,7 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
 });
 
 test('Plaza posts: only an admin can delete, and deleting one leaves the rest of the feed untouched', async () => {
-  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'temporary note' } });
+  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;
 
   const forbidden = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: userToken });
@@ -741,11 +787,14 @@ test('Plaza is gated behind ENABLE_PLAZA - off (prod default) means every endpoi
     const read = await api('GET', '/plaza-posts', { token: userToken });
     assert.equal(read.status, 404);
 
-    const write = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'should not save' } });
+    const write = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'should not save' } });
     assert.equal(write.status, 404);
 
     const vote = await api('POST', '/plaza-posts/1/vote', { token: userToken, body: { optionId: 1 } });
     assert.equal(vote.status, 404);
+
+    const pin = await api('PATCH', '/admin/plaza-posts/1/pin', { token: ADMIN, body: { pinned: true } });
+    assert.equal(pin.status, 404);
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }

@@ -14,6 +14,7 @@ import {
   currentConsequence,
   pendingCount,
   mySuggestionToday,
+  assignConsequenceUser,
 } from './consequences.js';
 import {
   contestantsForNight,
@@ -36,7 +37,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost } from './plaza.js';
 
 const router = Router();
 
@@ -145,10 +146,14 @@ router.post('/me/change-token', (req, res) => {
 });
 
 /* ---------------------------------- Plaza --------------------------------- */
-// Owner/admin-authored feed shown on the Plaza tab - the app's landing
-// page. Two post types: a plain note (welcome message, wifi password,
-// house rules, release notes) and a poll (e.g. picking a dinner spot),
-// most-recent-first. Any admin can post, not just the owner.
+// Owner/admin-authored feed shown on the Wall tab (internal name "plaza"
+// stays as-is - only the displayed label changed, see tab_plaza in
+// i18n.js) - the app's landing page. Two post types: a plain announcement
+// (welcome message, wifi
+// password, house rules, release notes) and a poll (e.g. picking a dinner
+// spot). Any admin can post, not just the owner; only the owner can pin a
+// post, either type (see PATCH .../pin below) - pinned ones float to the
+// top of the feed, most-recently-pinned first.
 //
 // Gated behind ENABLE_PLAZA - it's being reworked from a single pinned
 // note into this real posts feed, so it stays QA-only (see fly.qa.toml)
@@ -172,11 +177,11 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   res.json(result);
   const isPoll = req.body?.type === 'poll';
   await broadcast({
-    title: { pt: 'Plaza', en: 'Plaza' },
+    title: { pt: 'Wall', en: 'Wall' },
     body: isPoll
-      ? { pt: 'nova sondagem na Plaza - vem votar.', en: 'new poll on the Plaza - come vote.' }
-      : { pt: 'o anfitrião deixou uma nova nota na Plaza.', en: 'your host left a new note on the Plaza.' },
-    tag: 'plaza-note',
+      ? { pt: 'nova sondagem na Wall - vem votar.', en: 'new poll on the Wall - come vote.' }
+      : { pt: 'o anfitrião deixou um novo anúncio na Wall.', en: 'your host left a new announcement on the Wall.' },
+    tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
 });
@@ -185,6 +190,16 @@ router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const result = deletePlazaPost(Number(req.params.id));
   if (result.error) return res.status(404).json({ error: result.error });
+  res.json(result);
+});
+
+// Owner-only: pins or unpins any post (announcement or poll) so it floats
+// to the top of everyone's Plaza feed. Not exposed to regular admins - same
+// reuse of requireOwner as the rest of the golden-rule-gated admin actions.
+router.patch('/admin/plaza-posts/:id/pin', requireOwner, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  const result = pinPlazaPost(Number(req.params.id), !!req.body?.pinned);
+  if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
 });
 
@@ -280,7 +295,8 @@ router.post('/votes', (req, res) => {
 
 /* ---------------------------------- Chat ---------------------------------- */
 // Open, ephemeral group chat - keeps only the last 15 messages, no time
-// expiry (see src/chat.js).
+// expiry (see src/chat.js). Displayed as "Plaza" now (internal name "chat"
+// stays as-is, see tab_chat in i18n.js).
 
 router.get('/chat/messages', (req, res) => {
   res.json({ messages: listMessages() });
@@ -290,13 +306,13 @@ router.post('/chat/messages', async (req, res) => {
   const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json({ ok: true });
-  // Announce by pseudonym only - same golden rule as the rest of the Wall,
-  // nobody but the owner learns who's behind a post. Skip the poster's own
-  // device, they don't need telling about their own message.
+  // Announce by pseudonym only - same golden rule as the rest of the
+  // Plaza, nobody but the owner learns who's behind a post. Skip the
+  // poster's own device, they don't need telling about their own message.
   await broadcast({
-    title: { pt: 'Wall', en: 'Wall' },
-    body: { pt: `${result.pseudonym} acabou de afixar algo novo na wall.`, en: `${result.pseudonym} just pinned something new into the wall.` },
-    tag: 'wall',
+    title: { pt: 'Plaza', en: 'Plaza' },
+    body: { pt: `${result.pseudonym} acabou de partilhar algo novo na plaza.`, en: `${result.pseudonym} just shared something new in the plaza.` },
+    tag: 'plaza-share',
     url: '/?tab=chat',
   }, { excludeUserId: req.user.id });
 });
@@ -482,8 +498,11 @@ router.get('/admin/consequences', (req, res) => {
   // suggested, but the moment it's revealed it jumps to the top too
   // (revealed_at, once set, is always more recent than created_at).
   const rows = db.prepare(`
-    SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author
-    FROM consequences c JOIN users u ON u.id = c.user_id
+    SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author,
+           c.assigned_user_id, a.name AS assignedName
+    FROM consequences c
+    JOIN users u ON u.id = c.user_id
+    LEFT JOIN users a ON a.id = c.assigned_user_id
     ORDER BY COALESCE(c.revealed_at, c.created_at) DESC
   `).all();
   res.json(rows);
@@ -494,6 +513,20 @@ router.post('/admin/consequences/reveal', async (req, res) => {
   const revealed = await revealRandomConsequence();
   if (!revealed) return res.status(404).json({ error: 'Nao ha consequencias pendentes - ja foi tudo revelado.' });
   res.json({ ok: true, revealed });
+});
+
+// Owner-only: records who's actually holding the rata for a revealed
+// consequence - only the owner can see this at the party and enter it, it
+// can't be inferred from anything in the app.
+router.patch('/admin/consequences/:id/assign', requireOwner, (req, res) => {
+  const userId = req.body?.userId === null ? null : Number(req.body?.userId);
+  if (userId !== null) {
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  }
+  const updated = assignConsequenceUser(Number(req.params.id), userId);
+  if (!updated) return res.status(404).json({ error: 'Consequencia nao encontrada.' });
+  res.json({ ok: true, consequence: updated });
 });
 
 // Contestants for a night. registered_by/partner_name are set only for
@@ -591,7 +624,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `candidaturas abertas - já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `entries are open - you can now register for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-registration',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -606,7 +639,7 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `votação aberta - já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `voting is open - you can now vote for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -622,7 +655,7 @@ router.post('/admin/voting/:night/close', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
   await broadcast({
-    title: { pt: 'Best Look', en: 'Best Look' },
+    title: { pt: 'Snatch', en: 'Snatch' },
     body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
     tag: 'outfit-closed',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -633,7 +666,7 @@ const REVEAL_NOTIFY = {
   third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
   second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
   first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
-  all: { pt: 'já podes ver quem venceu o Best Look!', en: 'you can now see who won Best Look!' },
+  all: { pt: 'já podes ver quem venceu o Snatch!', en: 'you can now see who won Snatch!' },
 };
 
 // Advances the results reveal one stage: hidden -> third -> second -> first
@@ -646,7 +679,7 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   res.json({ ok: true, night, resultsPhase: phase });
   if (REVEAL_NOTIFY[phase]) {
     await broadcast({
-      title: { pt: 'Best Look', en: 'Best Look' },
+      title: { pt: 'Snatch', en: 'Snatch' },
       body: REVEAL_NOTIFY[phase],
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,

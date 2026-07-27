@@ -5,7 +5,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
-import { showAlert } from './modal.js';
+import { showAlert, showConfirm } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -70,7 +70,11 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
-  if (plazaEnabled) loadPlaza();
+  // Plaza/Wall is the default landing tab (see currentTab above) - starts
+  // polling immediately, same as any other tab does once it's the one
+  // showing. A Rata's own load below is just a preload for a smooth first
+  // switch, not polling - it isn't the visible tab yet.
+  if (plazaEnabled) startPlazaPolling();
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -78,8 +82,10 @@ function showApp(me) {
   // but now that it has a live registration form, a late-resolving response
   // from this redundant call could silently wipe out text someone's mid-
   // typing (the newer selectTab() load re-renders the same DOM nodes).
-  // Always opens on Plaza - a notification's own ?tab= (handled right
-  // after) is the only thing allowed to land somewhere else.
+  // Always opens on the announcements feed (internally "plaza", now
+  // labeled "Wall" - see the tab nav comment in index.html) - a
+  // notification's own ?tab= (handled right after) is the only thing
+  // allowed to land somewhere else.
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
 }
@@ -198,6 +204,10 @@ function setFindKeyMode(on) {
   findKeyMode = on;
   const input = $('token-input');
   $('login-error').textContent = '';
+  // Find-key mode never uses this line (no password to reject) - its
+  // reserved empty-line height was pushing the results away from the
+  // search bar they belong to.
+  $('login-error').classList.toggle('hidden', on);
   $('find-key-results').innerHTML = '';
   input.value = '';
   input.type = on ? 'text' : 'password';
@@ -275,11 +285,10 @@ function selectTab(tab) {
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
   applyNight();
-  if (currentTab === 'plaza') loadPlaza();
-  if (currentTab === 'rata') loadConsequences();
-  if (currentTab === 'outfit') loadVotes();
-  if (currentTab === 'chat') startChatPolling();
-  else stopChatPolling();
+  if (currentTab === 'plaza') startPlazaPolling(); else stopPlazaPolling();
+  if (currentTab === 'rata') startRataPolling(); else stopRataPolling();
+  if (currentTab === 'outfit') startOutfitPolling(); else stopOutfitPolling();
+  if (currentTab === 'chat') startChatPolling(); else stopChatPolling();
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {
@@ -365,9 +374,8 @@ function applyDeepLinkParams() {
 wireNotifButton('notif-btn');
 
 /* --------------------------------- Plaza ---------------------------------- */
-// Landing tab: the host's pinned note (if any) plus a quick, read-only
-// glance at each other tab's current state - reuses the same endpoints
-// those tabs themselves call, just summarized down to one line each.
+// Landing tab: a feed of owner/admin-authored posts (announcements + polls),
+// pinned ones first. See renderPlazaPost() below.
 
 // "5 seconds ago" style, from a raw "YYYY-MM-DD HH:MM:SS[.mmm]" UTC
 // timestamp (see formatTimeInZone() server-side for the equivalent
@@ -385,59 +393,120 @@ function timeAgo(dbTimestamp) {
   return t(day === 1 ? 'time_ago_day' : 'time_ago_days', { n: day });
 }
 
-// Renders one post as either a plain-note "torn column" or a poll "magazine
-// card" (see .plaza-post-note/.plaza-post-poll in styles.css) - the two
-// banner styles the owner asked for so a glance tells notes and polls apart.
+// Renders one post as either a plain-announcement "torn column" or a poll
+// "magazine card" (see .plaza-post-announcement/.plaza-post-poll in
+// styles.css) - the two banner styles the owner asked for so a glance tells
+// announcements and polls apart. Pinned announcements (owner-only, see the
+// admin Plaza page) already sort first from the API - this just marks them
+// visually so a pin doesn't blend into the rest of the feed.
 function renderPlazaPost(post) {
-  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_note_label');
+  const eyebrow = t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement');
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
+  const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
 
   if (post.type !== 'poll') {
     return `
-      <article class="plaza-post plaza-post-note">
-        <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+      <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
+        <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
         <p class="plaza-post-text">${esc(post.text)}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
 
   const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
+  const alreadyVoted = post.myOptionId != null;
+  // A vote is final the instant it's submitted (see castPlazaVote() server-
+  // side) - picking an option here only stages it locally in
+  // pendingPollSelections; nothing reaches the server until "votar" below
+  // is pressed, so a misclick before then costs nothing.
+  const pendingOptionId = pendingPollSelections.get(post.id);
   const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
-    const voted = post.myOptionId === o.id;
-    return `
-      <button type="button" class="plaza-poll-option${voted ? ' voted' : ''}" data-vote-post="${post.id}" data-vote-option="${o.id}">
+    const isMine = post.myOptionId === o.id;
+    const isPending = !alreadyVoted && pendingOptionId === o.id;
+    const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
+    const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
         <span class="plaza-poll-option-label">${esc(o.label)}</span>
-        <span class="plaza-poll-option-pct">${pct}%</span>
-      </button>`;
+        <span class="plaza-poll-option-pct">${pct}%</span>`;
+    // Once you've voted, the choice is locked - render plain divs instead of
+    // buttons so there's nothing left to click, rather than disabling a
+    // button and having to fight its default styles.
+    return alreadyVoted
+      ? `<div class="${classes}">${body}</div>`
+      : `<button type="button" class="${classes}" data-select-post="${post.id}" data-select-option="${o.id}">${body}</button>`;
   }).join('');
 
+  const submitHtml = alreadyVoted ? '' : `
+      <button type="button" class="small plaza-poll-submit" data-vote-submit="${post.id}" data-vote-option="${pendingOptionId ?? ''}"${pendingOptionId == null ? ' disabled' : ''}>${esc(t('plaza_vote_btn'))}</button>`;
+
   return `
-    <article class="plaza-post plaza-post-poll">
-      <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+    <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
+      <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
       <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
+      ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
     </article>`;
 }
 
+// Poll option picked but not yet submitted, per post id - local-only until
+// "votar" is pressed (see renderPlazaPost()). Cleared once the vote lands.
+const pendingPollSelections = new Map();
+// Last feed rendered, so picking an option can re-render locally (just
+// updating pendingPollSelections) without a round-trip to the server.
+let lastPlazaPosts = [];
+
 function renderPlazaFeed(posts) {
+  lastPlazaPosts = posts;
   $('plaza-feed').innerHTML = posts.map(renderPlazaPost).join('');
   $('plaza-feed-empty').classList.toggle('hidden', posts.length > 0);
-  $('plaza-feed').querySelectorAll('[data-vote-post]').forEach((btn) => {
+
+  $('plaza-feed').querySelectorAll('[data-select-post]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      pendingPollSelections.set(Number(btn.dataset.selectPost), Number(btn.dataset.selectOption));
+      renderPlazaFeed(lastPlazaPosts);
+    });
+  });
+
+  $('plaza-feed').querySelectorAll('[data-vote-submit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      const postId = Number(btn.dataset.voteSubmit);
+      const optionId = Number(btn.dataset.voteOption);
       try {
-        const { posts: updated } = await api(`/plaza-posts/${btn.dataset.votePost}/vote`, {
+        const { posts: updated } = await api(`/plaza-posts/${postId}/vote`, {
           method: 'POST',
-          body: { optionId: Number(btn.dataset.voteOption) },
+          body: { optionId },
         });
+        pendingPollSelections.delete(postId);
         renderPlazaFeed(updated);
       } catch (err) {
         await showAlert(err.message);
+        pendingPollSelections.delete(postId);
+        // A second tab/click can lose the race against the vote that just
+        // landed - resync from the server so the UI locks to read-only
+        // instead of leaving stale, still-selectable options on screen.
+        loadPlaza();
       }
     });
   });
+}
+
+// Polled while the tab is open, same as chat, so a new/pinned post or a
+// poll's live tally shows up without a manual reload.
+let plazaPollTimer = null;
+
+function startPlazaPolling() {
+  loadPlaza();
+  if (plazaPollTimer) return;
+  plazaPollTimer = setInterval(loadPlaza, 4000);
+}
+
+function stopPlazaPolling() {
+  if (plazaPollTimer) {
+    clearInterval(plazaPollTimer);
+    plazaPollTimer = null;
+  }
 }
 
 async function loadPlaza() {
@@ -448,11 +517,34 @@ async function loadPlaza() {
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
+// Polled while the tab is open, so a consequence revealed by the
+// scheduled cron (or an admin's manual reveal) shows up without a manual reload.
+let rataPollTimer = null;
+
+function startRataPolling() {
+  loadConsequences();
+  if (rataPollTimer) return;
+  rataPollTimer = setInterval(loadConsequences, 5000);
+}
+
+function stopRataPolling() {
+  if (rataPollTimer) {
+    clearInterval(rataPollTimer);
+    rataPollTimer = null;
+  }
+}
 
 async function loadConsequences() {
   try {
     const data = await api('/consequences/current');
     $('current-consequence').textContent = data.current ? data.current.text : t('rata_none');
+    if (data.current) {
+      $('consequence-holder').textContent = data.current.assignedName
+        ? t('rata_holder', { name: data.current.assignedName })
+        : t('rata_holder_unknown');
+    } else {
+      $('consequence-holder').textContent = '';
+    }
     $('pending-line').textContent = t('rata_pending', { n: data.pending });
 
     if (data.mySuggestion) {
@@ -501,8 +593,14 @@ function applyNight() {
     document.body.classList.toggle(`theme-${n}`, onOutfit && night === n);
   });
   document.body.classList.toggle('theme-rata', currentTab === 'rata');
-  document.body.classList.toggle('theme-mural', currentTab === 'chat');
-  document.body.classList.toggle('theme-plaza', currentTab === 'plaza');
+  // Theme classes follow the DISPLAYED name, not the internal tab id: the
+  // chat feature is now labeled "Plaza" and gets the plaza-motif
+  // background (city-square/agora), while the old plaza/announcements
+  // feature is now labeled "Wall" and gets the mural texture that used to
+  // belong to the chat tab - swapped on purpose, see index.html's tab nav
+  // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
+  document.body.classList.toggle('theme-mural', currentTab === 'plaza');
+  document.body.classList.toggle('theme-plaza', currentTab === 'chat');
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
@@ -541,6 +639,13 @@ function renderRegistration(data) {
     return;
   }
   card.classList.remove('hidden');
+
+  // Now that Best Look polls for updates (see startOutfitPolling()), a
+  // refresh landing mid-keystroke would otherwise wipe out whatever the
+  // user is typing into the name/partner-search fields below - skip the
+  // re-render entirely while focus is inside this form, nothing about
+  // their own not-yet-submitted entry could have changed anyway.
+  if (area.contains(document.activeElement)) return;
 
   if (data.myContestant) {
     const msg = data.myContestant.partnerName
@@ -621,6 +726,25 @@ function renderRegistration(data) {
   });
 }
 
+// Polled while the tab is open, so the admin opening/closing voting or
+// advancing the results reveal shows up without a manual reload. Skips
+// clobbering an in-progress registration entry - see the activeElement
+// guard in renderRegistration().
+let outfitPollTimer = null;
+
+function startOutfitPolling() {
+  loadVotes();
+  if (outfitPollTimer) return;
+  outfitPollTimer = setInterval(loadVotes, 4000);
+}
+
+function stopOutfitPolling() {
+  if (outfitPollTimer) {
+    clearInterval(outfitPollTimer);
+    outfitPollTimer = null;
+  }
+}
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -641,12 +765,16 @@ async function loadVotes() {
 
     if (data.status === 'open' && !data.myVote) {
       area.innerHTML = data.contestants.length
-        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}">${esc(c.name)}</button>`).join('')
+        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
-        b.addEventListener('click', () => vote(Number(b.dataset.id)));
+        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.name));
       });
-    } else if (data.status === 'open' && data.myVote) {
+    } else if (data.myVote) {
+      // Once cast, a vote is final (see castVote() server-side) and this
+      // stays the vote area's content for the rest of the night - closed/
+      // pending-results no longer overwrites it with a generic status
+      // message, so "who did I vote for" stays visible throughout.
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(chosen.name) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -674,7 +802,11 @@ async function loadVotes() {
   }
 }
 
-async function vote(contestantId) {
+async function vote(contestantId, name) {
+  // A vote is final the moment it's submitted (see castVote() server-side,
+  // same rule as Plaza polls) - confirm first, since there's no changing
+  // your mind after.
+  if (!(await showConfirm(t('outfit_confirm_vote', { name })))) return;
   try {
     await api('/votes', { method: 'POST', body: { contestantId, night: getNight() } });
     loadVotes();

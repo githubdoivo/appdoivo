@@ -117,8 +117,8 @@ async function boot() {
       // done now, so it's owner-only again, whole tab hidden rather than just
       // the sensitive card within it.
       document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
-      // Any admin - not just the owner - can now post to Plaza (see
-      // requireAdmin on PUT /admin/plaza-note), so the tab stays visible.
+      // Any admin - not just the owner - can post to Plaza (see requireAdmin
+      // on POST /admin/plaza-posts), so the tab stays visible.
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -174,6 +174,7 @@ $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
     $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
     loadVotingState();
     loadContestants();
+    loadVotes();
   });
 });
 
@@ -510,9 +511,14 @@ function roleOf(u) {
 // Role filter narrows the VIEW only - it never affects whether "create"
 // is offered, which is purely about whether the typed name already
 // exists (creating always makes a plain user regardless of this filter).
-let roleFilter = 'all';
+// Owner/admin/user are independent, cumulative (OR) toggles - picking more
+// than one widens the view rather than narrowing it to users matching all
+// of them at once (which for mutually-exclusive roles would always be
+// empty). An empty set (none picked) already means "show everyone" -
+// no separate "all roles" button needed for that.
+const roleFilter = new Set();
 function byRole(users) {
-  return roleFilter === 'all' ? users : users.filter((u) => roleOf(u) === roleFilter);
+  return roleFilter.size === 0 ? users : users.filter((u) => roleFilter.has(roleOf(u)));
 }
 
 function applyUserSearch() {
@@ -544,8 +550,14 @@ $('user-name-input').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
-    roleFilter = btn.dataset.role;
-    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    if (roleFilter.has(btn.dataset.role)) {
+      roleFilter.delete(btn.dataset.role);
+    } else {
+      roleFilter.add(btn.dataset.role);
+    }
+    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => {
+      b.classList.toggle('active', roleFilter.has(b.dataset.role));
+    });
     applyUserSearch();
   });
 });
@@ -657,16 +669,14 @@ $('contestant-form').addEventListener('submit', async (e) => {
 
 /* --------------------------------- Votos --------------------------------- */
 
-// Night selected in the votes card sub-tabs (independent of the one at the top).
-let votesNight = 'furnished';
-
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
   // results (the same tally that goes public on Best Look later), so
   // `votes` is simply absent from the response for them. Shown as two
   // separate cards: Results (everyone with admin access) and Voting logs
-  // (owner-only, kept last on the page).
-  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
+  // (owner-only, kept last on the page). Scoped by the same admin-night-switch
+  // as voting control/contestants above - one night picker for the whole tab.
+  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
@@ -680,15 +690,6 @@ async function loadVotes() {
       : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
   }
 }
-
-document.querySelectorAll('#votes-night-tabs .tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#votes-night-tabs .tab').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    votesNight = btn.dataset.vnight;
-    loadVotes();
-  });
-});
 
 /* ------------------------------ Rata Game -------------------------------- */
 
@@ -710,14 +711,39 @@ async function loadConsequences() {
   $('revealed-consequence').classList.toggle('hidden', !revealed);
   if (revealed) $('revealed-consequence').textContent = revealed.text;
 
+  // Owner-only: who's actually holding the rata right now, entered by hand
+  // since it can't be inferred from anything in the app - only the owner
+  // walking around the party knows.
+  $('consequence-assign').classList.toggle('hidden', !revealed || !isOwner);
+  if (revealed && isOwner) {
+    const users = await api('/admin/users');
+    const select = $('consequence-assign-select');
+    select.innerHTML = `<option value="">${t('rata_assign_placeholder')}</option>` +
+      users.map((u) => `<option value="${u.id}"${u.id === revealed.assigned_user_id ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+    select.dataset.consequenceId = revealed.id;
+  }
+
   $('consequences-table').innerHTML = rows.length
     ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
       rows.map((c) => `<tr>
-        <td>${esc(c.text)}</td><td>${esc(c.author)}</td>
+        <td>${esc(c.text)}${c.assignedName ? `<br><span class="muted">${t('rata_holder', { name: esc(c.assignedName) })}</span>` : ''}</td>
+        <td>${esc(c.author)}</td>
         <td class="muted">${esc(formatEuDate(c.day))}</td>
         <td>${c.status === 'used' ? t('status_used') : t('status_pending')}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }
+
+$('consequence-assign-select').addEventListener('change', async (e) => {
+  const consequenceId = e.target.dataset.consequenceId;
+  const userId = e.target.value ? Number(e.target.value) : null;
+  $('consequence-assign-msg').textContent = '';
+  try {
+    await api(`/admin/consequences/${consequenceId}/assign`, { method: 'PATCH', body: { userId } });
+    $('consequence-assign-msg').textContent = t('rata_assign_saved');
+  } catch (err) {
+    $('consequence-assign-msg').textContent = err.message;
+  }
+});
 
 // Older pseudonyms stay listed (not just the current one) - a re-roll
 // doesn't erase who was who for messages already posted under the old one.
@@ -754,17 +780,21 @@ async function loadWallPseudonyms() {
 
 /* --------------------------------- Plaza ---------------------------------- */
 // Owner/admin-authored feed on everyone's Plaza landing page (see GET
-// /plaza-posts in app.js). Two post types: a plain note, or a poll with
-// 2-6 options. Publishing broadcasts a notification.
+// /plaza-posts in app.js). Two post types: a plain announcement, or a poll
+// with 2-6 options. Publishing broadcasts a notification. Pinning a post,
+// either type (owner-only), floats it to the top of the feed for everyone.
 
 const MAX_POLL_OPTIONS = 6;
-let plazaPostType = 'note';
+let plazaPostType = 'announcement';
 
 $('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
     plazaPostType = btn.dataset.postType;
     $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    // Poll mode shows only poll-building tools (question + options) - the
+    // plain message field is announcement-only, not shared with polls.
     $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+    $('plaza-post-text').classList.toggle('hidden', plazaPostType === 'poll');
   });
 });
 
@@ -787,10 +817,11 @@ async function loadPlazaPosts() {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_note')}</span>
-            <span class="muted">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</span>
+            <span class="badge${p.type === 'poll' ? ' type-poll' : ' type-announcement'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
+            ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
+        <p class="muted" style="margin:4px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
         <p style="margin:8px 0 0">${esc(p.text)}</p>
         ${p.type === 'poll' ? `
         <ul class="muted" style="margin:8px 0 0;padding-left:18px">
@@ -800,6 +831,7 @@ async function loadPlazaPosts() {
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
+          ${isOwner ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
         </div>
       </div>`).join('')
@@ -816,18 +848,35 @@ async function loadPlazaPosts() {
       }
     });
   });
+
+  // Owner-only (see requireOwner on PATCH .../pin) - button only rendered
+  // for the owner above, matching the backend gate rather than a new check.
+  $('plaza-posts-list').querySelectorAll('[data-pin-post]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      try {
+        await api(`/admin/plaza-posts/${b.dataset.pinPost}/pin`, {
+          method: 'PATCH',
+          body: { pinned: b.dataset.pinned !== 'true' },
+        });
+        loadPlazaPosts();
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
 }
 
 $('plaza-post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('plaza-post-msg').textContent = '';
-  const text = $('plaza-post-text').value;
+  const text = plazaPostType === 'poll' ? $('plaza-poll-question').value : $('plaza-post-text').value;
   const options = plazaPostType === 'poll'
     ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
     : undefined;
   try {
     await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
     $('plaza-post-text').value = '';
+    $('plaza-poll-question').value = '';
     $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);

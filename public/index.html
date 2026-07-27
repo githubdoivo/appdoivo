@@ -38,8 +38,8 @@
         <button type="submit" id="login-submit-btn" data-i18n="enter">Entrar</button>
       </form>
       <p id="login-error" class="error"></p>
-      <button type="button" id="find-key-link" class="link-btn" data-i18n="find_key_link">Ainda não tens a tua chave?</button>
       <div id="find-key-results"></div>
+      <button type="button" id="find-key-link" class="link-btn" data-i18n="find_key_link">Ainda não tens a tua chave?</button>
     </div>
   </section>
 
@@ -76,16 +76,22 @@
       </div>
     </header>
 
+    <!-- Tab order/labels: internal ids (data-tab, #tab-*, theme-*) stay
+         "plaza"/"chat" as before - only the DISPLAYED name and position
+         changed (see tab_plaza/tab_chat in i18n.js). "plaza" is still the
+         admin-authored announcements+polls feed, now labeled Wall; "chat"
+         is still the anonymous ephemeral board, now labeled Plaza - a
+         gathering space for the group rather than a pinboard. -->
     <nav class="tabs">
-      <button class="tab active" data-tab="plaza" data-i18n="tab_plaza">Plaza</button>
-      <button class="tab" data-tab="rata" data-i18n="tab_rata">A Rata</button>
-      <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Best Look</button>
-      <button class="tab" data-tab="chat" data-i18n="tab_chat">Chat</button>
+      <button class="tab active" data-tab="plaza" data-i18n="tab_plaza">Wall</button>
+      <button class="tab" data-tab="rata" data-i18n="tab_rata">Rata</button>
+      <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Snatch</button>
+      <button class="tab" data-tab="chat" data-i18n="tab_chat">Plaza</button>
     </nav>
 
-    <!-- Plaza: landing page - a feed of owner/admin-authored posts (notes
-         + polls), most-recent-first. No masthead - the tab bar already
-         says "plaza", so a repeated title/dateline/rule was redundant. -->
+    <!-- Plaza: owner/admin-authored posts (announcements + polls), most-
+         recent-first, pinned ones first - now labeled "Wall" (see nav
+         above). Still the default landing tab (see currentTab in app.js). -->
     <div id="tab-plaza" class="tab-panel">
       <div id="plaza-feed" class="plaza-feed"></div>
       <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
@@ -97,6 +103,7 @@
       <div class="card">
         <h2 data-i18n="rata_current">Consequência atual</h2>
         <div id="current-consequence" class="highlight" style="margin-top:12px">...</div>
+        <p class="muted" id="consequence-holder" style="margin-top:8px"></p>
         <p class="muted" id="pending-line" style="margin-top:12px"></p>
       </div>
 
@@ -145,7 +152,7 @@
       </div>
     </div>
 
-    <!-- Chat efemero -->
+    <!-- Chat efemero - now labeled "Plaza" (see nav above). -->
     <div id="tab-chat" class="tab-panel hidden">
       <p class="hero-line" data-i18n="chat_hero">Conversa aberta. Tudo some sozinho.</p>
       <div class="card">
@@ -153,7 +160,7 @@
         <div id="chat-messages" class="chat-messages"></div>
         <form id="chat-form" class="inline" style="margin-top:12px">
           <input id="chat-text" type="text" maxlength="300" data-i18n-ph="chat_ph" placeholder="Escreve uma mensagem..." autocomplete="off" />
-          <button type="submit" class="small" data-i18n="chat_send">Enviar</button>
+          <button type="submit" class="small" data-i18n="chat_send">Partilhar</button>
         </form>
       </div>
     </div>

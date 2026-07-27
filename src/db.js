@@ -38,6 +38,7 @@ db.exec(`
     day        TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'pending',
     revealed_at TEXT,
+    assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
   -- A user can only suggest one consequence per day
@@ -79,14 +80,18 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 
-  -- Plaza feed: owner/admin-authored posts, most-recent-first. 'note' is a
-  -- plain announcement (wifi password, house rules, release notes); 'poll'
-  -- adds options for everyone to vote on (e.g. picking a dinner spot).
+  -- Plaza feed: owner/admin-authored posts, most-recent-first. 'announcement'
+  -- is a plain one (wifi password, house rules, release notes); 'poll' adds
+  -- options for everyone to vote on (e.g. picking a dinner spot). Either
+  -- type can be pinned (pinned_at set) - owner-only, see pinPlazaPost() in
+  -- plaza.js. Pinned ones float to the top of the feed, most-recently-
+  -- pinned first; multiple can be pinned at once.
   CREATE TABLE IF NOT EXISTS plaza_posts (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     type       TEXT NOT NULL,
     author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text       TEXT NOT NULL,
+    pinned_at  TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
 
@@ -97,9 +102,9 @@ db.exec(`
     position INTEGER NOT NULL DEFAULT 0
   );
 
-  -- One row per (user, post): voting for a different option in the same
-  -- poll overwrites this row (see castPlazaVote() in routes.js) rather
-  -- than adding a second vote.
+  -- One row per (user, post), enforced below - a vote is final, so
+  -- castPlazaVote() in plaza.js rejects any second attempt rather than
+  -- moving this row to a new option.
   CREATE TABLE IF NOT EXISTS plaza_poll_votes (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id    INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
@@ -281,6 +286,22 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_contestant_user_night
     ON contestants(user_id, night) WHERE user_id IS NOT NULL;
 `);
+
+// Migration: owner-only pinning for Plaza announcements (renamed from
+// "note"). NULL means not pinned; a timestamp both flags it and orders
+// multiple pins by most-recently-pinned first.
+if (!columnExists('plaza_posts', 'pinned_at')) {
+  db.exec('ALTER TABLE plaza_posts ADD COLUMN pinned_at TEXT');
+}
+
+// Migration: who's actually holding the rata for a given consequence, set
+// by the owner after the fact (they have to look around the party and see
+// who has it at the moment it's revealed - nothing about this can be
+// inferred automatically). Separate from user_id, which is whoever
+// suggested the consequence, not who has to do it.
+if (!columnExists('consequences', 'assigned_user_id')) {
+  db.exec('ALTER TABLE consequences ADD COLUMN assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
 
 /** Generates a secure, readable token. */
 export function generateToken() {

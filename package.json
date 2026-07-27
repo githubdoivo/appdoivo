@@ -1,7 +1,7 @@
 {
   "name": "appdoivo",
-  "version": "1.1.6",
-  "description": "Web app com duas features: consequencias (rata) e votos.",
+  "version": "1.1.12",
+  "description": "Web app de festa com quatro features: wall, rata, snatch e plaza.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "admin-token": "node --disable-warning=ExperimentalWarning scripts/print-admin-token.js",
     "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
     "test": "node --disable-warning=ExperimentalWarning --test",
-    "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js"
+    "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js",
+    "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "engines": {
     "node": ">=23.4"

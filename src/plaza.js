@@ -6,17 +6,19 @@ const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 
 /**
- * The full Plaza feed, most-recent-first. Each post carries its author's
- * name and, for polls, every option with its live vote tally and whichever
- * option (if any) userId has picked - so the frontend can highlight it and
- * offer "change your vote" instead of "vote" once someone already has.
+ * The full Plaza feed. Pinned announcements come first (most-recently-
+ * pinned first - multiple can be pinned at once), then everything else
+ * most-recent-first. Each post carries its author's name and, for polls,
+ * every option with its live vote tally and whichever option (if any)
+ * userId has picked - so the frontend can highlight it and offer "change
+ * your vote" instead of "vote" once someone already has.
  */
 export function listPlazaPosts(userId) {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
   `).all();
 
   const optionsStmt = db.prepare(`
@@ -45,10 +47,10 @@ export function listPlazaPosts(userId) {
  */
 export function listPlazaPostsForAdmin() {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
   `).all();
 
   const optionsStmt = db.prepare(`
@@ -75,15 +77,15 @@ export function listPlazaPostsForAdmin() {
 }
 
 /**
- * Creates a note or a poll. Notes ignore `options`; polls require 2-6
- * non-empty option labels. Returns { ok, post } or { error }.
+ * Creates an announcement or a poll. Announcements ignore `options`; polls
+ * require 2-6 non-empty option labels. Returns { ok, post } or { error }.
  */
 export function createPlazaPost(authorId, { type, text, options }) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText) return { error: 'Escreve o texto da publicação.' };
   if (trimmedText.length > MAX_TEXT_LENGTH) return { error: `Máximo ${MAX_TEXT_LENGTH} caracteres.` };
 
-  if (type !== 'note' && type !== 'poll') return { error: 'Tipo de publicação inválido.' };
+  if (type !== 'announcement' && type !== 'poll') return { error: 'Tipo de publicação inválido.' };
 
   let cleanOptions = [];
   if (type === 'poll') {
@@ -116,8 +118,31 @@ export function deletePlazaPost(id) {
 }
 
 /**
- * Casts (or changes) a vote on a poll. One vote per user per post - voting
- * again just moves it to the new option. Returns { ok } or { error }.
+ * Pins or unpins any post - announcement or poll - owner-only (enforced by
+ * the route, see requireOwner on PATCH /admin/plaza-posts/:id/pin). Multiple
+ * can be pinned at once, of either type; pinned_at both flags it and orders
+ * pins by most-recently-pinned first (see listPlazaPosts()). Returns { ok }
+ * or { error }.
+ */
+export function pinPlazaPost(id, pinned) {
+  const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
+  if (!post) return { error: 'Publicação não encontrada.' };
+
+  if (pinned) {
+    db.prepare("UPDATE plaza_posts SET pinned_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(id);
+  } else {
+    db.prepare('UPDATE plaza_posts SET pinned_at = NULL WHERE id = ?').run(id);
+  }
+  return { ok: true };
+}
+
+/**
+ * Casts a vote on a poll. One vote per user per post, permanently - a
+ * second attempt is rejected rather than moving the existing vote. The
+ * SELECT below is the friendly path (a clean error instead of a 500); the
+ * UNIQUE index on (user_id, post_id) is what actually holds under two
+ * simultaneous requests from the same user, caught below as a fallback.
+ * Returns { ok } or { error }.
  */
 export function castPlazaVote(userId, postId, optionId) {
   const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(postId);
@@ -127,9 +152,16 @@ export function castPlazaVote(userId, postId, optionId) {
   const option = db.prepare('SELECT id FROM plaza_poll_options WHERE id = ? AND post_id = ?').get(optionId, postId);
   if (!option) return { error: 'Opção inválida.' };
 
-  db.prepare(`
-    INSERT INTO plaza_poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)
-    ON CONFLICT(user_id, post_id) DO UPDATE SET option_id = excluded.option_id, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-  `).run(postId, optionId, userId);
+  const existing = db.prepare('SELECT id FROM plaza_poll_votes WHERE user_id = ? AND post_id = ?').get(userId, postId);
+  if (existing) return { error: 'Já votaste nesta sondagem.' };
+
+  try {
+    db.prepare('INSERT INTO plaza_poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)').run(postId, optionId, userId);
+  } catch (err) {
+    if (err.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(err.message)) {
+      return { error: 'Já votaste nesta sondagem.' };
+    }
+    throw err;
+  }
   return { ok: true };
 }
