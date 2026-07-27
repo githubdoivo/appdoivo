@@ -18,7 +18,7 @@ export function authenticate(req, res, next) {
   // Keys are always lowercase (see /auth/login) - normalize here too, since
   // the frontend just replays whatever was typed at login on every
   // subsequent request.
-  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang FROM users WHERE token_hash = ?').get(hashToken(String(token).toLowerCase()));
+  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at FROM users WHERE token_hash = ?').get(hashToken(String(token).toLowerCase()));
   if (!user) {
     // Shares /auth/login's rate-limit budget - guessing tokens against any
     // endpoint that accepts a Bearer token is throttled the same way,
@@ -29,6 +29,13 @@ export function authenticate(req, res, next) {
       return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
     }
     return res.status(401).json({ error: 'Token invalido.' });
+  }
+
+  // Any successful authenticated request proves this user already has
+  // their key - closes the first-time name-search retrieval flow for them
+  // for good (see keyClaim.js), even if they never used it themselves.
+  if (!user.key_claimed_at) {
+    db.prepare("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(user.id);
   }
 
   req.user = {

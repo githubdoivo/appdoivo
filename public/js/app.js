@@ -5,7 +5,7 @@ import { applyMode, toggleMode } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
-import { showAlert, showConfirm } from './modal.js';
+import { showAlert } from './modal.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -62,7 +62,6 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
-  renderMyPseudonym(me.wallPseudonym);
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -179,6 +178,74 @@ $('login-form').addEventListener('submit', async (e) => {
   }
 });
 
+// First-time key retrieval: for someone who's never logged in, find their
+// own account by name (see GET /auth/unclaimed-users) and claim its key
+// (see POST /auth/claim-key). Once claimed - by this flow or by ever
+// logging in for real - the account no longer shows up here.
+$('find-key-link').addEventListener('click', () => {
+  $('login-form').classList.add('hidden');
+  $('login-error').textContent = '';
+  $('find-key-link').classList.add('hidden');
+  $('find-key-area').classList.remove('hidden');
+  $('find-key-input').focus();
+});
+
+$('find-key-back').addEventListener('click', () => {
+  $('find-key-area').classList.add('hidden');
+  $('find-key-input').value = '';
+  $('find-key-results').innerHTML = '';
+  $('login-form').classList.remove('hidden');
+  $('find-key-link').classList.remove('hidden');
+});
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch { /* best effort */ }
+    document.body.removeChild(ta);
+  }
+}
+
+let findKeyTimer = null;
+$('find-key-input').addEventListener('input', () => {
+  clearTimeout(findKeyTimer);
+  const name = $('find-key-input').value.trim();
+  if (name.length < 3) {
+    $('find-key-results').innerHTML = '';
+    return;
+  }
+  findKeyTimer = setTimeout(async () => {
+    try {
+      const { users } = await api(`/auth/unclaimed-users?name=${encodeURIComponent(name)}`);
+      $('find-key-results').innerHTML = users.length
+        ? users.map((u) => `<button type="button" class="find-key-result" data-claim-user="${u.id}">${esc(u.name)}</button>`).join('')
+        : `<p class="muted">${t('find_key_no_match')}</p>`;
+      $('find-key-results').querySelectorAll('[data-claim-user]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          try {
+            const r = await api('/auth/claim-key', { method: 'POST', body: { userId: Number(b.dataset.claimUser) } });
+            await copyToClipboard(r.token);
+            await showAlert(t('find_key_revealed_msg', { name: r.name, token: r.token }));
+            $('find-key-back').click(); // reset back to the normal login form for next time
+            setToken(r.token);
+            const me = await api('/me');
+            showApp(me);
+          } catch (err) {
+            await showAlert(err.message);
+          }
+        });
+      });
+    } catch { /* transient network hiccup - next keystroke retries */ }
+  }, 300);
+});
+
 // Logout itself lives on the Settings page now (settings.js) - it's rare
 // enough not to need a permanent topbar icon slot on every page.
 
@@ -221,29 +288,6 @@ function stopChatPolling() {
   }
 }
 
-// Shows the caller's own current Wall pseudonym, with a self-service
-// button to re-roll it (once a day - see POST /me/wall-pseudonym/reset).
-// Nothing to show yet if they haven't posted for the first time.
-function renderMyPseudonym(pseudonym) {
-  const el = $('my-pseudonym-line');
-  if (!pseudonym) {
-    el.innerHTML = '';
-    return;
-  }
-  el.innerHTML = `
-    <span>${esc(t('wall_my_pseudonym_label'))} <strong>${esc(pseudonym)}</strong></span>
-    <button type="button" class="small" id="reset-my-pseudonym-btn">${esc(t('wall_reset_pseudonym_btn'))}</button>`;
-  $('reset-my-pseudonym-btn').addEventListener('click', async () => {
-    if (!(await showConfirm(t('confirm_reset_my_pseudonym')))) return;
-    try {
-      const r = await api('/me/wall-pseudonym/reset', { method: 'POST' });
-      renderMyPseudonym(r.pseudonym);
-    } catch (err) {
-      await showAlert(err.message);
-    }
-  });
-}
-
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
@@ -269,9 +313,8 @@ $('chat-form').addEventListener('submit', async (e) => {
   const text = input.value.trim();
   if (!text) return;
   try {
-    const r = await api('/chat/messages', { method: 'POST', body: { text } });
+    await api('/chat/messages', { method: 'POST', body: { text } });
     input.value = '';
-    renderMyPseudonym(r.pseudonym);
     await loadChat();
     $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
   } catch (err) {

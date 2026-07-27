@@ -35,6 +35,7 @@ import {
   broadcast,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
+import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 
 const router = Router();
 
@@ -60,22 +61,35 @@ router.post('/auth/login', loginRateLimit, (req, res) => {
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
   const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
+  // Proves they know their key - same claimed-key stamp authenticate()
+  // applies (see auth.js), so they stop showing up in the first-time
+  // name-search flow (keyClaim.js) from here on.
+  db.prepare("UPDATE users SET key_claimed_at = COALESCE(key_claimed_at, strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE id = ?").run(user.id);
   res.json({ id: user.id, name: user.name, isAdmin: !!user.is_admin });
+});
+
+// First-time key retrieval: lets someone who's never logged in find their
+// own account by name and get their key, instead of the owner having to
+// message everyone individually. Public and unauthenticated by necessity -
+// they don't have a key yet. Search itself isn't rate-limited (it doesn't
+// reveal a secret, just names of accounts nobody's claimed yet, and needs
+// 3+ characters); claiming the actual key shares the login attempt budget,
+// same as guessing a token would.
+router.get('/auth/unclaimed-users', (req, res) => {
+  res.json({ users: searchUnclaimedUsers(req.query.name) });
+});
+
+router.post('/auth/claim-key', loginRateLimit, (req, res) => {
+  const result = claimKey(Number(req.body?.userId));
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
 });
 
 // Everything below requires authentication.
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
-  // wall_pseudonym isn't null until the user's first Wall post (see
-  // getOrAssignPseudonym in chat.js) - fine here, it's their own, not
-  // anyone else's.
-  const row = db.prepare('SELECT wall_pseudonym FROM users WHERE id = ?').get(req.user.id);
-  res.json({
-    ...req.user,
-    wallPseudonym: row.wall_pseudonym,
-    adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
-  });
+  res.json({ ...req.user, adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true' });
 });
 
 router.post('/me/tutorial-seen', (req, res) => {
@@ -121,16 +135,6 @@ router.post('/me/change-token', (req, res) => {
   db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
     .run(newHash, encryptToken(newToken), req.user.id);
   res.json({ ok: true });
-});
-
-// Self-service: any logged-in user can re-roll their OWN Wall pseudonym,
-// at most once a day (see resetPseudonym() in chat.js). Distinct from the
-// owner-only /admin/users/:id/wall-pseudonym/reset, which can target
-// anyone - this one only ever touches req.user's own account.
-router.post('/me/wall-pseudonym/reset', (req, res) => {
-  const result = resetPseudonym(req.user.id);
-  if (result.error) return res.status(400).json({ error: result.error });
-  res.json(result);
 });
 
 /* ------------------------------ Consequences ----------------------------- */
@@ -227,10 +231,7 @@ router.get('/chat/messages', (req, res) => {
 router.post('/chat/messages', async (req, res) => {
   const result = postMessage(req.user.id, req.body?.text);
   if (result.error) return res.status(400).json({ error: result.error });
-  // Their own pseudonym, so the client can show/refresh "your Wall
-  // nickname" right after a first post assigns one - not a golden-rule
-  // leak, it's the poster's own.
-  res.status(201).json({ ok: true, pseudonym: result.pseudonym });
+  res.status(201).json({ ok: true });
   // Announce by pseudonym only - same golden rule as the rest of the Wall,
   // nobody but the owner learns who's behind a post. Skip the poster's own
   // device, they don't need telling about their own message.
@@ -311,15 +312,18 @@ router.patch('/admin/users/:id/name', (req, res) => {
   res.json({ ok: true, id, name });
 });
 
-// Issues a brand-new access key for a user (e.g. they think it leaked).
-// Invalidates the previous key immediately - the caller is responsible for
-// getting the new one to them.
+// Issues a brand-new access key for a user (e.g. they think it leaked, or
+// someone else claimed it by mistake via the first-time name-search flow).
+// Invalidates the previous key immediately, AND reopens that same
+// name-search flow for them (key_claimed_at back to NULL) - so recovering
+// from a wrongly-claimed key is just "tell the owner, get regenerated,
+// find your name again," not the owner manually messaging a new key.
 router.post('/admin/users/:id/regenerate-token', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
   const token = generateUserToken(user.name);
-  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), key_claimed_at = NULL WHERE id = ?")
     .run(hashToken(token), encryptToken(token), id);
   res.json({ ok: true, id, name: user.name, token });
 });

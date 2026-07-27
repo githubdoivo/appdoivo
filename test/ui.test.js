@@ -174,6 +174,39 @@ test('body carries no night-theme class while the login screen is showing', asyn
   await context.close();
 });
 
+/* --------------------- First-time key retrieval (register) --------------- */
+
+test('a first-time user can find their name, claim their key, and get logged straight in', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Playwright Newcomer' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)');
+
+  await page.click('#find-key-link');
+  await page.fill('#find-key-input', 'playwright newcomer');
+  await page.waitForSelector('.find-key-result', { timeout: 5000 });
+  await page.click('.find-key-result');
+
+  const modal = page.locator('.modal-overlay:not(.hidden)');
+  await modal.waitFor({ timeout: 5000 });
+  const revealed = await page.locator('.modal-message').textContent();
+  assert.match(revealed, /copiada|copied/i, 'the modal should confirm the key was copied');
+  await page.locator('.modal-actions button').first().click();
+
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  const me = await page.evaluate(async () => {
+    const token = localStorage.getItem('appivo_token');
+    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } });
+    return res.json();
+  });
+  assert.equal(me.name, 'Playwright Newcomer', 'the auto-login after claiming should be the claimed account');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
 /* --------------------- Role badge colors (regression) --------------------- */
 // owner / admin / user must each render in a visually distinct color.
 
@@ -269,6 +302,38 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   await page.waitForTimeout(200);
   const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(names.includes('César Session Search'), 'plain-ASCII "cesar" should match the accented name');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
+test('Manage Users role filter narrows the list to just that role', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Filter Test User' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  await page.click('#user-role-filter [data-role="owner"]');
+  await page.waitForTimeout(200);
+  const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
+  const ownerPillActive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => el.classList.contains('active'));
+  assert.ok(ownerPillActive, 'the clicked pill should show as active');
+
+  await page.click('#user-role-filter [data-role="user"]');
+  await page.waitForTimeout(200);
+  const userRows = await page.$$eval('#users-list .user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(userRows.includes('Role Filter Test User'), 'filtering to "user" should include the plain user just created');
+  assert.ok(!userRows.includes('UI Test Admin'), 'filtering to "user" should exclude the owner');
+  const ownerPillInactive = await page.$eval('#user-role-filter [data-role="owner"]', (el) => !el.classList.contains('active'));
+  assert.ok(ownerPillInactive, 'only one pill should be active at a time');
+
+  await page.click('#user-role-filter [data-role="all"]');
+  await page.waitForTimeout(200);
+  const allRows = await page.$$('#users-list .user-row');
+  assert.ok(allRows.length >= 2, 'switching back to "all roles" should restore the full list');
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });

@@ -73,6 +73,50 @@ test('admin creates a user', async () => {
   userId = r.data.id;
 });
 
+/* --------------------- First-time key retrieval (register) --------------- */
+
+test('a brand-new user is searchable by name until they claim their key', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zélia Cunha' } });
+
+  const tooShort = await api('GET', '/auth/unclaimed-users?name=ze');
+  assert.equal(tooShort.data.users.length, 0, 'below 3 characters should return nothing');
+
+  const accentless = await api('GET', '/auth/unclaimed-users?name=zelia');
+  assert.ok(accentless.data.users.some((u) => u.id === created.data.id), 'plain-ASCII "zelia" should match "Zélia"');
+
+  const claim = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(claim.status, 200);
+  assert.equal(claim.data.token, created.data.token);
+
+  const again = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(again.status, 400, 'a key can only ever be claimed once');
+
+  const afterClaim = await api('GET', '/auth/unclaimed-users?name=zelia');
+  assert.ok(!afterClaim.data.users.some((u) => u.id === created.data.id), 'claimed users disappear from search');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('logging in for real also closes the first-time key retrieval, even without using it', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Rogério Vale' } });
+
+  const before = await api('GET', '/auth/unclaimed-users?name=rogerio');
+  assert.ok(before.data.users.some((u) => u.id === created.data.id));
+
+  // A real authenticated request (not the claim flow) with their actual key.
+  await api('GET', '/me', { token: created.data.token });
+
+  const after = await api('GET', '/auth/unclaimed-users?name=rogerio');
+  assert.ok(!after.data.users.some((u) => u.id === created.data.id), 'a real login should close this even if the claim endpoint was never used');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
+test('the owner is never searchable via first-time key retrieval', async () => {
+  const r = await api('GET', '/auth/unclaimed-users?name=test');
+  assert.ok(!r.data.users.some((u) => u.name === 'Test Admin'), 'the owner already has their key from setup');
+});
+
 test('a normal user cannot access the admin panel', async () => {
   const r = await api('GET', '/admin/users', { token: userToken });
   assert.equal(r.status, 403);
@@ -211,6 +255,24 @@ test("regenerating a user's key issues a new one and invalidates the old", async
 
   const newLogin = await api('GET', '/me', { token: regen.data.token });
   assert.equal(newLogin.status, 200);
+});
+
+test('regenerating a key also reopens first-time name-search retrieval for that user', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Wrongly Claimed Guest' } });
+
+  // Simulate someone else claiming it by mistake.
+  const claim = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(claim.status, 200);
+
+  const goneFromSearch = await api('GET', '/auth/unclaimed-users?name=wrongly claimed');
+  assert.ok(!goneFromSearch.data.users.some((u) => u.id === created.data.id), 'setup: should be claimed and gone from search');
+
+  await api('POST', `/admin/users/${created.data.id}/regenerate-token`, { token: ADMIN });
+
+  const backInSearch = await api('GET', '/auth/unclaimed-users?name=wrongly claimed');
+  assert.ok(backInSearch.data.users.some((u) => u.id === created.data.id), 'regenerating the key should make the account findable again, so the rightful person can re-claim it');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
 });
 
 /* ----------------------------- Consequences ------------------------------ */
@@ -503,27 +565,6 @@ test('a Wall pseudonym can be reset once a day, and the owner sees the full hist
   const list = await api('GET', '/chat/messages', { token: ADMIN });
   const oldMsg = list.data.messages.find((m) => m.text === 'stable-1');
   assert.equal(oldMsg.author, oldPseudonym, 'messages already posted keep the pseudonym that was active at the time');
-});
-
-test('any user can self-service reset their own Wall pseudonym, once a day', async () => {
-  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Self Service Poster' } });
-  const selfToken = created.data.token;
-
-  // Never posted yet - still works, just assigns a first pseudonym.
-  const first = await api('POST', '/me/wall-pseudonym/reset', { token: selfToken });
-  assert.equal(first.status, 200);
-  assert.ok(first.data.pseudonym);
-
-  const again = await api('POST', '/me/wall-pseudonym/reset', { token: selfToken });
-  assert.equal(again.status, 400, 'a second self-reset the same day should be rejected');
-
-  // Only ever touches the caller's own account - there's no way to target
-  // anyone else's, since it's keyed off the bearer token, not a param.
-  const mapping = await api('GET', '/admin/wall-pseudonyms', { token: ADMIN });
-  const otherEntry = mapping.data.find((r) => r.name === 'Ivo');
-  assert.ok(!otherEntry.pseudonyms.includes(first.data.pseudonym), "one user's self-reset must not touch another's");
-
-  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
 });
 
 test('a user can change their own access key, given the correct current one', async () => {
