@@ -118,16 +118,15 @@ export function deletePlazaPost(id) {
 }
 
 /**
- * Pins or unpins an announcement - owner-only (enforced by the route, see
- * requireOwner on PATCH /admin/plaza-posts/:id/pin), and only announcements
- * can be pinned, not polls. Multiple can be pinned at once; pinned_at both
- * flags it and orders pins by most-recently-pinned first (see
- * listPlazaPosts()). Returns { ok } or { error }.
+ * Pins or unpins any post - announcement or poll - owner-only (enforced by
+ * the route, see requireOwner on PATCH /admin/plaza-posts/:id/pin). Multiple
+ * can be pinned at once, of either type; pinned_at both flags it and orders
+ * pins by most-recently-pinned first (see listPlazaPosts()). Returns { ok }
+ * or { error }.
  */
 export function pinPlazaPost(id, pinned) {
-  const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(id);
+  const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
   if (!post) return { error: 'Publicação não encontrada.' };
-  if (post.type !== 'announcement') return { error: 'Só é possível fixar anúncios.' };
 
   if (pinned) {
     db.prepare("UPDATE plaza_posts SET pinned_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(id);

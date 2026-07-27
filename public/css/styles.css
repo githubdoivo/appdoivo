@@ -978,6 +978,9 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-post-poll.plaza-post:first-child { margin-top: 0; }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+/* A poll is already boxed - pinning it upgrades the border rather than
+   changing layout, same "stands out" intent as the announcement treatment. */
+.plaza-post-poll.pinned { border-color: var(--clay); }
 
 .plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .plaza-poll-option {

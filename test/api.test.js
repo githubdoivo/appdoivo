@@ -679,10 +679,10 @@ test('Plaza announcements: any logged-in user can read the feed, any admin (not 
   await api('DELETE', `/admin/plaza-posts/${asAdmin.data.id}`, { token: ADMIN });
 });
 
-test('Plaza pinning: owner-only, only announcements can be pinned, pinned ones sort first (most-recently-pinned first)', async () => {
+test('Plaza pinning: owner-only, either post type, pinned ones sort first (most-recently-pinned first)', async () => {
   const older = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'older announcement' } });
-  const newer = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'newer announcement' } });
-  const poll = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Pizza', 'Sushi'] } });
+  const newer = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Pizza', 'Sushi'] } });
+  const unpinned = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'never pinned' } });
 
   const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Plaza Pin Tester' } });
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
@@ -690,12 +690,11 @@ test('Plaza pinning: owner-only, only announcements can be pinned, pinned ones s
   // Not owner - forbidden, regardless of post type.
   const forbidden = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: nonOwnerAdmin.data.token, body: { pinned: true } });
   assert.equal(forbidden.status, 403);
+  const forbiddenPoll = await api('PATCH', `/admin/plaza-posts/${newer.data.id}/pin`, { token: nonOwnerAdmin.data.token, body: { pinned: true } });
+  assert.equal(forbiddenPoll.status, 403);
 
-  // A poll can't be pinned, even by the owner.
-  const pollPin = await api('PATCH', `/admin/plaza-posts/${poll.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
-  assert.equal(pollPin.status, 400);
-
-  // Pin the older one first, then the newer one - most-recently-pinned first.
+  // Pin the announcement first, then the poll - most-recently-pinned first,
+  // and a poll can be pinned same as an announcement.
   const pin1 = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
   assert.equal(pin1.status, 200);
   const pin2 = await api('PATCH', `/admin/plaza-posts/${newer.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
@@ -704,7 +703,7 @@ test('Plaza pinning: owner-only, only announcements can be pinned, pinned ones s
   const feed = await api('GET', '/plaza-posts', { token: userToken });
   const pinnedIds = feed.data.posts.filter((p) => p.pinnedAt).map((p) => p.id);
   assert.deepEqual(pinnedIds, [newer.data.id, older.data.id]);
-  assert.ok(feed.data.posts.findIndex((p) => p.id === newer.data.id) < feed.data.posts.findIndex((p) => p.id === poll.data.id));
+  assert.ok(feed.data.posts.findIndex((p) => p.id === older.data.id) < feed.data.posts.findIndex((p) => p.id === unpinned.data.id));
 
   const unpin = await api('PATCH', `/admin/plaza-posts/${older.data.id}/pin`, { token: ADMIN, body: { pinned: false } });
   assert.equal(unpin.status, 200);
@@ -715,7 +714,7 @@ test('Plaza pinning: owner-only, only announcements can be pinned, pinned ones s
   await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
   await api('DELETE', `/admin/plaza-posts/${older.data.id}`, { token: ADMIN });
   await api('DELETE', `/admin/plaza-posts/${newer.data.id}`, { token: ADMIN });
-  await api('DELETE', `/admin/plaza-posts/${poll.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${unpinned.data.id}`, { token: ADMIN });
 });
 
 test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote is rejected rather than moving it', async () => {

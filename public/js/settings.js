@@ -745,8 +745,8 @@ async function loadWallPseudonyms() {
 /* --------------------------------- Plaza ---------------------------------- */
 // Owner/admin-authored feed on everyone's Plaza landing page (see GET
 // /plaza-posts in app.js). Two post types: a plain announcement, or a poll
-// with 2-6 options. Publishing broadcasts a notification. Pinning an
-// announcement (owner-only) floats it to the top of the feed for everyone.
+// with 2-6 options. Publishing broadcasts a notification. Pinning a post,
+// either type (owner-only), floats it to the top of the feed for everyone.
 
 const MAX_POLL_OPTIONS = 6;
 let plazaPostType = 'announcement';
@@ -792,7 +792,7 @@ async function loadPlazaPosts() {
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
-          ${isOwner && p.type === 'announcement' ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
+          ${isOwner ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
         </div>
       </div>`).join('')

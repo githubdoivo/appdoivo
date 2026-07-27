@@ -432,8 +432,8 @@ function renderPlazaPost(post) {
       <button type="button" class="small plaza-poll-submit" data-vote-submit="${post.id}" data-vote-option="${pendingOptionId ?? ''}"${pendingOptionId == null ? ' disabled' : ''}>${esc(t('plaza_vote_btn'))}</button>`;
 
   return `
-    <article class="plaza-post plaza-post-poll">
-      <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+    <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
+      <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
       <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}

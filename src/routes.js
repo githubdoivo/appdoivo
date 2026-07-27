@@ -148,9 +148,9 @@ router.post('/me/change-token', (req, res) => {
 // Owner/admin-authored feed shown on the Plaza tab - the app's landing
 // page. Two post types: a plain announcement (welcome message, wifi
 // password, house rules, release notes) and a poll (e.g. picking a dinner
-// spot). Any admin can post, not just the owner; only the owner can pin an
-// announcement (see PATCH .../pin below) - pinned ones float to the top of
-// the feed, most-recently-pinned first.
+// spot). Any admin can post, not just the owner; only the owner can pin a
+// post, either type (see PATCH .../pin below) - pinned ones float to the
+// top of the feed, most-recently-pinned first.
 //
 // Gated behind ENABLE_PLAZA - it's being reworked from a single pinned
 // note into this real posts feed, so it stays QA-only (see fly.qa.toml)
@@ -190,9 +190,9 @@ router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
   res.json(result);
 });
 
-// Owner-only: pins or unpins an announcement so it floats to the top of
-// everyone's Plaza feed. Not exposed to regular admins - same reuse of
-// requireOwner as the rest of the golden-rule-gated admin actions.
+// Owner-only: pins or unpins any post (announcement or poll) so it floats
+// to the top of everyone's Plaza feed. Not exposed to regular admins - same
+// reuse of requireOwner as the rest of the golden-rule-gated admin actions.
 router.patch('/admin/plaza-posts/:id/pin', requireOwner, (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const result = pinPlazaPost(Number(req.params.id), !!req.body?.pinned);

@@ -81,10 +81,10 @@ db.exec(`
 
   -- Plaza feed: owner/admin-authored posts, most-recent-first. 'announcement'
   -- is a plain one (wifi password, house rules, release notes); 'poll' adds
-  -- options for everyone to vote on (e.g. picking a dinner spot). Only
-  -- announcements can be pinned (pinned_at set) - owner-only, see
-  -- pinPlazaPost() in plaza.js. Pinned ones float to the top of the feed,
-  -- most-recently-pinned first; multiple can be pinned at once.
+  -- options for everyone to vote on (e.g. picking a dinner spot). Either
+  -- type can be pinned (pinned_at set) - owner-only, see pinPlazaPost() in
+  -- plaza.js. Pinned ones float to the top of the feed, most-recently-
+  -- pinned first; multiple can be pinned at once.
   CREATE TABLE IF NOT EXISTS plaza_posts (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     type       TEXT NOT NULL,
