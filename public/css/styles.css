@@ -485,7 +485,13 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* Scrolling itself is for phones with a narrow viewport - the visible
+     scrollbar track/thumb it drags in on desktop browsers doesn't belong
+     on what's designed as a mobile-first PWA (mobile browsers already
+     auto-hide it). Swipe/scroll still works, just without the chrome. */
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 /* In light mode, --line is pale enough to blend into the paper background
    on its own. In dark mode it reads as a bright, hard "limit" line across
    the whole tab row - blend it toward the background so it stays a subtle
