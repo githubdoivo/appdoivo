@@ -174,6 +174,7 @@ $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
     $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
     loadVotingState();
     loadContestants();
+    loadVotes();
   });
 });
 
@@ -657,16 +658,14 @@ $('contestant-form').addEventListener('submit', async (e) => {
 
 /* --------------------------------- Votos --------------------------------- */
 
-// Night selected in the votes card sub-tabs (independent of the one at the top).
-let votesNight = 'furnished';
-
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
   // results (the same tally that goes public on Best Look later), so
   // `votes` is simply absent from the response for them. Shown as two
   // separate cards: Results (everyone with admin access) and Voting logs
-  // (owner-only, kept last on the page).
-  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(votesNight)}`);
+  // (owner-only, kept last on the page). Scoped by the same admin-night-switch
+  // as voting control/contestants above - one night picker for the whole tab.
+  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
@@ -680,15 +679,6 @@ async function loadVotes() {
       : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
   }
 }
-
-document.querySelectorAll('#votes-night-tabs .tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#votes-night-tabs .tab').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    votesNight = btn.dataset.vnight;
-    loadVotes();
-  });
-});
 
 /* ------------------------------ Rata Game -------------------------------- */
 

@@ -298,15 +298,18 @@ select {
 }
 select:hover { border-color: var(--clay); }
 
-/* Night picker atop Best Look admin - governs contestants/votes/voter-log
-   below it too, not just the voting-control card, so it sits outside any
-   single card. Reuses the main app's .theme-switch component instead of a
-   <select>, but this page never gets a body.theme-outfit class (no per-
+/* Night picker atop Best Look admin - the single source of truth for the
+   whole tab (voting control, contestants, results, voter log all read it),
+   so it sits outside any single card. Reuses the main app's .theme-switch
+   component, but this page never gets a body.theme-outfit class (no per-
    night reskin here), so var(--ot) is never set - fill the active state
-   with the general accent instead. */
+   with the general accent instead. Scoped by #id rather than .night-switch:
+   it needs to outrank .theme-switch button.active on specificity, not just
+   source order, or the active label renders as near-white text on a
+   transparent fill - invisible against the page background. */
 .night-switch { margin-bottom: 18px; }
-.night-switch button.active { background: var(--clay); color: var(--paper-3); }
-.night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
+#admin-night-switch button.active,
+#admin-night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
 
 label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
@@ -508,13 +511,6 @@ html.mode-light { --clay-active: #b5624a; }
 [data-atab="rata"].active { border-bottom-color: #83807a; }
 html.mode-light [data-tab="rata"].active,
 html.mode-light [data-atab="rata"].active { border-bottom-color: #5c5952; }
-
-/* Sub-tabs: smaller, nested tab groups inside a card (e.g. Furnished/Swamp
-   under "Votos da noite" in admin). The page-level .tab component above is
-   sized for primary navigation and reads as oversized/heavy at this
-   secondary, in-card scale. */
-#votes-night-tabs { gap: 16px; margin-bottom: 14px; }
-#votes-night-tabs .tab { font-size: 0.95rem; padding: 2px 0 8px; border-bottom-width: 1.5px; }
 
 /* --------------------------------- Cards --------------------------------- */
 
