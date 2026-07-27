@@ -684,7 +684,7 @@ async function loadWallPseudonyms() {
       rows.map((r) => `<tr>
         <td>${esc(r.name)}</td>
         <td>${formatPseudonymHistory(r.pseudonyms)}</td>
-        <td style="text-align:right"><button class="small ghost" data-reset-pseudonym="${r.id}">${t('wall_reset_pseudonym_btn')}</button></td>
+        <td style="text-align:right"><button class="small" data-reset-pseudonym="${r.id}">${t('wall_reset_pseudonym_btn')}</button></td>
       </tr>`).join('')
     : `<tr><td class="muted">${t('no_wall_pseudonyms')}</td></tr>`;
 

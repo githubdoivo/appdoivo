@@ -232,7 +232,7 @@ function renderMyPseudonym(pseudonym) {
   }
   el.innerHTML = `
     <span>${esc(t('wall_my_pseudonym_label'))} <strong>${esc(pseudonym)}</strong></span>
-    <button type="button" class="small ghost" id="reset-my-pseudonym-btn">${esc(t('wall_reset_pseudonym_btn'))}</button>`;
+    <button type="button" class="small" id="reset-my-pseudonym-btn">${esc(t('wall_reset_pseudonym_btn'))}</button>`;
   $('reset-my-pseudonym-btn').addEventListener('click', async () => {
     if (!(await showConfirm(t('confirm_reset_my_pseudonym')))) return;
     try {
