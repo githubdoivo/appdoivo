@@ -257,6 +257,24 @@ test("regenerating a user's key issues a new one and invalidates the old", async
   assert.equal(newLogin.status, 200);
 });
 
+test('regenerating a key also reopens first-time name-search retrieval for that user', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Wrongly Claimed Guest' } });
+
+  // Simulate someone else claiming it by mistake.
+  const claim = await api('POST', '/auth/claim-key', { body: { userId: created.data.id } });
+  assert.equal(claim.status, 200);
+
+  const goneFromSearch = await api('GET', '/auth/unclaimed-users?name=wrongly claimed');
+  assert.ok(!goneFromSearch.data.users.some((u) => u.id === created.data.id), 'setup: should be claimed and gone from search');
+
+  await api('POST', `/admin/users/${created.data.id}/regenerate-token`, { token: ADMIN });
+
+  const backInSearch = await api('GET', '/auth/unclaimed-users?name=wrongly claimed');
+  assert.ok(backInSearch.data.users.some((u) => u.id === created.data.id), 'regenerating the key should make the account findable again, so the rightful person can re-claim it');
+
+  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
+});
+
 /* ----------------------------- Consequences ------------------------------ */
 
 test('you can only suggest 1 consequence per day', async () => {

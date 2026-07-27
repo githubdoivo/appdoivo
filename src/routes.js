@@ -308,15 +308,18 @@ router.patch('/admin/users/:id/name', (req, res) => {
   res.json({ ok: true, id, name });
 });
 
-// Issues a brand-new access key for a user (e.g. they think it leaked).
-// Invalidates the previous key immediately - the caller is responsible for
-// getting the new one to them.
+// Issues a brand-new access key for a user (e.g. they think it leaked, or
+// someone else claimed it by mistake via the first-time name-search flow).
+// Invalidates the previous key immediately, AND reopens that same
+// name-search flow for them (key_claimed_at back to NULL) - so recovering
+// from a wrongly-claimed key is just "tell the owner, get regenerated,
+// find your name again," not the owner manually messaging a new key.
 router.post('/admin/users/:id/regenerate-token', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
   const token = generateUserToken(user.name);
-  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), key_claimed_at = NULL WHERE id = ?")
     .run(hashToken(token), encryptToken(token), id);
   res.json({ ok: true, id, name: user.name, token });
 });
