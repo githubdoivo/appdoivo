@@ -429,17 +429,17 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    (neutral ink for "all roles"), inactive stays a plain outline. */
 .role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Regular/Poll type + Publish share one row at the bottom of the post
-   form, instead of the type picker sitting above the whole form - Publish
-   pushed to the far edge via space-between since it's the row's only
-   other child. */
+/* Regular/Poll type + Publish share one row above the message/poll
+   fields, so the type choice (which controls what's shown below) and the
+   submit action both read as form-level controls, not buried under the
+   content. Publish pushed to the far edge via space-between since it's
+   the row's only other child. */
 .plaza-post-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 12px;
 }
 .plaza-post-footer button[type="submit"] { margin-left: auto; }
 .role-pill {
