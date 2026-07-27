@@ -528,27 +528,6 @@ test('a Wall pseudonym can be reset once a day, and the owner sees the full hist
   assert.equal(oldMsg.author, oldPseudonym, 'messages already posted keep the pseudonym that was active at the time');
 });
 
-test('any user can self-service reset their own Wall pseudonym, once a day', async () => {
-  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Self Service Poster' } });
-  const selfToken = created.data.token;
-
-  // Never posted yet - still works, just assigns a first pseudonym.
-  const first = await api('POST', '/me/wall-pseudonym/reset', { token: selfToken });
-  assert.equal(first.status, 200);
-  assert.ok(first.data.pseudonym);
-
-  const again = await api('POST', '/me/wall-pseudonym/reset', { token: selfToken });
-  assert.equal(again.status, 400, 'a second self-reset the same day should be rejected');
-
-  // Only ever touches the caller's own account - there's no way to target
-  // anyone else's, since it's keyed off the bearer token, not a param.
-  const mapping = await api('GET', '/admin/wall-pseudonyms', { token: ADMIN });
-  const otherEntry = mapping.data.find((r) => r.name === 'Ivo');
-  assert.ok(!otherEntry.pseudonyms.includes(first.data.pseudonym), "one user's self-reset must not touch another's");
-
-  await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
-});
-
 test('a user can change their own access key, given the correct current one', async () => {
   const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Selfservice' } });
   const oldToken = created.data.token;

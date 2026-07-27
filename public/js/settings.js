@@ -478,22 +478,34 @@ function foldAccents(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function roleOf(u) {
+  return u.is_owner ? 'owner' : u.is_admin ? 'admin' : 'user';
+}
+
+// Role filter narrows the VIEW only - it never affects whether "create"
+// is offered, which is purely about whether the typed name already
+// exists (creating always makes a plain user regardless of this filter).
+function byRole(users) {
+  const role = $('user-role-filter').value;
+  return role === 'all' ? users : users.filter((u) => roleOf(u) === role);
+}
+
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
   const createBtn = $('user-form').querySelector('button[type="submit"]');
 
   if (term.length < 3) {
-    renderUsersList(withRecentFirst(allUsers));
+    renderUsersList(withRecentFirst(byRole(allUsers)));
     $('user-search-hint').classList.add('hidden');
     createBtn.disabled = true;
     return;
   }
 
   const foldedTerm = foldAccents(term.toLowerCase());
-  const matches = allUsers.filter((u) => foldAccents(u.name.toLowerCase()).includes(foldedTerm));
-  renderUsersList(withRecentFirst(matches));
+  const nameMatches = allUsers.filter((u) => foldAccents(u.name.toLowerCase()).includes(foldedTerm));
+  renderUsersList(withRecentFirst(byRole(nameMatches)));
 
-  const noMatch = matches.length === 0;
+  const noMatch = nameMatches.length === 0;
   $('user-search-hint').classList.toggle('hidden', !noMatch);
   createBtn.disabled = !noMatch;
 }
@@ -504,6 +516,7 @@ async function loadUsers() {
 }
 
 $('user-name-input').addEventListener('input', applyUserSearch);
+$('user-role-filter').addEventListener('change', applyUserSearch);
 
 $('user-form').addEventListener('submit', async (e) => {
   e.preventDefault();

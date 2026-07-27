@@ -307,6 +307,34 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
 });
 
+test('Manage Users role filter narrows the list to just that role', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Filter Test User' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  await page.selectOption('#user-role-filter', 'owner');
+  await page.waitForTimeout(200);
+  const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
+
+  await page.selectOption('#user-role-filter', 'user');
+  await page.waitForTimeout(200);
+  const userRows = await page.$$eval('#users-list .user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(userRows.includes('Role Filter Test User'), 'filtering to "user" should include the plain user just created');
+  assert.ok(!userRows.includes('UI Test Admin'), 'filtering to "user" should exclude the owner');
+
+  await page.selectOption('#user-role-filter', 'all');
+  await page.waitForTimeout(200);
+  const allRows = await page.$$('#users-list .user-row');
+  assert.ok(allRows.length >= 2, 'switching back to "all roles" should restore the full list');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
 /* --------------- Manage Users key layout (regression) --------------- */
 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
