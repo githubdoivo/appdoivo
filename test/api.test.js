@@ -643,39 +643,100 @@ test('an invalid language value falls back to pt', async () => {
 
 /* ----------------------------------- Plaza ----------------------------------- */
 
-test('Plaza note: any logged-in user can read it, any admin (not just the owner) can write it', async () => {
-  const forbidden = await api('PUT', '/admin/plaza-note', { token: userToken, body: { note: 'sneaky' } });
+test('Plaza notes: any logged-in user can read the feed, any admin (not just the owner) can post a note', async () => {
+  const forbidden = await api('POST', '/admin/plaza-posts', { token: userToken, body: { type: 'note', text: 'sneaky' } });
   assert.equal(forbidden.status, 403);
 
-  const save = await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'welcome! wifi: mossycottage' } });
-  assert.equal(save.status, 200);
-  assert.equal(save.data.note, 'welcome! wifi: mossycottage');
+  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'welcome! wifi: mossycottage' } });
+  assert.equal(create.status, 200);
 
-  const read = await api('GET', '/plaza-note', { token: userToken });
+  const read = await api('GET', '/plaza-posts', { token: userToken });
   assert.equal(read.status, 200);
-  assert.equal(read.data.note, 'welcome! wifi: mossycottage');
+  const note = read.data.posts.find((p) => p.id === create.data.id);
+  assert.equal(note.type, 'note');
+  assert.equal(note.text, 'welcome! wifi: mossycottage');
+  assert.equal(note.author, 'Test Admin');
 
   // A regular (non-owner) admin can post to Plaza too now.
   const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Plaza Admin Poster' } });
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  const asAdmin = await api('PUT', '/admin/plaza-note', { token: nonOwnerAdmin.data.token, body: { note: 'admin-posted note' } });
+  const asAdmin = await api('POST', '/admin/plaza-posts', { token: nonOwnerAdmin.data.token, body: { type: 'note', text: 'admin-posted note' } });
   assert.equal(asAdmin.status, 200);
-  assert.equal(asAdmin.data.note, 'admin-posted note');
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
   await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
 
-  // Leave it empty for other tests/manual QA runs that don't expect a note.
-  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
+  await api('DELETE', `/admin/plaza-posts/${create.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/plaza-posts/${asAdmin.data.id}`, { token: ADMIN });
 });
 
-test('Plaza is gated behind ENABLE_PLAZA - off (prod default) means both endpoints 404', async () => {
+test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote changes it instead of adding another', async () => {
+  const bad = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Only one'] } });
+  assert.equal(bad.status, 400);
+
+  const create = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'Where for dinner?', options: ['Pizza', 'Sushi', 'Tacos'] },
+  });
+  assert.equal(create.status, 200);
+  const postId = create.data.id;
+
+  const before = await api('GET', '/plaza-posts', { token: userToken });
+  const poll = before.data.posts.find((p) => p.id === postId);
+  assert.equal(poll.type, 'poll');
+  assert.equal(poll.options.length, 3);
+  assert.ok(poll.options.every((o) => o.votes === 0));
+  assert.equal(poll.myOptionId, null);
+
+  const pizzaId = poll.options.find((o) => o.label === 'Pizza').id;
+  const sushiId = poll.options.find((o) => o.label === 'Sushi').id;
+
+  const vote1 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: pizzaId } });
+  assert.equal(vote1.status, 200);
+  let voted = vote1.data.posts.find((p) => p.id === postId);
+  assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 1);
+  assert.equal(voted.myOptionId, pizzaId);
+
+  // Voting again for a different option moves the vote, doesn't add one.
+  const vote2 = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: sushiId } });
+  voted = vote2.data.posts.find((p) => p.id === postId);
+  assert.equal(voted.options.find((o) => o.id === pizzaId).votes, 0);
+  assert.equal(voted.options.find((o) => o.id === sushiId).votes, 1);
+  assert.equal(voted.myOptionId, sushiId);
+
+  const badVote = await api('POST', `/plaza-posts/${postId}/vote`, { token: userToken, body: { optionId: 999999 } });
+  assert.equal(badVote.status, 400);
+
+  await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
+});
+
+test('Plaza posts: only an admin can delete, and deleting one leaves the rest of the feed untouched', async () => {
+  const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'temporary note' } });
+  const postId = create.data.id;
+
+  const forbidden = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: userToken });
+  assert.equal(forbidden.status, 403);
+
+  const del = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
+  assert.equal(del.status, 200);
+
+  const after = await api('GET', '/plaza-posts', { token: userToken });
+  assert.ok(!after.data.posts.some((p) => p.id === postId), 'deleted post should no longer appear in the feed');
+
+  const missing = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
+  assert.equal(missing.status, 404);
+});
+
+test('Plaza is gated behind ENABLE_PLAZA - off (prod default) means every endpoint 404s', async () => {
   process.env.ENABLE_PLAZA = 'false';
   try {
-    const read = await api('GET', '/plaza-note', { token: userToken });
+    const read = await api('GET', '/plaza-posts', { token: userToken });
     assert.equal(read.status, 404);
 
-    const write = await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'should not save' } });
+    const write = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'should not save' } });
     assert.equal(write.status, 404);
+
+    const vote = await api('POST', '/plaza-posts/1/vote', { token: userToken, body: { optionId: 1 } });
+    assert.equal(vote.status, 404);
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }

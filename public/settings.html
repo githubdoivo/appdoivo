@@ -55,17 +55,31 @@
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
-      <!-- Separador: Plaza (qualquer admin pode escrever - nota fixada,
-           visivel a todos na app principal via GET /plaza-note) -->
+      <!-- Separador: Plaza (qualquer admin pode publicar - feed visivel a
+           todos na app principal via GET /plaza-posts) -->
       <div id="atab-plaza" class="tab-panel hidden">
         <div class="card">
-          <h2 data-i18n="plaza_admin_title">Nota da Plaza</h2>
+          <h2 data-i18n="plaza_admin_title">Nova publicação</h2>
           <p class="help" data-i18n="plaza_admin_help">Explicação</p>
-          <form id="plaza-note-form" style="margin-top:12px">
-            <textarea id="plaza-note-input" rows="4" maxlength="500" data-i18n-ph="plaza_note_ph" placeholder="Mensagem..."></textarea>
-            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
-            <span id="plaza-note-msg" class="muted"></span>
+          <div class="role-pills" id="plaza-post-type" style="margin-top:12px">
+            <button type="button" class="role-pill active" data-post-type="note" data-i18n="plaza_type_note">Nota</button>
+            <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Sondagem</button>
+          </div>
+          <form id="plaza-post-form" style="margin-top:12px">
+            <textarea id="plaza-post-text" rows="3" maxlength="500" data-i18n-ph="plaza_post_text_ph" placeholder="Mensagem..."></textarea>
+            <div id="plaza-poll-options" class="hidden" style="margin-top:10px">
+              <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
+              <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
+              <button type="button" id="plaza-add-option-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_option">Adicionar opção</button>
+            </div>
+            <button type="submit" class="small" style="margin-top:12px" data-i18n="plaza_publish_btn">Publicar</button>
+            <span id="plaza-post-msg" class="muted"></span>
           </form>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="plaza_posts_list_title">Publicações</h2>
+          <div id="plaza-posts-list" style="margin-top:12px"></div>
         </div>
       </div>
 

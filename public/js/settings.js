@@ -750,23 +750,84 @@ async function loadWallPseudonyms() {
 }
 
 /* --------------------------------- Plaza ---------------------------------- */
-// Owner-only note pinned to everyone's Plaza landing page (see GET
-// /plaza-note in app.js). Saving broadcasts a notification.
+// Owner/admin-authored feed on everyone's Plaza landing page (see GET
+// /plaza-posts in app.js). Two post types: a plain note, or a poll with
+// 2-6 options. Publishing broadcasts a notification.
 
-async function loadPlazaNote() {
-  const { note } = await api('/plaza-note');
-  $('plaza-note-input').value = note;
+const MAX_POLL_OPTIONS = 6;
+let plazaPostType = 'note';
+
+$('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    plazaPostType = btn.dataset.postType;
+    $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+  });
+});
+
+$('plaza-add-option-btn').addEventListener('click', () => {
+  const inputs = $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input');
+  if (inputs.length >= MAX_POLL_OPTIONS) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'plaza-poll-option-input';
+  input.placeholder = t('plaza_option_ph');
+  input.maxLength = 60;
+  input.style.marginTop = '8px';
+  $('plaza-add-option-btn').before(input);
+});
+
+async function loadPlazaPosts() {
+  const { posts } = await api('/plaza-posts');
+  $('plaza-posts-list').innerHTML = posts.length
+    ? posts.map((p) => `
+      <div class="user-row">
+        <div class="user-row-top">
+          <div class="user-row-name">
+            <span class="badge${p.type === 'poll' ? ' role-admin' : ' role-user'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_note')}</span>
+            <span class="muted">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</span>
+          </div>
+        </div>
+        <p style="margin:8px 0 0">${esc(p.text)}</p>
+        ${p.type === 'poll' ? `
+        <ul class="muted" style="margin:8px 0 0;padding-left:18px">
+          ${p.options.map((o) => `<li>${esc(o.label)} - ${o.votes}</li>`).join('')}
+        </ul>` : ''}
+        <div class="row-actions">
+          <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
+        </div>
+      </div>`).join('')
+    : `<p class="muted">${t('plaza_no_posts')}</p>`;
+
+  $('plaza-posts-list').querySelectorAll('[data-del-post]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      if (!(await showConfirm(t('plaza_confirm_delete_post')))) return;
+      try {
+        await api(`/admin/plaza-posts/${b.dataset.delPost}`, { method: 'DELETE' });
+        loadPlazaPosts();
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
 }
 
-$('plaza-note-form').addEventListener('submit', async (e) => {
+$('plaza-post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  $('plaza-note-msg').textContent = '';
+  $('plaza-post-msg').textContent = '';
+  const text = $('plaza-post-text').value;
+  const options = plazaPostType === 'poll'
+    ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
+    : undefined;
   try {
-    await api('/admin/plaza-note', { method: 'PUT', body: { note: $('plaza-note-input').value } });
-    $('plaza-note-msg').textContent = t('saved');
-    setTimeout(() => ($('plaza-note-msg').textContent = ''), 2000);
+    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
+    $('plaza-post-text').value = '';
+    $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
+    $('plaza-post-msg').textContent = t('saved');
+    setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
+    loadPlazaPosts();
   } catch (err) {
-    $('plaza-note-msg').textContent = err.message;
+    $('plaza-post-msg').textContent = err.message;
   }
 });
 
@@ -778,7 +839,7 @@ function selectAdminTab(tab) {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
-  if (tab === 'plaza' && isAdmin) loadPlazaNote();
+  if (tab === 'plaza' && isAdmin) loadPlazaPosts();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

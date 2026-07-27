@@ -78,6 +78,37 @@ db.exec(`
     pseudonym  TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
+
+  -- Plaza feed: owner/admin-authored posts, most-recent-first. 'note' is a
+  -- plain announcement (wifi password, house rules, release notes); 'poll'
+  -- adds options for everyone to vote on (e.g. picking a dinner spot).
+  CREATE TABLE IF NOT EXISTS plaza_posts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    type       TEXT NOT NULL,
+    author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS plaza_poll_options (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id  INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
+    label    TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- One row per (user, post): voting for a different option in the same
+  -- poll overwrites this row (see castPlazaVote() in routes.js) rather
+  -- than adding a second vote.
+  CREATE TABLE IF NOT EXISTS plaza_poll_votes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id    INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
+    option_id  INTEGER NOT NULL REFERENCES plaza_poll_options(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_plaza_vote_user_post
+    ON plaza_poll_votes(user_id, post_id);
 `);
 
 /** Checks whether a column exists in a table. */

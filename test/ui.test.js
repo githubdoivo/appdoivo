@@ -215,8 +215,8 @@ test('a first-time user can find their name, claim their key, and get logged str
 
 /* --------------------------------- Plaza ----------------------------------- */
 
-test('Plaza opens by default, shows a saved owner note, and lets the owner edit it', async () => {
-  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'wifi: mossycottage' } });
+test('Plaza opens by default and shows a posted note in the feed', async () => {
+  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'note', text: 'wifi: mossycottage' } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
@@ -224,21 +224,44 @@ test('Plaza opens by default, shows a saved owner note, and lets the owner edit 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
   assert.ok(plazaActive, 'Plaza should be the tab shown right after logging in');
 
-  await page.waitForFunction(() => document.getElementById('plaza-note-text').textContent.length > 0);
-  const noteVisible = await page.$eval('#plaza-note-card', (el) => !el.classList.contains('hidden'));
-  assert.ok(noteVisible, 'a non-empty owner note should show on Plaza');
-  const noteText = await page.$eval('#plaza-note-text', (el) => el.textContent);
+  await page.waitForSelector('.plaza-post-note', { timeout: 5000 });
+  const noteText = await page.$eval('.plaza-post-note .plaza-post-text', (el) => el.textContent);
   assert.equal(noteText, 'wifi: mossycottage');
 
-  await page.goto(base + '/settings.html');
-  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+  await context.close();
+  await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+});
+
+test('Plaza admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="plaza"]');
-  await page.waitForFunction(() => document.getElementById('plaza-note-input').value.length > 0);
-  const inputValue = await page.$eval('#plaza-note-input', (el) => el.value);
-  assert.equal(inputValue, 'wifi: mossycottage', 'the admin editor should be pre-filled with the current note');
+  await page.waitForSelector('#plaza-post-form', { timeout: 5000 });
+
+  await page.click('[data-post-type="poll"]');
+  await page.fill('#plaza-post-text', 'Where for dinner?');
+  const optionInputs = page.locator('.plaza-poll-option-input');
+  await optionInputs.nth(0).fill('Pizza');
+  await optionInputs.nth(1).fill('Sushi');
+  await page.click('#plaza-post-form button[type="submit"]');
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: 5000 });
+
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('.plaza-post-poll', { timeout: 5000 });
+
+  const questionText = await page.$eval('.plaza-post-poll .plaza-post-text', (el) => el.textContent);
+  assert.equal(questionText, 'Where for dinner?');
+
+  await page.click('.plaza-poll-option:has-text("Pizza")');
+  await page.waitForFunction(() => document.querySelector('.plaza-poll-option.voted')?.textContent.includes('Pizza'));
+  const pizzaPct = await page.$eval('.plaza-poll-option.voted .plaza-poll-option-pct', (el) => el.textContent);
+  assert.equal(pizzaPct, '100%');
 
   await context.close();
-  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
+  const { posts } = await api('GET', '/plaza-posts', { token: ADMIN });
+  const created = posts.find((p) => p.text === 'Where for dinner?');
+  await api('DELETE', `/admin/plaza-posts/${created.id}`, { token: ADMIN });
 });
 
 /* --------------------- Role badge colors (regression) --------------------- */

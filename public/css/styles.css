@@ -935,22 +935,6 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-tagline { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 6px 0 0; }
 
-/* Notice + glance items read as brief front-page columns - a kicker label
-   above a headline-style line - not bordered app cards. */
-.plaza-notice, .plaza-item {
-  appearance: none;
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  padding: 16px 0;
-  font: inherit;
-  color: inherit;
-}
-.plaza-item { cursor: pointer; }
-.plaza-item:last-of-type { border-bottom: 1px solid var(--line); }
 .plaza-eyebrow {
   display: block;
   font-family: var(--body);
@@ -960,23 +944,60 @@ html.mode-dark body.theme-plaza {
   text-transform: uppercase;
   color: var(--clay);
 }
-.plaza-headline {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 1.2rem;
-  color: var(--ink);
-  margin: 6px 0 0;
-  text-wrap: balance;
-}
-.plaza-item:hover .plaza-headline { color: var(--clay-2); }
-.plaza-notice-text {
+
+/* Plaza feed: most-recent-first posts, two banner styles so a glance tells
+   a note from a poll - a plain torn front-page column for notes, a boxed
+   "magazine spread" card for polls (the interactive one). */
+.plaza-feed { display: flex; flex-direction: column; }
+.plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
+.plaza-post:first-child { border-top: none; padding-top: 0; }
+.plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
   color: var(--ink);
-  margin-top: 8px;
+  margin: 8px 0 0;
   padding-left: 14px;
   border-left: 3px solid var(--clay);
+  text-wrap: balance;
 }
+.plaza-byline { font-family: var(--body); font-size: 0.78rem; font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+
+.plaza-post-poll {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin: 10px 0;
+}
+.plaza-post-poll.plaza-post:first-child { margin-top: 0; }
+.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+
+.plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.plaza-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.plaza-poll-option.voted { border-color: var(--clay); }
+.plaza-poll-option-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--clay) 18%, transparent);
+  transition: width 0.3s ease;
+}
+.plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
+.plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {

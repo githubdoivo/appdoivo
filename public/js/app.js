@@ -385,6 +385,61 @@ function timeAgo(dbTimestamp) {
   return t(day === 1 ? 'time_ago_day' : 'time_ago_days', { n: day });
 }
 
+// Renders one post as either a plain-note "torn column" or a poll "magazine
+// card" (see .plaza-post-note/.plaza-post-poll in styles.css) - the two
+// banner styles the owner asked for so a glance tells notes and polls apart.
+function renderPlazaPost(post) {
+  const eyebrow = t(post.type === 'poll' ? 'plaza_post_poll_label' : 'plaza_post_note_label');
+  const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
+
+  if (post.type !== 'poll') {
+    return `
+      <article class="plaza-post plaza-post-note">
+        <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+        <p class="plaza-post-text">${esc(post.text)}</p>
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
+
+  const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
+  const optionsHtml = post.options.map((o) => {
+    const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
+    const voted = post.myOptionId === o.id;
+    return `
+      <button type="button" class="plaza-poll-option${voted ? ' voted' : ''}" data-vote-post="${post.id}" data-vote-option="${o.id}">
+        <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
+        <span class="plaza-poll-option-label">${esc(o.label)}</span>
+        <span class="plaza-poll-option-pct">${pct}%</span>
+      </button>`;
+  }).join('');
+
+  return `
+    <article class="plaza-post plaza-post-poll">
+      <span class="plaza-eyebrow">${esc(eyebrow)}</span>
+      <p class="plaza-post-text">${esc(post.text)}</p>
+      <div class="plaza-poll-options">${optionsHtml}</div>
+      <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
+    </article>`;
+}
+
+function renderPlazaFeed(posts) {
+  $('plaza-feed').innerHTML = posts.map(renderPlazaPost).join('');
+  $('plaza-feed-empty').classList.toggle('hidden', posts.length > 0);
+  $('plaza-feed').querySelectorAll('[data-vote-post]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const { posts: updated } = await api(`/plaza-posts/${btn.dataset.votePost}/vote`, {
+          method: 'POST',
+          body: { optionId: Number(btn.dataset.voteOption) },
+        });
+        renderPlazaFeed(updated);
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
+}
+
 async function loadPlaza() {
   // Newspaper dateline, e.g. "quarta-feira, 27 de julho" / "Wednesday, July 27".
   $('plaza-dateline').textContent = new Intl.DateTimeFormat(getLang() === 'pt' ? 'pt-PT' : 'en-US', {
@@ -394,33 +449,9 @@ async function loadPlaza() {
   }).format(new Date());
 
   try {
-    const { note } = await api('/plaza-note');
-    $('plaza-note-card').classList.toggle('hidden', !note);
-    $('plaza-note-text').textContent = note;
+    const { posts } = await api('/plaza-posts');
+    renderPlazaFeed(posts);
   } catch { /* transient - leaves whatever was last shown */ }
-
-  try {
-    const data = await api('/consequences/current');
-    $('plaza-rata-summary').textContent = data.current ? data.current.text : t('rata_none');
-  } catch { /* transient */ }
-
-  try {
-    const data = await api(`/votes/status?night=${encodeURIComponent(getNight())}`);
-    let statusKey;
-    if (!data.started) statusKey = 'plaza_outfit_wait';
-    else if (data.status === 'registration') statusKey = 'plaza_outfit_registration';
-    else if (data.status === 'open') statusKey = 'plaza_outfit_voting';
-    else if (data.resultsPhase === 'hidden') statusKey = 'plaza_outfit_closed_pending';
-    else if (data.resultsPhase === 'all') statusKey = 'plaza_outfit_done';
-    else statusKey = 'plaza_outfit_revealing';
-    $('plaza-outfit-summary').textContent = t(statusKey);
-  } catch { /* transient */ }
-
-  try {
-    const { messages } = await api('/chat/messages');
-    const last = messages[messages.length - 1];
-    $('plaza-wall-summary').textContent = last ? t('plaza_wall_last', { time: timeAgo(last.created_at) }) : t('chat_empty');
-  } catch { /* transient */ }
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
