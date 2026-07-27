@@ -36,7 +36,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, createPlazaPost, deletePlazaPost, castPlazaVote } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote } from './plaza.js';
 
 const router = Router();
 
@@ -158,6 +158,11 @@ router.post('/me/change-token', (req, res) => {
 router.get('/plaza-posts', (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   res.json({ posts: listPlazaPosts(req.user.id) });
+});
+
+router.get('/admin/plaza-posts', requireAdmin, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  res.json({ posts: listPlazaPostsForAdmin() });
 });
 
 router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {

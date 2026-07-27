@@ -166,12 +166,15 @@ $('lang-toggle').addEventListener('click', () => {
 
 // Night currently selected in the panel (scope of controls/contestants/votes).
 function currentNight() {
-  return $('admin-night')?.value || 'furnished';
+  return $('admin-night-switch')?.querySelector('.active')?.dataset.night || 'furnished';
 }
 
-$('admin-night').addEventListener('change', () => {
-  loadVotingState();
-  loadContestants();
+$('admin-night-switch').querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+    loadVotingState();
+    loadContestants();
+  });
 });
 
 // What clicking "reveal next" will do, keyed by the *current* phase.
@@ -778,7 +781,7 @@ $('plaza-add-option-btn').addEventListener('click', () => {
 });
 
 async function loadPlazaPosts() {
-  const { posts } = await api('/plaza-posts');
+  const { posts } = await api('/admin/plaza-posts');
   $('plaza-posts-list').innerHTML = posts.length
     ? posts.map((p) => `
       <div class="user-row">
@@ -791,7 +794,10 @@ async function loadPlazaPosts() {
         <p style="margin:8px 0 0">${esc(p.text)}</p>
         ${p.type === 'poll' ? `
         <ul class="muted" style="margin:8px 0 0;padding-left:18px">
-          ${p.options.map((o) => `<li>${esc(o.label)} - ${o.votes}</li>`).join('')}
+          ${p.options.map((o) => {
+            const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
+            return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
+          }).join('')}
         </ul>` : ''}
         <div class="row-actions">
           <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>

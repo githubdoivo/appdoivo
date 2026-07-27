@@ -87,11 +87,13 @@
       <div id="atab-outfit" class="tab-panel hidden">
         <!-- A noite selecionada aqui governa concorrentes, votos e o registo
              de votantes mais abaixo - não é so o controlo da votação - por
-             isso fica solta no topo, fora de qualquer card. -->
-        <select id="admin-night" class="night-select">
-          <option value="furnished">Furnished</option>
-          <option value="swamp">Swamp</option>
-        </select>
+             isso fica solta no topo, fora de qualquer card. Mesmo
+             componente "switch" da Best Look principal (theme-switch),
+             não um <select>. -->
+        <div class="theme-switch night-switch" id="admin-night-switch">
+          <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
+          <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
+        </div>
 
         <div class="card">
           <h2 data-i18n="voting_control_title">Controlo da votação</h2>

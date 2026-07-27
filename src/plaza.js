@@ -38,6 +38,43 @@ export function listPlazaPosts(userId) {
 }
 
 /**
+ * Same feed as listPlazaPosts(), but for the admin Plaza page: polls also
+ * carry a `voters` list (who picked what) instead of just the aggregate
+ * tally. Unlike Best Look's voter log (owner-only - see /admin/votes),
+ * this is open to any admin, not just the owner.
+ */
+export function listPlazaPostsForAdmin() {
+  const posts = db.prepare(`
+    SELECT p.id, p.type, p.text, p.created_at, u.name AS author
+    FROM plaza_posts p
+    JOIN users u ON u.id = p.author_id
+    ORDER BY p.created_at DESC, p.id DESC
+  `).all();
+
+  const optionsStmt = db.prepare(`
+    SELECT o.id, o.label, COUNT(v.id) AS votes
+    FROM plaza_poll_options o
+    LEFT JOIN plaza_poll_votes v ON v.option_id = o.id
+    WHERE o.post_id = ?
+    GROUP BY o.id
+    ORDER BY o.position ASC, o.id ASC
+  `);
+  const votersStmt = db.prepare(`
+    SELECT u.name AS name, o.label AS option
+    FROM plaza_poll_votes v
+    JOIN users u ON u.id = v.user_id
+    JOIN plaza_poll_options o ON o.id = v.option_id
+    WHERE v.post_id = ?
+    ORDER BY u.name COLLATE NOCASE
+  `);
+
+  return posts.map((p) => {
+    if (p.type !== 'poll') return p;
+    return { ...p, options: optionsStmt.all(p.id), voters: votersStmt.all(p.id) };
+  });
+}
+
+/**
  * Creates a note or a poll. Notes ignore `options`; polls require 2-6
  * non-empty option labels. Returns { ok, post } or { error }.
  */

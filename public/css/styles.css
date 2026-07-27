@@ -300,8 +300,13 @@ select:hover { border-color: var(--clay); }
 
 /* Night picker atop Best Look admin - governs contestants/votes/voter-log
    below it too, not just the voting-control card, so it sits outside any
-   single card. */
-.night-select { width: auto; min-width: 200px; margin-bottom: 18px; font-weight: 600; }
+   single card. Reuses the main app's .theme-switch component instead of a
+   <select>, but this page never gets a body.theme-outfit class (no per-
+   night reskin here), so var(--ot) is never set - fill the active state
+   with the general accent instead. */
+.night-switch { margin-bottom: 18px; }
+.night-switch button.active { background: var(--clay); color: var(--paper-3); }
+.night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
 
 label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
@@ -913,27 +918,6 @@ html.mode-dark body.theme-plaza {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23e8e2d3' fill-opacity='0.05'/%3E%3C/svg%3E");
 }
-
-.plaza-masthead { text-align: center; padding: 6px 0 22px; border-bottom: 4px double var(--clay); margin-bottom: 24px; }
-.plaza-dateline {
-  font-family: var(--body);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin: 0 0 6px;
-}
-.plaza-title {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 600;
-  font-size: 2.6rem;
-  color: var(--clay);
-  margin: 0;
-  text-wrap: balance;
-}
-.plaza-tagline { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 6px 0 0; }
 
 .plaza-eyebrow {
   display: block;

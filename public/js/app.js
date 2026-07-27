@@ -441,13 +441,6 @@ function renderPlazaFeed(posts) {
 }
 
 async function loadPlaza() {
-  // Newspaper dateline, e.g. "quarta-feira, 27 de julho" / "Wednesday, July 27".
-  $('plaza-dateline').textContent = new Intl.DateTimeFormat(getLang() === 'pt' ? 'pt-PT' : 'en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
-
   try {
     const { posts } = await api('/plaza-posts');
     renderPlazaFeed(posts);

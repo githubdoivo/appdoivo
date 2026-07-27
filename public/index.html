@@ -83,16 +83,10 @@
       <button class="tab" data-tab="chat" data-i18n="tab_chat">Chat</button>
     </nav>
 
-    <!-- Plaza: landing page - host notes (pinned, if any) + a quick glance
-         at what's happening across A Rata/Best Look/Wall right now, styled
-         like a daily front page rather than app cards. -->
+    <!-- Plaza: landing page - a feed of owner/admin-authored posts (notes
+         + polls), most-recent-first. No masthead - the tab bar already
+         says "plaza", so a repeated title/dateline/rule was redundant. -->
     <div id="tab-plaza" class="tab-panel">
-      <header class="plaza-masthead">
-        <p class="plaza-dateline" id="plaza-dateline"></p>
-        <h1 class="plaza-title" data-i18n="tab_plaza">Plaza</h1>
-        <p class="plaza-tagline" data-i18n="plaza_hero">O que se passa agora.</p>
-      </header>
-
       <div id="plaza-feed" class="plaza-feed"></div>
       <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
     </div>
