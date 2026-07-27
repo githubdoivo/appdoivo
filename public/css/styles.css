@@ -30,6 +30,14 @@
   --radius:   4px;
   --shadow:   0 12px 40px rgba(43, 39, 33, 0.12);
 
+  /* Small-text and heading scale - consolidates what used to be ~15 one-off
+     sizes (0.6-0.78rem for badges/buttons/labels, 1.15-1.5rem for card and
+     section headings) into two tiers each. */
+  --text-xs:   0.66rem;
+  --text-sm:   0.74rem;
+  --heading-sm: 1.2rem;
+  --heading-md: 1.4rem;
+
   --serif:  'Cormorant Garamond', Georgia, serif;
   --body:   'EB Garamond', Georgia, serif;
   --script: 'Italianno', cursive;
@@ -116,7 +124,7 @@ body {
   position: fixed;
   right: 10px;
   bottom: calc(6px + env(safe-area-inset-bottom));
-  font-size: 0.68rem;
+  font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.4;
   letter-spacing: 0.02em;
@@ -319,7 +327,7 @@ select:hover { border-color: var(--clay); }
 #admin-night-switch button.active,
 #admin-night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
 
-label.field { display: block; margin: 4px 0 2px; font-size: 0.72rem; font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+label.field { display: block; margin: 4px 0 2px; font-size: var(--text-sm); font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 
 /* -------------------------------- Botoes --------------------------------- */
 
@@ -352,10 +360,10 @@ button.ghost, a.ghost {
   color: var(--ink);
   border: 1px solid var(--line);
   padding: 7px 12px;
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
 }
 button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transparent; }
-button.small { padding: 7px 12px; font-size: 0.64rem; letter-spacing: 0.14em; }
+button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
 button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
@@ -389,7 +397,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   border: 1.5px solid var(--clay);
   color: var(--clay);
@@ -414,7 +422,7 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   background: none;
   border: 1.5px solid var(--line);
@@ -615,7 +623,7 @@ html.mode-light .hero-line { color: var(--ink); }
   min-width: 40px;
 }
 .tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
-.tier .votes { font-family: var(--body); font-size: 0.72rem; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
+.tier .votes { font-family: var(--body); font-size: var(--text-sm); text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 .tier li:nth-child(-n+3) .name { font-weight: 600; }
 
 /* Podium reveal in progress (before "all"): the row already states its own
@@ -632,7 +640,7 @@ html.mode-light .hero-line { color: var(--ink); }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: 0.66rem; color: var(--ink-soft); font-weight: 600; }
+th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em; font-size: var(--text-xs); color: var(--ink-soft); font-weight: 600; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 /* Lista de utilizadores em cartoes (evita colunas espremidas em mobile) */
@@ -932,7 +940,7 @@ html.mode-dark body.theme-plaza {
   display: block;
   font-family: var(--body);
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--clay);
@@ -955,7 +963,7 @@ html.mode-dark body.theme-plaza {
   border-left: 3px solid var(--clay);
   text-wrap: balance;
 }
-.plaza-byline { font-family: var(--body); font-size: 0.78rem; font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+.plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
 
 .plaza-post-announcement.pinned {
   background: var(--paper-2);
@@ -969,7 +977,7 @@ html.mode-dark body.theme-plaza {
   display: inline-block;
   font-family: var(--body);
   font-weight: 700;
-  font-size: 0.6rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--paper-3);
@@ -1054,7 +1062,7 @@ html.mode-dark body.theme-plaza {
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.22em;
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
   color: var(--ot);
 }
 .outfit-theme-eyebrow #outfit-theme-name { font-weight: 600; }
@@ -1074,7 +1082,7 @@ html.mode-dark body.theme-plaza {
   background: transparent;
   color: var(--ink-soft);
   padding: 8px 14px;
-  font-size: 0.64rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
   border-radius: 0;
 }
@@ -1172,8 +1180,8 @@ html.mode-dark body.theme-plaza {
 .chat-msg { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .chat-msg:last-child { border-bottom: none; }
 .chat-msg-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
-.chat-msg-author { font-family: var(--body); font-size: 0.66rem; text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
-.chat-msg-time { font-family: var(--body); font-size: 0.62rem; color: var(--ink-soft); white-space: nowrap; }
+.chat-msg-author { font-family: var(--body); font-size: var(--text-xs); text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
+.chat-msg-time { font-family: var(--body); font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
 .chat-empty { color: var(--ink-soft); font-style: italic; font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }
