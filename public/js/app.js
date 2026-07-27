@@ -517,8 +517,8 @@ async function loadPlaza() {
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
-// Polled while the tab is open, so a consequence revealed by the hourly
-// cron (or an admin's manual reveal) shows up without a manual reload.
+// Polled while the tab is open, so a consequence revealed by the
+// scheduled cron (or an admin's manual reveal) shows up without a manual reload.
 let rataPollTimer = null;
 
 function startRataPolling() {

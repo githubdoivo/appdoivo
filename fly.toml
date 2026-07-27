@@ -14,7 +14,7 @@
 # Notas:
 #   - TIMEZONE e PORT ficam abaixo em [env] (nao sao segredos).
 #   - min_machines_running = 1 mantem a maquina acordada para a revelacao
-#     horaria da Rata funcionar mesmo sem trafego. Poe 0 fora dos eventos
+#     da Rata (a cada 3h) funcionar mesmo sem trafego. Poe 0 fora dos eventos
 #     para poupar (mas ai o cron so corre quando houver visitas).
 
 app = "appdoivo"

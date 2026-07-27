@@ -2,7 +2,7 @@ import app, { seedResult } from './app.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './seedDemo.js';
 
-// Start the scheduler (hourly consequence reveal).
+// Start the scheduler (consequence reveal every 3 hours).
 startScheduler();
 
 // QA-only: the DB is ephemeral there (resets on every deploy/restart), so

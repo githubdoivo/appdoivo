@@ -1,7 +1,7 @@
 {
   "name": "appdoivo",
   "version": "1.1.11",
-  "description": "Web app com duas features: consequencias (rata) e votos.",
+  "description": "Web app de festa com quatro features: wall, rata, snatch e plaza.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

@@ -4,7 +4,7 @@
 // are normally event-specific and only ever added manually by the owner -
 // that's still true in production (SEED_DEMO is never set there). QA is the
 // one exception: 5 contestants per night are seeded automatically from the
-// demo user template, so Best Look is testable without manual setup.
+// demo user template, so Snatch is testable without manual setup.
 import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';

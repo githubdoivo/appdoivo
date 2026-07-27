@@ -7,8 +7,9 @@ import { getTimezone } from './time.js';
  *  - Every 3 hours (minute 0) between 16:00 and 04:00: reveals a random
  *    consequence and notifies. No reveals 05:00-15:00. Hourly was too much
  *    to keep track of, so this is spaced out.
- * The Wall has no time-based expiry (just the 20-most-recent cap, applied
- * inline on every post/read in chat.js), so it needs no scheduled job.
+ * The Wall has no time-based expiry or cap at all. Plaza (the open group
+ * chat) has its own 15-most-recent cap, applied inline on every post/read
+ * in chat.js, so neither needs a scheduled job.
  * (Voting is controlled manually by the admin, not on a schedule.)
  */
 export function startScheduler() {
@@ -24,7 +25,7 @@ export function startScheduler() {
         console.log('[cron] No pending consequences to reveal.');
       }
     } catch (err) {
-      console.error('[cron] Error in hourly job:', err);
+      console.error('[cron] Error in reveal job:', err);
     }
   }, { timezone: tz });
 

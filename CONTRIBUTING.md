@@ -44,18 +44,22 @@ session's work and deploy once at the end.
    via `npm install`'s `postinstall` - no husky, plain git hook) runs
    `npm test` and blocks the commit if anything fails, so this doesn't rely
    on remembering to run it manually.
-4. Push, open a PR, and merge it into `main` (delete the branch on merge -
-   `gh pr merge --merge --delete-branch`). Every push and PR also runs the
-   same suite via GitHub Actions (`.github/workflows/test.yml`) - a red
-   check there means the branch isn't safe to merge.
-5. Deploy `main` to QA with `scripts/deploy.sh qa` (wraps `npm test` +
-   `fly deploy -a appdoivo-qa --config fly.qa.toml` - refuses to deploy if
-   tests fail) and verify manually at https://qa.appdoivo.com.
-6. Only after QA is confirmed working: deploy to production with
+4. Push the branch. Every push and PR also runs the same suite via GitHub
+   Actions (`.github/workflows/test.yml`) - a red check there means the
+   branch isn't safe to deploy or merge.
+5. Deploy the branch straight to QA with `scripts/deploy.sh qa` (wraps
+   `npm test` + `fly deploy -a appdoivo-qa --config fly.qa.toml` - refuses
+   to deploy if tests fail) so it can be checked live at
+   https://qa.appdoivo.com before it's even merged. Bump the version in
+   `package.json` before each QA deploy, so the version badge makes it
+   obvious which build is live.
+6. Once it's confirmed working on QA, open a PR and merge it into `main`
+   (delete the branch on merge - `gh pr merge --merge --delete-branch`).
+7. Only after merging: deploy `main` to production with
    `scripts/deploy.sh prod`. Fly's GitHub integration is connected but has
    not reliably auto-deployed on push in practice, so treat this script as
    the real deploy step, not the integration.
-7. Verify production directly (HTTP check, login, and whatever the batch
+8. Verify production directly (HTTP check, login, and whatever the batch
    actually touched) before considering the session's work done.
 
 ## Secrets
