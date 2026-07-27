@@ -444,6 +444,20 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
 html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
 .card h2 { font-size: 1.15rem; font-style: italic; font-weight: 500; margin-bottom: 6px; }
 
+/* Plaza's dashboard cards are <button>s (so the whole card is a tap target
+   to jump to that tab) - reset button chrome back to plain .card look. */
+button.plaza-glance {
+  appearance: none;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+button.plaza-glance:hover { border-color: var(--clay); }
+
 .hero-line {
   font-family: var(--serif);
   font-style: italic;

@@ -578,6 +578,24 @@ test('an invalid language value falls back to pt', async () => {
   assert.equal(me.data.lang, 'pt');
 });
 
+/* ----------------------------------- Plaza ----------------------------------- */
+
+test('Plaza note: any logged-in user can read it, only the owner can write it', async () => {
+  const forbidden = await api('PUT', '/admin/plaza-note', { token: userToken, body: { note: 'sneaky' } });
+  assert.equal(forbidden.status, 403);
+
+  const save = await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'welcome! wifi: mossycottage' } });
+  assert.equal(save.status, 200);
+  assert.equal(save.data.note, 'welcome! wifi: mossycottage');
+
+  const read = await api('GET', '/plaza-note', { token: userToken });
+  assert.equal(read.status, 200);
+  assert.equal(read.data.note, 'welcome! wifi: mossycottage');
+
+  // Leave it empty for other tests/manual QA runs that don't expect a note.
+  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
+});
+
 /* ------------------------------- Rate limiting ------------------------------ */
 // Runs last in the file on purpose: it exhausts this IP's shared
 // login/auth-guess budget, which would make any *later* test expecting a
