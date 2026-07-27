@@ -227,6 +227,53 @@ test('Manage Users: a freshly created user floats to the top of this session\'s 
   await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
 });
 
+test('clicking a user\'s name renames it in place - no separate rename button', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Original Name' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  // Anchor on the token div, not the name span - the span itself gets
+  // replaced by an <input> once editing starts, so a locator keyed off
+  // its text would stop matching the row mid-interaction.
+  const row = page.locator('.user-row', { has: page.locator(`[data-token="${created.token}"]`) });
+  await row.locator('.user-row-name-text').click();
+  await row.locator('input.user-row-name-text').fill('Renamed Via Click');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+
+  const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(names.includes('Renamed Via Click'), 'clicking the name should have opened an editable field that saved on Enter');
+  assert.ok(!names.includes('Original Name'), 'the old name should be gone once renamed');
+
+  const renameButtons = await page.locator('.row-actions button', { hasText: /renom|rename/i }).count();
+  assert.equal(renameButtons, 0, 'rename should no longer be a separate button in the row actions');
+
+  await context.close();
+  const updated = await api('GET', '/admin/users', { token: ADMIN });
+  const renamed = updated.find((u) => u.name === 'Renamed Via Click');
+  await api('DELETE', `/admin/users/${renamed.id}`, { token: ADMIN });
+});
+
+test('user search ignores accents - "cesar" finds "César"', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'César Session Search' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="users"]');
+  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+
+  await page.fill('#user-name-input', 'cesar session');
+  await page.waitForTimeout(200);
+  const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(names.includes('César Session Search'), 'plain-ASCII "cesar" should match the accented name');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
 /* --------------- Manage Users key layout (regression) --------------- */
 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
@@ -295,22 +342,34 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
   assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
 
+  // The Wall tab itself is visible now (so any admin can fix the timezone
+  // there), but who's-behind-each-pseudonym stays owner-only.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(wallTabHidden, 'non-owner admin can see the Wall tab');
+  assert.ok(!wallTabHidden, 'non-owner admin should be able to see the Wall tab (for its timezone setting)');
+
+  await page.click('[data-atab="wall"]');
+  const pseudonymsCardHidden = await page.$eval('#wall-pseudonyms-card', (el) => el.classList.contains('hidden'));
+  assert.ok(pseudonymsCardHidden, 'non-owner admin must not see who is behind each Wall pseudonym');
+  const wallTimezoneVisible = await page.$eval('#timezone-wall-card', (el) => !el.classList.contains('hidden'));
+  assert.ok(wallTimezoneVisible, 'non-owner admin should see the timezone setting on the Wall tab');
 
   const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
-  assert.ok(searchCardHidden, 'non-owner admin can create/search users (owner-only on the backend)');
+  assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');
 
   const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
-  assert.ok(resetCardHidden, 'non-owner admin can reset event content (owner-only on the backend)');
+  assert.ok(resetCardHidden, 'non-owner admin cannot reset event content (owner-only on the backend)');
 
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
-  assert.ok(timezoneCardHidden, 'non-owner admin can see the timezone settings card');
+  assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   // Voting control (Best Outfit) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
-  const votingControlsVisible = await page.$eval('#voting-open-btn', (el) => el.getBoundingClientRect().width > 0);
+  const votingControlsVisible = await page.$eval('#voting-advance-btn', (el) => el.getBoundingClientRect().width > 0);
   assert.ok(votingControlsVisible, 'non-owner admin should still see Best Outfit voting control');
+
+  await page.waitForTimeout(300);
+  const voterLogHidden = await page.$eval('#voter-log-card', (el) => el.classList.contains('hidden'));
+  assert.ok(voterLogHidden, 'non-owner admin must not see the who-voted-for-whom card');
 
   await page.click('[data-atab="rata"]');
   const revealBtnVisible = await page.$eval('#reveal-btn', (el) => el.getBoundingClientRect().width > 0);
@@ -362,6 +421,33 @@ test('?tab=&night= deep-links land on the right tab/night, then clean the URL', 
   assert.ok(outfitActive, 'deep link did not select the outfit tab');
   assert.ok(swampTheme, 'deep link did not apply the swamp night');
   assert.equal(cleanedUrl, '', 'query params were not cleaned up after applying the deep link');
+  await context.close();
+});
+
+test('a Wall notification\'s ?tab=chat deep link actually opens the Wall', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.goto(`${base}/?tab=chat`);
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
+  assert.ok(chatActive, '?tab=chat should select the Wall tab, same as rata/outfit already do');
+  await context.close();
+});
+
+test('reloading the page keeps you on the tab you were last on', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.click('[data-tab="chat"]');
+  await page.waitForTimeout(200);
+
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForTimeout(300);
+
+  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
+  assert.ok(chatActive, 'a reload should restore the last-open tab, not always bounce back to A Rata');
   await context.close();
 });
 

@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { seed } from './db.js';
-import { initPush } from './push.js';
+import { initPush, checkVersionUpdate } from './push.js';
 import apiRouter from './routes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,11 @@ export const seedResult = seed({
 
 // Configure Web Push (disabled if VAPID keys are missing).
 initPush();
+
+// Tell everyone once when this boot is running a different version than
+// the last one - see checkVersionUpdate() for why this only ever fires on prod.
+const { version: appVersion } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+checkVersionUpdate(appVersion).catch((err) => console.error('[push] version-update notify failed:', err));
 
 const app = express();
 // Fly.io terminates TLS and proxies requests, so trust its X-Forwarded-For

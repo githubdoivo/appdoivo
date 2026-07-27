@@ -69,6 +69,11 @@ function showApp(me) {
   // but now that it has a live registration form, a late-resolving response
   // from this redundant call could silently wipe out text someone's mid-
   // typing (the newer selectTab() load re-renders the same DOM nodes).
+  // Restore whichever tab was open before a reload - otherwise every
+  // refresh silently bounces back to A Rata. A notification's own ?tab=
+  // (handled right after) still wins over this.
+  const savedTab = localStorage.getItem(TAB_KEY);
+  if (TABS.includes(savedTab) && savedTab !== 'rata') selectTab(savedTab);
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
 }
@@ -181,6 +186,7 @@ $('login-form').addEventListener('submit', async (e) => {
 function selectTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
+  localStorage.setItem(TAB_KEY, tab);
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
@@ -214,10 +220,6 @@ function stopChatPolling() {
   }
 }
 
-function formatChatTime(dateTimeStr) {
-  return (String(dateTimeStr).split(' ')[1] || '').slice(0, 5);
-}
-
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
@@ -228,7 +230,7 @@ async function loadChat() {
         <div class="chat-msg">
           <div class="chat-msg-head">
             <span class="chat-msg-author">${esc(m.author)}</span>
-            <span class="chat-msg-time">${formatChatTime(m.created_at)}</span>
+            <span class="chat-msg-time">${esc(m.time)}</span>
           </div>
           <div class="chat-msg-text">${esc(m.text)}</div>
         </div>`).join('')
@@ -263,7 +265,7 @@ function applyDeepLinkParams() {
   if (night && NIGHTS.includes(night)) {
     localStorage.setItem(NIGHT_KEY, night);
   }
-  if (tab === 'rata' || tab === 'outfit') {
+  if (TABS.includes(tab)) {
     selectTab(tab);
   }
   history.replaceState({}, '', location.pathname);
@@ -312,6 +314,8 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // WHOLE page and shows that night's vote. Nights this edition: furnished | swamp.
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
+const TAB_KEY = 'appivo_tab';
+const TABS = ['rata', 'outfit', 'chat'];
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);

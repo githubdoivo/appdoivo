@@ -38,6 +38,23 @@ export function currentHour(tz = getTimezone()) {
   return parseInt(h, 10) % 24;
 }
 
+/**
+ * Formats a "YYYY-MM-DD HH:MM:SS[.mmm]" DB timestamp (always stored in UTC,
+ * see strftime('...', 'now') in db.js) as "HH:MM" in the configured
+ * timezone. Without this, displaying the raw stored value shows UTC time
+ * as if it were already local - off by an hour for Portugal whenever DST
+ * is in effect.
+ */
+export function formatTimeInZone(dbTimestamp, tz = getTimezone()) {
+  const iso = `${String(dbTimestamp).replace(' ', 'T')}Z`;
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
+}
+
 /** Status of a night's Best Outfit, controlled by the admin:
  * 'registration' (contestants can enter) | 'open' (voting) | 'closed' (results). */
 export function nightStatus(night) {
