@@ -82,13 +82,40 @@
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="rata" data-i18n="tab_rata">A Rata</button>
+      <button class="tab active" data-tab="plaza" data-i18n="tab_plaza">Plaza</button>
+      <button class="tab" data-tab="rata" data-i18n="tab_rata">A Rata</button>
       <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Best Look</button>
       <button class="tab" data-tab="chat" data-i18n="tab_chat">Chat</button>
     </nav>
 
+    <!-- Plaza: landing page - host notes (pinned, if any) + a quick glance
+         at what's happening across A Rata/Best Look/Wall right now. -->
+    <div id="tab-plaza" class="tab-panel">
+      <p class="hero-line" data-i18n="plaza_hero">O que se passa agora.</p>
+
+      <div class="card hidden" id="plaza-note-card">
+        <h2 data-i18n="plaza_note_title">Notas do anfitrião</h2>
+        <div id="plaza-note-text" class="highlight" style="margin-top:12px"></div>
+      </div>
+
+      <button type="button" class="card plaza-glance" data-goto-tab="rata">
+        <h2 data-i18n="tab_rata">A Rata</h2>
+        <p id="plaza-rata-summary" class="muted" style="margin-top:8px"></p>
+      </button>
+
+      <button type="button" class="card plaza-glance" data-goto-tab="outfit">
+        <h2 data-i18n="tab_outfit">Best Look</h2>
+        <p id="plaza-outfit-summary" class="muted" style="margin-top:8px"></p>
+      </button>
+
+      <button type="button" class="card plaza-glance" data-goto-tab="chat">
+        <h2 data-i18n="tab_chat">Wall</h2>
+        <p id="plaza-wall-summary" class="muted" style="margin-top:8px"></p>
+      </button>
+    </div>
+
     <!-- Rata Game -->
-    <div id="tab-rata" class="tab-panel">
+    <div id="tab-rata" class="tab-panel hidden">
       <p class="hero-line" data-i18n="rata_hero">Cada hora, o destino escolhe.</p>
       <div class="card">
         <h2 data-i18n="rata_current">Consequência atual</h2>

@@ -96,9 +96,14 @@ for (const deviceName of IOS_DEVICES) {
     await context.close();
   });
 
-  test(`main app (rata + best look + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
+  test(`main app (plaza + rata + best look + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
     const context = await iphoneContext(deviceName);
     const page = await loginPage(context, ADMIN, '/');
+    const plazaOverflow = await horizontalOverflow(page);
+    assert.ok(plazaOverflow <= 1, `"plaza" tab overflows by ${plazaOverflow}px on ${deviceName}`);
+
+    await page.click('[data-tab="rata"]');
+    await page.waitForTimeout(150);
     const rataOverflow = await horizontalOverflow(page);
     assert.ok(rataOverflow <= 1, `"a rata" tab overflows by ${rataOverflow}px on ${deviceName}`);
 
@@ -205,6 +210,34 @@ test('a first-time user can find their name, claim their key, and get logged str
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
+/* --------------------------------- Plaza ----------------------------------- */
+
+test('Plaza opens by default, shows a saved owner note, and lets the owner edit it', async () => {
+  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: 'wifi: mossycottage' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+
+  const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
+  assert.ok(plazaActive, 'Plaza should be the tab shown right after logging in');
+
+  await page.waitForFunction(() => document.getElementById('plaza-note-text').textContent.length > 0);
+  const noteVisible = await page.$eval('#plaza-note-card', (el) => !el.classList.contains('hidden'));
+  assert.ok(noteVisible, 'a non-empty owner note should show on Plaza');
+  const noteText = await page.$eval('#plaza-note-text', (el) => el.textContent);
+  assert.equal(noteText, 'wifi: mossycottage');
+
+  await page.goto(base + '/settings.html');
+  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+  await page.click('[data-atab="plaza"]');
+  await page.waitForFunction(() => document.getElementById('plaza-note-input').value.length > 0);
+  const inputValue = await page.$eval('#plaza-note-input', (el) => el.value);
+  assert.equal(inputValue, 'wifi: mossycottage', 'the admin editor should be pre-filled with the current note');
+
+  await context.close();
+  await api('PUT', '/admin/plaza-note', { token: ADMIN, body: { note: '' } });
 });
 
 /* --------------------- Role badge colors (regression) --------------------- */
@@ -427,6 +460,9 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
   assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
+  const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
+  assert.ok(plazaTabHidden, 'non-owner admin cannot write the Plaza note (owner-only end to end)');
+
   // Voting control (Best Look) and reveal-consequence (A Rata) stay available.
   await page.click('[data-atab="outfit"]');
   const votingControlsVisible = await page.$eval('#voting-advance-btn', (el) => el.getBoundingClientRect().width > 0);
@@ -451,7 +487,7 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, plain.token, '/settings.html');
 
-  for (const tab of ['users', 'outfit', 'rata', 'wall']) {
+  for (const tab of ['users', 'plaza', 'outfit', 'rata', 'wall']) {
     const hidden = await page.$eval(`[data-atab="${tab}"]`, (el) => el.classList.contains('hidden'));
     assert.ok(hidden, `plain user should not see the ${tab} tab`);
   }
@@ -501,7 +537,7 @@ test('a Wall notification\'s ?tab=chat deep link actually opens the Wall', async
   await context.close();
 });
 
-test('reloading the page keeps you on the tab you were last on', async () => {
+test('reloading the page always opens on Plaza, regardless of the last tab used', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.click('[data-tab="chat"]');
@@ -511,8 +547,8 @@ test('reloading the page keeps you on the tab you were last on', async () => {
   await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
   await page.waitForTimeout(300);
 
-  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
-  assert.ok(chatActive, 'a reload should restore the last-open tab, not always bounce back to A Rata');
+  const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
+  assert.ok(plazaActive, 'a reload should always land on Plaza, not wherever was last open');
   await context.close();
 });
 

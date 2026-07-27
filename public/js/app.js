@@ -12,7 +12,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
-let currentTab = 'rata';
+let currentTab = 'plaza';
 
 /* ------------------------------- Arranque -------------------------------- */
 
@@ -62,6 +62,7 @@ function showApp(me) {
   // is open to everyone now, not just admins.
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
+  loadPlaza();
   loadConsequences();
   // Best Look's own data loads when its tab is actually selected (see
   // selectTab()) - not here too. It used to double-load unconditionally,
@@ -69,11 +70,8 @@ function showApp(me) {
   // but now that it has a live registration form, a late-resolving response
   // from this redundant call could silently wipe out text someone's mid-
   // typing (the newer selectTab() load re-renders the same DOM nodes).
-  // Restore whichever tab was open before a reload - otherwise every
-  // refresh silently bounces back to A Rata. A notification's own ?tab=
-  // (handled right after) still wins over this.
-  const savedTab = localStorage.getItem(TAB_KEY);
-  if (TABS.includes(savedTab) && savedTab !== 'rata') selectTab(savedTab);
+  // Always opens on Plaza - a notification's own ?tab= (handled right
+  // after) is the only thing allowed to land somewhere else.
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
 }
@@ -254,11 +252,12 @@ $('find-key-input').addEventListener('input', () => {
 function selectTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
-  localStorage.setItem(TAB_KEY, tab);
+  $('tab-plaza').classList.toggle('hidden', currentTab !== 'plaza');
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
   applyNight();
+  if (currentTab === 'plaza') loadPlaza();
   if (currentTab === 'rata') loadConsequences();
   if (currentTab === 'outfit') loadVotes();
   if (currentTab === 'chat') startChatPolling();
@@ -267,6 +266,10 @@ function selectTab(tab) {
 
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => selectTab(btn.dataset.tab));
+});
+
+document.querySelectorAll('[data-goto-tab]').forEach((btn) => {
+  btn.addEventListener('click', () => selectTab(btn.dataset.gotoTab));
 });
 
 /* --------------------------------- Chat ----------------------------------- */
@@ -343,6 +346,41 @@ function applyDeepLinkParams() {
 
 wireNotifButton('notif-btn');
 
+/* --------------------------------- Plaza ---------------------------------- */
+// Landing tab: the host's pinned note (if any) plus a quick, read-only
+// glance at each other tab's current state - reuses the same endpoints
+// those tabs themselves call, just summarized down to one line each.
+
+async function loadPlaza() {
+  try {
+    const { note } = await api('/plaza-note');
+    $('plaza-note-card').classList.toggle('hidden', !note);
+    $('plaza-note-text').textContent = note;
+  } catch { /* transient - leaves whatever was last shown */ }
+
+  try {
+    const data = await api('/consequences/current');
+    $('plaza-rata-summary').textContent = data.current ? `"${data.current.text}"` : t('rata_none');
+  } catch { /* transient */ }
+
+  try {
+    const data = await api(`/votes/status?night=${encodeURIComponent(getNight())}`);
+    let statusKey;
+    if (data.status === 'registration') statusKey = 'outfit_registration_open';
+    else if (data.status === 'open') statusKey = 'outfit_open';
+    else if (!data.started) statusKey = 'outfit_wait';
+    else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
+    else statusKey = 'outfit_closed';
+    $('plaza-outfit-summary').textContent = t(statusKey);
+  } catch { /* transient */ }
+
+  try {
+    const { messages } = await api('/chat/messages');
+    const last = messages[messages.length - 1];
+    $('plaza-wall-summary').textContent = last ? `${last.author}: "${last.text}"` : t('chat_empty');
+  } catch { /* transient */ }
+}
+
 /* ------------------------------- Rata Game ------------------------------- */
 
 async function loadConsequences() {
@@ -382,8 +420,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // WHOLE page and shows that night's vote. Nights this edition: furnished | swamp.
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
-const TAB_KEY = 'appivo_tab';
-const TABS = ['rata', 'outfit', 'chat'];
+const TABS = ['plaza', 'rata', 'outfit', 'chat'];
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);

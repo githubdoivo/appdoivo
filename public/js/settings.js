@@ -85,7 +85,7 @@ async function boot() {
   // plain user only gets the "Settings" tab (change their own key); the
   // rest of this scoping matches the main admin panel's existing rules.
   if (!isAdmin) {
-    ['users', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['users', 'plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
   } else if (!isOwner) {
@@ -100,6 +100,9 @@ async function boot() {
     // Same for the Wall tab: the timezone setting there is fine for any
     // admin, but who's-behind-each-pseudonym stays owner-only.
     $('wall-pseudonyms-card').classList.add('hidden');
+    // The Plaza note is owner-only end to end (backend requireOwner too) -
+    // hide the whole tab rather than a control that would just 403.
+    document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
   // Whoever you are, tapping the settings icon should always land you on
   // "Settings" first - admins/owner can still switch to their other tabs.
@@ -727,14 +730,36 @@ async function loadWallPseudonyms() {
   });
 }
 
+/* --------------------------------- Plaza ---------------------------------- */
+// Owner-only note pinned to everyone's Plaza landing page (see GET
+// /plaza-note in app.js). Saving broadcasts a notification.
+
+async function loadPlazaNote() {
+  const { note } = await api('/plaza-note');
+  $('plaza-note-input').value = note;
+}
+
+$('plaza-note-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('plaza-note-msg').textContent = '';
+  try {
+    await api('/admin/plaza-note', { method: 'PUT', body: { note: $('plaza-note-input').value } });
+    $('plaza-note-msg').textContent = t('saved');
+    setTimeout(() => ($('plaza-note-msg').textContent = ''), 2000);
+  } catch (err) {
+    $('plaza-note-msg').textContent = err.message;
+  }
+});
+
 /* --------------------------------- Tabs ---------------------------------- */
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['users', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['users', 'plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
+  if (tab === 'plaza' && isOwner) loadPlazaNote();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

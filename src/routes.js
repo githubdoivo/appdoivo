@@ -137,6 +137,28 @@ router.post('/me/change-token', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ---------------------------------- Plaza --------------------------------- */
+// A pinned note from the owner (welcome message, wifi password, schedule,
+// whatever) shown to everyone on the Plaza tab - the app's landing page.
+
+router.get('/plaza-note', (req, res) => {
+  res.json({ note: getSetting('plaza_note', '') });
+});
+
+router.put('/admin/plaza-note', requireOwner, async (req, res) => {
+  const note = String(req.body?.note ?? '').trim();
+  setSetting('plaza_note', note);
+  res.json({ ok: true, note });
+  if (note) {
+    await broadcast({
+      title: { pt: 'Plaza', en: 'Plaza' },
+      body: { pt: 'o anfitrião deixou uma nova nota na Plaza.', en: 'your host left a new note on the Plaza.' },
+      tag: 'plaza-note',
+      url: '/?tab=plaza',
+    });
+  }
+});
+
 /* ------------------------------ Consequences ----------------------------- */
 
 // Suggest one consequence per day.

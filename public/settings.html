@@ -50,10 +50,25 @@
       <nav class="tabs" id="admin-tabs">
         <button class="tab active" data-atab="settings" data-i18n="tab_settings">Settings</button>
         <button class="tab" data-atab="users" data-i18n="users_title">Users</button>
+        <button class="tab" data-atab="plaza" data-i18n="tab_plaza">Plaza</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">A Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Best Look</button>
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
+
+      <!-- Separador: Plaza (owner-only - nota fixada, visivel a todos na
+           app principal via GET /plaza-note) -->
+      <div id="atab-plaza" class="tab-panel hidden">
+        <div class="card">
+          <h2 data-i18n="plaza_admin_title">Nota da Plaza</h2>
+          <p class="help" data-i18n="plaza_admin_help">Explicação</p>
+          <form id="plaza-note-form" style="margin-top:12px">
+            <textarea id="plaza-note-input" rows="4" maxlength="500" data-i18n-ph="plaza_note_ph" placeholder="Mensagem..."></textarea>
+            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
+            <span id="plaza-note-msg" class="muted"></span>
+          </form>
+        </div>
+      </div>
 
       <!-- Separador: Utilizadores (visivel a qualquer admin, mas a API so
            devolve mais do que a propria linha, e so aceita escrita, para o
