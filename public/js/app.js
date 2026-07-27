@@ -408,19 +408,20 @@ function timeAgo(dbTimestamp) {
 
 // Renders one post as either a plain-announcement "torn column" or a poll
 // "magazine card" (see .plaza-post-announcement/.plaza-post-poll in
-// styles.css) - the two banner styles the owner asked for so a glance tells
-// announcements and polls apart. Pinned announcements (owner-only, see the
-// admin Plaza page) already sort first from the API - this just marks them
-// visually so a pin doesn't blend into the rest of the feed.
+// styles.css) - the two banner styles so a glance tells announcements and
+// polls apart by shape (a poll's options make that obvious on their own),
+// without needing a type label spelling it out. Pinned announcements
+// (owner-only, see the admin Plaza page) already sort first from the API -
+// this just marks them visually so a pin doesn't blend into the rest of
+// the feed.
 function renderPlazaPost(post) {
-  const eyebrow = t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement');
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
 
   if (post.type !== 'poll') {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
-        <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
+        ${pinnedBadge}
         <p class="plaza-post-text">${esc(post.text)}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
@@ -455,7 +456,7 @@ function renderPlazaPost(post) {
 
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
-      <span class="plaza-eyebrow">${esc(eyebrow)}${pinnedBadge}</span>
+      ${pinnedBadge}
       <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}

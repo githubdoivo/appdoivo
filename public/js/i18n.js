@@ -351,7 +351,7 @@ export const translations = {
     admin_only: 'Admin access only.',
     plaza_admin_title: 'New post',
     plaza_admin_help: 'Shows up in everyone\'s Wall feed. Publishing sends a notification.',
-    plaza_type_announcement: 'Regular',
+    plaza_type_announcement: 'Announcement',
     plaza_type_poll: 'Poll',
     plaza_post_text_ph: 'Welcome message, wifi password, tonight\'s schedule...',
     plaza_poll_question_ph: 'Poll question...',

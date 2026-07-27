@@ -11,10 +11,14 @@ import { today } from './time.js';
 import { NIGHTS } from './nights.js';
 import { createPlazaPost } from './plaza.js';
 
+// Never include "Ivo Lopes" (or any name matching the real owner) here -
+// a demo account sharing the owner's name showed up in the unclaimed-user
+// search on QA, which is confusing/alarming even though it's just a
+// regular demo user under the hood, not an actual owner-account exposure.
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Ivo Lopes', 'Nádia Barros',
+  'Leonor Matos', 'Marta Freitas', 'Tomás Vieira', 'Nádia Barros',
   'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
