@@ -428,6 +428,20 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    clickable toggles. Active state fills solid in that role's own color
    (neutral ink for "all roles"), inactive stays a plain outline. */
 .role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Regular/Poll type + Publish share one row at the bottom of the post
+   form, instead of the type picker sitting above the whole form - Publish
+   pushed to the far edge via space-between since it's the row's only
+   other child. */
+.plaza-post-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.plaza-post-footer button[type="submit"] { margin-left: auto; }
 .role-pill {
   font-family: var(--body);
   text-transform: lowercase;
@@ -937,33 +951,33 @@ html.mode-dark body.theme-mural .card {
    to stay legible. Applied to <body> only while the Plaza tab is active
    (see applyNight() in app.js), same mechanism as every other night theme. */
 body.theme-plaza {
-  --paper:    #e9e4d6;
-  --paper-2:  #f1ede1;
-  --paper-3:  #f7f4ea;
-  --ink:      #262220;
-  --ink-soft: #6b625a;
-  --line:     #c9c0ac;
-  --line-2:   #d9d2bf;
-  --clay:     #7a2419;
-  --clay-2:   #94301f;
-  --clay-active: #7a2419;
-  --rata:     #7a2419;
-  background-color: #e9e4d6;
+  --paper:    #e8c97a;
+  --paper-2:  #eed392;
+  --paper-3:  #f3ddac;
+  --ink:      #2e2411;
+  --ink-soft: #6e5a2c;
+  --line:     #c7a659;
+  --line-2:   #d4b876;
+  --clay:     #8a5c00;
+  --clay-2:   #a67815;
+  --clay-active: #8a5c00;
+  --rata:     #8a5c00;
+  background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-plaza {
-  --paper:    #1a1815;
-  --paper-2:  #221f1a;
-  --paper-3:  #2a271f;
-  --ink:      #e8e2d3;
-  --ink-soft: #a89d89;
-  --line:     #3a3527;
-  --line-2:   #494332;
-  --clay:     #c2604a;
-  --clay-2:   #d3745c;
-  --rata:     #c2604a;
-  background-color: #1a1815;
+  --paper:    #1f1a0e;
+  --paper-2:  #26200f;
+  --paper-3:  #2e2712;
+  --ink:      #f0e0ac;
+  --ink-soft: #b8a06a;
+  --line:     #4a3d1f;
+  --line-2:   #5c4c28;
+  --clay:     #e0a83a;
+  --clay-2:   #edc06a;
+  --rata:     #e0a83a;
+  background-color: #1f1a0e;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
