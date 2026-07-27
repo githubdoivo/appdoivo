@@ -266,7 +266,7 @@ test('Wall admin can publish a poll from Settings, and a user can vote on it fro
   await page.waitForSelector('#plaza-post-form', { timeout: 5000 });
 
   await page.click('[data-post-type="poll"]');
-  await page.fill('#plaza-post-text', 'Where for dinner?');
+  await page.fill('#plaza-poll-question', 'Where for dinner?');
   const optionInputs = page.locator('.plaza-poll-option-input');
   await optionInputs.nth(0).fill('Pizza');
   await optionInputs.nth(1).fill('Sushi');

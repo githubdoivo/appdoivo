@@ -791,7 +791,10 @@ $('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
     plazaPostType = btn.dataset.postType;
     $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
+    // Poll mode shows only poll-building tools (question + options) - the
+    // plain message field is announcement-only, not shared with polls.
     $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+    $('plaza-post-text').classList.toggle('hidden', plazaPostType === 'poll');
   });
 });
 
@@ -866,13 +869,14 @@ async function loadPlazaPosts() {
 $('plaza-post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('plaza-post-msg').textContent = '';
-  const text = $('plaza-post-text').value;
+  const text = plazaPostType === 'poll' ? $('plaza-poll-question').value : $('plaza-post-text').value;
   const options = plazaPostType === 'poll'
     ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
     : undefined;
   try {
     await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
     $('plaza-post-text').value = '';
+    $('plaza-poll-question').value = '';
     $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);

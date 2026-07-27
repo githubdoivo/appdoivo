@@ -204,6 +204,10 @@ function setFindKeyMode(on) {
   findKeyMode = on;
   const input = $('token-input');
   $('login-error').textContent = '';
+  // Find-key mode never uses this line (no password to reject) - its
+  // reserved empty-line height was pushing the results away from the
+  // search bar they belong to.
+  $('login-error').classList.toggle('hidden', on);
   $('find-key-results').innerHTML = '';
   input.value = '';
   input.type = on ? 'text' : 'password';
