@@ -668,12 +668,37 @@ async function loadConsequences() {
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }
 
+// Older pseudonyms stay listed (not just the current one) - a re-roll
+// doesn't erase who was who for messages already posted under the old one.
+function formatPseudonymHistory(pseudonyms) {
+  const older = pseudonyms.slice(0, -1);
+  const current = pseudonyms[pseudonyms.length - 1];
+  const olderHtml = older.length ? `<span class="muted">${older.map(esc).join(', ')}, </span>` : '';
+  return `${olderHtml}${esc(current)}`;
+}
+
 async function loadWallPseudonyms() {
   const rows = await api('/admin/wall-pseudonyms');
   $('wall-pseudonyms-table').innerHTML = rows.length
-    ? `<tr><th>${t('col_name')}</th><th>${t('col_pseudonym')}</th></tr>` +
-      rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.pseudonym)}</td></tr>`).join('')
+    ? `<tr><th>${t('col_name')}</th><th>${t('col_pseudonym')}</th><th></th></tr>` +
+      rows.map((r) => `<tr>
+        <td>${esc(r.name)}</td>
+        <td>${formatPseudonymHistory(r.pseudonyms)}</td>
+        <td style="text-align:right"><button class="small ghost" data-reset-pseudonym="${r.id}">${t('wall_reset_pseudonym_btn')}</button></td>
+      </tr>`).join('')
     : `<tr><td class="muted">${t('no_wall_pseudonyms')}</td></tr>`;
+
+  $('wall-pseudonyms-table').querySelectorAll('[data-reset-pseudonym]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      if (!(await showConfirm(t('confirm_reset_pseudonym')))) return;
+      try {
+        await api(`/admin/users/${b.dataset.resetPseudonym}/wall-pseudonym/reset`, { method: 'POST' });
+        loadWallPseudonyms();
+      } catch (err) {
+        await showAlert(err.message);
+      }
+    });
+  });
 }
 
 /* --------------------------------- Tabs ---------------------------------- */

@@ -455,7 +455,33 @@ test('the Wall name<->pseudonym mapping is owner-only', async () => {
 
   const list = await api('GET', '/chat/messages', { token: ADMIN });
   const theirMsg = list.data.messages.find((m) => m.text === 'stable-1');
-  assert.equal(entry.pseudonym, theirMsg.author, 'the mapping should match what actually shows on the Wall');
+  const current = entry.pseudonyms[entry.pseudonyms.length - 1];
+  assert.equal(current, theirMsg.author, 'the mapping should match what actually shows on the Wall');
+});
+
+test('a Wall pseudonym can be reset once a day, and the owner sees the full history', async () => {
+  const before = await api('GET', '/admin/wall-pseudonyms', { token: ADMIN });
+  const entryBefore = before.data.find((r) => r.name === 'Ivo');
+  const oldPseudonym = entryBefore.pseudonyms[entryBefore.pseudonyms.length - 1];
+
+  const forbidden = await api('POST', `/admin/users/${userId}/wall-pseudonym/reset`, { token: userToken });
+  assert.equal(forbidden.status, 403, 'non-owner admins cannot reset a pseudonym');
+
+  const first = await api('POST', `/admin/users/${userId}/wall-pseudonym/reset`, { token: ADMIN });
+  assert.equal(first.status, 200);
+  assert.notEqual(first.data.pseudonym, oldPseudonym, 'reset should produce a different pseudonym');
+
+  const again = await api('POST', `/admin/users/${userId}/wall-pseudonym/reset`, { token: ADMIN });
+  assert.equal(again.status, 400, 'a second reset the same day should be rejected');
+
+  const after = await api('GET', '/admin/wall-pseudonyms', { token: ADMIN });
+  const entryAfter = after.data.find((r) => r.name === 'Ivo');
+  assert.ok(entryAfter.pseudonyms.includes(oldPseudonym), 'the old pseudonym should stay in the history');
+  assert.ok(entryAfter.pseudonyms.includes(first.data.pseudonym), 'the new pseudonym should be in the history too');
+
+  const list = await api('GET', '/chat/messages', { token: ADMIN });
+  const oldMsg = list.data.messages.find((m) => m.text === 'stable-1');
+  assert.equal(oldMsg.author, oldPseudonym, 'messages already posted keep the pseudonym that was active at the time');
 });
 
 test('a user can change their own access key, given the correct current one', async () => {

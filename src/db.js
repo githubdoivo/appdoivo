@@ -67,6 +67,16 @@ db.exec(`
     pseudonym  TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
+
+  -- Every pseudonym a user has ever had on the Wall, oldest first - not
+  -- just the current one. The owner's "who's who" view lists all of them,
+  -- since a re-rolled pseudonym doesn't erase the old one's messages.
+  CREATE TABLE IF NOT EXISTS wall_pseudonym_history (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    pseudonym  TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
 `);
 
 /** Checks whether a column exists in a table. */
@@ -154,6 +164,27 @@ if (!columnExists('messages', 'pseudonym')) {
 if (!columnExists('users', 'wall_pseudonym')) {
   db.exec('ALTER TABLE users ADD COLUMN wall_pseudonym TEXT');
 }
+
+// Migration: the "day" (per time.js's today(), same concept as A Rata's
+// one-suggestion-per-day limit) a pseudonym was last deliberately re-rolled
+// via POST /admin/users/:id/wall-pseudonym/reset - lets that be limited to
+// once a day. It should stay stable most of the time (that's the whole
+// point of a Wall pseudonym), just occasionally refreshable.
+if (!columnExists('users', 'wall_pseudonym_reset_day')) {
+  db.exec('ALTER TABLE users ADD COLUMN wall_pseudonym_reset_day TEXT');
+}
+
+// Migration: backfills wall_pseudonym_history for anyone who already had a
+// pseudonym before that table existed - otherwise their current one would
+// never show up in the owner's "who's who" history. Idempotent: only
+// inserts for a user once, safe to run on every boot.
+db.exec(`
+  INSERT INTO wall_pseudonym_history (user_id, pseudonym, created_at)
+  SELECT u.id, u.wall_pseudonym, u.updated_at
+  FROM users u
+  WHERE u.wall_pseudonym IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM wall_pseudonym_history h WHERE h.user_id = u.id)
+`);
 
 // Migration: per-day voting -> per-night voting.
 // Older databases had contestants/votes with a 'day' column. Voting is now per

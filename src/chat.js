@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import db from './db.js';
-import { formatTimeInZone } from './time.js';
+import { formatTimeInZone, today } from './time.js';
 
 const MAX_MESSAGES = 15;
 const MAX_TEXT_LENGTH = 300;
@@ -30,6 +30,14 @@ function randomPseudonym() {
   return `${object}${being}`;
 }
 
+/** Sets a user's current pseudonym and appends it to their history - every
+ * pseudonym they've ever had, not just the latest (see wall_pseudonym_history
+ * in db.js and GET /admin/wall-pseudonyms). */
+function setPseudonym(userId, pseudonym) {
+  db.prepare('UPDATE users SET wall_pseudonym = ? WHERE id = ?').run(pseudonym, userId);
+  db.prepare('INSERT INTO wall_pseudonym_history (user_id, pseudonym) VALUES (?, ?)').run(userId, pseudonym);
+}
+
 /** Returns this user's Wall pseudonym, assigning one the first time they
  * ever post (stored on users.wall_pseudonym, reused forever after). */
 function getOrAssignPseudonym(userId) {
@@ -37,8 +45,46 @@ function getOrAssignPseudonym(userId) {
   if (row?.wall_pseudonym) return row.wall_pseudonym;
 
   const pseudonym = randomPseudonym();
-  db.prepare('UPDATE users SET wall_pseudonym = ? WHERE id = ?').run(pseudonym, userId);
+  setPseudonym(userId, pseudonym);
   return pseudonym;
+}
+
+/** Re-rolls a user's Wall pseudonym to a fresh random one, at most once a
+ * day - it's meant to stay stable (that's the whole point), just
+ * occasionally refreshable if someone wants a change. Returns
+ * { ok, pseudonym } or { error }. */
+export function resetPseudonym(userId) {
+  const user = db.prepare('SELECT wall_pseudonym, wall_pseudonym_reset_day FROM users WHERE id = ?').get(userId);
+  if (!user) return { error: 'Utilizador nao encontrado.' };
+
+  const day = today();
+  if (user.wall_pseudonym_reset_day === day) {
+    return { error: 'Só podes gerar uma nova alcunha uma vez por dia.' };
+  }
+
+  const pseudonym = randomPseudonym();
+  setPseudonym(userId, pseudonym);
+  db.prepare('UPDATE users SET wall_pseudonym_reset_day = ? WHERE id = ?').run(day, userId);
+  return { ok: true, pseudonym };
+}
+
+/** Every user who's ever posted, with the full list of pseudonyms they've
+ * had over time (oldest first) - not just their current one, since a
+ * re-rolled pseudonym doesn't erase the messages posted under the old one. */
+export function wallPseudonymDirectory() {
+  const rows = db.prepare(`
+    SELECT u.id, u.name, h.pseudonym
+    FROM users u
+    JOIN wall_pseudonym_history h ON h.user_id = u.id
+    ORDER BY u.name COLLATE NOCASE ASC, h.id ASC
+  `).all();
+
+  const byUser = new Map();
+  for (const r of rows) {
+    if (!byUser.has(r.id)) byUser.set(r.id, { id: r.id, name: r.name, pseudonyms: [] });
+    byUser.get(r.id).pseudonyms.push(r.pseudonym);
+  }
+  return [...byUser.values()];
 }
 
 /** Trims down to the 15 most recent messages. No time-based expiry - the

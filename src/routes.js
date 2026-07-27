@@ -34,7 +34,7 @@ import {
   removeSubscription,
   broadcast,
 } from './push.js';
-import { listMessages, postMessage } from './chat.js';
+import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 
 const router = Router();
 
@@ -345,13 +345,16 @@ router.patch('/admin/users/:id/admin', (req, res) => {
 // admins - only the owner can see who's behind each pseudonym.
 
 router.get('/admin/wall-pseudonyms', requireOwner, (req, res) => {
-  const rows = db.prepare(`
-    SELECT name, wall_pseudonym
-    FROM users
-    WHERE wall_pseudonym IS NOT NULL
-    ORDER BY name ASC
-  `).all();
-  res.json(rows.map((r) => ({ name: r.name, pseudonym: r.wall_pseudonym })));
+  res.json(wallPseudonymDirectory());
+});
+
+// Owner-only: re-rolls a user's Wall pseudonym to a fresh random one, at
+// most once a day (see resetPseudonym() in chat.js) - the old one stays in
+// their history, it's just no longer the one new posts use.
+router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) => {
+  const result = resetPseudonym(Number(req.params.id));
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
 });
 
 // Owner-only: wipe game content (contestants, votes, consequences) to start
