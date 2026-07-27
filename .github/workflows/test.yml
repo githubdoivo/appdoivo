@@ -1,0 +1,29 @@
+name: Test
+
+# Runs on every push and PR to any branch - the merge-safety gate: a red
+# check here means the branch isn't safe to merge to main. See
+# CONTRIBUTING.md for the full branch -> QA -> prod process.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      # UI suite drives the app with Playwright's WebKit engine (see
+      # test/ui.test.js) - needs the browser binaries, not just the npm
+      # package.
+      - run: npx playwright install --with-deps webkit chromium
+
+      - run: npm test
