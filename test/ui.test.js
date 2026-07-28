@@ -14,14 +14,17 @@ import { webkit, devices } from 'playwright';
 
 const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`);
 process.env.DB_FILE = DB;
-process.env.ADMIN_TOKEN = 'ui-test-admin-token';
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
-const { default: app } = await import('../src/app.js');
+const { default: app, seedResult } = await import('../src/app.js');
 
-const ADMIN = 'ui-test-admin-token';
+// The admin's real key is always generated (see seed() in db.js - no more
+// ADMIN_TOKEN pinning it, even outside production), so this reads the
+// actual generated value off seedResult rather than assuming a fixed
+// string.
+const ADMIN = seedResult.token;
 // GitHub Actions' shared runners occasionally get resource-starved enough
 // that a login flow taking well under 5s locally blows past a 5000ms
 // waitForSelector everywhere at once (seen firsthand: identical commits

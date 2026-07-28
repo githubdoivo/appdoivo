@@ -5,18 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
 
-// Isolated test environment: temporary DB + known admin token.
-// (Set BEFORE importing the app, so the seed uses these values.)
+// Isolated test environment: temporary DB. The admin's real key is always
+// generated (see seed() in db.js - no more ADMIN_TOKEN pinning it, even
+// outside production), so ADMIN below reads the actual generated value
+// off seedResult rather than assuming a fixed string.
 const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
 process.env.DB_FILE = DB;
-process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
-const { default: app } = await import('../src/app.js');
+const { default: app, seedResult } = await import('../src/app.js');
 
-const ADMIN = 'test-admin-token';
+const ADMIN = seedResult.token;
 let server;
 let base;
 let userToken;

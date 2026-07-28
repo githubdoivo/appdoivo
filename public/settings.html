@@ -134,7 +134,7 @@
               <input id="admin-register-partner-search" type="text" data-i18n-ph="outfit_register_partner_ph" placeholder="Procura o nome da pessoa..." autocomplete="off" />
               <div id="admin-register-partner-results" class="partner-results"></div>
             </div>
-            <input id="admin-register-name" type="text" maxlength="60" data-i18n-ph="outfit_register_ph" placeholder="Nome da personagem..." style="margin-top:10px" autocomplete="off" />
+            <input id="admin-register-name" type="text" maxlength="60" data-i18n-ph="admin_register_name_ph" placeholder="Nome da personagem..." style="margin-top:10px" autocomplete="off" />
             <div style="text-align:right;margin-top:10px">
               <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
             </div>
@@ -165,17 +165,13 @@
         <div class="card">
           <h2 data-i18n="rata_admin_title">Consequências</h2>
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
-          <div class="role-pills" id="rata-status-filter" style="margin-top:8px">
-            <button type="button" class="role-pill" data-status="fila" data-i18n="rata_status_fila">fila</button>
-            <button type="button" class="role-pill" data-status="atribuir" data-i18n="rata_status_atribuir">atribuir</button>
-            <button type="button" class="role-pill" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
-            <button type="button" class="role-pill" data-status="feita" data-i18n="rata_status_feita">feita</button>
-          </div>
-          <!-- Shown only when nothing has ever been revealed yet - once
-               something has, this same action lives below its text inside
-               the current card in #consequences-table instead (see
-               renderConsequences() in settings.js), right-aligned there. -->
-          <div id="reveal-standalone" style="text-align:right;margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:8px">
+            <div class="role-pills" id="rata-status-filter">
+              <button type="button" class="role-pill active" data-status="fila" data-i18n="rata_status_fila">fila</button>
+              <button type="button" class="role-pill active" data-status="atribuir" data-i18n="rata_status_atribuir">atribuir</button>
+              <button type="button" class="role-pill active" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
+              <button type="button" class="role-pill active" data-status="feita" data-i18n="rata_status_feita">feita</button>
+            </div>
             <button type="button" data-reveal-next class="small" data-i18n="reveal_now">Revelar consequência</button>
           </div>
           <span id="reveal-msg" class="muted"></span>

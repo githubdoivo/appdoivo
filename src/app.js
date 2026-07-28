@@ -13,7 +13,6 @@ const PUBLIC_DIR = join(__dirname, '..', 'public');
 
 // Seed the admin + settings (result used by server.js to print the token).
 export const seedResult = seed({
-  adminToken: process.env.ADMIN_TOKEN,
   adminName: process.env.ADMIN_NAME,
 });
 

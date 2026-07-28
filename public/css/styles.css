@@ -495,9 +495,9 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 }
 /* fila (queued, not revealed yet) uses the plain default .rata-badge look
    above - nothing needs your attention yet, so it stays neutral. atribuir
-   reuses the app's general accent (the same color a "needs action" cue
-   already uses everywhere else) rather than a new color just for this. */
-.rata-badge.rata-status-atribuir { border-color: var(--clay); color: var(--clay); }
+   is a stronger, solid ink instead of --clay - this page stays grayscale,
+   no accent hue, weight alone marks "needs action". */
+.rata-badge.rata-status-atribuir { border-color: var(--ink); color: var(--ink); }
 .rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
 .rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
 
@@ -523,6 +523,14 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
 .role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
 .role-pill[data-role="user"].active { background: var(--role-user); border-color: var(--role-user); }
+
+/* Rata status filter - same colors as the rata-badge each state renders
+   with in the list below, so the filter pill you toggled and what it's
+   showing read as the same thing. fila and atribuir both stay the default
+   neutral active look (solid ink) - this page is grayscale, no accent
+   hue, so there's nothing to give either of them beyond that. */
+.role-pill[data-status="pendente"].active { background: var(--status-pending, #2a6ca6); border-color: var(--status-pending, #2a6ca6); }
+.role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }

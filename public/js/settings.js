@@ -717,7 +717,7 @@ $('admin-register-mode-switch').querySelectorAll('button').forEach((b) => {
     adminRegisterMode = b.dataset.mode;
     $('admin-register-mode-switch').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
     $('admin-register-partner-wrap').classList.toggle('hidden', adminRegisterMode !== 'duo');
-    $('admin-register-name').placeholder = t(adminRegisterMode === 'duo' ? 'outfit_register_ph_duo' : 'outfit_register_ph');
+    $('admin-register-name').placeholder = t(adminRegisterMode === 'duo' ? 'admin_register_name_ph_duo' : 'admin_register_name_ph');
     if (adminRegisterMode === 'solo') {
       adminRegisterPartnerId = null;
       $('admin-register-partner-search').value = '';
@@ -796,11 +796,9 @@ async function loadVotes() {
 
 /* ------------------------------ Rata Game -------------------------------- */
 
-// Reveal may be triggered from two spots depending on state - the
-// standalone slot (nothing revealed yet) or, once something is, from
-// inside the current card's own markup in #consequences-table (see
-// renderConsequences()) - both share this one delegated handler via
-// [data-reveal-next] rather than two separate listeners.
+// Fixed position next to the status filter, above the (filtered) list -
+// same spot regardless of what's currently revealed or filtered, so it's
+// never a moving target.
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-reveal-next]')) return;
   $('reveal-msg').textContent = '';
@@ -826,8 +824,11 @@ function rataStatus(c) {
 }
 
 // Cumulative OR toggle, same pattern as Manage Users' own role filter -
-// narrows the view only, never affects the data itself.
-const rataStatusFilter = new Set();
+// narrows the view only, never affects the data itself. All four start
+// selected (matches the pills' own default "active" state in the HTML) -
+// deselecting one hides it, rather than starting from "nothing picked
+// means show everything".
+const rataStatusFilter = new Set(['fila', 'atribuir', 'pendente', 'feita']);
 let rataRows = [];
 let rataAssignableUsers = [];
 
@@ -851,18 +852,7 @@ function renderConsequences() {
   // rows are sorted most-recently-touched first (see GET /admin/consequences),
   // so the first 'used' one encountered is simply the current one.
   const revealed = rataRows.find((c) => c.status === 'used');
-
-  const rows = rataStatusFilter.size === 0
-    ? rataRows
-    : rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state));
-
-  // The reveal button normally lives inside the current item's own card
-  // below - but a status filter can hide that card (e.g. filtering to just
-  // "fila"), which would otherwise leave no way to trigger the next reveal
-  // at all. Fall back to the standalone slot whenever the current item
-  // itself isn't part of what's actually being shown right now.
-  const currentVisible = revealed && rows.some((c) => c.id === revealed.id);
-  $('reveal-standalone').classList.toggle('hidden', !!currentVisible);
+  const rows = rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state));
 
   const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
     rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
@@ -874,8 +864,7 @@ function renderConsequences() {
   // width; everything else drops to a second, plainer meta line. The
   // current consequence used to also get a separate, much louder .highlight
   // box above this whole list, duplicating the exact same text - now it's
-  // just this one card with a subtler tint (.rata-current) and the reveal
-  // button for the next one directly below it.
+  // just this one card with a subtler tint (.rata-current).
   $('consequences-table').innerHTML = rows.length
     ? rows.map((c) => {
       const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}`;
@@ -899,7 +888,6 @@ function renderConsequences() {
           <select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>
           ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
         </div>
-        ${isCurrent ? `<div style="text-align:right;margin-top:10px"><button type="button" data-reveal-next class="small">${t('reveal_now')}</button></div>` : ''}
       </div>`;
     }).join('')
     : `<p class="muted">${t('no_consequences')}</p>`;

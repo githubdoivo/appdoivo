@@ -375,7 +375,7 @@ export function setSetting(key, value) {
 }
 
 /** Seeds settings and the admin (owner) user on first start. */
-export function seed({ adminToken, adminName }) {
+export function seed({ adminName }) {
   // Per-night voting status (closed by default).
   for (const night of NIGHTS) {
     if (getSetting(`voting_status_${night}`) === null) {
@@ -387,18 +387,16 @@ export function seed({ adminToken, adminName }) {
   let admin = db.prepare('SELECT * FROM users WHERE is_admin = 1').get();
   if (!admin) {
     // Same generateUserToken() every regular user gets via POST /admin/users
-    // - the owner's real key is no longer specially pinned to a literal,
-    // memorable env var value in production (that used to mean the same
-    // guessable word doubled as the actual production admin password).
-    // ADMIN_TOKEN still works as a convenience OUTSIDE production (local
-    // dev, the test suite, QA - which never sets NODE_ENV=production, see
-    // fly.qa.toml) so a known token can still be pinned there on purpose;
-    // in production it's ignored and a random one is generated instead,
-    // same as anyone else. The "mossy" dev-only quick-login (see
-    // /auth/login in routes.js) is a separate, login-time-only shortcut -
-    // it doesn't touch what's actually stored here.
-    const pinnedToken = process.env.NODE_ENV !== 'production' ? adminToken : null;
-    const token = pinnedToken || generateUserToken(adminName || 'Admin');
+    // - in every environment, no exceptions. This used to also accept an
+    // ADMIN_TOKEN override outside production, which defeated the whole
+    // point on QA (its DB is ephemeral, so it reseeds - and re-pins the
+    // owner's real key to ADMIN_TOKEN's literal value - on every deploy):
+    // the owner's actual stored key was silently "mossy" there, not a
+    // generated one. The "mossy" dev-only quick-login (see /auth/login in
+    // routes.js) is a separate, login-time-only shortcut that never
+    // touches what's actually stored here - the real key is always
+    // generated and never surfaced as "mossy" anywhere.
+    const token = generateUserToken(adminName || 'Admin');
     // Still pre-claimed unlike a regular user - not because the owner
     // "already knows their key" (they may not, now that it's generated
     // the same as anyone else's), but because the public, unauthenticated
