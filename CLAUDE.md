@@ -40,6 +40,15 @@ by its *internal* name, not its current display label.
   motifs, serif/script font pairing) rather than introducing new patterns
   — check `styles.css`'s theme blocks (`body.theme-*`) before adding a new
   surface.
+- **Prefer in-place updates over full reloads for state that can change
+  mid-session** (e.g. a role change, a feature flag flipping). Don't make
+  someone feel logged-out or bounced just because something updated in the
+  background — patch the DOM/state live where possible. Only navigate
+  someone away if they've lost access to the specific page they're on (e.g.
+  a demoted admin sitting on an admin-only page) — and even then, send them
+  somewhere useful (the main app's landing tab), not just a blank reload.
+  See `startRoleWatcher()` in `app.js`/`settings.js` for the reference
+  implementation.
 
 ## Git & deploy workflow
 
