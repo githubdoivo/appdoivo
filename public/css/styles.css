@@ -573,7 +573,7 @@ button.danger:hover {
 .role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
-.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 
 /* Botoes de icone (tema, notificacoes, idioma, gerir, sair) na topbar -
    todos a mesma caixa quadrada. Auto-suficiente (nao depende de .ghost)
