@@ -23,6 +23,15 @@ process.env.ENABLE_PLAZA = 'true';
 const { default: app } = await import('../src/app.js');
 
 const ADMIN = 'ui-test-admin-token';
+// GitHub Actions' shared runners occasionally get resource-starved enough
+// that a login flow taking well under 5s locally blows past a 5000ms
+// waitForSelector everywhere at once (seen firsthand: identical commits
+// pass locally every time, then fail in CI with every login-dependent test
+// timing out around 5.5-5.7s, and a rerun of the same commit often passes
+// clean) - not a real regression, just CI's shared hardware being slower
+// on a bad run. `CI` is set by GitHub Actions (and most other CI
+// providers) automatically, so this only loosens the timeout there.
+const WAIT_TIMEOUT = process.env.CI ? 15000 : 5000;
 let server;
 let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
 let browser;
@@ -62,16 +71,16 @@ async function loginPage(context, token, path = '/') {
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
   await page.goto(base + path);
-  await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   // First-session tutorial overlay would otherwise intercept every click in
   // tests that aren't specifically testing it - dismiss it if it's showing
   // (language choice first, then skip the content step).
   const langBtn = await page.$('#tutorial-lang-pt');
   if (langBtn && await langBtn.isVisible()) {
     await langBtn.click();
-    await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
+    await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
     await page.click('#tutorial-skip');
-    await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: 5000 });
+    await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
   }
   return page;
 }
@@ -91,7 +100,7 @@ for (const deviceName of IOS_DEVICES) {
     const context = await iphoneContext(deviceName);
     const page = await context.newPage();
     await page.goto(base + '/');
-    await page.waitForSelector('#login:not(.hidden)', { timeout: 5000 });
+    await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
     const overflow = await horizontalOverflow(page);
     assert.ok(overflow <= 1, `login screen overflows by ${overflow}px on ${deviceName}`);
     await context.close();
@@ -192,16 +201,16 @@ test('a first-time user can find their name, claim their key, and get logged str
 
   await page.click('#find-key-link');
   await page.fill('#token-input', 'playwright newcomer');
-  await page.waitForSelector('.find-key-result', { timeout: 5000 });
+  await page.waitForSelector('.find-key-result', { timeout: WAIT_TIMEOUT });
   await page.click('.find-key-result');
 
   const modal = page.locator('.modal-overlay:not(.hidden)');
-  await modal.waitFor({ timeout: 5000 });
+  await modal.waitFor({ timeout: WAIT_TIMEOUT });
   const revealed = await page.locator('.modal-message').textContent();
   assert.match(revealed, /copiada|copied/i, 'the modal should confirm the key was copied');
   await page.locator('.modal-actions button').first().click();
 
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   const me = await page.evaluate(async () => {
     const token = localStorage.getItem('appivo_token');
     const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } });
@@ -226,7 +235,7 @@ test('Wall opens by default and shows a posted announcement in the feed', async 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
   assert.ok(plazaActive, 'Wall should be the tab shown right after logging in');
 
-  await page.waitForSelector('.plaza-post-announcement', { timeout: 5000 });
+  await page.waitForSelector('.plaza-post-announcement', { timeout: WAIT_TIMEOUT });
   const announcementText = await page.$eval('.plaza-post-announcement .plaza-post-text', (el) => el.textContent);
   assert.equal(announcementText, 'wifi: mossycottage');
 
@@ -241,15 +250,15 @@ test('Wall admin can pin an announcement (owner-only), and it floats to the top 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="plaza"]');
-  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: WAIT_TIMEOUT });
 
   const olderRow = page.locator('#plaza-posts-list .user-row', { hasText: 'older announcement' });
   await olderRow.locator('[data-pin-post]').click();
   await page.waitForFunction(() => document.querySelectorAll('.plaza-pinned-badge').length === 1);
 
   await page.goto(base + '/');
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
-  await page.waitForSelector('.plaza-post-announcement.pinned', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('.plaza-post-announcement.pinned', { timeout: WAIT_TIMEOUT });
 
   const firstPostText = await page.$eval('.plaza-post-announcement .plaza-post-text', (el) => el.textContent);
   assert.equal(firstPostText, 'older announcement', 'the pinned announcement should be first, even though it is older');
@@ -263,7 +272,7 @@ test('Wall admin can publish a poll from Settings, and a user can vote on it fro
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.click('[data-atab="plaza"]');
-  await page.waitForSelector('#plaza-post-form', { timeout: 5000 });
+  await page.waitForSelector('#plaza-post-form', { timeout: WAIT_TIMEOUT });
 
   await page.click('[data-post-type="poll"]');
   await page.fill('#plaza-poll-question', 'Where for dinner?');
@@ -271,11 +280,11 @@ test('Wall admin can publish a poll from Settings, and a user can vote on it fro
   await optionInputs.nth(0).fill('Pizza');
   await optionInputs.nth(1).fill('Sushi');
   await page.click('#plaza-post-form button[type="submit"]');
-  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: WAIT_TIMEOUT });
 
   await page.goto(base + '/');
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
-  await page.waitForSelector('.plaza-post-poll', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('.plaza-post-poll', { timeout: WAIT_TIMEOUT });
 
   const questionText = await page.$eval('.plaza-post-poll .plaza-post-text', (el) => el.textContent);
   assert.equal(questionText, 'Where for dinner?');
@@ -309,7 +318,7 @@ test('owner, admin and user role badges each render in a distinct color', async 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   const colorOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).borderColor);
   const ownerColor = await colorOf('.badge.role-owner');
@@ -329,12 +338,12 @@ test('owner, admin and user role badges each render in a distinct color', async 
 test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   await page.fill('#user-name-input', 'Zzz Session Tester');
   await page.click('#user-form button[type="submit"]');
   const alertOk = page.locator('.modal-actions button');
-  await alertOk.first().waitFor({ timeout: 5000 });
+  await alertOk.first().waitFor({ timeout: WAIT_TIMEOUT });
   await alertOk.first().click();
   await page.waitForTimeout(300);
 
@@ -355,7 +364,7 @@ test('clicking a user\'s name renames it in place - no separate rename button', 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   // Anchor on the token div, not the name span - the span itself gets
   // replaced by an <input> once editing starts, so a locator keyed off
@@ -384,7 +393,7 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   await page.fill('#user-name-input', 'cesar session');
   await page.waitForTimeout(200);
@@ -400,7 +409,7 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   await page.click('#user-role-filter [data-role="owner"]');
   await page.waitForTimeout(200);
@@ -438,7 +447,7 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
 test('Manage Users row keeps the access key visible with no overflow', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
   assert.ok(tokenVisible, 'access key is not visible in the user row');
@@ -451,7 +460,7 @@ test('Manage Users row keeps the access key visible with no overflow', async () 
 test('access keys are censored by default, reveal on click, and copy automatically at the same time', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   // Spy on the clipboard instead of relying on real OS clipboard access,
   // which needs permissions that aren't reliably grantable in WebKit.
@@ -492,7 +501,7 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   // Sees user management inside Settings now (so they can get familiar with
   // it), but the API only ever returns their own row - see GET /admin/users -
   // so there's nothing here to further lock down on the frontend.
-  await page.waitForSelector('#users-list .user-row', { timeout: 5000 });
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
   const rows = await page.$$('#users-list .user-row');
   assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
   const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
@@ -579,11 +588,11 @@ test('a role change made by the owner syncs to an already-open session automatic
   await mainPage.goto(base + '/');
   await mainPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
   await mainPage.goto(base + '/');
-  await mainPage.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await mainPage.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   const mainLangBtn = await mainPage.$('#tutorial-lang-pt');
   if (mainLangBtn && await mainLangBtn.isVisible()) {
     await mainLangBtn.click();
-    await mainPage.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
+    await mainPage.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
     await mainPage.click('#tutorial-skip');
   }
   assert.ok(await mainPage.$eval('#admin-badge', (el) => !el.classList.contains('hidden')), 'should start with the admin badge showing');
@@ -594,20 +603,20 @@ test('a role change made by the owner syncs to an already-open session automatic
   await settingsPage.goto(base + '/settings.html');
   await settingsPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
   await settingsPage.goto(base + '/settings.html');
-  await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+  await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
   assert.ok(await settingsPage.$eval('#role-badge', (el) => !el.classList.contains('hidden')), 'should start with the role badge showing');
 
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
 
   await mainPage.clock.fastForward('00:31');
-  await mainPage.waitForSelector('#admin-badge.hidden', { state: 'attached', timeout: 5000 });
+  await mainPage.waitForSelector('#admin-badge.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
 
   // Losing admin access entirely sends them away from Settings altogether
   // (no reason to stay on a page built for admins) - lands on the main
   // app's Wall tab rather than reloading into a stripped-down admin view.
   await settingsPage.clock.fastForward('00:31');
-  await settingsPage.waitForURL(base + '/', { timeout: 5000 });
-  await settingsPage.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await settingsPage.waitForURL(base + '/', { timeout: WAIT_TIMEOUT });
+  await settingsPage.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   assert.ok(await settingsPage.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active')), 'demoted user should land on the Wall tab after being redirected away from Settings');
 
   await context.close();
@@ -620,7 +629,7 @@ test('?tab=&night= deep-links land on the right tab/night, then clean the URL', 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.goto(`${base}/?tab=outfit&night=swamp`);
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.waitForTimeout(300);
 
   const outfitActive = await page.$eval('[data-tab="outfit"]', (el) => el.classList.contains('active'));
@@ -637,7 +646,7 @@ test('a Plaza notification\'s ?tab=chat deep link actually opens the Plaza', asy
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.goto(`${base}/?tab=chat`);
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.waitForTimeout(300);
 
   const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
@@ -652,7 +661,7 @@ test('reloading the page always opens on Wall, regardless of the last tab used',
   await page.waitForTimeout(200);
 
   await page.reload();
-  await page.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.waitForTimeout(300);
 
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
@@ -672,7 +681,7 @@ test('with ENABLE_PLAZA off (prod default), Wall is hidden in both the main app 
     assert.ok(rataActive, 'A Rata should be the landing tab instead of Wall when the Plaza feature is disabled');
 
     await page.goto(`${base}/settings.html`);
-    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: 5000 });
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
     const plazaAdminTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
     assert.ok(plazaAdminTabHidden, 'Wall admin tab should be hidden even for the owner when the flag is off');
 
@@ -776,13 +785,13 @@ test('first-session tutorial shows once, steps through, then never shows again',
   await page.waitForSelector('#app:not(.hidden)');
 
   // Shows immediately on a fresh account, asking for a language first.
-  await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
   const langStepVisible = await page.$eval('#tutorial-lang-step', (el) => !el.classList.contains('hidden'));
   assert.ok(langStepVisible, 'tutorial should ask for a language before showing content');
 
   // Picking English should render the actual tour content in English.
   await page.click('#tutorial-lang-en');
-  await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: 5000 });
+  await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
   const firstTitle = await page.$eval('#tutorial-title', (el) => el.textContent);
   assert.ok(firstTitle.length > 0, 'first tutorial step has no title');
   assert.match(firstTitle, /welcome/i, 'choosing English did not render the tour in English');
@@ -801,7 +810,7 @@ test('first-session tutorial shows once, steps through, then never shows again',
 
   // Last step's button finishes the tutorial instead of advancing further.
   await page.click('#tutorial-next');
-  await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: 5000 });
+  await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
 
   // Reloading (new "session") must not show it again - it's tied to the account.
   await page.reload();
