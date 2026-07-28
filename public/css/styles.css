@@ -156,6 +156,9 @@ body {
 }
 
 .muted { color: var(--ink-soft); font-size: 0.92rem; }
+/* Kill-switch confirmation ("apagado.") sits on its own line below the
+   danger button, not crammed beside it like the other inline action msgs. */
+.wipe-msg { display: block; margin-top: 10px; }
 .error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
    #auth-error), so plain colored text was too easy to miss regardless of
