@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -320,11 +320,6 @@ if (!columnExists('consequences', 'approved_at')) {
   db.exec('ALTER TABLE consequences ADD COLUMN approved_at TEXT');
 }
 
-/** Generates a secure, readable token. */
-export function generateToken() {
-  return randomBytes(24).toString('base64url');
-}
-
 /** Strips a name down to the plain-ASCII, lowercase base used by every token. */
 function tokenBase(name) {
   return String(name)
@@ -379,7 +374,7 @@ export function setSetting(key, value) {
   `).run(key, String(value));
 }
 
-/** Seeds settings and the admin user on first start. */
+/** Seeds settings and the admin (owner) user on first start. */
 export function seed({ adminToken, adminName }) {
   // Per-night voting status (closed by default).
   for (const night of NIGHTS) {
@@ -391,9 +386,26 @@ export function seed({ adminToken, adminName }) {
 
   let admin = db.prepare('SELECT * FROM users WHERE is_admin = 1').get();
   if (!admin) {
-    const token = adminToken || generateToken();
-    // The owner already knows their own key from setup - never eligible
-    // for the first-time name-search key retrieval (see keyClaim.js).
+    // Same generateUserToken() every regular user gets via POST /admin/users
+    // - the owner's real key is no longer specially pinned to a literal,
+    // memorable env var value in production (that used to mean the same
+    // guessable word doubled as the actual production admin password).
+    // ADMIN_TOKEN still works as a convenience OUTSIDE production (local
+    // dev, the test suite, QA - which never sets NODE_ENV=production, see
+    // fly.qa.toml) so a known token can still be pinned there on purpose;
+    // in production it's ignored and a random one is generated instead,
+    // same as anyone else. The "mossy" dev-only quick-login (see
+    // /auth/login in routes.js) is a separate, login-time-only shortcut -
+    // it doesn't touch what's actually stored here.
+    const pinnedToken = process.env.NODE_ENV !== 'production' ? adminToken : null;
+    const token = pinnedToken || generateUserToken(adminName || 'Admin');
+    // Still pre-claimed unlike a regular user - not because the owner
+    // "already knows their key" (they may not, now that it's generated
+    // the same as anyone else's), but because the public, unauthenticated
+    // first-time key-retrieval flow (keyClaim.js) does zero identity
+    // verification beyond a name match. That's an acceptable trade-off
+    // for a guest account; it is not for the one account with full admin
+    // control over everyone else's keys and data.
     const info = db.prepare(
       "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at, key_claimed_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
@@ -406,7 +418,7 @@ export function seed({ adminToken, adminName }) {
     throw new Error(
       'TOKEN_SECRET does not match the one used to create the existing admin user, so their ' +
       'token cannot be read. Either restore the previous TOKEN_SECRET, or delete the admin row ' +
-      "(DELETE FROM users WHERE is_admin = 1) so a new admin is seeded with the current ADMIN_TOKEN."
+      "(DELETE FROM users WHERE is_admin = 1) so a new admin is reseeded."
     );
   }
 }

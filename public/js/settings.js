@@ -74,14 +74,29 @@ function renderAccountCard() {
   });
 }
 
+// renderAccountCard() only ever runs once at boot, so without this the
+// account card kept showing/copying the OLD key after a self-service
+// change (see wireChangeKeyForm()) - one that no longer even works to log
+// in - until a full page reload synced it back up.
+function refreshAccountToken() {
+  const tokenEl = $('account-token');
+  tokenEl.dataset.token = getToken();
+  if (!tokenEl.classList.contains('censored')) tokenEl.textContent = tokenEl.dataset.token;
+}
+
 async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
   wireVersionBadge();
   await registerServiceWorker().catch(() => {});
+  // Not authenticated (no token, or one the server no longer accepts) -
+  // land on the actual login page, same as the main app does on a failed
+  // /me (see boot() in app.js). This used to just print an error message
+  // here and leave the visitor stranded on a dead-end admin page with no
+  // way back in except manually navigating to "/" themselves.
   if (!getToken()) {
-    $('auth-error').textContent = t('admin_no_session');
+    location.href = '/';
     return;
   }
   let me;
@@ -95,8 +110,9 @@ async function boot() {
     myName = me.name;
     wireLogoEasterEgg(me.name);
     renderAccountCard();
-  } catch (err) {
-    $('auth-error').textContent = err.message;
+  } catch {
+    clearToken();
+    location.href = '/';
     return;
   }
 
@@ -339,7 +355,6 @@ function renderUsersList(users) {
         <div class="row-actions">
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-          ${u.is_owner ? `<button class="small ghost" data-change-own-key="${u.id}">${t('change_own_key_btn')}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>` : ''}
       </div>`).join('')
@@ -420,44 +435,6 @@ function renderUsersList(users) {
       } catch (err) {
         await showAlert(err.message);
       }
-    });
-  });
-
-  // Owner's own row: unlike "nova chave" (random) above, this lets the
-  // owner type the exact key they want (e.g. "moss" -> "rock"), same as
-  // the standalone change-key form everyone else uses - just inline here
-  // instead of its own section, since the owner's tab is this list.
-  $('users-list').querySelectorAll('[data-change-own-key]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const row = b.closest('.user-row');
-      if (row.querySelector('.own-key-form')) return;
-      const form = document.createElement('form');
-      form.className = 'own-key-form';
-      form.style.marginTop = '10px';
-      form.innerHTML = `
-        <input type="password" class="own-key-current" placeholder="${esc(t('current_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
-        <input type="password" class="own-key-new" placeholder="${esc(t('new_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" style="margin-top:8px" />
-        <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
-          <button type="submit" class="small">${t('save')}</button>
-          <button type="button" class="small ghost own-key-cancel">${t('modal_cancel')}</button>
-        </div>`;
-      row.appendChild(form);
-      form.querySelector('.own-key-current').focus();
-      form.querySelector('.own-key-cancel').addEventListener('click', () => form.remove());
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const currentToken = form.querySelector('.own-key-current').value.trim();
-        const newToken = form.querySelector('.own-key-new').value.trim();
-        try {
-          await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
-          setToken(newToken);
-          form.remove();
-          await showAlert(t('key_changed_msg'));
-          loadUsers();
-        } catch (err) {
-          await showAlert(err.message);
-        }
-      });
     });
   });
 
@@ -925,10 +902,10 @@ async function loadPlazaPosts() {
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
-        <p class="muted" style="margin:4px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
+        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
         <p style="margin:8px 0 0">${esc(p.text)}</p>
         ${p.type === 'poll' ? `
-        <ul class="muted" style="margin:8px 0 0;padding-left:18px">
+        <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
           ${p.options.map((o) => {
             const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
             return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
@@ -1029,6 +1006,7 @@ function wireChangeKeyForm() {
     try {
       await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
       setToken(newToken);
+      refreshAccountToken();
       $('current-key-input').value = '';
       $('new-key-input').value = '';
       $('change-key-msg').textContent = t('key_changed_msg');

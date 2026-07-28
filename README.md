@@ -115,7 +115,12 @@ device). Each notification opens the app straight to the relevant tab. See
 ## Configuration (.env)
 
 - `PORT` - server port (default 3000; this project uses 3001 locally).
-- `ADMIN_TOKEN` - the owner's access key. If empty, one is generated on first start.
+- `NODE_ENV` - set to `production` only in the real deployment (fly.toml). Gates
+  two dev/test-only conveniences: `ADMIN_TOKEN` below, and a `mossy` quick-login
+  that always logs in as the owner regardless of their real key (see
+  `/auth/login` in `src/routes.js`) - neither works when this is `production`.
+- `ADMIN_TOKEN` - pins the owner's access key outside production. If empty (or
+  in production), one is generated the same way any user's key is.
 - `ADMIN_NAME` - the owner's display name.
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of
   the database and never share it. If you change it, nobody can log in.

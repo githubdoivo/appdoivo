@@ -43,7 +43,6 @@
         </a>
       </div>
     </header>
-    <p id="auth-error" class="error"></p>
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
@@ -72,7 +71,9 @@
               <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
               <button type="button" id="plaza-add-option-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_option">Adicionar opção</button>
             </div>
-            <button type="submit" class="small" style="margin-top:12px" data-i18n="plaza_publish_btn">Publicar</button>
+            <div style="text-align:right;margin-top:12px">
+              <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
+            </div>
             <span id="plaza-post-msg" class="muted"></span>
           </form>
         </div>
@@ -179,7 +180,9 @@
             </div>
             <div class="account-token censored" id="account-token" data-reveal-token role="button" tabindex="0">••••••••••••</div>
           </div>
-          <button type="button" id="logout-btn" class="small ghost" style="margin-top:14px" data-i18n="logout">Sair</button>
+          <div style="text-align:right;margin-top:14px">
+            <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
+          </div>
         </div>
 
         <div class="card" id="change-key-card">
@@ -200,7 +203,7 @@
               </button>
             </div>
             <div class="password-field" style="margin-top:10px">
-              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" />
+              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" minlength="7" />
               <button type="button" id="new-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />

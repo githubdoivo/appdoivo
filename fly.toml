@@ -7,7 +7,7 @@
 #   3. Cria o volume persistente na mesma regiao:
 #        fly volumes create appdoivo_data --region cdg --size 1
 #   4. Define os segredos (NAO ficam no repositorio):
-#        fly secrets set TOKEN_SECRET=<32 bytes hex> ADMIN_TOKEN=<your-admin-password> ADMIN_NAME=Ivo `
+#        fly secrets set TOKEN_SECRET=<32 bytes hex> ADMIN_NAME=Ivo `
 #          VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:tu@exemplo.pt
 #   5. Deploy:  fly deploy
 #
@@ -15,6 +15,10 @@
 #   - PORT fica abaixo em [env] (nao e segredo). O fuso horario da app e
 #     fixo (Europe/Lisbon, ver getTimezone() em src/time.js), nao e uma
 #     variavel de ambiente.
+#   - ADMIN_TOKEN nao tem efeito aqui (NODE_ENV=production abaixo ignora-o
+#     de proposito, ver seed() em src/db.js) - a chave real do dono e
+#     gerada automaticamente, tal como a de qualquer utilizador. Consulta-a
+#     com "npm run admin-token" (ou "fly ssh console -C 'node scripts/print-admin-token.js'").
 #   - min_machines_running = 1 mantem a maquina acordada para a revelacao
 #     da Rata (a cada 3h) funcionar mesmo sem trafego. Poe 0 fora dos eventos
 #     para poupar (mas ai o cron so corre quando houver visitas).
@@ -27,6 +31,11 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   DB_FILE = "/data/app.sqlite"
+  # Not set anywhere else (QA included) - gates the owner's dev/test-only
+  # login shortcuts (see /auth/login and seed() in src/db.js): the "mossy"
+  # quick-login and an ADMIN_TOKEN-pinned owner key both only ever work
+  # when this is unset/non-production, never here.
+  NODE_ENV = "production"
   # Lets the owner promote/revoke other real users to admin ("tester")
   # in production. The golden rule (only the owner sees access keys) is
   # unaffected - that's enforced separately in src/routes.js regardless

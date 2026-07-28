@@ -137,8 +137,8 @@ body {
    floating badge used to sit on top of page content instead. */
 .version-badge {
   display: block;
-  text-align: center;
-  padding: 20px 0 calc(10px + env(safe-area-inset-bottom));
+  text-align: right;
+  padding: 20px 4px calc(10px + env(safe-area-inset-bottom));
   font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.4;
@@ -449,7 +449,12 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
 /* Publication-type badges (Regular/Poll on the Wall admin list) - own
    colors, deliberately outside the role palette above so a post type is
-   never visually confused with a user role. */
+   never visually confused with a user role. Nudged left by exactly the
+   pill's own left padding (see .badge's shared padding: 3px 9px) - a pill
+   shape needs that padding to not look cramped, but it was throwing the
+   badge's own text out of alignment with the plain text (byline,
+   question, options) below it in the same list. */
+.badge.type-announcement, .badge.type-poll { margin-left: -9px; }
 .badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
 .badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
 

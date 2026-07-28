@@ -681,6 +681,11 @@ test('a user can change their own access key, given the correct current one', as
   });
   assert.equal(badChars.status, 400);
 
+  const tooShort = await api('POST', '/me/change-token', {
+    token: oldToken, body: { currentToken: oldToken, newToken: 'abc123' },
+  });
+  assert.equal(tooShort.status, 400, 'a 6-character key should be rejected - minimum is 7');
+
   const ok = await api('POST', '/me/change-token', {
     token: oldToken, body: { currentToken: oldToken, newToken: 'newkey1234' },
   });

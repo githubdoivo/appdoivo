@@ -22,6 +22,11 @@ let myUserId = null;
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
 // before /me resolves; showApp() corrects it immediately after.
 let plazaEnabled = true;
+// Set from /me in showApp() - gates the tutorial's skip button (see
+// startTutorial()): only admin/owner accounts can skip, everyone else
+// has to read through it.
+let isAdmin = false;
+let isOwner = false;
 
 /* ------------------------------- Arranque -------------------------------- */
 
@@ -57,6 +62,8 @@ function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   myUserId = me.id;
+  isAdmin = !!me.isAdmin;
+  isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
@@ -145,6 +152,9 @@ function startTutorial() {
   $('tutorial-lang-step').classList.remove('hidden');
   $('tutorial-content-step').classList.add('hidden');
   $('tutorial-overlay').classList.remove('hidden');
+  // Regular users read through the whole thing (no skip) - admin/owner
+  // accounts already know the app, so they can jump straight past it.
+  $('tutorial-skip').classList.toggle('hidden', !(isAdmin || isOwner));
 }
 
 function beginTutorialContent(lang) {
@@ -164,6 +174,7 @@ async function endTutorial() {
 
 $('tutorial-lang-pt').addEventListener('click', () => beginTutorialContent('pt'));
 $('tutorial-lang-en').addEventListener('click', () => beginTutorialContent('en'));
+$('tutorial-skip').addEventListener('click', () => endTutorial());
 
 $('tutorial-next').addEventListener('click', () => {
   if (tutorialStep < TUTORIAL_STEPS.length - 1) {
