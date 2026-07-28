@@ -1069,7 +1069,7 @@ async function loadPlazaPosts() {
         </ul>` : ''}
         <div class="row-actions">
           ${isOwner ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
-          <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
+          ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
         </div>
       </div>`).join('')
     : `<p class="muted">${t('plaza_no_posts')}</p>`;
