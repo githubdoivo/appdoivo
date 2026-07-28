@@ -367,56 +367,66 @@ label.field { display: block; margin: 4px 0 2px; font-size: var(--text-sm); font
 
 /* -------------------------------- Botoes --------------------------------- */
 
+/* -------------------------------- Buttons --------------------------------- */
 button, .btn {
   cursor: pointer;
-  /* iOS Safari draws its own translucent rounded-rect "tap highlight" over
-     any tapped button, regardless of `outline` - that's the "square limit"
-     that shows up on a tab tap even with the focus ring itself suppressed. */
   -webkit-tap-highlight-color: transparent;
-  border: 1px solid var(--ink);
   border-radius: var(--radius);
-  padding: 12px 20px;
   font-family: var(--body);
-  font-size: 0.78rem;
   font-weight: 600;
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  background: var(--ink);
-  color: var(--paper-3);
-  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s;
   text-decoration: none;
   display: inline-block;
   text-align: center;
 }
-button:hover, .btn:hover { background: transparent; color: var(--ink); }
-button:disabled { opacity: 0.45; cursor: default; }
 
+/* DEFAULT: Primary solid dark button (submit, create, send, save). */
+button, .btn {
+  border: 1px solid var(--ink);
+  padding: 12px 20px;
+  font-size: 0.78rem;
+  background: var(--ink);
+  color: var(--paper-3);
+}
+button:hover, .btn:hover {
+  background: var(--ink);
+  color: var(--paper-3);
+  opacity: 0.8;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Secondary: Ghost button (transparent, subtle). */
 button.ghost, a.ghost {
-  background: transparent;
-  color: var(--ink);
   border: 1px solid var(--line);
   padding: 7px 12px;
   font-size: var(--text-xs);
+  background: transparent;
+  color: var(--ink);
 }
-button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transparent; }
-button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
-button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
-button.danger:hover { background: var(--danger); color: var(--paper-3); }
+button.ghost:hover, a.ghost:hover {
+  border-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
 
-/* Primary action buttons (logout, create user, save key): solid dark throughout. */
-#logout-btn,
-#admin-register-form button[type="submit"],
-#change-key-form button[type="submit"] {
-  background: var(--ink) !important;
-  color: var(--paper-3) !important;
-  border: none !important;
+/* Size modifier: small buttons, just padding/font size, inherit color scheme. */
+button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
+
+/* Destructive: Red danger button (delete, wipe, reset). */
+button.danger {
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
 }
-#logout-btn:hover,
-#admin-register-form button[type="submit"]:hover,
-#change-key-form button[type="submit"]:hover {
-  background: var(--ink) !important;
-  color: var(--paper-3) !important;
-  opacity: 0.8;
+button.danger:hover {
+  background: var(--danger);
+  color: var(--paper-3);
+}
 }
 
 /* -------------------------------- Topbar --------------------------------- */
