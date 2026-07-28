@@ -845,13 +845,21 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
   await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
 });
 
-test('Plaza posts: only an admin can delete, and deleting one leaves the rest of the feed untouched', async () => {
+test('Plaza posts: only the owner can delete, and deleting one leaves the rest of the feed untouched', async () => {
   const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;
 
+  // Regular user cannot delete
   const forbidden = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: userToken });
   assert.equal(forbidden.status, 403);
 
+  // Non-owner admin cannot delete
+  const admin2 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'test-admin-2' } });
+  await api('PATCH', `/admin/users/${admin2.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const forbiddenAdmin = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: admin2.data.token });
+  assert.equal(forbiddenAdmin.status, 403);
+
+  // Owner can delete
   const del = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
   assert.equal(del.status, 200);
 
