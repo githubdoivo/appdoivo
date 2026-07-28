@@ -134,17 +134,13 @@ async function boot() {
     $('users-management').classList.add('hidden');
   } else {
     // User management now lives inside Settings (below change-key), not
-    // its own tab - any admin sees it, same as before.
-    $('users-management').classList.remove('hidden');
+    // its own tab - owner-only. A regular (non-owner) admin only ever gets
+    // their own row back from the API (see GET /admin/users), with no
+    // actions on it either (rename/regenerate/promote are all owner-gated
+    // further down) - that's just a read-only duplicate of the account
+    // card already at the top of this page, not a useful section.
+    $('users-management').classList.toggle('hidden', !isOwner);
     if (!isOwner) {
-      // A regular admin can see the Users list too, but the API only ever
-      // gives them their own row (see GET /admin/users) - so nobody else's
-      // key is ever exposed here, they just get to see it exist and their
-      // own entry in it. Creating users and resetting event content are
-      // owner-only actions on the backend regardless, so hide both instead
-      // of showing controls that would just 403 if clicked.
-      $('user-search-card').classList.add('hidden');
-      $('reset-content-card').classList.add('hidden');
       // The Wall tab (pseudonym mapping + its timezone card) was opened up to
       // regular admins temporarily so testers could see it existed - that's
       // done now, so it's owner-only again, whole tab hidden rather than just
@@ -198,7 +194,9 @@ function startRoleWatcher() {
 
 function reloadAll() {
   loadVotingState();
-  loadUsers();
+  // Manage Users is owner-only now (see boot()) - skip the fetch entirely
+  // for a regular admin rather than pulling a list that's never shown.
+  if (isOwner) loadUsers();
   loadContestants();
   loadVotes();
   loadConsequences();

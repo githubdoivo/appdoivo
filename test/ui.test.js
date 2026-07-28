@@ -542,26 +542,21 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  // Sees user management inside Settings now (so they can get familiar with
-  // it), but the API only ever returns their own row - see GET /admin/users -
-  // so there's nothing here to further lock down on the frontend.
-  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
-  const rows = await page.$$('#users-list .user-row');
-  assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
-  const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
-  assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
+  // Manage Users is owner-only - a regular admin's own row is all the API
+  // would ever return them anyway (see GET /admin/users), with no actions
+  // on it either, so it would just be a read-only duplicate of the account
+  // card already at the top of this page. Whole section hidden instead.
+  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('[data-atab="settings"]');
+  await page.waitForTimeout(300);
+  const usersManagementHidden = await page.$eval('#users-management', (el) => el.classList.contains('hidden'));
+  assert.ok(usersManagementHidden, 'non-owner admin should not see Manage Users at all - it would just duplicate the account card');
 
   // The Plaza (pseudonym-unmasking) admin tab - internal id "wall", see
   // tab_chat in i18n.js - was opened up to admins temporarily for testing;
   // it's owner-only again now, whole tab hidden.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
   assert.ok(wallTabHidden, 'non-owner admin should no longer see the Plaza admin tab');
-
-  const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
-  assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');
-
-  const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
-  assert.ok(resetCardHidden, 'non-owner admin cannot reset event content (owner-only on the backend)');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
   assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');
@@ -631,7 +626,9 @@ test('a role change made by the owner syncs to an already-open Settings session 
   await settingsPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
   await settingsPage.goto(base + '/settings.html');
   await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.ok(await settingsPage.$eval('#users-management', (el) => !el.classList.contains('hidden')), 'should start with admin-only Manage Users visible');
+  // Manage Users is owner-only (this target is admin, not owner) - check a
+  // tab a regular admin does see instead, as the "currently admin" signal.
+  assert.ok(await settingsPage.$eval('[data-atab="outfit"]', (el) => !el.classList.contains('hidden')), 'should start with admin tabs visible');
 
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
 
