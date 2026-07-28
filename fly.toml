@@ -31,6 +31,10 @@ primary_region = "cdg"
   # unaffected - that's enforced separately in src/routes.js regardless
   # of this flag.
   ENABLE_ADMIN_PROMOTION = "true"
+  # Wall (announcements/polls, internal name "plaza") stayed QA-only
+  # while it was being rebuilt - fully redesigned, tested, and approved
+  # on QA, so it's on for the real event now too.
+  ENABLE_PLAZA = "true"
 
 [[mounts]]
   source = "appdoivo_data"

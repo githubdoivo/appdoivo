@@ -74,8 +74,8 @@ token, and go to Settings to:
 
 Optional local env flags (see `.env.example`):
 
-- `ENABLE_PLAZA=true` - turns on the Wall tab (off by default, matching
-  production - only QA has it on while the feature is still being tried out).
+- `ENABLE_PLAZA=true` - turns on the Wall tab (off by default locally; on in
+  both QA and production).
 - `ENABLE_ADMIN_PROMOTION=true` - lets the owner promote/revoke other users'
   admin status from Settings.
 - `SEED_DEMO=true` - auto-loads demo users/contestants/consequences on every
@@ -123,7 +123,7 @@ device). Each notification opens the app straight to the relevant tab. See
   the database and never share it. If you change it, nobody can log in.
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` - Web Push (`npm run genkeys`).
 - `ENABLE_ADMIN_PROMOTION` - lets the owner promote/revoke other users' admin status.
-- `ENABLE_PLAZA` - turns on the Wall tab. Off by default; on in QA.
+- `ENABLE_PLAZA` - turns on the Wall tab. Off by default locally; on in both QA and production.
 - `SEED_DEMO` - auto-loads demo data on boot. QA only, never production.
 - `DB_FILE` - (optional) database path; used by the tests (`:memory:` or a temp file).
 - `APP_ENV` - (optional) labels the version badge (e.g. `qa`) so it's obvious which environment is open.
