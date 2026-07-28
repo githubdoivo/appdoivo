@@ -7,3 +7,5 @@ data/
 .DS_Store
 npm-debug.log*
 .claude/
+.agents/
+skills-lock.json
