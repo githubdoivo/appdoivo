@@ -563,10 +563,13 @@ async function loadPlaza() {
 // scheduled cron (or an admin's manual reveal) shows up without a manual reload.
 let rataPollTimer = null;
 
+// Same derivation as rataStatus() in settings.js - every consequence here
+// is already revealed (this only ever reads /consequences/revealed), so
+// the only question is where it sits between atribuir/pendente/feita.
 function rataStatusBadge(c) {
-  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
-  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
-  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+  if (c.approved_at) return { key: 'rata_status_feita', cls: 'rata-status-feita' };
+  if (!c.assigned_user_id) return { key: 'rata_status_atribuir', cls: 'rata-status-atribuir' };
+  return { key: 'rata_status_pendente', cls: 'rata-status-pendente' };
 }
 
 async function loadRataHistory() {

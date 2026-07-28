@@ -586,8 +586,19 @@ $('reset-content-btn').addEventListener('click', async () => {
 
 /* ------------------------------ Concorrentes ----------------------------- */
 
+let allContestants = [];
+
 async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
+  allContestants = contestants;
+  renderContestants();
+}
+
+function renderContestants() {
+  const term = foldAccents($('contestant-search').value.trim().toLowerCase());
+  const contestants = term
+    ? allContestants.filter((c) => foldAccents(c.name.toLowerCase()).includes(term))
+    : allContestants;
   $('contestants-table').innerHTML = contestants.length
     ? `<tr><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
         const who = c.partner_name
@@ -651,50 +662,102 @@ async function loadContestants() {
   });
 }
 
-// Same search-then-pick pattern as the self-registration "team up with"
-// field in app.js: type-to-filter over /users/basic, click a result to
-// link it. Previously the only way to add a contestant here was a bare
-// free-text costume name with no database lookup, so an admin-added entry
-// could never carry a real name alongside it (see contestantLabel() above).
-let contestantUsersCache = null;
-async function ensureContestantUsersCache() {
-  if (!contestantUsersCache) contestantUsersCache = await api('/users/basic');
-  return contestantUsersCache;
+$('contestant-search').addEventListener('input', renderContestants);
+
+// Same registration capability as the public candidatura form in app.js
+// (renderRegistration() there) - solo or teamed up with a partner - just
+// admin-facing: an extra search-and-pick field up front for WHO this entry
+// is for, since (unlike the public form) there's no implicit "self" here.
+let adminRegisterUsersCache = null;
+async function ensureAdminRegisterUsersCache() {
+  if (!adminRegisterUsersCache) adminRegisterUsersCache = await api('/users/basic');
+  return adminRegisterUsersCache;
 }
 
-let contestantUserId = null;
-const contestantUserSearch = $('contestant-user-search');
-const contestantUserResults = $('contestant-user-results');
-contestantUserSearch.addEventListener('input', async () => {
-  contestantUserId = null;
-  const term = contestantUserSearch.value.trim().toLowerCase();
-  if (term.length < 2) { contestantUserResults.innerHTML = ''; return; }
-  const users = await ensureContestantUsersCache();
-  const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
-  contestantUserResults.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
-  contestantUserResults.querySelectorAll('[data-user-id]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      contestantUserId = Number(btn.dataset.userId);
-      contestantUserSearch.value = btn.textContent;
-      contestantUserResults.innerHTML = '';
+// Wires a search input to a results container: type to filter
+// /users/basic by name, click a result to pick it (calling onPick with the
+// chosen user's id). Used twice below (participant, partner) - identical
+// behavior to app.js's own partner-search, just parameterized so it's not
+// duplicated per field.
+function wireAdminUserSearch(inputEl, resultsEl, onPick) {
+  inputEl.addEventListener('input', async () => {
+    onPick(null);
+    const term = inputEl.value.trim().toLowerCase();
+    if (term.length < 2) { resultsEl.innerHTML = ''; return; }
+    const users = await ensureAdminRegisterUsersCache();
+    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
+    resultsEl.querySelectorAll('[data-user-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        onPick(Number(btn.dataset.userId));
+        inputEl.value = btn.textContent;
+        resultsEl.innerHTML = '';
+      });
     });
+  });
+}
+
+let adminRegisterMode = 'solo';
+let adminRegisterParticipantId = null;
+let adminRegisterPartnerId = null;
+
+wireAdminUserSearch(
+  $('admin-register-participant-search'),
+  $('admin-register-participant-results'),
+  (id) => { adminRegisterParticipantId = id; },
+);
+wireAdminUserSearch(
+  $('admin-register-partner-search'),
+  $('admin-register-partner-results'),
+  (id) => { adminRegisterPartnerId = id; },
+);
+
+$('admin-register-mode-switch').querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    adminRegisterMode = b.dataset.mode;
+    $('admin-register-mode-switch').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    $('admin-register-partner-wrap').classList.toggle('hidden', adminRegisterMode !== 'duo');
+    $('admin-register-name').placeholder = t(adminRegisterMode === 'duo' ? 'outfit_register_ph_duo' : 'outfit_register_ph');
+    if (adminRegisterMode === 'solo') {
+      adminRegisterPartnerId = null;
+      $('admin-register-partner-search').value = '';
+      $('admin-register-partner-results').innerHTML = '';
+    }
   });
 });
 
-$('contestant-form').addEventListener('submit', async (e) => {
+$('admin-register-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const name = $('contestant-name').value.trim();
+  $('admin-register-msg').textContent = '';
+  const name = $('admin-register-name').value.trim();
   if (!name) return;
-  try {
-    await api('/admin/contestants', { method: 'POST', body: { name, night: currentNight(), userId: contestantUserId } });
-  } catch (err) {
-    await showAlert(err.message);
+  if (!adminRegisterParticipantId) {
+    $('admin-register-msg').textContent = t('admin_register_participant_required');
     return;
   }
-  $('contestant-name').value = '';
-  contestantUserId = null;
-  contestantUserSearch.value = '';
-  contestantUserResults.innerHTML = '';
+  if (adminRegisterMode === 'duo' && !adminRegisterPartnerId) {
+    $('admin-register-msg').textContent = t('outfit_register_partner_required');
+    return;
+  }
+  try {
+    await api('/admin/contestants/register', {
+      method: 'POST',
+      body: {
+        userId: adminRegisterParticipantId,
+        partnerUserId: adminRegisterMode === 'duo' ? adminRegisterPartnerId : null,
+        name,
+        night: currentNight(),
+      },
+    });
+  } catch (err) {
+    $('admin-register-msg').textContent = err.message;
+    return;
+  }
+  $('admin-register-name').value = '';
+  $('admin-register-participant-search').value = '';
+  $('admin-register-partner-search').value = '';
+  adminRegisterParticipantId = null;
+  adminRegisterPartnerId = null;
   loadContestants();
 });
 
@@ -733,7 +796,13 @@ async function loadVotes() {
 
 /* ------------------------------ Rata Game -------------------------------- */
 
-$('reveal-btn').addEventListener('click', async () => {
+// Reveal may be triggered from two spots depending on state - the
+// standalone slot (nothing revealed yet) or, once something is, from
+// inside the current card's own markup in #consequences-table (see
+// renderConsequences()) - both share this one delegated handler via
+// [data-reveal-next] rather than two separate listeners.
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-reveal-next]')) return;
   $('reveal-msg').textContent = '';
   try {
     await api('/admin/consequences/reveal', { method: 'POST' });
@@ -743,20 +812,27 @@ $('reveal-btn').addEventListener('click', async () => {
   }
 });
 
-function rataStatusBadge(c) {
-  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
-  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
-  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+// Four states a consequence moves through: fila (queued, not revealed) ->
+// atribuir (revealed, needs the owner to pick who's responsible) ->
+// pendente (assigned, awaiting the assignee's self-report then the
+// owner's approval - both count as "pendente", no separate tag for each
+// half) -> feita (approved, final). All derived from columns that already
+// exist - nothing about this is stored as a literal status string.
+function rataStatus(c) {
+  if (c.status !== 'used') return { state: 'fila', key: 'rata_status_fila', cls: 'rata-status-fila' };
+  if (c.approved_at) return { state: 'feita', key: 'rata_status_feita', cls: 'rata-status-feita' };
+  if (!c.assigned_user_id) return { state: 'atribuir', key: 'rata_status_atribuir', cls: 'rata-status-atribuir' };
+  return { state: 'pendente', key: 'rata_status_pendente', cls: 'rata-status-pendente' };
 }
 
-async function loadConsequences() {
-  const rows = await api('/admin/consequences');
-  // rows are sorted most-recently-touched first (see GET /admin/consequences),
-  // so the first 'used' one encountered is simply the current one.
-  const revealed = rows.find((c) => c.status === 'used');
-  $('revealed-consequence').classList.toggle('hidden', !revealed);
-  if (revealed) $('revealed-consequence').textContent = revealed.text;
+// Cumulative OR toggle, same pattern as Manage Users' own role filter -
+// narrows the view only, never affects the data itself.
+const rataStatusFilter = new Set();
+let rataRows = [];
+let rataAssignableUsers = [];
 
+async function loadConsequences() {
+  rataRows = await api('/admin/consequences');
   // Any admin (not owner-only) records who was actually holding the rata
   // for each revealed consequence, entered by hand since it can't be
   // inferred from anything in the app - not "right now", can be set any
@@ -767,30 +843,55 @@ async function loadConsequences() {
   // (that picker never needs to team up with yourself), but here the
   // admin filling this in might themselves be who had it - add self back.
   const others = await api('/users/basic');
-  const users = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  rataAssignableUsers = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  renderConsequences();
+}
+
+function renderConsequences() {
+  // rows are sorted most-recently-touched first (see GET /admin/consequences),
+  // so the first 'used' one encountered is simply the current one.
+  const revealed = rataRows.find((c) => c.status === 'used');
+
+  const rows = rataStatusFilter.size === 0
+    ? rataRows
+    : rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state));
+
+  // The reveal button normally lives inside the current item's own card
+  // below - but a status filter can hide that card (e.g. filtering to just
+  // "fila"), which would otherwise leave no way to trigger the next reveal
+  // at all. Fall back to the standalone slot whenever the current item
+  // itself isn't part of what's actually being shown right now.
+  const currentVisible = revealed && rows.some((c) => c.id === revealed.id);
+  $('reveal-standalone').classList.toggle('hidden', !!currentVisible);
+
   const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
-    users.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
 
   // Card list, not a grid: same shape as the user-facing rata-history-item
   // (see loadRataHistory in app.js) - a table forced this text into a
   // narrow column and wrapped it one word per line, and combining italic +
   // small + serif + grey on top of that made it worse. Text first, full
-  // width; everything else drops to a second, plainer meta line.
+  // width; everything else drops to a second, plainer meta line. The
+  // current consequence used to also get a separate, much louder .highlight
+  // box above this whole list, duplicating the exact same text - now it's
+  // just this one card with a subtler tint (.rata-current) and the reveal
+  // button for the next one directly below it.
   $('consequences-table').innerHTML = rows.length
     ? rows.map((c) => {
       const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}`;
+      const status = rataStatus(c);
       if (c.status !== 'used') {
         return `<div class="rata-history-item">
           <p class="rata-history-text">${esc(c.text)}</p>
           <div class="rata-history-meta">
             <span class="muted">${byline}</span>
-            <span class="muted">${t('status_pending')}</span>
+            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
           </div>
         </div>`;
       }
-      const status = rataStatusBadge(c);
+      const isCurrent = revealed && c.id === revealed.id;
       const canApprove = isOwner && c.done_at && !c.approved_at;
-      return `<div class="rata-history-item">
+      return `<div class="rata-history-item${isCurrent ? ' rata-current' : ''}">
         <p class="rata-history-text">${esc(c.text)}</p>
         <div class="rata-history-meta">
           <span class="muted">${byline}</span>
@@ -798,10 +899,20 @@ async function loadConsequences() {
           <select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>
           ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
         </div>
+        ${isCurrent ? `<div style="text-align:right;margin-top:10px"><button type="button" data-reveal-next class="small">${t('reveal_now')}</button></div>` : ''}
       </div>`;
     }).join('')
     : `<p class="muted">${t('no_consequences')}</p>`;
 }
+
+$('rata-status-filter').querySelectorAll('.role-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (rataStatusFilter.has(btn.dataset.status)) rataStatusFilter.delete(btn.dataset.status);
+    else rataStatusFilter.add(btn.dataset.status);
+    btn.classList.toggle('active', rataStatusFilter.has(btn.dataset.status));
+    renderConsequences();
+  });
+});
 
 $('consequences-table').addEventListener('change', async (e) => {
   const select = e.target.closest('[data-assign-id]');
@@ -809,6 +920,10 @@ $('consequences-table').addEventListener('change', async (e) => {
   const userId = select.value ? Number(select.value) : null;
   try {
     await api(`/admin/consequences/${select.dataset.assignId}/assign`, { method: 'PATCH', body: { userId } });
+    // Assigning moves it from atribuir to pendente - re-render so the
+    // status badge (and the atribuir/pendente filter) reflect that
+    // immediately instead of waiting for the next poll.
+    loadConsequences();
   } catch (err) {
     await showAlert(err.message);
     loadConsequences();

@@ -606,6 +606,21 @@ router.post('/admin/contestants', (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid, name, night });
 });
 
+// Same registration capability as /outfit/register (solo or teamed up with
+// a partner), just usable from admin on someone else's behalf instead of
+// only for yourself - reuses registerContestant() as-is rather than
+// duplicating its rules (duplicate-entry checks, partner validation, the
+// night having to actually be in "registration"), so an admin follows the
+// exact same constraints a self-registering guest would.
+router.post('/admin/contestants/register', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const userId = Number(req.body?.userId);
+  if (!userId) return res.status(400).json({ error: 'Escolhe um utilizador.' });
+  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
+});
+
 // Renames a contestant (e.g. fixing a typo in a self-registered entry, or
 // just reviewing/cleaning up submissions before opening voting).
 router.patch('/admin/contestants/:id', (req, res) => {

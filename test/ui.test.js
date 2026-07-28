@@ -573,7 +573,10 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(voterLogHidden, 'non-owner admin must not see the who-voted-for-whom card');
 
   await page.click('[data-atab="rata"]');
-  const revealBtnVisible = await page.$eval('#reveal-btn', (el) => el.getBoundingClientRect().width > 0);
+  // Lives in one of two spots depending on state - the standalone slot
+  // (nothing revealed yet) or inside the current card (once something is)
+  // - so check whichever one is actually visible right now.
+  const revealBtnVisible = await page.$$eval('[data-reveal-next]', (els) => els.some((el) => el.getBoundingClientRect().width > 0));
   assert.ok(revealBtnVisible, 'non-owner admin should still see the reveal-consequence button');
 
   await context.close();

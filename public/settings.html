@@ -91,9 +91,11 @@
              isso fica solta no topo, fora de qualquer card. Mesmo
              componente "switch" da Best Look principal (theme-switch),
              não um <select>. -->
-        <div class="theme-switch night-switch" id="admin-night-switch">
-          <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
-          <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
+        <div style="text-align:right">
+          <div class="theme-switch night-switch" id="admin-night-switch">
+            <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
+            <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
+          </div>
         </div>
 
         <div class="card">
@@ -113,14 +115,32 @@
 
         <div class="card">
           <h2 data-i18n="contestants_title">Concorrentes da noite</h2>
-          <form id="contestant-form" style="margin-top:12px">
-            <input id="contestant-user-search" type="text" data-i18n-ph="contestant_user_search_ph" placeholder="Ligar a um utilizador (opcional)..." autocomplete="off" />
-            <div id="contestant-user-results" class="partner-results"></div>
-            <div class="inline" style="margin-top:8px">
-              <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
-              <button type="submit" class="small" data-i18n="add">Adicionar</button>
+          <!-- Same registration capability as the public candidatura form
+               (solo/duo toggle, partner search when duo, persona name) -
+               just admin-facing: an extra search field up front to pick
+               WHO this entry is for, since there's no implicit "self"
+               here. Replaces the old free-text-plus-optional-single-link
+               form, which couldn't do duo entries at all. -->
+          <form id="admin-register-form" style="margin-top:12px">
+            <div class="theme-switch" id="admin-register-mode-switch">
+              <button type="button" data-mode="solo" class="active" data-i18n="outfit_register_solo">sozinhe</button>
+              <button type="button" data-mode="duo" data-i18n="outfit_register_duo">com alguém</button>
             </div>
+            <div style="margin-top:10px">
+              <input id="admin-register-participant-search" type="text" data-i18n-ph="admin_register_participant_ph" placeholder="Procura quem se vai inscrever..." autocomplete="off" />
+              <div id="admin-register-participant-results" class="partner-results"></div>
+            </div>
+            <div id="admin-register-partner-wrap" class="hidden" style="margin-top:10px">
+              <input id="admin-register-partner-search" type="text" data-i18n-ph="outfit_register_partner_ph" placeholder="Procura o nome da pessoa..." autocomplete="off" />
+              <div id="admin-register-partner-results" class="partner-results"></div>
+            </div>
+            <input id="admin-register-name" type="text" maxlength="60" data-i18n-ph="outfit_register_ph" placeholder="Nome da personagem..." style="margin-top:10px" autocomplete="off" />
+            <div style="text-align:right;margin-top:10px">
+              <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
+            </div>
+            <span id="admin-register-msg" class="muted"></span>
           </form>
+          <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:16px" />
           <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
 
@@ -145,9 +165,20 @@
         <div class="card">
           <h2 data-i18n="rata_admin_title">Consequências</h2>
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
-          <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência</button>
+          <div class="role-pills" id="rata-status-filter" style="margin-top:8px">
+            <button type="button" class="role-pill" data-status="fila" data-i18n="rata_status_fila">fila</button>
+            <button type="button" class="role-pill" data-status="atribuir" data-i18n="rata_status_atribuir">atribuir</button>
+            <button type="button" class="role-pill" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
+            <button type="button" class="role-pill" data-status="feita" data-i18n="rata_status_feita">feita</button>
+          </div>
+          <!-- Shown only when nothing has ever been revealed yet - once
+               something has, this same action lives below its text inside
+               the current card in #consequences-table instead (see
+               renderConsequences() in settings.js), right-aligned there. -->
+          <div id="reveal-standalone" style="text-align:right;margin-top:12px">
+            <button type="button" data-reveal-next class="small" data-i18n="reveal_now">Revelar consequência</button>
+          </div>
           <span id="reveal-msg" class="muted"></span>
-          <div id="revealed-consequence" class="highlight hidden" style="margin-top:12px"></div>
           <div id="consequences-table" style="margin-top:16px"></div>
         </div>
       </div>

@@ -464,6 +464,17 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    of those containers. */
 .rata-history-item { border-top: 1px solid var(--line); padding: 14px 0; }
 .rata-history-item:first-child { border-top: none; padding-top: 0; }
+/* The currently-revealed consequence, in the admin list - used to also get
+   a separate, much louder .highlight box duplicating the same text above
+   this same list. A soft tint here (same color-mix technique .highlight
+   uses, just faint) is enough to mark it as "the current one" without
+   competing with it. */
+.rata-history-item.rata-current {
+  background: color-mix(in srgb, var(--rata) 6%, transparent);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 0 -14px;
+}
 .rata-history-text { font-family: var(--serif); font-size: 1.05rem; margin: 0; }
 .rata-history-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .rata-badge {
@@ -477,8 +488,13 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
-.rata-badge.rata-status-pending { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
-.rata-badge.rata-status-done { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
+/* fila (queued, not revealed yet) uses the plain default .rata-badge look
+   above - nothing needs your attention yet, so it stays neutral. atribuir
+   reuses the app's general accent (the same color a "needs action" cue
+   already uses everywhere else) rather than a new color just for this. */
+.rata-badge.rata-status-atribuir { border-color: var(--clay); color: var(--clay); }
+.rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
+.rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
