@@ -479,13 +479,40 @@ router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) =>
   res.json(result);
 });
 
-// Owner-only: wipe game content (contestants, votes, consequences) to start
-// a fresh event, without touching user accounts/keys. Production data is
-// otherwise permanent (persistent volume, never reset on deploy).
-router.post('/admin/reset-content', requireOwner, (req, res) => {
-  db.prepare('DELETE FROM contestants').run(); // cascades to votes
+// Owner-only kill switches, one per feature - each wipes only its own
+// data (never touches user accounts/keys, and never another feature's
+// data), unlike the single cross-feature "reset everything" this
+// replaced. Lives on each feature's own admin tab, not a shared "danger
+// zone" bundling all of them together.
+
+// Rata: every consequence, any status/day.
+router.post('/admin/consequences/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM consequences').run();
-  for (const night of NIGHTS) setSetting(`voting_status_${night}`, 'closed');
+  res.json({ ok: true });
+});
+
+// Snatch: every contestant (cascades to votes), both nights at once - the
+// existing per-night "Reiniciar tudo" on the voting-controls card only
+// ever clears whichever night is currently selected.
+router.post('/admin/contestants/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM contestants').run();
+  for (const night of NIGHTS) {
+    setSetting(`voting_status_${night}`, 'closed');
+    setSetting(`voting_started_${night}`, '0');
+    resetResultsPhase(night);
+  }
+  res.json({ ok: true });
+});
+
+// Wall: every post (announcements + polls, cascades poll options/votes).
+router.post('/admin/plaza-posts/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM plaza_posts').run();
+  res.json({ ok: true });
+});
+
+// Plaza: every chat message.
+router.post('/admin/chat/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM messages').run();
   res.json({ ok: true });
 });
 

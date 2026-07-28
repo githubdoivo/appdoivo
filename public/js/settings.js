@@ -148,6 +148,13 @@ async function boot() {
       document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
+      // Per-feature kill switches (see POST /admin/consequences/wipe etc.)
+      // are owner-only, same golden rule as everything else destructive.
+      // chat-wipe-card doesn't need listing here - it lives inside the
+      // wall tab, already hidden above.
+      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card'].forEach((id) => {
+        $(id).classList.add('hidden');
+      });
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -570,17 +577,34 @@ $('user-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('reset-content-btn').addEventListener('click', async () => {
-  if (!(await showConfirm(t('confirm_reset_content'), { danger: true }))) return;
-  try {
-    await api('/admin/reset-content', { method: 'POST' });
-    $('reset-content-msg').textContent = t('reset_content_done_msg');
-    setTimeout(() => ($('reset-content-msg').textContent = ''), 3000);
-    reloadAll();
-  } catch (err) {
-    $('reset-content-msg').textContent = err.message;
-  }
+// Per-feature kill switches - each hits its own dedicated wipe route (see
+// POST /admin/consequences/wipe etc. in routes.js), scoped to just that
+// feature's data, unlike the single cross-feature reset this replaced.
+function wireWipeButton(btnId, msgId, endpoint, confirmKey, doneMsgKey, afterWipe) {
+  $(btnId).addEventListener('click', async () => {
+    if (!(await showConfirm(t(confirmKey), { danger: true }))) return;
+    try {
+      await api(endpoint, { method: 'POST' });
+      $(msgId).textContent = t(doneMsgKey);
+      setTimeout(() => ($(msgId).textContent = ''), 3000);
+      afterWipe();
+    } catch (err) {
+      $(msgId).textContent = err.message;
+    }
+  });
+}
+
+wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
+wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
+  loadVotingState();
+  loadContestants();
+  loadVotes();
 });
+wireWipeButton('plaza-wipe-btn', 'plaza-wipe-msg', '/admin/plaza-posts/wipe', 'confirm_plaza_wipe', 'plaza_wipe_done_msg', loadPlazaPosts);
+// Nothing on this admin tab displays chat messages themselves (just the
+// pseudonym mapping, a separate table untouched by this), so no reload
+// needed after wiping.
+wireWipeButton('chat-wipe-btn', 'chat-wipe-msg', '/admin/chat/wipe', 'confirm_chat_wipe', 'chat_wipe_done_msg', () => {});
 
 /* ------------------------------ Concorrentes ----------------------------- */
 

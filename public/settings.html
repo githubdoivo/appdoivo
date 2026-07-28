@@ -82,6 +82,16 @@
           <h2 data-i18n="plaza_posts_list_title">Publicações</h2>
           <div id="plaza-posts-list" style="margin-top:12px"></div>
         </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/plaza-posts/wipe) - hidden for a regular admin in
+             boot() in settings.js. -->
+        <div class="card" id="plaza-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="plaza_wipe_help">Explicação</p>
+          <button id="plaza-wipe-btn" type="button" class="danger" data-i18n="plaza_wipe_btn">Apagar tudo do Wall</button>
+          <span id="plaza-wipe-msg" class="muted"></span>
+        </div>
       </div>
 
       <!-- Separador: Best Look -->
@@ -158,6 +168,17 @@
           <p class="help" data-i18n="voter_log_help">Explicação</p>
           <div class="table-scroll"><table id="voter-log-table"></table></div>
         </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/contestants/wipe) - hidden for a regular admin in
+             boot() in settings.js. Distinct from "Reiniciar tudo" above,
+             which only clears whichever night is currently selected. -->
+        <div class="card" id="outfit-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="outfit_wipe_help">Explicação</p>
+          <button id="outfit-wipe-btn" type="button" class="danger" data-i18n="outfit_wipe_btn">Apagar tudo do Snatch</button>
+          <span id="outfit-wipe-msg" class="muted"></span>
+        </div>
       </div>
 
       <!-- Separador: A Rata -->
@@ -185,6 +206,16 @@
           </div>
           <div id="consequences-table" style="margin-top:16px"></div>
         </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/consequences/wipe) - hidden for a regular admin
+             in boot() in settings.js. -->
+        <div class="card" id="rata-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="rata_wipe_help">Explicação</p>
+          <button id="rata-wipe-btn" type="button" class="danger" data-i18n="rata_wipe_btn">Apagar tudo da Rata</button>
+          <span id="rata-wipe-msg" class="muted"></span>
+        </div>
       </div>
 
       <!-- Separador: Wall (visivel a qualquer admin - so a tabela de
@@ -194,6 +225,16 @@
           <h2 data-i18n="wall_pseudonyms_title">Quem é quem na Wall</h2>
           <p class="help" data-i18n="wall_pseudonyms_help">Explicação</p>
           <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>
+        </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/chat/wipe). This whole tab is already owner-only,
+             so no extra hiding needed here beyond that. -->
+        <div class="card" id="chat-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="chat_wipe_help">Explicação</p>
+          <button id="chat-wipe-btn" type="button" class="danger" data-i18n="chat_wipe_btn">Apagar tudo da Plaza</button>
+          <span id="chat-wipe-msg" class="muted"></span>
         </div>
       </div>
 
@@ -275,13 +316,6 @@
               <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
             </div>
             <div id="users-list" class="user-list" style="margin-top:16px"></div>
-          </div>
-
-          <div class="card" id="reset-content-card">
-            <h2 data-i18n="reset_content_title">Zona perigosa</h2>
-            <p class="help" data-i18n="reset_content_help">Explicação</p>
-            <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
-            <span id="reset-content-msg" class="muted"></span>
           </div>
         </div>
       </div>
