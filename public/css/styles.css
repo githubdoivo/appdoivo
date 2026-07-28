@@ -81,6 +81,8 @@ html.mode-light {
   --type-poll: #6b4c8a;
   --status-pending: #2a6ca6;
   --status-done: #2f7d32;
+  --status-fila: #5b6472;
+  --status-atribuir: #a3406b;
 }
 
 html.mode-dark {
@@ -106,6 +108,8 @@ html.mode-dark {
   --type-poll: #b294d6;
   --status-pending: #6badde;
   --status-done: #7ed181;
+  --status-fila: #9aa4b5;
+  --status-atribuir: #e08fb0;
 }
 
 * { box-sizing: border-box; }
@@ -493,11 +497,11 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
-/* fila (queued, not revealed yet) uses the plain default .rata-badge look
-   above - nothing needs your attention yet, so it stays neutral. atribuir
-   is a stronger, solid ink instead of --clay - this page stays grayscale,
-   no accent hue, weight alone marks "needs action". */
-.rata-badge.rata-status-atribuir { border-color: var(--ink); color: var(--ink); }
+/* Four distinct colors, one per state, reading roughly as a progression:
+   fila (grey, nothing to do yet) -> atribuir (rose, needs the owner to
+   pick someone) -> pendente (blue, in progress) -> feita (green, done). */
+.rata-badge.rata-status-fila { border-color: var(--status-fila, #5b6472); color: var(--status-fila, #5b6472); }
+.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir, #a3406b); color: var(--status-atribuir, #a3406b); }
 .rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
 .rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
 
@@ -526,9 +530,9 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
 /* Rata status filter - same colors as the rata-badge each state renders
    with in the list below, so the filter pill you toggled and what it's
-   showing read as the same thing. fila and atribuir both stay the default
-   neutral active look (solid ink) - this page is grayscale, no accent
-   hue, so there's nothing to give either of them beyond that. */
+   showing read as the same thing. */
+.role-pill[data-status="fila"].active { background: var(--status-fila, #5b6472); border-color: var(--status-fila, #5b6472); }
+.role-pill[data-status="atribuir"].active { background: var(--status-atribuir, #a3406b); border-color: var(--status-atribuir, #a3406b); }
 .role-pill[data-status="pendente"].active { background: var(--status-pending, #2a6ca6); border-color: var(--status-pending, #2a6ca6); }
 .role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
