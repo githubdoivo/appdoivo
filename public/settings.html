@@ -162,19 +162,27 @@
 
       <!-- Separador: A Rata -->
       <div id="atab-rata" class="tab-panel hidden">
+        <!-- What needs the owner's attention right now: reveal the next
+             one, and assign anyone still waiting for someone to be
+             picked. Everything past that point (queued, awaiting
+             confirmation, done) moves to Histórico below. -->
         <div class="card">
           <h2 data-i18n="rata_admin_title">Consequências</h2>
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:8px">
-            <div class="role-pills" id="rata-status-filter">
-              <button type="button" class="role-pill active" data-status="fila" data-i18n="rata_status_fila">fila</button>
-              <button type="button" class="role-pill active" data-status="atribuir" data-i18n="rata_status_atribuir">atribuir</button>
-              <button type="button" class="role-pill active" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
-              <button type="button" class="role-pill active" data-status="feita" data-i18n="rata_status_feita">feita</button>
-            </div>
+          <div style="text-align:right;margin-top:8px">
             <button type="button" data-reveal-next class="small" data-i18n="reveal_now">Revelar consequência</button>
           </div>
           <span id="reveal-msg" class="muted"></span>
+          <div id="consequences-assign-list" style="margin-top:16px"></div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="rata_admin_history_title">Histórico</h2>
+          <div class="role-pills" id="rata-status-filter" style="margin-top:8px">
+            <button type="button" class="role-pill active" data-status="fila" data-i18n="rata_status_fila">fila</button>
+            <button type="button" class="role-pill active" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
+            <button type="button" class="role-pill active" data-status="feita" data-i18n="rata_status_feita">feita</button>
+          </div>
           <div id="consequences-table" style="margin-top:16px"></div>
         </div>
       </div>

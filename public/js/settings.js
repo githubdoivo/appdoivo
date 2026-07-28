@@ -824,11 +824,13 @@ function rataStatus(c) {
 }
 
 // Cumulative OR toggle, same pattern as Manage Users' own role filter -
-// narrows the view only, never affects the data itself. All four start
-// selected (matches the pills' own default "active" state in the HTML) -
-// deselecting one hides it, rather than starting from "nothing picked
-// means show everything".
-const rataStatusFilter = new Set(['fila', 'atribuir', 'pendente', 'feita']);
+// narrows the Histórico view only, never affects the data itself. Only
+// covers fila/pendente/feita - atribuir isn't filterable, it always shows
+// in full in the Consequências card above (see renderConsequences()). All
+// three start selected (matches the pills' own default "active" state in
+// the HTML) - deselecting one hides it, rather than starting from
+// "nothing picked means show everything".
+const rataStatusFilter = new Set(['fila', 'pendente', 'feita']);
 let rataRows = [];
 let rataAssignableUsers = [];
 
@@ -848,48 +850,64 @@ async function loadConsequences() {
   renderConsequences();
 }
 
+function userOptionsHtml(selectedId) {
+  return `<option value="">${t('rata_assign_placeholder')}</option>` +
+    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+}
+
+// Card list, not a grid: same shape as the user-facing rata-history-item
+// (see loadRataHistory in app.js) - a table forced this text into a
+// narrow column and wrapped it one word per line, and combining italic +
+// small + serif + grey on top of that made it worse. Text first, full
+// width; everything else drops to a second, plainer meta line. Shared
+// between the Consequências (atribuir only) and Histórico (everything
+// else) cards - same row shape either way, just a different subset of
+// rows feeds each one (see renderConsequences()).
+function renderConsequenceCard(c, revealed) {
+  const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}`;
+  const status = rataStatus(c);
+  if (c.status !== 'used') {
+    return `<div class="rata-history-item">
+      <p class="rata-history-text">${esc(c.text)}</p>
+      <div class="rata-history-meta">
+        <span class="muted">${byline}</span>
+        <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+      </div>
+    </div>`;
+  }
+  // The current consequence used to also get a separate, much louder
+  // .highlight box duplicating the exact same text - now it's just this
+  // one card with a subtler tint (.rata-current) wherever it ends up
+  // rendering (Consequências if still unassigned, Histórico otherwise).
+  const isCurrent = revealed && c.id === revealed.id;
+  const canApprove = isOwner && c.done_at && !c.approved_at;
+  return `<div class="rata-history-item${isCurrent ? ' rata-current' : ''}">
+    <p class="rata-history-text">${esc(c.text)}</p>
+    <div class="rata-history-meta">
+      <span class="muted">${byline}</span>
+      <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+      <select data-assign-id="${c.id}">${userOptionsHtml(c.assigned_user_id)}</select>
+      ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderConsequences() {
   // rows are sorted most-recently-touched first (see GET /admin/consequences),
   // so the first 'used' one encountered is simply the current one.
   const revealed = rataRows.find((c) => c.status === 'used');
-  const rows = rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state));
 
-  const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
-    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+  const assignRows = rataRows.filter((c) => rataStatus(c).state === 'atribuir');
+  $('consequences-assign-list').innerHTML = assignRows.length
+    ? assignRows.map((c) => renderConsequenceCard(c, revealed)).join('')
+    : `<p class="muted">${t('rata_admin_assign_empty')}</p>`;
 
-  // Card list, not a grid: same shape as the user-facing rata-history-item
-  // (see loadRataHistory in app.js) - a table forced this text into a
-  // narrow column and wrapped it one word per line, and combining italic +
-  // small + serif + grey on top of that made it worse. Text first, full
-  // width; everything else drops to a second, plainer meta line. The
-  // current consequence used to also get a separate, much louder .highlight
-  // box above this whole list, duplicating the exact same text - now it's
-  // just this one card with a subtler tint (.rata-current).
-  $('consequences-table').innerHTML = rows.length
-    ? rows.map((c) => {
-      const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}`;
-      const status = rataStatus(c);
-      if (c.status !== 'used') {
-        return `<div class="rata-history-item">
-          <p class="rata-history-text">${esc(c.text)}</p>
-          <div class="rata-history-meta">
-            <span class="muted">${byline}</span>
-            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-          </div>
-        </div>`;
-      }
-      const isCurrent = revealed && c.id === revealed.id;
-      const canApprove = isOwner && c.done_at && !c.approved_at;
-      return `<div class="rata-history-item${isCurrent ? ' rata-current' : ''}">
-        <p class="rata-history-text">${esc(c.text)}</p>
-        <div class="rata-history-meta">
-          <span class="muted">${byline}</span>
-          <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-          <select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>
-          ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
-        </div>
-      </div>`;
-    }).join('')
+  const historyRows = rataRows.filter((c) => {
+    const state = rataStatus(c).state;
+    return state !== 'atribuir' && rataStatusFilter.has(state);
+  });
+  $('consequences-table').innerHTML = historyRows.length
+    ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')
     : `<p class="muted">${t('no_consequences')}</p>`;
 }
 
@@ -902,14 +920,17 @@ $('rata-status-filter').querySelectorAll('.role-pill').forEach((btn) => {
   });
 });
 
-$('consequences-table').addEventListener('change', async (e) => {
+// Delegated on document, not #consequences-table - an assign select can
+// now render in either #consequences-assign-list (atribuir) or
+// #consequences-table (Histórico, once it's moved past atribuir).
+document.addEventListener('change', async (e) => {
   const select = e.target.closest('[data-assign-id]');
   if (!select) return;
   const userId = select.value ? Number(select.value) : null;
   try {
     await api(`/admin/consequences/${select.dataset.assignId}/assign`, { method: 'PATCH', body: { userId } });
-    // Assigning moves it from atribuir to pendente - re-render so the
-    // status badge (and the atribuir/pendente filter) reflect that
+    // Assigning moves it from atribuir to pendente (and from the
+    // Consequências card into Histórico) - re-render so that happens
     // immediately instead of waiting for the next poll.
     loadConsequences();
   } catch (err) {
@@ -918,7 +939,7 @@ $('consequences-table').addEventListener('change', async (e) => {
   }
 });
 
-$('consequences-table').addEventListener('click', async (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-approve-id]');
   if (!btn) return;
   try {
