@@ -108,7 +108,7 @@ async function boot() {
     plazaEnabled = !!me.plazaEnabled;
     myUserId = me.id;
     myName = me.name;
-    wireLogoEasterEgg(me.name);
+    wireLogoEasterEgg(me.name, me.logo_customized);
     renderAccountCard();
   } catch {
     clearToken();

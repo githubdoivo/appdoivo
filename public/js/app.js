@@ -68,7 +68,7 @@ function showApp(me) {
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
-  wireLogoEasterEgg(me.name);
+  wireLogoEasterEgg(me.name, me.logo_customized);
   // No role badge in the main app's topbar - every tab is open to
   // everyone regardless of role, and it was fighting the logo-swap
   // easter egg for space. Settings still shows a role badge, where it's

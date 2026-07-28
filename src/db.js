@@ -320,6 +320,13 @@ if (!columnExists('consequences', 'approved_at')) {
   db.exec('ALTER TABLE consequences ADD COLUMN approved_at TEXT');
 }
 
+// Migration: persist the customized logo state (triple-click "appdoivo" to
+// swap to "appde<firstname>") across app close/reopen. Defaults to false
+// (the vanilla "appdoivo" logo).
+if (!columnExists('users', 'logo_customized')) {
+  db.exec('ALTER TABLE users ADD COLUMN logo_customized INTEGER NOT NULL DEFAULT 0');
+}
+
 /** Strips a name down to the plain-ASCII, lowercase base used by every token. */
 function tokenBase(name) {
   return String(name)

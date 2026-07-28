@@ -189,7 +189,7 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   });
 });
 
-router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
+router.delete('/admin/plaza-posts/:id', requireOwner, (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const result = deletePlazaPost(Number(req.params.id));
   if (result.error) return res.status(404).json({ error: result.error });
@@ -419,6 +419,17 @@ router.post('/admin/users/:id/regenerate-token', (req, res) => {
   db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), key_claimed_at = NULL WHERE id = ?")
     .run(hashToken(token), encryptToken(token), id);
   res.json({ ok: true, id, name: user.name, token });
+});
+
+// Toggle the logo customization state (appde<firstname> vs plain appdoivo).
+// Self-only; returns the new state.
+router.post('/me/logo-customized', (req, res) => {
+  const customized = req.body?.customized;
+  if (customized !== true && customized !== false) {
+    return res.status(400).json({ error: 'Invalid logo_customized value.' });
+  }
+  db.prepare('UPDATE users SET logo_customized = ? WHERE id = ?').run(customized ? 1 : 0, req.user.id);
+  res.json({ ok: true, logo_customized: customized });
 });
 
 router.delete('/admin/users/:id', (req, res) => {
