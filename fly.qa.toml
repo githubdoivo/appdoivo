@@ -23,10 +23,10 @@ primary_region = "cdg"
   # Only set in QA - the DB is ephemeral here, so auto-load demo/mock data
   # (contestants, votes, consequences) on every boot. Never set in prod.
   SEED_DEMO = "true"
-  # Only set in QA - gates the Wall/announcements feature (internal name
-  # "plaza", now displayed "Wall") while it's still being tried out; stays
-  # off prod until it's confirmed ready for the real event. See routes.js's
-  # Plaza section.
+  # Gates the Wall/announcements feature (internal name "plaza", now
+  # displayed "Wall") - confirmed ready and on in production too (see
+  # fly.toml). Kept here for parity so QA never drifts from what prod
+  # actually runs. See routes.js's Plaza section.
   ENABLE_PLAZA = "true"
 
 [http_service]

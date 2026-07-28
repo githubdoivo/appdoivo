@@ -872,7 +872,7 @@ test('Plaza posts: only an admin can delete, and deleting one leaves the rest of
   assert.equal(missing.status, 404);
 });
 
-test('Plaza is gated behind ENABLE_PLAZA - off (prod default) means every endpoint 404s', async () => {
+test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', async () => {
   process.env.ENABLE_PLAZA = 'false';
   try {
     const read = await api('GET', '/plaza-posts', { token: userToken });

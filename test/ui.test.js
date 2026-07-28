@@ -649,7 +649,7 @@ test('reloading the page always opens on Wall, regardless of the last tab used',
   await context.close();
 });
 
-test('with ENABLE_PLAZA off (prod default), Wall is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
+test('with ENABLE_PLAZA disabled, Wall is hidden in both the main app and Settings, and Rata is the landing tab instead', async () => {
   process.env.ENABLE_PLAZA = 'false';
   try {
     const context = await iphoneContext('iPhone 13');

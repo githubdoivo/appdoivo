@@ -3,8 +3,8 @@
 A small PWA for a private group of friends, with four features:
 
 - **Wall** - the owner/admins post announcements or polls; the group gets
-  notified and can vote on polls. Off by default in production, only
-  enabled where `ENABLE_PLAZA=true`.
+  notified and can vote on polls. Gated behind `ENABLE_PLAZA=true` - off
+  by default locally, on in QA and production.
 - **Rata** - every 3 hours a random "consequence" (suggested by users) is
   revealed and everyone is notified. The owner can record who's actually
   holding it.
@@ -60,7 +60,7 @@ Open http://localhost:3001 (or the port set in `.env`), log in with the owner to
 
 Feature flags worth knowing about locally (see `.env.example`):
 
-- `ENABLE_PLAZA=true` - turns on the Wall tab (matches QA; off by default like production).
+- `ENABLE_PLAZA=true` - turns on the Wall tab (matches QA/production; off by default locally).
 - `ENABLE_ADMIN_PROMOTION=true` - lets the owner promote/revoke other users' admin status.
 - `SEED_DEMO=true` - loads demo users/contestants/consequences on every boot, instead of running `npm run seed-demo` by hand.
 
@@ -125,7 +125,7 @@ Avoid GoDaddy (up-sells and expensive renewals). Suggested names: `appdoivo.com`
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of the database and never share it. If you change it, nobody can log in (the stored hashes no longer match).
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` - Web Push keys (generate with `npm run genkeys`).
 - `ENABLE_ADMIN_PROMOTION` - lets the owner promote/revoke other users' admin status from Settings. On in QA, off in production.
-- `ENABLE_PLAZA` - turns on the Wall tab. Off by default (production); on in QA.
+- `ENABLE_PLAZA` - turns on the Wall tab. Off by default locally; on in both QA and production.
 - `SEED_DEMO` - auto-loads demo users/contestants/consequences on every boot. QA only - never set in production.
 - `DB_FILE` - (optional) database path; used by the tests and to point production/QA at their mounted volume.
 - `APP_ENV` - (optional) labels the version badge (e.g. `qa`), so it's obvious at a glance which environment is open.
