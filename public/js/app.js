@@ -17,12 +17,6 @@ let currentTab = 'plaza';
 // me" apart from "assigned to someone else" so only the actual assignee
 // sees a mark-as-done button on their own entry.
 let myUserId = null;
-// Set from /me in showApp(), re-checked periodically (see
-// startRoleWatcher()) so a role change made by the owner while someone's
-// mid-session (promoted, demoted, or removed) takes effect for them
-// automatically instead of only after their next manual reload.
-let myIsAdmin = false;
-let myIsOwner = false;
 // Set from /me in showApp() - Plaza is mid-rebuild (single note -> real
 // posts feed), so it's QA-only until that's done (see ENABLE_PLAZA in
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
@@ -63,18 +57,15 @@ function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   myUserId = me.id;
-  myIsAdmin = !!me.isAdmin;
-  myIsOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name);
-  updateAdminBadge();
-  // Plain (non-admin) users get no badge near the logo at all - only
-  // owner/admin are flagged there. Manage Users still shows every role.
-  // The settings link (change my own key, plus admin tabs if applicable)
-  // is open to everyone now, not just admins.
+  // No role badge in the main app's topbar - every tab is open to
+  // everyone regardless of role, and it was fighting the logo-swap
+  // easter egg for space. Settings still shows a role badge, where it's
+  // actually informative (explains which admin tabs are visible).
   $('settings-link').classList.remove('hidden');
   refreshNotifButton();
   // Plaza/Wall is the default landing tab (see currentTab above) - starts
@@ -96,44 +87,21 @@ function showApp(me) {
   // allowed to land somewhere else.
   applyDeepLinkParams();
   if (!me.tutorialSeen) startTutorial();
-  startRoleWatcher();
+  startSessionWatcher();
 }
 
-// Shows/hides/relabels the admin badge for whatever myIsAdmin/myIsOwner
-// currently are - called both at boot and by the role watcher below, so
-// a role change updates the badge in place instead of needing a reload
-// (nothing else in the main app is gated by role - every tab is open to
-// everyone, only the badge itself differs).
-function updateAdminBadge() {
-  const adminBadge = $('admin-badge');
-  if (myIsAdmin) {
-    adminBadge.textContent = myIsOwner ? 'owner' : 'admin';
-    adminBadge.classList.toggle('role-owner', myIsOwner);
-    adminBadge.classList.toggle('role-admin', !myIsOwner);
-    adminBadge.classList.remove('hidden');
-  } else {
-    adminBadge.classList.add('hidden');
-  }
-}
-
-// Polls /me every 30s for a role change (promoted, demoted, or removed
-// entirely) made by the owner while this session is already open, and
-// updates the badge in place - no need to reload or log out just because
-// a role changed, the person stays wherever they were looking. A 401
-// means the account was deleted or its key regenerated, which really
-// does need a fresh login - same treatment as boot()'s own auth failure
-// handling, just triggered mid-session instead of at load.
-let roleWatchTimer = null;
-function startRoleWatcher() {
-  if (roleWatchTimer) return;
-  roleWatchTimer = setInterval(async () => {
+// Polls /me every 30s to catch an account being deleted or its key
+// regenerated while this session is already open, logging out
+// automatically rather than continuing to silently fail every request.
+// No role-based UI to sync here (the main app has no role badge - see
+// showApp() - and every tab is open to everyone regardless of role), so
+// there's nothing else for this to watch for.
+let sessionWatchTimer = null;
+function startSessionWatcher() {
+  if (sessionWatchTimer) return;
+  sessionWatchTimer = setInterval(async () => {
     try {
-      const fresh = await api('/me');
-      if (!!fresh.isAdmin !== myIsAdmin || !!fresh.isOwner !== myIsOwner) {
-        myIsAdmin = !!fresh.isAdmin;
-        myIsOwner = !!fresh.isOwner;
-        updateAdminBadge();
-      }
+      await api('/me');
     } catch (err) {
       if (err.status === 401) {
         clearToken();

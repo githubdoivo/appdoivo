@@ -402,21 +402,18 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    tab or night theme, but still adapts to light/dark mode so it never
    washes out against either background. The fallback matches the old
    fixed color, for the brief moment before applyMode() runs. */
-/* overflow/text-overflow/min-width: the logo-swap easter egg (see
-   logoEasterEgg.js) can make this text much longer than "appdoivo"
-   (e.g. "appdemargarida") - without these, a long name doesn't wrap
-   (white-space: nowrap) and instead pushes the role badge next to it
-   out of the flex row entirely. Truncating the name instead keeps the
-   badge always visible regardless of whose name got swapped in. */
+/* No overflow/text-overflow here on purpose - this cursive script font
+   relies on rendering outside its own tight line box (line-height: 0.8),
+   so clipping overflow cuts the tops/tails off every letter, not just
+   whatever would've been truncated. The logo-swap easter egg (see
+   logoEasterEgg.js) is capped at a short length instead, so the text
+   itself never gets long enough to threaten the role badge next to it. */
 .brand .brand-name {
   font-family: var(--script);
   font-weight: 700;
   font-size: 2.2rem;
   line-height: 0.8;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
   color: var(--brand, #a96b4b);
 }
 .brand .badge,

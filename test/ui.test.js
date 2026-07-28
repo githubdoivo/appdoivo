@@ -573,31 +573,17 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
 
 /* --------------------- Live role sync (regression) ------------------------ */
 
-test('a role change made by the owner syncs to an already-open session automatically, on both the main app and Settings', async () => {
+test('a role change made by the owner syncs to an already-open Settings session automatically', async () => {
+  // The main app has no role-dependent UI at all (every tab is open to
+  // everyone regardless of role - see showApp() in app.js), so this is
+  // Settings-only: its role badge and which admin tabs show do depend on
+  // role, synced by its own watcher (see startRoleWatcher() in settings.js).
   const target = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Watch Test' } });
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
   await api('POST', '/me/tutorial-seen', { token: target.token });
 
   const context = await iphoneContext('iPhone 13');
 
-  // Main app: admin badge should be showing, then disappear once demoted -
-  // no manual reload, just the periodic /me poll (see startRoleWatcher()
-  // in app.js) picking up the change.
-  const mainPage = await context.newPage();
-  await mainPage.clock.install();
-  await mainPage.goto(base + '/');
-  await mainPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
-  await mainPage.goto(base + '/');
-  await mainPage.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  const mainLangBtn = await mainPage.$('#tutorial-lang-pt');
-  if (mainLangBtn && await mainLangBtn.isVisible()) {
-    await mainLangBtn.click();
-    await mainPage.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
-    await mainPage.click('#tutorial-skip');
-  }
-  assert.ok(await mainPage.$eval('#admin-badge', (el) => !el.classList.contains('hidden')), 'should start with the admin badge showing');
-
-  // Settings page: same story, its own independent watcher.
   const settingsPage = await context.newPage();
   await settingsPage.clock.install();
   await settingsPage.goto(base + '/settings.html');
@@ -607,9 +593,6 @@ test('a role change made by the owner syncs to an already-open session automatic
   assert.ok(await settingsPage.$eval('#role-badge', (el) => !el.classList.contains('hidden')), 'should start with the role badge showing');
 
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
-
-  await mainPage.clock.fastForward('00:31');
-  await mainPage.waitForSelector('#admin-badge.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
 
   // Losing admin access entirely sends them away from Settings altogether
   // (no reason to stay on a page built for admins) - lands on the main
