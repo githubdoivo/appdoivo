@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import db from './db.js';
-import { authenticate, requireAdmin, requireOwner } from './auth.js';
+import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
 import { generateUserToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
@@ -66,14 +66,7 @@ router.get('/version', (req, res) => {
 router.post('/auth/login', loginRateLimit, (req, res) => {
   const token = (req.body?.token || '').trim().toLowerCase();
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
-  let user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
-  // Dev/QA-only convenience: "mossy" always logs in as the owner, whatever
-  // their real (now randomly-generated, see seed() in db.js) key actually
-  // is - never honored when NODE_ENV=production (see fly.toml), so there's
-  // no guessable backdoor on the real deployment.
-  if (!user && token === 'mossy' && process.env.NODE_ENV !== 'production') {
-    user = db.prepare('SELECT id, name, is_admin FROM users WHERE is_owner = 1').get();
-  }
+  const user = findUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
   // Proves they know their key - same claimed-key stamp authenticate()
   // applies (see auth.js), so they stop showing up in the first-time
