@@ -11,7 +11,6 @@ const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
 process.env.DB_FILE = DB;
 process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ADMIN_NAME = 'Test Admin';
-process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
@@ -554,11 +553,11 @@ test('reset-all clears votes AND contestants, back to a never-started night', as
 // Wipes contestants/votes/consequences - runs last so it doesn't disturb
 // the shared state the tests above rely on.
 
-test('a non-owner admin can read and change the timezone setting', async () => {
+test('a non-owner admin can read and change the day-rollover-hour setting', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
   const get = await api('GET', '/admin/settings', { token: userToken });
   assert.equal(get.status, 200);
-  const put = await api('PUT', '/admin/settings', { token: userToken, body: { timezone: 'Europe/Lisbon' } });
+  const put = await api('PUT', '/admin/settings', { token: userToken, body: { dayRolloverHour: 6 } });
   assert.equal(put.status, 200);
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });

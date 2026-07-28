@@ -16,7 +16,6 @@ const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`
 process.env.DB_FILE = DB;
 process.env.ADMIN_TOKEN = 'ui-test-admin-token';
 process.env.ADMIN_NAME = 'UI Test Admin';
-process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
@@ -513,9 +512,6 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
 
   const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
   assert.ok(resetCardHidden, 'non-owner admin cannot reset event content (owner-only on the backend)');
-
-  const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
-  assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
   assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');

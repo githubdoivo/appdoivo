@@ -13,7 +13,6 @@ primary_region = "cdg"
 
 [env]
   PORT = "3000"
-  TIMEZONE = "Europe/Lisbon"
   # Only set in QA - labels the version badge "qa v1.2.3" instead of just
   # "v1.2.3", so it's obvious at a glance which environment is open.
   APP_ENV = "qa"

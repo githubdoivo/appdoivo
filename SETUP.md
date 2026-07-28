@@ -121,7 +121,6 @@ Avoid GoDaddy (up-sells and expensive renewals). Suggested names: `appdoivo.com`
 - `PORT` - server port (default 3000; this project uses 3001 locally).
 - `ADMIN_TOKEN` - the owner's access key. If empty, one is generated on first start.
 - `ADMIN_NAME` - the owner's display name.
-- `TIMEZONE` - timezone used for Rata's "day" and reveal window (e.g. `Europe/Lisbon`).
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of the database and never share it. If you change it, nobody can log in (the stored hashes no longer match).
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` - Web Push keys (generate with `npm run genkeys`).
 - `ENABLE_ADMIN_PROMOTION` - lets the owner promote/revoke other users' admin status from Settings. On in QA, off in production.

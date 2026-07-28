@@ -158,7 +158,6 @@ function startRoleWatcher() {
 }
 
 function reloadAll() {
-  loadSettings();
   loadVotingState();
   loadUsers();
   loadContestants();
@@ -296,53 +295,6 @@ $('voting-reset-all-btn').addEventListener('click', async () => {
   } catch (err) {
     $('voting-msg').textContent = err.message;
   }
-});
-
-/* ------------------------------ Definicoes ------------------------------- */
-
-// There's only one timezone setting, but it's edited from two places now -
-// A Rata (where it drives the day rollover) and Wall (added so any admin,
-// not just the owner, can fix it without needing the A Rata tab). Both
-// selects always show the same value.
-// A free-text field used to let a typo/invalid zone through, and every
-// Intl.DateTimeFormat call keyed off it (today() in time.js) throws
-// immediately on an invalid zone - that took down every consequence-
-// related request until someone noticed and fixed the setting again. A
-// dropdown sourced from the same list the server validates against
-// (GET /timezones) makes an invalid value impossible to enter.
-let timezonesLoaded = false;
-async function loadSettings() {
-  const s = await api('/admin/settings');
-  if (!timezonesLoaded) {
-    const { timezones } = await api('/timezones');
-    const optionsHtml = timezones.sort().map((tz) => `<option value="${tz}">${tz}</option>`).join('');
-    $('timezone').innerHTML = optionsHtml;
-    $('timezone-wall').innerHTML = optionsHtml;
-    timezonesLoaded = true;
-  }
-  $('timezone').value = s.timezone;
-  $('timezone-wall').value = s.timezone;
-}
-
-async function saveTimezone(value, msgEl) {
-  try {
-    await api('/admin/settings', { method: 'PUT', body: { timezone: value.trim() } });
-    msgEl.textContent = t('saved');
-    setTimeout(() => (msgEl.textContent = ''), 2000);
-    loadSettings();
-  } catch (err) {
-    msgEl.textContent = err.message;
-  }
-}
-
-$('settings-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveTimezone($('timezone').value, $('settings-msg'));
-});
-
-$('settings-form-wall').addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveTimezone($('timezone-wall').value, $('settings-msg-wall'));
 });
 
 /* ------------------------------ Utilizadores ----------------------------- */

@@ -15,7 +15,6 @@ const PUBLIC_DIR = join(__dirname, '..', 'public');
 export const seedResult = seed({
   adminToken: process.env.ADMIN_TOKEN,
   adminName: process.env.ADMIN_NAME,
-  timezone: process.env.TIMEZONE,
 });
 
 // Configure Web Push (disabled if VAPID keys are missing).

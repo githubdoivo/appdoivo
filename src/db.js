@@ -380,7 +380,7 @@ export function setSetting(key, value) {
 }
 
 /** Seeds settings and the admin user on first start. */
-export function seed({ adminToken, adminName, timezone }) {
+export function seed({ adminToken, adminName }) {
   // Per-night voting status (closed by default).
   for (const night of NIGHTS) {
     if (getSetting(`voting_status_${night}`) === null) {
@@ -388,7 +388,6 @@ export function seed({ adminToken, adminName, timezone }) {
     }
   }
   if (getSetting('day_rollover_hour') === null) setSetting('day_rollover_hour', 6);
-  if (getSetting('timezone') === null) setSetting('timezone', timezone || 'Europe/Lisbon');
 
   let admin = db.prepare('SELECT * FROM users WHERE is_admin = 1').get();
   if (!admin) {

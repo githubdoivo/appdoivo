@@ -7,7 +7,7 @@ import { authenticate, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
 import { generateUserToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
-import { today, nightStatus, getTimezone } from './time.js';
+import { today, nightStatus } from './time.js';
 import { NIGHTS, isNight, DEFAULT_NIGHT } from './nights.js';
 import {
   revealRandomConsequence,
@@ -615,34 +615,16 @@ router.delete('/admin/contestants/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Settings (timezone/rollover of the "day" used by A Rata)
+// Settings (day-rollover hour used by A Rata - timezone is fixed to
+// Europe/Lisbon, see getTimezone() in time.js, not user-configurable)
 router.get('/admin/settings', (req, res) => {
   res.json({
-    timezone: getTimezone(),
     dayRolloverHour: Number(getSetting('day_rollover_hour', 6)),
   });
 });
 
-// Every valid IANA zone name - used both to validate the setting below and
-// to populate the admin's timezone dropdown (GET /timezones), so the two
-// can never drift apart.
-const VALID_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
-
-router.get('/timezones', (req, res) => {
-  res.json({ timezones: [...VALID_TIMEZONES] });
-});
-
 router.put('/admin/settings', (req, res) => {
-  const { timezone, dayRolloverHour } = req.body || {};
-  if (timezone !== undefined && String(timezone).trim()) {
-    const tz = String(timezone).trim();
-    // A bad value here isn't just cosmetic - every Intl.DateTimeFormat
-    // call keyed off it (see today() in time.js) throws immediately,
-    // which used to 500 every consequence-related request until the
-    // setting was fixed again.
-    if (!VALID_TIMEZONES.has(tz)) return res.status(400).json({ error: 'Fuso horário inválido.' });
-    setSetting('timezone', tz);
-  }
+  const { dayRolloverHour } = req.body || {};
   if (dayRolloverHour !== undefined) {
     const h = Number(dayRolloverHour);
     if (!Number.isInteger(h) || h < 0 || h > 23) return res.status(400).json({ error: 'Hora de rollover invalida (0-23).' });

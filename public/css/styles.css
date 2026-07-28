@@ -61,7 +61,7 @@ html.mode-light {
   --paper-3:  #fdfafc;
   --ink:      #4a3f4d;
   /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
-     italic/muted text (.muted, .help, table cells) this drives all over
+     muted text (.muted, .help, table cells) this drives all over
      Settings and the admin panel. Darkened to ~5:1. */
   --ink-soft: #756980;
   --line:     #e3d4e0;
@@ -144,8 +144,8 @@ body {
   z-index: 5;
 }
 
-.muted { color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
-.error { color: var(--danger); min-height: 1.2em; font-style: italic; }
+.muted { color: var(--ink-soft); font-size: 0.92rem; }
+.error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
    #auth-error), so plain colored text was too easy to miss regardless of
    which part of the photo happened to be behind it - a solid light chip
@@ -154,7 +154,6 @@ body {
   display: inline-block;
   background: #ece5d5;
   color: #7a2416;
-  font-style: normal;
   font-weight: 700;
   text-align: center;
   padding: 8px 16px;
@@ -521,7 +520,7 @@ button.icon-btn:hover,
 a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
-.lang-toggle { font-family: var(--serif); font-style: italic; font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
+.lang-toggle { font-family: var(--serif); font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
 
 /* Theme toggle: shows the icon for what you'll switch TO. Light (default)
    shows the moon (switch to dark); dark mode shows the sun (switch to light). */
@@ -618,7 +617,7 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
    looks like a stray bracket rather than a subtle edge. Blend it toward
    the card's own background, same treatment as the tab-row border. */
 html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
-.card h2 { font-size: 1.15rem; font-style: italic; font-weight: 500; margin-bottom: 6px; }
+.card h2 { font-size: 1.15rem; margin-bottom: 6px; }
 
 .hero-line {
   font-family: var(--serif);
@@ -756,7 +755,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 
-.help { font-size: 0.95rem; font-style: italic; color: var(--ink-soft); margin: 0 0 14px; }
+.help { font-size: 0.95rem; color: var(--ink-soft); margin: 0 0 14px; }
 
 /* Search-result chips under the "team up with" input on Best Outfit's
    self-registration form (see #register-partner-results in app.js). */
@@ -790,7 +789,7 @@ body { transition: background-color 0.45s ease; }
 
 .voting-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .voting-controls button { width: 100%; }
-.voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
+.voting-state { font-family: var(--serif); font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
@@ -951,7 +950,7 @@ body.theme-mural {
   --paper-3:  #deb69c;
   --ink:      #3d2216;
   /* Was #7a5138 (~3.7:1 against --paper-3) - failed WCAG AA for the
-     italic/muted text (bylines, help text) this drives on the Wall tab.
+     muted text (bylines, help text) this drives on the Wall tab.
      Darkened to ~5.3:1. */
   --ink-soft: #5c3c29;
   --line:     #a9744f;
@@ -1057,7 +1056,7 @@ html.mode-dark body.theme-plaza {
   border-left: 3px solid var(--clay);
   text-wrap: balance;
 }
-.plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+.plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
 .plaza-post-announcement {
   background: var(--paper-2);
@@ -1093,7 +1092,7 @@ html.mode-dark body.theme-plaza {
   margin: 10px 0;
 }
 .plaza-post-poll.plaza-post:first-child { margin-top: 0; }
-.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */
 .plaza-post-poll.pinned { border-color: var(--clay); }
@@ -1280,5 +1279,5 @@ html.mode-dark body.theme-plaza {
 .chat-msg-author { font-family: var(--body); font-size: var(--text-xs); text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
 .chat-msg-time { font-family: var(--body); font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
-.chat-empty { color: var(--ink-soft); font-style: italic; font-weight: 600; font-size: 0.92rem; }
+.chat-empty { color: var(--ink-soft); font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }

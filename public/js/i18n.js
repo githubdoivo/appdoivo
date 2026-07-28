@@ -169,7 +169,6 @@ export const translations = {
     reveal_next_btn_first: 'revelar 1º',
     reveal_next_btn_all: 'revelar tudo',
     reveal_next_btn_done: 'concluído',
-    timezone: 'Fuso horário',
     save: 'Guardar',
     saved: 'Guardado.',
     // Modal (substitui alert()/confirm())
@@ -388,7 +387,6 @@ export const translations = {
     reveal_next_btn_first: 'reveal 1st',
     reveal_next_btn_all: 'reveal all',
     reveal_next_btn_done: 'done',
-    timezone: 'Timezone',
     save: 'Save',
     saved: 'Saved.',
     modal_ok: 'ok',

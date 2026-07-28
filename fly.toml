@@ -12,7 +12,9 @@
 #   5. Deploy:  fly deploy
 #
 # Notas:
-#   - TIMEZONE e PORT ficam abaixo em [env] (nao sao segredos).
+#   - PORT fica abaixo em [env] (nao e segredo). O fuso horario da app e
+#     fixo (Europe/Lisbon, ver getTimezone() em src/time.js), nao e uma
+#     variavel de ambiente.
 #   - min_machines_running = 1 mantem a maquina acordada para a revelacao
 #     da Rata (a cada 3h) funcionar mesmo sem trafego. Poe 0 fora dos eventos
 #     para poupar (mas ai o cron so corre quando houver visitas).
@@ -25,7 +27,6 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   DB_FILE = "/data/app.sqlite"
-  TIMEZONE = "Europe/Lisbon"
   # Lets the owner promote/revoke other real users to admin ("tester")
   # in production. The golden rule (only the owner sees access keys) is
   # unaffected - that's enforced separately in src/routes.js regardless
