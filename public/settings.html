@@ -61,12 +61,9 @@
           <h2 data-i18n="plaza_admin_title">Nova publicação</h2>
           <p class="help" data-i18n="plaza_admin_help">Explicação</p>
           <form id="plaza-post-form" style="margin-top:12px">
-            <div class="plaza-post-footer">
-              <div class="role-pills" id="plaza-post-type">
-                <button type="button" class="role-pill active" data-post-type="announcement" data-i18n="plaza_type_announcement">Regular</button>
-                <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Poll</button>
-              </div>
-              <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
+            <div class="role-pills" id="plaza-post-type">
+              <button type="button" class="role-pill active" data-post-type="announcement" data-i18n="plaza_type_announcement">Regular</button>
+              <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Poll</button>
             </div>
             <textarea id="plaza-post-text" rows="3" maxlength="500" data-i18n-ph="plaza_post_text_ph" placeholder="Mensagem..." style="margin-top:12px"></textarea>
             <div id="plaza-poll-options" class="hidden" style="margin-top:12px">
@@ -75,6 +72,7 @@
               <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
               <button type="button" id="plaza-add-option-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_option">Adicionar opção</button>
             </div>
+            <button type="submit" class="small" style="margin-top:12px" data-i18n="plaza_publish_btn">Publicar</button>
             <span id="plaza-post-msg" class="muted"></span>
           </form>
         </div>
@@ -114,9 +112,13 @@
 
         <div class="card">
           <h2 data-i18n="contestants_title">Concorrentes da noite</h2>
-          <form id="contestant-form" class="inline" style="margin-top:12px">
-            <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
-            <button type="submit" class="small" data-i18n="add">Adicionar</button>
+          <form id="contestant-form" style="margin-top:12px">
+            <input id="contestant-user-search" type="text" data-i18n-ph="contestant_user_search_ph" placeholder="Ligar a um utilizador (opcional)..." autocomplete="off" />
+            <div id="contestant-user-results" class="partner-results"></div>
+            <div class="inline" style="margin-top:8px">
+              <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
+              <button type="submit" class="small" data-i18n="add">Adicionar</button>
+            </div>
           </form>
           <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
@@ -145,13 +147,13 @@
           <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência</button>
           <span id="reveal-msg" class="muted"></span>
           <div id="revealed-consequence" class="highlight hidden" style="margin-top:12px"></div>
-          <div class="table-scroll"><table id="consequences-table" style="margin-top:16px"></table></div>
+          <div id="consequences-table" style="margin-top:16px"></div>
         </div>
 
         <div class="card" id="timezone-card">
           <h2 data-i18n="timezone">Fuso horário</h2>
           <form id="settings-form" style="margin-top:12px">
-            <input id="timezone" type="text" placeholder="Europe/Lisbon" />
+            <select id="timezone"></select>
             <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
             <span id="settings-msg" class="muted"></span>
           </form>
@@ -170,7 +172,7 @@
         <div class="card" id="timezone-wall-card">
           <h2 data-i18n="timezone">Fuso horário</h2>
           <form id="settings-form-wall" style="margin-top:12px">
-            <input id="timezone-wall" type="text" placeholder="Europe/Lisbon" />
+            <select id="timezone-wall"></select>
             <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
             <span id="settings-msg-wall" class="muted"></span>
           </form>
@@ -209,12 +211,17 @@
                 </svg>
               </button>
             </div>
-            <div class="card-head" style="margin-top:12px">
-              <button type="submit" class="small" data-i18n="save">Guardar</button>
-              <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
-            </div>
+            <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
           </form>
           <span id="change-key-msg" class="muted"></span>
+        </div>
+
+        <!-- Its own card, well away from change-key-card's save button - a
+             logout right next to "save password" risked an accidental
+             sign-out when the user meant to save a new key. -->
+        <div class="card" id="session-card">
+          <h2 data-i18n="session_title">Sessão</h2>
+          <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
         </div>
 
         <!-- Gestao de utilizadores, agora dentro de Definicoes, abaixo do

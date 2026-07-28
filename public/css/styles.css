@@ -147,13 +147,18 @@ body {
 .muted { color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
 .error { color: var(--danger); min-height: 1.2em; font-style: italic; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
-   #auth-error), so plain italic text was too easy to miss - a solid chip
-   gives it real contrast regardless of what's behind it. */
+   #auth-error), so plain colored text was too easy to miss regardless of
+   which part of the photo happened to be behind it - a solid light chip
+   guarantees contrast for the dark text no matter what's underneath. */
 #login-error:not(:empty) {
+  display: inline-block;
+  background: #ece5d5;
   color: #7a2416;
   font-style: normal;
   font-weight: 700;
   text-align: center;
+  padding: 8px 16px;
+  border-radius: var(--radius);
 }
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
@@ -474,19 +479,6 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    (neutral ink for "all roles"), inactive stays a plain outline. */
 .role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Regular/Poll type + Publish share one row above the message/poll
-   fields, so the type choice (which controls what's shown below) and the
-   submit action both read as form-level controls, not buried under the
-   content. Publish pushed to the far edge via space-between since it's
-   the row's only other child. */
-.plaza-post-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.plaza-post-footer button[type="submit"] { margin-left: auto; }
 .role-pill {
   font-family: var(--body);
   text-transform: lowercase;

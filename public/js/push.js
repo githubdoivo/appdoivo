@@ -56,12 +56,24 @@ async function isSubscribed() {
 /** Pede permissao e subscreve o push. Devolve true se subscrito. */
 export async function enablePush() {
   const support = pushSupport();
-  if (support === 'unsupported' || support === 'ios-add-home') {
+  if (support === 'ios-add-home') {
     await showAlert(t('notif_unsupported_msg'));
     return false;
   }
+  if (support === 'unsupported') {
+    await showAlert(t('notif_browser_unsupported_msg'));
+    return false;
+  }
 
+  // Once denied, the browser resolves this instantly with no prompt - so
+  // without this branch, a user who denied (or whose OS/browser denies by
+  // default) got zero feedback on every future click: no prompt, no alert,
+  // no state change. The button just looked dead.
   const permission = await Notification.requestPermission();
+  if (permission === 'denied') {
+    await showAlert(t('notif_denied_msg'));
+    return false;
+  }
   if (permission !== 'granted') return false;
 
   const { publicKey, enabled } = await api('/push/vapid-public-key');

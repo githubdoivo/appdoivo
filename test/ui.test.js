@@ -67,21 +67,16 @@ async function iphoneContext(deviceName) {
 
 /** Logs in via localStorage (like the app itself does) and waits for the app shell. */
 async function loginPage(context, token, path = '/') {
+  // First-session tutorial overlay would otherwise intercept every click in
+  // tests that aren't specifically testing it - the tutorial has no skip
+  // button by design (see the "no skip" feedback fix), so mark it seen via
+  // the API up front instead of clicking through every step.
+  await api('POST', '/me/tutorial-seen', { token });
   const page = await context.newPage();
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
   await page.goto(base + path);
   await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  // First-session tutorial overlay would otherwise intercept every click in
-  // tests that aren't specifically testing it - dismiss it if it's showing
-  // (language choice first, then skip the content step).
-  const langBtn = await page.$('#tutorial-lang-pt');
-  if (langBtn && await langBtn.isVisible()) {
-    await langBtn.click();
-    await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
-    await page.click('#tutorial-skip');
-    await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
-  }
   return page;
 }
 
@@ -778,9 +773,9 @@ test('first-session tutorial shows once, steps through, then never shows again',
   let activeDots = await page.$$eval('.tutorial-dots .dot.active', (els) => els.length);
   assert.equal(activeDots, 1, 'exactly one dot should be active at a time');
 
-  // Step through every step via "next" (6 total steps, so 5 clicks to
+  // Step through every step via "next" (8 total steps, so 7 clicks to
   // reach the last one; the final "finish" click happens after the loop).
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 7; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);

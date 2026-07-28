@@ -575,13 +575,27 @@ router.get('/admin/contestants', (req, res) => {
   res.json({ night, contestants: rows });
 });
 
+// userId optionally links this entry to a real registered user (picked
+// from /users/basic on the frontend, not typed) - same identity link
+// self-registration already gets, so an admin adding someone else's entry
+// doesn't leave it unattributed forever (see contestantsForNight()).
 router.post('/admin/contestants', (req, res) => {
   const name = (req.body?.name || '').trim();
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  let userId = null;
+  if (req.body?.userId) {
+    userId = Number(req.body.userId);
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(400).json({ error: 'Utilizador invalido.' });
+    const taken = db.prepare(
+      'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+    ).get(night, userId, userId);
+    if (taken) return res.status(400).json({ error: 'Essa pessoa ja esta inscrita nesta noite.' });
+  }
   const info = db.prepare(
-    'INSERT INTO contestants (name, night) VALUES (?, ?)'
-  ).run(name, night);
+    'INSERT INTO contestants (name, night, user_id) VALUES (?, ?, ?)'
+  ).run(name, night, userId);
   res.status(201).json({ id: info.lastInsertRowid, name, night });
 });
 
@@ -609,10 +623,25 @@ router.get('/admin/settings', (req, res) => {
   });
 });
 
+// Every valid IANA zone name - used both to validate the setting below and
+// to populate the admin's timezone dropdown (GET /timezones), so the two
+// can never drift apart.
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
+
+router.get('/timezones', (req, res) => {
+  res.json({ timezones: [...VALID_TIMEZONES] });
+});
+
 router.put('/admin/settings', (req, res) => {
   const { timezone, dayRolloverHour } = req.body || {};
   if (timezone !== undefined && String(timezone).trim()) {
-    setSetting('timezone', String(timezone).trim());
+    const tz = String(timezone).trim();
+    // A bad value here isn't just cosmetic - every Intl.DateTimeFormat
+    // call keyed off it (see today() in time.js) throws immediately,
+    // which used to 500 every consequence-related request until the
+    // setting was fixed again.
+    if (!VALID_TIMEZONES.has(tz)) return res.status(400).json({ error: 'Fuso horário inválido.' });
+    setSetting('timezone', tz);
   }
   if (dayRolloverHour !== undefined) {
     const h = Number(dayRolloverHour);

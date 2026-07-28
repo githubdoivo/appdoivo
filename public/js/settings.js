@@ -167,11 +167,11 @@ function reloadAll() {
 }
 
 /* -------------------------------- Idioma --------------------------------- */
-// Single square button, like the theme toggle: shows the language you'll
-// switch TO, not the one that's active.
+// Single square button, like the theme toggle: shows the language that's
+// currently active, not the one it switches to.
 
 function updateLangUI() {
-  $('lang-toggle').textContent = getLang() === 'pt' ? 'en' : 'pt';
+  $('lang-toggle').textContent = getLang();
 }
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
@@ -303,9 +303,23 @@ $('voting-reset-all-btn').addEventListener('click', async () => {
 // There's only one timezone setting, but it's edited from two places now -
 // A Rata (where it drives the day rollover) and Wall (added so any admin,
 // not just the owner, can fix it without needing the A Rata tab). Both
-// inputs always show the same value.
+// selects always show the same value.
+// A free-text field used to let a typo/invalid zone through, and every
+// Intl.DateTimeFormat call keyed off it (today() in time.js) throws
+// immediately on an invalid zone - that took down every consequence-
+// related request until someone noticed and fixed the setting again. A
+// dropdown sourced from the same list the server validates against
+// (GET /timezones) makes an invalid value impossible to enter.
+let timezonesLoaded = false;
 async function loadSettings() {
   const s = await api('/admin/settings');
+  if (!timezonesLoaded) {
+    const { timezones } = await api('/timezones');
+    const optionsHtml = timezones.sort().map((tz) => `<option value="${tz}">${tz}</option>`).join('');
+    $('timezone').innerHTML = optionsHtml;
+    $('timezone-wall').innerHTML = optionsHtml;
+    timezonesLoaded = true;
+  }
   $('timezone').value = s.timezone;
   $('timezone-wall').value = s.timezone;
 }
@@ -685,16 +699,63 @@ async function loadContestants() {
   });
 }
 
+// Same search-then-pick pattern as the self-registration "team up with"
+// field in app.js: type-to-filter over /users/basic, click a result to
+// link it. Previously the only way to add a contestant here was a bare
+// free-text costume name with no database lookup, so an admin-added entry
+// could never carry a real name alongside it (see contestantLabel() above).
+let contestantUsersCache = null;
+async function ensureContestantUsersCache() {
+  if (!contestantUsersCache) contestantUsersCache = await api('/users/basic');
+  return contestantUsersCache;
+}
+
+let contestantUserId = null;
+const contestantUserSearch = $('contestant-user-search');
+const contestantUserResults = $('contestant-user-results');
+contestantUserSearch.addEventListener('input', async () => {
+  contestantUserId = null;
+  const term = contestantUserSearch.value.trim().toLowerCase();
+  if (term.length < 2) { contestantUserResults.innerHTML = ''; return; }
+  const users = await ensureContestantUsersCache();
+  const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+  contestantUserResults.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
+  contestantUserResults.querySelectorAll('[data-user-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      contestantUserId = Number(btn.dataset.userId);
+      contestantUserSearch.value = btn.textContent;
+      contestantUserResults.innerHTML = '';
+    });
+  });
+});
+
 $('contestant-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('contestant-name').value.trim();
   if (!name) return;
-  await api('/admin/contestants', { method: 'POST', body: { name, night: currentNight() } });
+  try {
+    await api('/admin/contestants', { method: 'POST', body: { name, night: currentNight(), userId: contestantUserId } });
+  } catch (err) {
+    await showAlert(err.message);
+    return;
+  }
   $('contestant-name').value = '';
+  contestantUserId = null;
+  contestantUserSearch.value = '';
+  contestantUserResults.innerHTML = '';
   loadContestants();
 });
 
 /* --------------------------------- Votos --------------------------------- */
+
+// Same pairing as app.js's own contestantLabel() - a character name alone
+// doesn't tell an admin (or a live crowd they're reading results out to)
+// who's actually behind it.
+function contestantLabel(c) {
+  if (!c.registeredBy) return c.name;
+  const who = c.partnerName ? `${c.registeredBy} & ${c.partnerName}` : c.registeredBy;
+  return `${c.name} (${who})`;
+}
 
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
@@ -706,7 +767,7 @@ async function loadVotes() {
   const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
-      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+      results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
   $('voter-log-card').classList.toggle('hidden', !votes);
@@ -758,35 +819,36 @@ async function loadConsequences() {
   const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
     users.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
 
+  // Card list, not a grid: same shape as the user-facing rata-history-item
+  // (see loadRataHistory in app.js) - a table forced this text into a
+  // narrow column and wrapped it one word per line, and combining italic +
+  // small + serif + grey on top of that made it worse. Text first, full
+  // width; everything else drops to a second, plainer meta line.
   $('consequences-table').innerHTML = rows.length
-    ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th><th>${t('col_assigned')}</th><th>${t('col_progress')}</th></tr>` +
-      rows.map((c) => {
-        if (c.status !== 'used') {
-          return `<tr>
-            <td>${esc(c.text)}</td>
-            <td>${esc(c.author)}</td>
-            <td class="muted">${esc(formatEuDate(c.day))}</td>
-            <td>${t('status_pending')}</td>
-            <td class="muted">-</td>
-            <td class="muted">-</td>
-          </tr>`;
-        }
-        const status = rataStatusBadge(c);
-        const assignedCell = `<select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>`;
-        const canApprove = isOwner && c.done_at && !c.approved_at;
-        return `<tr>
-          <td>${esc(c.text)}</td>
-          <td>${esc(c.author)}</td>
-          <td class="muted">${esc(formatEuDate(c.day))}</td>
-          <td>${t('status_used')}</td>
-          <td>${assignedCell}</td>
-          <td>
-            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-            ${canApprove ? `<br><button type="button" class="small ghost" data-approve-id="${c.id}" style="margin-top:6px">${t('rata_approve_btn')}</button>` : ''}
-          </td>
-        </tr>`;
-      }).join('')
-    : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
+    ? rows.map((c) => {
+      const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}`;
+      if (c.status !== 'used') {
+        return `<div class="rata-history-item">
+          <p class="rata-history-text">${esc(c.text)}</p>
+          <div class="rata-history-meta">
+            <span class="muted">${byline}</span>
+            <span class="muted">${t('status_pending')}</span>
+          </div>
+        </div>`;
+      }
+      const status = rataStatusBadge(c);
+      const canApprove = isOwner && c.done_at && !c.approved_at;
+      return `<div class="rata-history-item">
+        <p class="rata-history-text">${esc(c.text)}</p>
+        <div class="rata-history-meta">
+          <span class="muted">${byline}</span>
+          <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+          <select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>
+          ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
+        </div>
+      </div>`;
+    }).join('')
+    : `<p class="muted">${t('no_consequences')}</p>`;
 }
 
 $('consequences-table').addEventListener('change', async (e) => {
@@ -967,6 +1029,15 @@ function selectAdminTab(tab) {
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
+
+// The top-left logo used to do nothing here - now it's "go home", same as
+// clicking a site's logo anywhere else: back to the landing admin tab from
+// wherever you've wandered off to (Rata, Wall, Users...).
+const brandLogo = document.querySelector('.brand-name');
+if (brandLogo) {
+  brandLogo.style.cursor = 'pointer';
+  brandLogo.addEventListener('click', () => selectAdminTab('settings'));
+}
 
 /* ------------------------------ Change key -------------------------------- */
 // Self-service, open to every logged-in user (not admin-gated) - requires
