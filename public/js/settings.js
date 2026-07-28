@@ -864,11 +864,10 @@ function userOptionsHtml(selectedId) {
 // else) cards - same row shape either way, just a different subset of
 // rows feeds each one (see renderConsequences()).
 function renderConsequenceCard(c, revealed) {
-  // Just the hour, not a full time - c.day already says which day, and a
-  // full HH:MM is more precision than anyone reading this list needs.
-  // Only revealed items have a revealed_at to show one for at all.
-  const hour = c.revealed_at ? `${String(c.revealed_at).split(' ')[1].slice(0, 2)}h` : '';
-  const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}${hour ? ` · ${hour}` : ''}`;
+  // Hours and minutes here (this is the admin view) - only revealed items
+  // have a revealed_at to show one for at all.
+  const time = c.revealed_at ? String(c.revealed_at).split(' ')[1].slice(0, 5) : '';
+  const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}${time ? ` · ${time}` : ''}`;
   const status = rataStatus(c);
   if (c.status !== 'used') {
     return `<div class="rata-history-item">

@@ -580,11 +580,15 @@ async function loadRataHistory() {
         const status = rataStatusBadge(c);
         const assignedLine = c.assignedName ? t('rata_assigned_to', { name: esc(c.assignedName) }) : t('rata_unassigned');
         const canMarkDone = c.assigned_user_id === myUserId && !c.done_at;
+        // Just the hour here (this is the guest-facing view) - the admin
+        // side shows hours and minutes, this one only needs to say
+        // roughly when.
+        const hour = c.revealed_at ? `${String(c.revealed_at).split(' ')[1].slice(0, 2)}h` : '';
         return `<div class="rata-history-item">
           <p class="rata-history-text">${esc(c.text)}</p>
           <div class="rata-history-meta">
             <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-            <span class="muted">${assignedLine}</span>
+            <span class="muted">${assignedLine}${hour ? ` · ${hour}` : ''}</span>
           </div>
           ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
