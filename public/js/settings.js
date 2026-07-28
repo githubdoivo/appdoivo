@@ -84,16 +84,6 @@ async function boot() {
     document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
 
-  const roleBadge = $('role-badge');
-  if (isAdmin) {
-    roleBadge.textContent = isOwner ? 'owner' : 'admin';
-    roleBadge.classList.toggle('role-owner', isOwner);
-    roleBadge.classList.toggle('role-admin', !isOwner);
-  } else {
-    // Plain users get no badge near the logo, same as the main app.
-    roleBadge.classList.add('hidden');
-  }
-
   // This page is now open to every logged-in user, not just admins - a
   // plain user only gets the "Settings" tab (change their own key, no
   // user-management section); the rest of this scoping matches the main

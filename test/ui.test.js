@@ -565,9 +565,6 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
   const usersManagementHidden = await page.$eval('#users-management', (el) => el.classList.contains('hidden'));
   assert.ok(usersManagementHidden, 'plain user should not see the user-management section');
 
-  const roleBadgeHidden = await page.$eval('#role-badge', (el) => el.classList.contains('hidden'));
-  assert.ok(roleBadgeHidden, 'plain user should get no role badge, same as the main app');
-
   await context.close();
 });
 
@@ -576,8 +573,8 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
 test('a role change made by the owner syncs to an already-open Settings session automatically', async () => {
   // The main app has no role-dependent UI at all (every tab is open to
   // everyone regardless of role - see showApp() in app.js), so this is
-  // Settings-only: its role badge and which admin tabs show do depend on
-  // role, synced by its own watcher (see startRoleWatcher() in settings.js).
+  // Settings-only: which admin tabs show does depend on role, synced by
+  // its own watcher (see startRoleWatcher() in settings.js).
   const target = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Watch Test' } });
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
   await api('POST', '/me/tutorial-seen', { token: target.token });
@@ -590,7 +587,7 @@ test('a role change made by the owner syncs to an already-open Settings session 
   await settingsPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
   await settingsPage.goto(base + '/settings.html');
   await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.ok(await settingsPage.$eval('#role-badge', (el) => !el.classList.contains('hidden')), 'should start with the role badge showing');
+  assert.ok(await settingsPage.$eval('#users-management', (el) => !el.classList.contains('hidden')), 'should start with admin-only Manage Users visible');
 
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
 
