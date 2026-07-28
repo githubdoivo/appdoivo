@@ -120,6 +120,11 @@ body {
   color: var(--ink);
   text-transform: lowercase;
   background-color: var(--paper);
+  /* Backs up the viewport meta's maximum-scale/user-scalable=no (some
+     browsers still trigger a double-tap zoom regardless) - a real app
+     shouldn't zoom on a stray double-tap. Normal scroll/swipe still work,
+     this only disables the double-tap/pinch zoom gesture specifically. */
+  touch-action: manipulation;
   /* textura de papel subtil */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
   min-height: 100vh;
