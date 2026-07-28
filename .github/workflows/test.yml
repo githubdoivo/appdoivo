@@ -1,11 +1,15 @@
 name: Test
 
-# Runs on every push and PR to any branch - the merge-safety gate: a red
-# check here means the branch isn't safe to merge to main. See
-# CONTRIBUTING.md for the full branch -> QA -> prod process.
+# The merge-safety gate: a red check on a PR means that branch isn't safe
+# to merge to main. Runs on every PR update (any push to a branch with an
+# open PR triggers this), plus directly on pushes to main itself (the rare
+# direct-push case, e.g. a hotfix - see CONTRIBUTING.md). Deliberately NOT
+# on every push to every branch - that doubled up with the pull_request
+# run for anything with an open PR already, and fired (and emailed) on
+# WIP commits that were never going near main yet.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
     branches: ['**']
 
