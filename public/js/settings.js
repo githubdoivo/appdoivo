@@ -626,8 +626,9 @@ function renderContestants() {
         const who = c.partner_name
           ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
           : c.registered_by ? esc(c.registered_by) : '-';
+        const isSolo = !c.partner_name;
         return `
-        <tr>
+        <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span></td>
           <td class="muted">${who}</td>
           <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td>
@@ -911,7 +912,7 @@ function renderConsequenceCard(c, revealed) {
     <div class="rata-history-meta">
       <span class="muted">${byline}</span>
       <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-      <select data-assign-id="${c.id}">${userOptionsHtml(c.assigned_user_id)}</select>
+      <select data-assign-id="${c.id}"${c.done_at ? ' disabled' : ''}>${userOptionsHtml(c.assigned_user_id)}</select>
       ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
     </div>
   </div>`;
@@ -930,6 +931,12 @@ function renderConsequences() {
   const historyRows = rataRows.filter((c) => {
     const state = rataStatus(c).state;
     return state !== 'atribuir' && rataStatusFilter.has(state);
+  }).sort((a, b) => {
+    // Most recent timestamp (approved, then done, then revealed) sorts first.
+    const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
+    const aTime = getLatestTime(a);
+    const bTime = getLatestTime(b);
+    return bTime.localeCompare(aTime);
   });
   $('consequences-table').innerHTML = historyRows.length
     ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')

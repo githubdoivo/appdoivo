@@ -159,6 +159,13 @@ body {
 /* Kill-switch confirmation ("apagado.") sits on its own line below the
    danger button, not crammed beside it like the other inline action msgs. */
 .wipe-msg { display: block; margin-top: 10px; }
+/* Contestant registration type: solo has a subtle warm tint, duo a cool one. */
+@media (prefers-color-scheme: dark) {
+  tr.contestant-solo { background: color-mix(in srgb, #e8a76c 8%, transparent); }
+  tr.contestant-duo { background: color-mix(in srgb, #7aa3d0 8%, transparent); }
+}
+html.mode-light tr.contestant-solo { background: color-mix(in srgb, #f5c689 10%, transparent); }
+html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, transparent); }
 .error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
    #auth-error), so plain colored text was too easy to miss regardless of
@@ -395,6 +402,22 @@ button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transp
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
 button.danger:hover { background: var(--danger); color: var(--paper-3); }
+
+/* Primary action buttons (logout, create user, save key): solid dark throughout. */
+#logout-btn,
+#admin-register-form button[type="submit"],
+#change-key-form button[type="submit"] {
+  background: var(--ink) !important;
+  color: var(--paper-3) !important;
+  border: none !important;
+}
+#logout-btn:hover,
+#admin-register-form button[type="submit"]:hover,
+#change-key-form button[type="submit"]:hover {
+  background: var(--ink) !important;
+  color: var(--paper-3) !important;
+  opacity: 0.8;
+}
 
 /* -------------------------------- Topbar --------------------------------- */
 
