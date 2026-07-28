@@ -328,6 +328,97 @@ test('the admin consequences list is sorted most-recently-touched first, so a fr
   await api('DELETE', `/admin/users/${posterB.data.id}`, { token: ADMIN });
 });
 
+test('assigning a consequence notifies nobody but works even without push configured, and is visible to everyone via GET /consequences/revealed', async () => {
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Assign Poster' } });
+  const holder = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Assign Holder' } });
+  await api('POST', '/consequences', { token: poster.data.token, body: { text: 'Assign flow consequence' } });
+  const revealed = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+
+  const assigned = await api('PATCH', `/admin/consequences/${revealed.data.revealed.id}/assign`, {
+    token: ADMIN, body: { userId: holder.data.id },
+  });
+  assert.equal(assigned.status, 200);
+  assert.equal(assigned.data.consequence.assignedName, 'Assign Holder');
+
+  const list = await api('GET', '/consequences/revealed', { token: userToken });
+  const found = list.data.consequences.find((c) => c.id === revealed.data.revealed.id);
+  assert.equal(found.assignedName, 'Assign Holder', 'the assignment is public - any logged-in user sees who was assigned');
+  assert.equal(found.done_at, null);
+  assert.equal(found.approved_at, null);
+
+  await api('DELETE', `/admin/users/${poster.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${holder.data.id}`, { token: ADMIN });
+});
+
+test('a non-owner admin can assign a consequence, but only the owner can approve it', async () => {
+  const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Non Owner Assign Test' } });
+  await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Non Owner Test Poster' } });
+  await api('POST', '/consequences', { token: poster.data.token, body: { text: 'Non-owner gate consequence' } });
+  const revealed = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+
+  const assignAttempt = await api('PATCH', `/admin/consequences/${revealed.data.revealed.id}/assign`, {
+    token: nonOwnerAdmin.data.token, body: { userId: poster.data.id },
+  });
+  assert.equal(assignAttempt.status, 200, 'any admin, not just the owner, can record who was holding the rata');
+  assert.equal(assignAttempt.data.consequence.assignedName, 'Non Owner Test Poster');
+
+  const approveAttempt = await api('PATCH', `/admin/consequences/${revealed.data.revealed.id}/approve`, {
+    token: nonOwnerAdmin.data.token,
+  });
+  assert.equal(approveAttempt.status, 403, 'approving is owner-only, unlike assigning');
+
+  await api('DELETE', `/admin/users/${nonOwnerAdmin.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${poster.data.id}`, { token: ADMIN });
+});
+
+test('only the assigned user can mark a consequence done, only once, and only the owner can approve it afterwards', async () => {
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mark Done Poster' } });
+  const assignee = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mark Done Assignee' } });
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mark Done Bystander' } });
+  await api('POST', '/consequences', { token: poster.data.token, body: { text: 'Mark done consequence' } });
+  const revealed = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  const id = revealed.data.revealed.id;
+
+  await api('PATCH', `/admin/consequences/${id}/assign`, { token: ADMIN, body: { userId: assignee.data.id } });
+
+  // Not the assigned user - rejected.
+  const wrongUser = await api('POST', `/consequences/${id}/mark-done`, { token: bystander.data.token });
+  assert.equal(wrongUser.status, 400);
+
+  // Owner can't approve before it's been marked done.
+  const tooEarly = await api('PATCH', `/admin/consequences/${id}/approve`, { token: ADMIN });
+  assert.equal(tooEarly.status, 400);
+
+  // The actual assignee marks it done.
+  const markedDone = await api('POST', `/consequences/${id}/mark-done`, { token: assignee.data.token });
+  assert.equal(markedDone.status, 200);
+  assert.ok(markedDone.data.consequence.done_at);
+  assert.equal(markedDone.data.consequence.approved_at, null, 'done is not the same as approved - still needs the owner');
+
+  // Can't mark done twice.
+  const again = await api('POST', `/consequences/${id}/mark-done`, { token: assignee.data.token });
+  assert.equal(again.status, 400);
+
+  // Now the owner approves it, and it shows as done to everyone.
+  const approved = await api('PATCH', `/admin/consequences/${id}/approve`, { token: ADMIN });
+  assert.equal(approved.status, 200);
+  assert.ok(approved.data.consequence.approved_at);
+
+  const list = await api('GET', '/consequences/revealed', { token: bystander.data.token });
+  const found = list.data.consequences.find((c) => c.id === id);
+  assert.ok(found.approved_at, 'the approval is public - shows as done to everyone, not just the owner/assignee');
+
+  // Approving twice is rejected.
+  const doubleApprove = await api('PATCH', `/admin/consequences/${id}/approve`, { token: ADMIN });
+  assert.equal(doubleApprove.status, 400);
+
+  await api('DELETE', `/admin/users/${poster.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${assignee.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${bystander.data.id}`, { token: ADMIN });
+});
+
 /* -------------------------------- Voting --------------------------------- */
 
 const NIGHT = 'furnished';

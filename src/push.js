@@ -94,6 +94,44 @@ export async function broadcast(payload, { excludeUserId } = {}) {
 }
 
 /**
+ * Sends a notification to a single user's devices (all of them, if they're
+ * logged in on more than one), in their own `lang`. Same payload shape and
+ * cleanup behavior as broadcast() - just filtered to one recipient instead
+ * of everyone.
+ */
+export async function notifyUser(userId, payload) {
+  if (!configured) return { sent: 0, failed: 0 };
+  const rows = db.prepare(`
+    SELECT s.endpoint, s.subscription, u.lang
+    FROM push_subscriptions s
+    JOIN users u ON u.id = s.user_id
+    WHERE u.id = ?
+  `).all(userId);
+  let sent = 0;
+  let failed = 0;
+
+  await Promise.all(rows.map(async (row) => {
+    const lang = row.lang === 'en' ? 'en' : 'pt';
+    const body = JSON.stringify({
+      ...payload,
+      title: localize(payload.title, lang),
+      body: localize(payload.body, lang),
+    });
+    try {
+      await webpush.sendNotification(JSON.parse(row.subscription), body);
+      sent++;
+    } catch (err) {
+      failed++;
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        removeSubscription(row.endpoint);
+      }
+    }
+  }));
+
+  return { sent, failed };
+}
+
+/**
  * Notifies everyone once when the running version differs from the last
  * one this same database ever booted with. First-ever boot (no stored
  * version yet) just records it silently - nobody needs telling that the

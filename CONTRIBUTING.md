@@ -44,9 +44,11 @@ session's work and deploy once at the end.
    via `npm install`'s `postinstall` - no husky, plain git hook) runs
    `npm test` and blocks the commit if anything fails, so this doesn't rely
    on remembering to run it manually.
-4. Push the branch. Every push and PR also runs the same suite via GitHub
-   Actions (`.github/workflows/test.yml`) - a red check there means the
-   branch isn't safe to deploy or merge.
+4. Push the branch. Once a PR is open, every push to it also runs the same
+   suite via GitHub Actions (`.github/workflows/test.yml`) - a red check
+   there means the branch isn't safe to deploy or merge. Plain pushes
+   without an open PR don't trigger CI, to avoid noise on WIP commits that
+   aren't close to main yet.
 5. Deploy the branch straight to QA with `scripts/deploy.sh qa` (wraps
    `npm test` + `fly deploy -a appdoivo-qa --config fly.qa.toml` - refuses
    to deploy if tests fail) so it can be checked live at

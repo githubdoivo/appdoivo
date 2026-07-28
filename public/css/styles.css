@@ -79,6 +79,8 @@ html.mode-light {
   --role-user:  #1f6d78;
   --type-announcement: #8a6a1f;
   --type-poll: #6b4c8a;
+  --status-pending: #2a6ca6;
+  --status-done: #2f7d32;
 }
 
 html.mode-dark {
@@ -102,6 +104,8 @@ html.mode-dark {
   --role-user:  #6fd6e0;
   --type-announcement: #d4b04a;
   --type-poll: #b294d6;
+  --status-pending: #6badde;
+  --status-done: #7ed181;
 }
 
 * { box-sizing: border-box; }
@@ -398,9 +402,25 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    tab or night theme, but still adapts to light/dark mode so it never
    washes out against either background. The fallback matches the old
    fixed color, for the brief moment before applyMode() runs. */
-.brand .brand-name { font-family: var(--script); font-weight: 700; font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: var(--brand, #a96b4b); }
+/* No overflow/text-overflow here on purpose - this cursive script font
+   relies on rendering outside its own tight line box (line-height: 0.8),
+   so clipping overflow cuts the tops/tails off every letter, not just
+   whatever would've been truncated. The logo-swap easter egg (see
+   logoEasterEgg.js) is capped at a short length instead, so the text
+   itself never gets long enough to threaten the role badge next to it. */
+.brand .brand-name {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 0.8;
+  white-space: nowrap;
+  color: var(--brand, #a96b4b);
+}
 .brand .badge,
 .user-row-name .badge {
+  /* Never shrink to make room for a long brand-name - see the comment
+     on .brand .brand-name above. */
+  flex-shrink: 0;
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;
@@ -426,6 +446,28 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    never visually confused with a user role. */
 .badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
 .badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
+
+/* Rata history: each revealed consequence, who was assigned, and its
+   completion status - a standalone pill (not .badge, which is scoped to
+   .brand/.user-row-name) since these appear in a plain list, not either
+   of those containers. */
+.rata-history-item { border-top: 1px solid var(--line); padding: 14px 0; }
+.rata-history-item:first-child { border-top: none; padding-top: 0; }
+.rata-history-text { font-family: var(--serif); font-size: 1.05rem; margin: 0; }
+.rata-history-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rata-badge {
+  font-family: var(--body);
+  text-transform: lowercase;
+  letter-spacing: 0.14em;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border: 1.5px solid var(--ink-soft);
+  color: var(--ink-soft);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.rata-badge.rata-status-pending { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
+.rata-badge.rata-status-done { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
@@ -694,8 +736,14 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   font-size: 0.8rem;
   color: var(--rata);
   word-break: break-all;
-  text-align: right;
+  text-align: left;
   cursor: pointer;
+  /* Always its own line below the name, not a flex sibling sharing the
+     row - otherwise it only wraps once the name is long enough to push
+     it off, so short names show it inline and long names don't, an
+     inconsistent zig-zag down the list. */
+  flex-basis: 100%;
+  margin-top: 4px;
 }
 .user-row-token.censored { letter-spacing: 2px; }
 /* Brief confirmation that a click also copied the key - doesn't touch the
@@ -996,7 +1044,7 @@ html.mode-dark body.theme-plaza {
   font-weight: 700;
   font-size: var(--text-xs);
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--clay);
 }
 
@@ -1019,27 +1067,30 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
 
-.plaza-post-announcement.pinned {
+.plaza-post-announcement {
   background: var(--paper-2);
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-announcement.pinned:first-child { margin-top: 0; }
+.plaza-post-announcement:first-child { margin-top: 0; }
+/* Boxed like a poll now (was a plain unboxed "torn column" that read as
+   an afterthought next to the poll's card) - pinning still upgrades the
+   border to stand out further, same as polls. */
+.plaza-post-announcement.pinned { border-color: var(--clay); }
 .plaza-pinned-badge {
   display: inline-block;
   font-family: var(--body);
   font-weight: 700;
   font-size: var(--text-xs);
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--paper-3);
   background: var(--clay);
   border-radius: 999px;
   padding: 2px 8px;
-  margin-left: 8px;
-  vertical-align: 1px;
+  margin-bottom: 8px;
 }
 
 .plaza-post-poll {

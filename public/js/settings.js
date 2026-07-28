@@ -49,6 +49,8 @@ let adminPromotionEnabled = false;
 let isOwner = false;
 let isAdmin = false;
 let plazaEnabled = false;
+let myUserId = null;
+let myName = '';
 
 async function boot() {
   applyMode();
@@ -67,6 +69,8 @@ async function boot() {
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
     plazaEnabled = !!me.plazaEnabled;
+    myUserId = me.id;
+    myName = me.name;
     wireLogoEasterEgg(me.name);
   } catch (err) {
     $('auth-error').textContent = err.message;
@@ -78,16 +82,6 @@ async function boot() {
   // everyone, owner included, regardless of the role-based rules below.
   if (!plazaEnabled) {
     document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
-  }
-
-  const roleBadge = $('role-badge');
-  if (isAdmin) {
-    roleBadge.textContent = isOwner ? 'owner' : 'admin';
-    roleBadge.classList.toggle('role-owner', isOwner);
-    roleBadge.classList.toggle('role-admin', !isOwner);
-  } else {
-    // Plain users get no badge near the logo, same as the main app.
-    roleBadge.classList.add('hidden');
   }
 
   // This page is now open to every logged-in user, not just admins - a
@@ -128,6 +122,39 @@ async function boot() {
   refreshNotifButton('notif-btn');
   wireChangeKeyForm();
   if (isAdmin) reloadAll();
+  startRoleWatcher();
+}
+
+// Polls /me every 30s for a role change (promoted, demoted, or removed
+// entirely) made by the owner while this page is already open - same
+// mechanism as app.js's own watcher. Losing admin access entirely sends
+// them back to the main app's landing tab (Wall) instead of reloading
+// into a stripped-down view of a page they no longer have a reason to be
+// on - no need to log out, just stop looking at admin pages. Any other
+// change (promoted, or still admin but owner status differs) reloads in
+// place so the newly-available tabs/content show up.
+let roleWatchTimer = null;
+function startRoleWatcher() {
+  if (roleWatchTimer) return;
+  roleWatchTimer = setInterval(async () => {
+    try {
+      const fresh = await api('/me');
+      const freshIsAdmin = !!fresh.isAdmin;
+      const freshIsOwner = !!fresh.isOwner;
+      if (freshIsAdmin !== isAdmin || freshIsOwner !== isOwner) {
+        if (isAdmin && !freshIsAdmin) {
+          location.href = '/';
+          return;
+        }
+        location.reload();
+      }
+    } catch (err) {
+      if (err.status === 401) {
+        clearToken();
+        location.reload();
+      }
+    }
+  }, 30000);
 }
 
 function reloadAll() {
@@ -703,6 +730,12 @@ $('reveal-btn').addEventListener('click', async () => {
   }
 });
 
+function rataStatusBadge(c) {
+  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
+  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
+  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+}
+
 async function loadConsequences() {
   const rows = await api('/admin/consequences');
   // rows are sorted most-recently-touched first (see GET /admin/consequences),
@@ -711,37 +744,71 @@ async function loadConsequences() {
   $('revealed-consequence').classList.toggle('hidden', !revealed);
   if (revealed) $('revealed-consequence').textContent = revealed.text;
 
-  // Owner-only: who's actually holding the rata right now, entered by hand
-  // since it can't be inferred from anything in the app - only the owner
-  // walking around the party knows.
-  $('consequence-assign').classList.toggle('hidden', !revealed || !isOwner);
-  if (revealed && isOwner) {
-    const users = await api('/admin/users');
-    const select = $('consequence-assign-select');
-    select.innerHTML = `<option value="">${t('rata_assign_placeholder')}</option>` +
-      users.map((u) => `<option value="${u.id}"${u.id === revealed.assigned_user_id ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
-    select.dataset.consequenceId = revealed.id;
-  }
+  // Any admin (not owner-only) records who was actually holding the rata
+  // for each revealed consequence, entered by hand since it can't be
+  // inferred from anything in the app - not "right now", can be set any
+  // time after the reveal. Uses the basic (id+name only, no tokens) user
+  // list, same one Best Look's team-up picker uses - the admin-only
+  // /admin/users list is owner-gated for everyone else, since it also
+  // carries plaintext access keys. /users/basic excludes the caller
+  // (that picker never needs to team up with yourself), but here the
+  // admin filling this in might themselves be who had it - add self back.
+  const others = await api('/users/basic');
+  const users = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
+    users.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
 
   $('consequences-table').innerHTML = rows.length
-    ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th></tr>` +
-      rows.map((c) => `<tr>
-        <td>${esc(c.text)}${c.assignedName ? `<br><span class="muted">${t('rata_holder', { name: esc(c.assignedName) })}</span>` : ''}</td>
-        <td>${esc(c.author)}</td>
-        <td class="muted">${esc(formatEuDate(c.day))}</td>
-        <td>${c.status === 'used' ? t('status_used') : t('status_pending')}</td></tr>`).join('')
+    ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th><th>${t('col_assigned')}</th><th>${t('col_progress')}</th></tr>` +
+      rows.map((c) => {
+        if (c.status !== 'used') {
+          return `<tr>
+            <td>${esc(c.text)}</td>
+            <td>${esc(c.author)}</td>
+            <td class="muted">${esc(formatEuDate(c.day))}</td>
+            <td>${t('status_pending')}</td>
+            <td class="muted">-</td>
+            <td class="muted">-</td>
+          </tr>`;
+        }
+        const status = rataStatusBadge(c);
+        const assignedCell = `<select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>`;
+        const canApprove = isOwner && c.done_at && !c.approved_at;
+        return `<tr>
+          <td>${esc(c.text)}</td>
+          <td>${esc(c.author)}</td>
+          <td class="muted">${esc(formatEuDate(c.day))}</td>
+          <td>${t('status_used')}</td>
+          <td>${assignedCell}</td>
+          <td>
+            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+            ${canApprove ? `<br><button type="button" class="small ghost" data-approve-id="${c.id}" style="margin-top:6px">${t('rata_approve_btn')}</button>` : ''}
+          </td>
+        </tr>`;
+      }).join('')
     : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
 }
 
-$('consequence-assign-select').addEventListener('change', async (e) => {
-  const consequenceId = e.target.dataset.consequenceId;
-  const userId = e.target.value ? Number(e.target.value) : null;
-  $('consequence-assign-msg').textContent = '';
+$('consequences-table').addEventListener('change', async (e) => {
+  const select = e.target.closest('[data-assign-id]');
+  if (!select) return;
+  const userId = select.value ? Number(select.value) : null;
   try {
-    await api(`/admin/consequences/${consequenceId}/assign`, { method: 'PATCH', body: { userId } });
-    $('consequence-assign-msg').textContent = t('rata_assign_saved');
+    await api(`/admin/consequences/${select.dataset.assignId}/assign`, { method: 'PATCH', body: { userId } });
   } catch (err) {
-    $('consequence-assign-msg').textContent = err.message;
+    await showAlert(err.message);
+    loadConsequences();
+  }
+});
+
+$('consequences-table').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-approve-id]');
+  if (!btn) return;
+  try {
+    await api(`/admin/consequences/${btn.dataset.approveId}/approve`, { method: 'PATCH' });
+    loadConsequences();
+  } catch (err) {
+    await showAlert(err.message);
   }
 });
 

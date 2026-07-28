@@ -9,14 +9,24 @@ import db, { generateDemoUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
 import { NIGHTS } from './nights.js';
+import { createPlazaPost } from './plaza.js';
 
+// Never include "Ivo Lopes" (or any name matching the real owner) here -
+// a demo account sharing the owner's name showed up in the unclaimed-user
+// search on QA, which is confusing/alarming even though it's just a
+// regular demo user under the hood, not an actual owner-account exposure.
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Ivo Lopes', 'Nádia Barros',
+  'Leonor Matos', 'Marta Freitas', 'Tomás Vieira', 'Nádia Barros',
   'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
+
+// The one demo user pre-promoted to admin on every fresh seed, so there's
+// always a stable non-owner admin tester available without manually
+// promoting someone after each QA reseed.
+const PRESET_ADMIN_NAME = 'Elisa Carvalho';
 
 // The rata is a passable, anonymous token - whoever ends up holding it when
 // a consequence is revealed might not be near anyone else at that moment.
@@ -40,24 +50,25 @@ export function seedDemo() {
   // so a tester's key stays the same across every QA reseed/deploy.
   // Keyed on is_owner (not is_admin) - the owner is the only row that never
   // came from this NAMES loop, and unlike is_admin it never changes for a
-  // demo user afterwards (whether from the NAMES[0] pre-promotion below or
-  // an ad hoc promotion during testing), so this stays an accurate "have I
-  // already seeded" check no matter how many demo users get promoted later.
+  // demo user afterwards (whether from the PRESET_ADMIN_NAME pre-promotion
+  // below or an ad hoc promotion during testing), so this stays an accurate
+  // "have I already seeded" check no matter how many demo users get
+  // promoted later.
   const seededCount = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_owner = 0').get().n;
   const demoUsers = [];
   if (seededCount < NAMES.length) {
     const insU = db.prepare("INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
-    NAMES.forEach((name, i) => {
+    NAMES.forEach((name) => {
       const tok = generateDemoUserToken(name);
       // QA's DB is ephemeral (resets every deploy) - without this, promoting
       // someone to admin to test admin-only flows gets wiped on the very
-      // next deploy. NAMES[0] is always pre-promoted so there's a stable
-      // non-owner admin tester available immediately after every reseed.
-      const isAdmin = i === 0 ? 1 : 0;
+      // next deploy. PRESET_ADMIN_NAME is always pre-promoted so there's a
+      // stable non-owner admin tester available immediately after every reseed.
+      const isAdmin = name === PRESET_ADMIN_NAME ? 1 : 0;
       const info = insU.run(name, hashToken(tok), encryptToken(tok), isAdmin);
       demoUsers.push(info.lastInsertRowid);
     });
-    console.log(`[seed-demo] Created ${NAMES.length} demo users (${NAMES[0]} pre-promoted to admin for testing).`);
+    console.log(`[seed-demo] Created ${NAMES.length} demo users (${PRESET_ADMIN_NAME} pre-promoted to admin for testing).`);
   } else {
     db.prepare('SELECT id FROM users WHERE is_owner = 0').all().forEach((u) => demoUsers.push(u.id));
   }
@@ -89,5 +100,21 @@ export function seedDemo() {
       NAMES.slice(i * 5, i * 5 + 5).forEach((name) => insContestant.run(name, night));
     });
     console.log(`[seed-demo] Registered 5 contestants for each night (${NIGHTS.join(', ')}).`);
+  }
+
+  // 4) Wall posts (QA convenience only - lets ENABLE_PLAZA be checked
+  // without publishing anything by hand first) --------------------------------
+  const plazaPostCount = db.prepare('SELECT COUNT(*) AS n FROM plaza_posts').get().n;
+  if (plazaPostCount === 0 && demoUsers.length) {
+    createPlazaPost(demoUsers[0], {
+      type: 'announcement',
+      text: 'Bem-vindos à festa! Password do wifi: party-wifi-2026.',
+    });
+    createPlazaPost(demoUsers[0], {
+      type: 'poll',
+      text: 'Qual foi o melhor momento da noite até agora?',
+      options: ['A Rata', 'Best Look', 'A Plaza', 'Ainda não sei'],
+    });
+    console.log('[seed-demo] Added 1 Wall announcement and 1 poll.');
   }
 }
