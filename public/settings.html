@@ -163,6 +163,25 @@
 
       <!-- Separador: Definições (todos os utilizadores, incluindo o dono) -->
       <div id="atab-settings" class="tab-panel">
+        <!-- First card in the tab, before change-key - your own identity,
+             key (click to reveal/copy, same convention as the Manage Users
+             list below) and logout, all in one place and reachable without
+             scrolling past anything else. Logout stays its own button here
+             rather than living inside change-key-form - right next to a
+             "save password" submit, it risked an accidental sign-out when
+             the user meant to save a new key. -->
+        <div class="card" id="account-card">
+          <h2 data-i18n="account_title">A tua conta</h2>
+          <div class="user-row-top">
+            <div class="user-row-name">
+              <span id="account-name"></span>
+              <span class="badge" id="account-role-badge"></span>
+            </div>
+            <div class="account-token censored" id="account-token" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          </div>
+          <button type="button" id="logout-btn" class="small ghost" style="margin-top:14px" data-i18n="logout">Sair</button>
+        </div>
+
         <div class="card" id="change-key-card">
           <h2 data-i18n="change_key_title">Mudar chave de acesso</h2>
           <p class="help" data-i18n="change_key_help">Explicação</p>
@@ -196,14 +215,6 @@
             <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
           </form>
           <span id="change-key-msg" class="muted"></span>
-        </div>
-
-        <!-- Its own card, well away from change-key-card's save button - a
-             logout right next to "save password" risked an accidental
-             sign-out when the user meant to save a new key. -->
-        <div class="card" id="session-card">
-          <h2 data-i18n="session_title">Sessão</h2>
-          <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
         </div>
 
         <!-- Gestao de utilizadores, agora dentro de Definicoes, abaixo do

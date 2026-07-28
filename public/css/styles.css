@@ -130,18 +130,20 @@ body {
 .hidden { display: none !important; }
 
 /* Tiny reference number, not a UI feature - lets QA vs prod be compared at
-   a glance when reporting a bug (see version.js / GET /api/version). */
+   a glance when reporting a bug (see version.js / GET /api/version). Sits
+   as the last element in the DOM (after #login/#app, both of which toggle
+   via .hidden), so in normal document flow it always lands at the true
+   bottom of whichever page/section is currently showing - a fixed
+   floating badge used to sit on top of page content instead. */
 .version-badge {
-  position: fixed;
-  right: 10px;
-  bottom: calc(6px + env(safe-area-inset-bottom));
+  display: block;
+  text-align: center;
+  padding: 20px 0 calc(10px + env(safe-area-inset-bottom));
   font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.4;
   letter-spacing: 0.02em;
-  pointer-events: none;
   user-select: none;
-  z-index: 5;
 }
 
 .muted { color: var(--ink-soft); font-size: 0.92rem; }
@@ -722,7 +724,13 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .user-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .user-row-name { font-weight: 600; }
 .user-row-name .badge { margin-left: 6px; }
-.user-row-token {
+/* .account-token (the Settings "your account" card) shares this exact
+   look-and-behavior with Manage Users' own row token below, but stays a
+   separate class - Playwright tests query .user-row-token unscoped to mean
+   specifically a Manage Users list row, and the account card now renders
+   earlier in the DOM than that list. */
+.user-row-token,
+.account-token {
   font-family: 'SFMono-Regular', ui-monospace, monospace;
   font-size: 0.8rem;
   color: var(--rata);
@@ -736,10 +744,10 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   flex-basis: 100%;
   margin-top: 4px;
 }
-.user-row-token.censored { letter-spacing: 2px; }
+.user-row-token.censored, .account-token.censored { letter-spacing: 2px; }
 /* Brief confirmation that a click also copied the key - doesn't touch the
    text itself (unlike the old copy button, which safely could). */
-.user-row-token.just-copied { color: var(--clay); transition: color 0.15s; }
+.user-row-token.just-copied, .account-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
 /* Click-to-rename a contestant or user (see loadContestants()/renderUsersList()). */

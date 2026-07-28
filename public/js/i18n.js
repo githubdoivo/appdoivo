@@ -232,7 +232,7 @@ export const translations = {
     current_key_ph: 'Chave atual',
     new_key_ph: 'Nova chave',
     key_changed_msg: 'Chave alterada com sucesso.',
-    session_title: 'Sessão',
+    account_title: 'A tua conta',
   },
   en: {
     // Tutorial (first session)
@@ -449,7 +449,7 @@ export const translations = {
     current_key_ph: 'Current key',
     new_key_ph: 'New key',
     key_changed_msg: 'Key changed successfully.',
-    session_title: 'Session',
+    account_title: 'Your account',
   },
 };
 

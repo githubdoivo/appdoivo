@@ -52,6 +52,28 @@ let plazaEnabled = false;
 let myUserId = null;
 let myName = '';
 
+// Your own name, role and access key, click-to-reveal/copy same as a row
+// in Manage Users below - the token itself never needs a server round-trip,
+// it's already what's in localStorage (see getToken() in api.js).
+function renderAccountCard() {
+  $('account-name').textContent = myName;
+  $('account-role-badge').className = `badge ${isOwner ? 'role-owner' : isAdmin ? 'role-admin' : 'role-user'}`;
+  $('account-role-badge').textContent = isOwner ? 'owner' : isAdmin ? 'admin' : 'user';
+  const tokenEl = $('account-token');
+  tokenEl.dataset.token = getToken();
+  const toggle = async () => {
+    const revealed = tokenEl.classList.toggle('censored') === false;
+    tokenEl.textContent = revealed ? tokenEl.dataset.token : '••••••••••••';
+    await copyToClipboard(tokenEl.dataset.token);
+    tokenEl.classList.add('just-copied');
+    setTimeout(() => tokenEl.classList.remove('just-copied'), 600);
+  };
+  tokenEl.addEventListener('click', toggle);
+  tokenEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+  });
+}
+
 async function boot() {
   applyMode();
   applyI18n();
@@ -72,6 +94,7 @@ async function boot() {
     myUserId = me.id;
     myName = me.name;
     wireLogoEasterEgg(me.name);
+    renderAccountCard();
   } catch (err) {
     $('auth-error').textContent = err.message;
     return;
