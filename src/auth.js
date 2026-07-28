@@ -14,7 +14,7 @@ import { checkAuthAttempt } from './rateLimit.js';
  * fly.toml), so there's no guessable backdoor on the real deployment.
  */
 export function findUserByToken(token) {
-  const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at';
+  const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
   let user = db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
   if (!user && token === 'mossy' && process.env.NODE_ENV !== 'production') {
     user = db.prepare(`SELECT ${columns} FROM users WHERE is_owner = 1`).get();
@@ -63,6 +63,7 @@ export function authenticate(req, res, next) {
     isOwner: !!user.is_owner,
     tutorialSeen: !!user.tutorial_seen,
     lang: user.lang,
+    logo_customized: !!user.logo_customized,
   };
   next();
 }
