@@ -567,6 +567,7 @@ test('a plain (non-admin) user only sees the Settings tab on /settings.html', as
 test('a role change made by the owner syncs to an already-open session automatically, on both the main app and Settings', async () => {
   const target = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Watch Test' } });
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  await api('POST', '/me/tutorial-seen', { token: target.token });
 
   const context = await iphoneContext('iPhone 13');
 
@@ -601,9 +602,13 @@ test('a role change made by the owner syncs to an already-open session automatic
   await mainPage.clock.fastForward('00:31');
   await mainPage.waitForSelector('#admin-badge.hidden', { state: 'attached', timeout: 5000 });
 
+  // Losing admin access entirely sends them away from Settings altogether
+  // (no reason to stay on a page built for admins) - lands on the main
+  // app's Wall tab rather than reloading into a stripped-down admin view.
   await settingsPage.clock.fastForward('00:31');
-  await settingsPage.waitForSelector('#role-badge.hidden', { state: 'attached', timeout: 5000 });
-  assert.ok(await settingsPage.$eval('[data-atab="settings"]', (el) => !el.classList.contains('hidden')), 'demoted user should be back to only seeing the Settings tab');
+  await settingsPage.waitForURL(base + '/', { timeout: 5000 });
+  await settingsPage.waitForSelector('#app:not(.hidden)', { timeout: 5000 });
+  assert.ok(await settingsPage.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active')), 'demoted user should land on the Wall tab after being redirected away from Settings');
 
   await context.close();
   await api('DELETE', `/admin/users/${target.id}`, { token: ADMIN });

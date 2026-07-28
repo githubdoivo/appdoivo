@@ -70,13 +70,7 @@ function showApp(me) {
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name);
-  if (me.isAdmin) {
-    const adminBadge = $('admin-badge');
-    adminBadge.textContent = me.isOwner ? 'owner' : 'admin';
-    adminBadge.classList.toggle('role-owner', me.isOwner);
-    adminBadge.classList.toggle('role-admin', !me.isOwner);
-    adminBadge.classList.remove('hidden');
-  }
+  updateAdminBadge();
   // Plain (non-admin) users get no badge near the logo at all - only
   // owner/admin are flagged there. Manage Users still shows every role.
   // The settings link (change my own key, plus admin tabs if applicable)
@@ -105,13 +99,30 @@ function showApp(me) {
   startRoleWatcher();
 }
 
+// Shows/hides/relabels the admin badge for whatever myIsAdmin/myIsOwner
+// currently are - called both at boot and by the role watcher below, so
+// a role change updates the badge in place instead of needing a reload
+// (nothing else in the main app is gated by role - every tab is open to
+// everyone, only the badge itself differs).
+function updateAdminBadge() {
+  const adminBadge = $('admin-badge');
+  if (myIsAdmin) {
+    adminBadge.textContent = myIsOwner ? 'owner' : 'admin';
+    adminBadge.classList.toggle('role-owner', myIsOwner);
+    adminBadge.classList.toggle('role-admin', !myIsOwner);
+    adminBadge.classList.remove('hidden');
+  } else {
+    adminBadge.classList.add('hidden');
+  }
+}
+
 // Polls /me every 30s for a role change (promoted, demoted, or removed
-// entirely) made by the owner while this session is already open. A
-// mismatch reloads the page - simplest way to get every role-dependent
-// bit of UI (admin badge, settings tabs, Manage Users access) back in
-// sync, rather than patching each one individually. A 401 means the
-// account was deleted or its key regenerated - same treatment as boot()'s
-// own auth failure handling, just triggered mid-session instead of at load.
+// entirely) made by the owner while this session is already open, and
+// updates the badge in place - no need to reload or log out just because
+// a role changed, the person stays wherever they were looking. A 401
+// means the account was deleted or its key regenerated, which really
+// does need a fresh login - same treatment as boot()'s own auth failure
+// handling, just triggered mid-session instead of at load.
 let roleWatchTimer = null;
 function startRoleWatcher() {
   if (roleWatchTimer) return;
@@ -119,7 +130,9 @@ function startRoleWatcher() {
     try {
       const fresh = await api('/me');
       if (!!fresh.isAdmin !== myIsAdmin || !!fresh.isOwner !== myIsOwner) {
-        location.reload();
+        myIsAdmin = !!fresh.isAdmin;
+        myIsOwner = !!fresh.isOwner;
+        updateAdminBadge();
       }
     } catch (err) {
       if (err.status === 401) {

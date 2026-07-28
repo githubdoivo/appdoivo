@@ -402,9 +402,28 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    tab or night theme, but still adapts to light/dark mode so it never
    washes out against either background. The fallback matches the old
    fixed color, for the brief moment before applyMode() runs. */
-.brand .brand-name { font-family: var(--script); font-weight: 700; font-size: 2.2rem; line-height: 0.8; white-space: nowrap; color: var(--brand, #a96b4b); }
+/* overflow/text-overflow/min-width: the logo-swap easter egg (see
+   logoEasterEgg.js) can make this text much longer than "appdoivo"
+   (e.g. "appdemargarida") - without these, a long name doesn't wrap
+   (white-space: nowrap) and instead pushes the role badge next to it
+   out of the flex row entirely. Truncating the name instead keeps the
+   badge always visible regardless of whose name got swapped in. */
+.brand .brand-name {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  color: var(--brand, #a96b4b);
+}
 .brand .badge,
 .user-row-name .badge {
+  /* Never shrink to make room for a long brand-name - see the comment
+     on .brand .brand-name above. */
+  flex-shrink: 0;
   font-family: var(--body);
   text-transform: lowercase;
   letter-spacing: 0.16em;

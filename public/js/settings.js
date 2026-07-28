@@ -137,16 +137,25 @@ async function boot() {
 
 // Polls /me every 30s for a role change (promoted, demoted, or removed
 // entirely) made by the owner while this page is already open - same
-// mechanism as app.js's own watcher. A mismatch reloads the page, the
-// simplest way to get every role-dependent bit of this page (badge,
-// which admin tabs show, Manage Users access) back in sync.
+// mechanism as app.js's own watcher. Losing admin access entirely sends
+// them back to the main app's landing tab (Wall) instead of reloading
+// into a stripped-down view of a page they no longer have a reason to be
+// on - no need to log out, just stop looking at admin pages. Any other
+// change (promoted, or still admin but owner status differs) reloads in
+// place so the newly-available tabs/content show up.
 let roleWatchTimer = null;
 function startRoleWatcher() {
   if (roleWatchTimer) return;
   roleWatchTimer = setInterval(async () => {
     try {
       const fresh = await api('/me');
-      if (!!fresh.isAdmin !== isAdmin || !!fresh.isOwner !== isOwner) {
+      const freshIsAdmin = !!fresh.isAdmin;
+      const freshIsOwner = !!fresh.isOwner;
+      if (freshIsAdmin !== isAdmin || freshIsOwner !== isOwner) {
+        if (isAdmin && !freshIsAdmin) {
+          location.href = '/';
+          return;
+        }
         location.reload();
       }
     } catch (err) {
