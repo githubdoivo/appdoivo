@@ -33,7 +33,12 @@ const ADMIN = seedResult.token;
 // clean) - not a real regression, just CI's shared hardware being slower
 // on a bad run. `CI` is set by GitHub Actions (and most other CI
 // providers) automatically, so this only loosens the timeout there.
-const WAIT_TIMEOUT = process.env.CI ? 15000 : 5000;
+// Bumped again (15000 -> 25000): 15000 was itself hit repeatedly on bad
+// runs (every login-dependent test failing at ~15.6-15.9s, consistently,
+// while the same commit had passed a different CI run minutes earlier) -
+// not further evidence of a real bug, just this shared hardware needing
+// still more headroom on its worse days.
+const WAIT_TIMEOUT = process.env.CI ? 25000 : 5000;
 let server;
 let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
 let browser;
