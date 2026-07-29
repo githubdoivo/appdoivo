@@ -181,14 +181,7 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
   border-radius: var(--radius);
 }
 
-/* viewport-fit=cover + display:standalone (see manifest.json) means content
-   renders edge-to-edge under the notch/status bar by design - padding-bottom
-   already accounts for the bottom safe area (see body below), but nothing
-   ever accounted for the TOP one, so the topbar had no real clearance from
-   the status bar/notch on an installed PWA. calc() adds the safe-area inset
-   on top of the existing 22px so non-notched devices/browser tabs (where the
-   env() resolves to 0) are unaffected. */
-.view { max-width: 620px; margin: 0 auto; padding: calc(22px + env(safe-area-inset-top)) 20px 48px; }
+.view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
 
 /* ------------------------------- Tipografia ------------------------------ */
 
