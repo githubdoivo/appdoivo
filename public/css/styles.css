@@ -436,9 +436,9 @@ button.danger:hover {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 14px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 26px;
+  margin-bottom: 32px;
   gap: 12px;
 }
 /* align-items: center, not baseline - the cursive brand-name font
@@ -462,7 +462,12 @@ button.danger:hover {
 .brand .brand-name {
   font-family: var(--script);
   font-weight: 700;
-  font-size: 2.5rem;
+  /* Script/cursive faces draw much smaller within their own em-box than a
+     sans-serif does at the same font-size (most of the box is empty
+     margin around comparatively small letterforms) - next to the 38px
+     square icon buttons this reads as noticeably undersized unless pushed
+     well past what a "normal" font would need for the same visual weight. */
+  font-size: 3.1rem;
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand, #a96b4b);
@@ -853,7 +858,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
      whole tier up together with the bigger body copy below. */
   html { font-size: 18px; }
   body { font-size: 19px; }
-  .brand .brand-name { font-size: 2.2rem; }
+  .brand .brand-name { font-size: 2.7rem; }
   .tabs { gap: 20px; }
   .tab { font-size: 1.2rem; }
   .card { padding: 18px; }
