@@ -625,6 +625,12 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 .tabs {
   display: flex;
+  /* space-between spreads the tabs across the full row width instead of
+     clustering them on the left with empty space to the right - gap stays
+     as a floor so they never crowd together if the row is narrower than
+     the content (space-between only kicks in once there's surplus width;
+     below that it falls back to normal flow + the overflow-x scroll). */
+  justify-content: space-between;
   gap: 26px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
