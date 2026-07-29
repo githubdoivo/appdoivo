@@ -6,21 +6,12 @@ import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
+import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
-
-// European date order everywhere: "YYYY-MM-DD[ HH:MM:SS]" -> "DD-MM-YYYY[ HH:MM]".
-function formatEuDate(dateStr) {
-  const [y, m, d] = String(dateStr).split(' ')[0].split('-');
-  return `${d}-${m}-${y}`;
-}
-function formatEuDateTime(dateTimeStr) {
-  const [datePart, timePart = ''] = String(dateTimeStr).split(' ');
-  return `${formatEuDate(datePart)} ${timePart.slice(0, 5)}`.trim();
-}
 
 /** Copia texto para o clipboard e dá feedback breve no botão. */
 async function copyToClipboard(text, btn) {
@@ -899,7 +890,7 @@ function userOptionsHtml(selectedId) {
 function renderConsequenceCard(c, revealed) {
   // Hours and minutes here (this is the admin view) - only revealed items
   // have a revealed_at to show one for at all.
-  const time = c.revealed_at ? String(c.revealed_at).split(' ')[1].slice(0, 5) : '';
+  const time = c.revealed_at ? formatTimeInZone(c.revealed_at) : '';
   const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}${time ? ` · ${time}` : ''}`;
   const status = rataStatus(c);
   if (c.status !== 'used') {

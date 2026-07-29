@@ -37,6 +37,7 @@ import {
   saveSubscription,
   removeSubscription,
   broadcast,
+  notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
@@ -588,6 +589,17 @@ router.patch('/admin/consequences/:id/assign', async (req, res) => {
   const updated = await assignConsequenceUser(Number(req.params.id), userId);
   if (!updated) return res.status(404).json({ error: 'Consequencia nao encontrada.' });
   res.json({ ok: true, consequence: updated });
+  // Tell the assigned user directly (not a broadcast - nobody else needs to
+  // know they specifically got picked) so they don't only find out by
+  // happening to check the Rata tab themselves.
+  if (userId !== null) {
+    await notifyUser(userId, {
+      title: { pt: 'Rata', en: 'Rata' },
+      body: { pt: 'ficaste com uma rata - vai à aba Rata para veres qual e confirmares quando a cumprires.', en: "you've been assigned a consequence - check the Rata tab to see which one and confirm once it's done." },
+      tag: 'rata-assigned',
+      url: '/?tab=rata',
+    });
+  }
 });
 
 // Owner-only: confirms a consequence the assigned user self-reported as

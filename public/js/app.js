@@ -6,6 +6,7 @@ import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
+import { formatHourInZone } from './time.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -563,32 +564,29 @@ async function loadPlaza() {
 // scheduled cron (or an admin's manual reveal) shows up without a manual reload.
 let rataPollTimer = null;
 
-// Same derivation as rataStatus() in settings.js - every consequence here
-// is already revealed (this only ever reads /consequences/revealed), so
-// the only question is where it sits between atribuir/pendente/feita.
-function rataStatusBadge(c) {
-  if (c.approved_at) return { key: 'rata_status_feita', cls: 'rata-status-feita' };
-  if (!c.assigned_user_id) return { key: 'rata_status_atribuir', cls: 'rata-status-atribuir' };
-  return { key: 'rata_status_pendente', cls: 'rata-status-pendente' };
-}
-
 async function loadRataHistory() {
   try {
     const { consequences } = await api('/consequences/revealed');
     $('rata-history').innerHTML = consequences.length
       ? consequences.map((c) => {
-        const status = rataStatusBadge(c);
-        const assignedLine = c.assignedName ? t('rata_assigned_to', { name: esc(c.assignedName) }) : t('rata_unassigned');
+        // No status tags/assign jargon here (that's admin-only, see
+        // renderConsequenceCard() in settings.js) - just plain "done by X"
+        // / "pending by X", or bare "pending" if nobody's confirmed
+        // holding it yet (revealed but unassigned).
+        const line = c.approved_at
+          ? t('rata_public_done_by', { name: esc(c.assignedName) })
+          : c.assignedName
+            ? t('rata_public_pending_by', { name: esc(c.assignedName) })
+            : t('rata_public_pending_unassigned');
         const canMarkDone = c.assigned_user_id === myUserId && !c.done_at;
         // Just the hour here (this is the guest-facing view) - the admin
         // side shows hours and minutes, this one only needs to say
         // roughly when.
-        const hour = c.revealed_at ? `${String(c.revealed_at).split(' ')[1].slice(0, 2)}h` : '';
+        const hour = c.revealed_at ? `${formatHourInZone(c.revealed_at)}h` : '';
         return `<div class="rata-history-item">
           <p class="rata-history-text">${esc(c.text)}</p>
           <div class="rata-history-meta">
-            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-            <span class="muted">${assignedLine}${hour ? ` · ${hour}` : ''}</span>
+            <span class="muted">${line}${hour ? ` · ${hour}` : ''}</span>
           </div>
           ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
