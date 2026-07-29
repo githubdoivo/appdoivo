@@ -443,9 +443,9 @@ button.danger:hover {
      either edge, since there's no alignment that makes an oversized-ascender
      script face and a plain square icon line up by both edges at once. */
   align-items: center;
-  padding-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 44px;
+  margin-bottom: 28px;
   gap: 12px;
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
