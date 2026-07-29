@@ -958,19 +958,21 @@ body.theme-swamp .card { box-shadow: 0 12px 34px rgba(36, 42, 23, 0.14); }
 /* Aplicado a <body> apenas quando o separador A Rata esta ativo (ver
    applyNight() em app.js), mesmo mecanismo dos temas Furnished/Swamp. */
 body.theme-rata {
-  --paper:    #18181b;
-  --paper-2:  #1f1f23;
-  --paper-3:  #26262b;
-  --ink:      #e6e5e2;
-  --ink-soft: #9a9a9c;
-  --line:     #38383d;
-  --line-2:   #47474d;
+  /* Was a neutral grey-black (#18181b family) - shifted warmer, toward a
+     dusty pink-grey (a hint of mauve in the dark, not full grey). */
+  --paper:    #201a1d;
+  --paper-2:  #271f22;
+  --paper-3:  #2e2529;
+  --ink:      #e8dfe1;
+  --ink-soft: #9c8b8e;
+  --line:     #3d3237;
+  --line-2:   #4b3e43;
   --clay:     #a8452f;
   --clay-2:   #c25a3f;
   --rata:     #a8452f;
-  background-color: #131316;
+  background-color: #190f13;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%2319191c'/%3E%3Cg fill='%23636369' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23636369' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
 }
 body.theme-rata .hero-line { color: var(--clay-2); }
 body.theme-rata .card {
@@ -1022,19 +1024,21 @@ html.mode-dark body.theme-swamp .card {
 }
 
 html.mode-light body.theme-rata {
-  --paper:    #ececed;
-  --paper-2:  #f1f1f2;
-  --paper-3:  #f5f5f6;
-  --ink:      #2c2c2f;
-  --ink-soft: #6d6d70;
-  --line:     #d6d6d9;
-  --line-2:   #e2e2e4;
+  /* Was a neutral light grey (#ececed family) - same dusty pink-grey shift
+     as the dark variant above, just lifted to a pale tone. */
+  --paper:    #ece3e4;
+  --paper-2:  #f1e9ea;
+  --paper-3:  #f6f0f0;
+  --ink:      #302629;
+  --ink-soft: #6d5c60;
+  --line:     #dcc9cc;
+  --line-2:   #e6d6d8;
   --clay:     #8a3f2c;
   --clay-2:   #6e3122;
   --rata:     #8a3f2c;
-  background-color: #f0f0f1;
+  background-color: #efe6e7;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f1f1f2'/%3E%3Cg fill='%23838388' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23838388' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0e8e9'/%3E%3Cg fill='%23978387' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23978387' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-light body.theme-rata .card {
   box-shadow: 0 12px 34px rgba(60, 60, 65, 0.16);
@@ -1057,11 +1061,14 @@ body.theme-mural {
      sits on directly - still failed WCAG AA there). Darkened again to
      ~5.1:1 against --paper, ~6:1 against --paper-2/3. */
   --ink-soft: #4a2e1c;
-  /* Was #a9744f - measured ~1.4:1 against the page background (#c48f6d),
-     effectively invisible, so the topbar's own divider line (and the tabs'
-     border-bottom) rendered as no line at all. Darkened to ~3.3:1 - meets
-     the 3:1 WCAG guideline for meaningful UI-element boundaries. */
-  --line:     #663f26;
+  /* Was #a9744f (~1.4:1 against the page background, effectively invisible -
+     the topbar/tabs border-bottom and icon-btn borders rendered as no line
+     at all), then #663f26 (~3.3:1, meets the 3:1 WCAG guideline for UI
+     boundaries) - but that read as noticeably bolder/thicker than the same
+     border on every other theme (furnished/swamp/default all sit much
+     lighter), which was its own inconsistency. Settled on a middle value -
+     still clearly visible, closer in weight to its siblings. */
+  --line:     #8c5a3a;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
@@ -1116,10 +1123,13 @@ body.theme-plaza {
   --ink-soft: #6e5a2c;
   --line:     #c7a659;
   --line-2:   #d4b876;
-  --clay:     #8a5c00;
-  --clay-2:   #a67815;
-  --clay-active: #8a5c00;
-  --rata:     #8a5c00;
+  /* Was brown-gold (#8a5c00/#a67815) - a monochrome newsprint mood.
+     Blue accent against the yellow paper instead, for a livelier
+     newsstand/masthead contrast rather than one tone throughout. */
+  --clay:     #2a4a7a;
+  --clay-2:   #3f679c;
+  --clay-active: #2a4a7a;
+  --rata:     #2a4a7a;
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1134,9 +1144,11 @@ html.mode-dark body.theme-plaza {
   --ink-soft: #b8a06a;
   --line:     #4a3d1f;
   --line-2:   #5c4c28;
-  --clay:     #e0a83a;
-  --clay-2:   #edc06a;
-  --rata:     #e0a83a;
+  /* Same yellow+blue pairing as the light variant above - bright blue
+     against the dark gold, instead of a monochrome gold-on-gold. */
+  --clay:     #4a7fc4;
+  --clay-2:   #6a9bd8;
+  --rata:     #4a7fc4;
   background-color: #2b2107;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
