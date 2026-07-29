@@ -181,7 +181,14 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
   border-radius: var(--radius);
 }
 
-.view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
+/* viewport-fit=cover + display:standalone (see manifest.json) means content
+   renders edge-to-edge under the notch/status bar by design - padding-bottom
+   already accounts for the bottom safe area (see body below), but nothing
+   ever accounted for the TOP one, so the topbar had no real clearance from
+   the status bar/notch on an installed PWA. calc() adds the safe-area inset
+   on top of the existing 22px so non-notched devices/browser tabs (where the
+   env() resolves to 0) are unaffected. */
+.view { max-width: 620px; margin: 0 auto; padding: calc(22px + env(safe-area-inset-top)) 20px 48px; }
 
 /* ------------------------------- Tipografia ------------------------------ */
 
@@ -427,7 +434,6 @@ button.danger:hover {
   background: var(--danger);
   color: var(--paper-3);
 }
-}
 
 /* -------------------------------- Topbar --------------------------------- */
 
@@ -435,20 +441,21 @@ button.danger:hover {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  /* flex-end, not center: a script face's glyphs sit low and small within
-     its own line-box (see the brand-name comment below), so centering it
-     against the 38px icon buttons left visible empty space above the
-     logo's tallest point but not below it - it read as floating too high.
-     Bottom-aligning both against the same line puts the logo's visual
-     baseline roughly level with the icons' bottom edge, which is closer to
-     how a wordmark sits next to UI chrome in print/signage. */
-  align-items: flex-end;
+  /* center, not flex-end: flex-end bottom-aligns the two boxes exactly
+     (verified: both hit the same y-coordinate), but a script face's
+     visible ink extends well above its own compressed line-box (line-
+     height: 0.8) - so box-bottom-alignment still let the tall ascenders
+     visually poke up past the icon buttons' top edge, reading as floating
+     above the row. Center align splits the difference instead of pinning
+     either edge, since there's no alignment that makes an oversized-ascender
+     script face and a plain square icon line up by both edges at once. */
+  align-items: center;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 44px;
   gap: 12px;
 }
-.brand { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* Uses --brand (declared on <html> alongside mode-light/mode-dark, not
    var(--clay)): the logo keeps one identity color regardless of active
    tab or night theme, but still adapts to light/dark mode so it never
@@ -1049,7 +1056,11 @@ body.theme-mural {
      sits on directly - still failed WCAG AA there). Darkened again to
      ~5.1:1 against --paper, ~6:1 against --paper-2/3. */
   --ink-soft: #4a2e1c;
-  --line:     #a9744f;
+  /* Was #a9744f - measured ~1.4:1 against the page background (#c48f6d),
+     effectively invisible, so the topbar's own divider line (and the tabs'
+     border-bottom) rendered as no line at all. Darkened to ~3.3:1 - meets
+     the 3:1 WCAG guideline for meaningful UI-element boundaries. */
+  --line:     #663f26;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
