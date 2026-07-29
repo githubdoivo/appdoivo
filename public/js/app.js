@@ -394,10 +394,10 @@ $('chat-form').addEventListener('submit', async (e) => {
   }
 });
 
-// Notification taps land here with ?tab=&night= so the app opens straight
-// on the result being announced, instead of just wherever it was left.
-function applyDeepLinkParams() {
-  const params = new URLSearchParams(location.search);
+// Shared by both deep-link paths below: a fresh page load reads its own
+// ?tab=&night=, and the service worker message listener reads the same
+// params out of a notification's url without a real navigation.
+function applyTabAndNight(params) {
   const tab = params.get('tab');
   const night = params.get('night');
   if (!tab && !night) return;
@@ -408,8 +408,26 @@ function applyDeepLinkParams() {
   if (TABS.includes(tab) && (tab !== 'plaza' || plazaEnabled)) {
     selectTab(tab);
   }
+}
+
+// Notification taps land here with ?tab=&night= so the app opens straight
+// on the result being announced, instead of just wherever it was left.
+function applyDeepLinkParams() {
+  applyTabAndNight(new URLSearchParams(location.search));
   history.replaceState({}, '', location.pathname);
 }
+
+// iOS Safari's service worker Client.navigate() often silently fails when
+// the PWA is already open in the foreground (falls back to just focusing
+// the existing window - see sw.js) - a real, documented WebKit limitation,
+// not something fixable from the service worker side. Have the already-
+// open page apply the deep link itself instead of depending on navigate()
+// to reload it.
+navigator.serviceWorker?.addEventListener('message', (event) => {
+  if (event.data?.type !== 'deep-link' || !event.data.url) return;
+  const url = new URL(event.data.url, location.origin);
+  applyTabAndNight(url.searchParams);
+});
 
 /* ----------------------------- Notificacoes ------------------------------ */
 

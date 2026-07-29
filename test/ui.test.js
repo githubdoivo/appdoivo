@@ -33,7 +33,12 @@ const ADMIN = seedResult.token;
 // clean) - not a real regression, just CI's shared hardware being slower
 // on a bad run. `CI` is set by GitHub Actions (and most other CI
 // providers) automatically, so this only loosens the timeout there.
-const WAIT_TIMEOUT = process.env.CI ? 15000 : 5000;
+// Bumped again (15000 -> 25000): 15000 was itself hit repeatedly on bad
+// runs (every login-dependent test failing at ~15.6-15.9s, consistently,
+// while the same commit had passed a different CI run minutes earlier) -
+// not further evidence of a real bug, just this shared hardware needing
+// still more headroom on its worse days.
+const WAIT_TIMEOUT = process.env.CI ? 25000 : 5000;
 let server;
 let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
 let browser;
@@ -694,6 +699,31 @@ test('a Plaza notification\'s ?tab=chat deep link actually opens the Plaza', asy
 
   const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
   assert.ok(chatActive, '?tab=chat should select the Plaza tab, same as rata/outfit already do');
+  await context.close();
+});
+
+test('a notification click while the app is already open switches tabs via postMessage, not just navigate()', async () => {
+  // iOS Safari's service worker Client.navigate() often silently no-ops
+  // when the PWA is already in the foreground (a real WebKit limitation) -
+  // sw.js also postMessage()s the deep link so the already-open page can
+  // apply it itself (see the message listener in app.js). Simulate that
+  // message directly, without any navigation, since there's no real
+  // service worker controller to trigger it through in this test harness.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  const plazaActiveBefore = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
+  assert.ok(plazaActiveBefore, 'should start on Wall/plaza, same as any fresh login');
+
+  await page.evaluate(() => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'deep-link', url: '/?tab=rata' } })
+    );
+  });
+  await page.waitForTimeout(200);
+
+  const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
+  assert.ok(rataActive, 'the simulated postMessage should have switched to the Rata tab without a page reload');
+  assert.equal(page.url(), `${base}/`, 'this path must not navigate/reload - only the in-page tab should change');
   await context.close();
 });
 

@@ -625,12 +625,14 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 .tabs {
   display: flex;
-  /* space-between spreads the tabs across the full row width instead of
-     clustering them on the left with empty space to the right - gap stays
-     as a floor so they never crowd together if the row is narrower than
-     the content (space-between only kicks in once there's surplus width;
-     below that it falls back to normal flow + the overflow-x scroll). */
-  justify-content: space-between;
+  /* space-evenly spreads the tabs across the full row width AND gives the
+     first/last tab the same breathing room from the edges as the gaps
+     between tabs - space-between (tried first) put "wall" and "plaza"
+     flush against the page edges with none. gap stays as a floor so they
+     never crowd together if the row is narrower than the content
+     (justify-content only kicks in once there's surplus width; below that
+     it falls back to normal flow + the overflow-x scroll). */
+  justify-content: space-evenly;
   gap: 26px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
