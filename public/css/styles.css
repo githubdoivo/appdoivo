@@ -435,19 +435,20 @@ button.danger:hover {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  /* flex-end, not center: a script face's glyphs sit low and small within
+     its own line-box (see the brand-name comment below), so centering it
+     against the 38px icon buttons left visible empty space above the
+     logo's tallest point but not below it - it read as floating too high.
+     Bottom-aligning both against the same line puts the logo's visual
+     baseline roughly level with the icons' bottom edge, which is closer to
+     how a wordmark sits next to UI chrome in print/signage. */
+  align-items: flex-end;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 32px;
+  margin-bottom: 44px;
   gap: 12px;
 }
-/* align-items: center, not baseline - the cursive brand-name font
-   (line-height: 0.8) doesn't have predictable baseline metrics, so
-   baseline-aligning it against the small role badge could put the badge
-   noticeably off relative to the logo depending on font-load timing/
-   rendering engine. Center alignment doesn't depend on font metrics at
-   all, so it's consistent everywhere. */
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
 /* Uses --brand (declared on <html> alongside mode-light/mode-dark, not
    var(--clay)): the logo keeps one identity color regardless of active
    tab or night theme, but still adapts to light/dark mode so it never
@@ -462,12 +463,15 @@ button.danger:hover {
 .brand .brand-name {
   font-family: var(--script);
   font-weight: 700;
-  /* Script/cursive faces draw much smaller within their own em-box than a
-     sans-serif does at the same font-size (most of the box is empty
-     margin around comparatively small letterforms) - next to the 38px
-     square icon buttons this reads as noticeably undersized unless pushed
-     well past what a "normal" font would need for the same visual weight. */
-  font-size: 3.1rem;
+  /* clamp() instead of a fixed rem + breakpoint: a fixed size that looked
+     right in one screenshot overflowed off both edges of a real (narrower)
+     phone, because "appdoivo" in this wide cursive face plus 4 icon
+     buttons plus gaps simply doesn't fit a fixed large size on every
+     screen. Scaling continuously with viewport width (8.5vw) guarantees it
+     never exceeds the available space, while the min/max bounds keep it
+     from ever reading as too small on a narrow phone or comically large on
+     a wide one. */
+  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand, #a96b4b);
@@ -858,7 +862,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
      whole tier up together with the bigger body copy below. */
   html { font-size: 18px; }
   body { font-size: 19px; }
-  .brand .brand-name { font-size: 2.7rem; }
+  /* No brand-name override here anymore - its clamp() above is in vw, which
+     is already relative to the real viewport width regardless of this
+     breakpoint's html{font-size} bump, so stacking a rem override on top of
+     it here would silently inflate it again (exactly what caused the
+     overflow this replaces). */
   .tabs { gap: 20px; }
   .tab { font-size: 1.2rem; }
   .card { padding: 18px; }

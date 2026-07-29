@@ -159,6 +159,28 @@ test('every topbar icon button stays vertically aligned', async () => {
   await context.close();
 });
 
+/* ------------------- Brand logo fits the viewport (regression) ----------- */
+// document-level scrollWidth (the check above) can pass even when the logo
+// itself is too wide, because .topbar's flex-wrap just drops topbar-actions
+// to its own line below - the page never scrolls horizontally, but the
+// logo's own box still overflows past both edges. Check its own
+// bounding rect directly, on the narrowest real device, since a fixed
+// rem size that looks fine at a wide viewport can still not fit a phone.
+
+for (const deviceName of IOS_DEVICES) {
+  test(`brand logo never overflows the viewport on ${deviceName}`, async () => {
+    const context = await iphoneContext(deviceName);
+    const page = await loginPage(context, ADMIN, '/');
+    const { left, right, viewportWidth } = await page.evaluate(() => {
+      const r = document.querySelector('.brand-name').getBoundingClientRect();
+      return { left: r.left, right: r.right, viewportWidth: window.innerWidth };
+    });
+    assert.ok(left >= -1, `brand logo starts off the left edge (left=${left.toFixed(1)}) on ${deviceName}`);
+    assert.ok(right <= viewportWidth + 1, `brand logo extends off the right edge (right=${right.toFixed(1)}, viewport=${viewportWidth}) on ${deviceName}`);
+    await context.close();
+  });
+}
+
 /* ------------------------ Login flash (regression) ------------------------ */
 // #login used to be visible by default, so an authenticated user briefly saw
 // the login form before the session check resolved. It must ship hidden.
