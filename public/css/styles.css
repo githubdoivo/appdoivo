@@ -1057,11 +1057,14 @@ body.theme-mural {
      sits on directly - still failed WCAG AA there). Darkened again to
      ~5.1:1 against --paper, ~6:1 against --paper-2/3. */
   --ink-soft: #4a2e1c;
-  /* Was #a9744f - measured ~1.4:1 against the page background (#c48f6d),
-     effectively invisible, so the topbar's own divider line (and the tabs'
-     border-bottom) rendered as no line at all. Darkened to ~3.3:1 - meets
-     the 3:1 WCAG guideline for meaningful UI-element boundaries. */
-  --line:     #663f26;
+  /* Was #a9744f (~1.4:1 against the page background, effectively invisible -
+     the topbar/tabs border-bottom and icon-btn borders rendered as no line
+     at all), then #663f26 (~3.3:1, meets the 3:1 WCAG guideline for UI
+     boundaries) - but that read as noticeably bolder/thicker than the same
+     border on every other theme (furnished/swamp/default all sit much
+     lighter), which was its own inconsistency. Settled on a middle value -
+     still clearly visible, closer in weight to its siblings. */
+  --line:     #8c5a3a;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
