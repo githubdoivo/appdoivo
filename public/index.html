@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#e7e3d6" />
   <link rel="manifest" href="/manifest.json" />
   <meta name="apple-mobile-web-app-title" content="appdoivo" />
@@ -92,6 +92,7 @@
          recent-first, pinned ones first - now labeled "Wall" (see nav
          above). Still the default landing tab (see currentTab in app.js). -->
     <div id="tab-plaza" class="tab-panel">
+      <p class="hero-line" data-i18n="plaza_hero">O que se passa agora.</p>
       <div id="plaza-feed" class="plaza-feed"></div>
       <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
     </div>
@@ -186,7 +187,7 @@
         <h2 id="tutorial-title"></h2>
         <p id="tutorial-text"></p>
         <div class="tutorial-actions">
-          <button type="button" id="tutorial-skip" class="ghost" data-i18n="tutorial_skip">Saltar</button>
+          <button type="button" id="tutorial-skip" class="ghost hidden" data-i18n="tutorial_skip">Saltar</button>
           <button type="button" id="tutorial-next" data-i18n="tutorial_next">Seguinte</button>
         </div>
       </div>

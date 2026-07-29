@@ -27,15 +27,16 @@ function isStandalone() {
 }
 
 /**
- * Estado das notificacoes: unsupported | ios-add-home | denied | default | granted.
- * No iOS, o Push API so existe depois de "Adicionar ao ecra principal" - nesse
- * caso distinguimos de um "unsupported" genuino para podermos guiar o utilizador.
+ * Estado das notificacoes: unsupported | needs-install | denied | default | granted.
+ * Gated on being installed (standalone) everywhere, not just iOS - some
+ * browsers would technically still support push in a plain tab, but the
+ * experience is far less reliable there, so the message and the gate are
+ * the same regardless of platform: install first, then notifications.
  */
 export function pushSupport() {
+  if (!isStandalone()) return 'needs-install';
   const hasPushApi = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  if (!hasPushApi) {
-    return isIOS() && !isStandalone() ? 'ios-add-home' : 'unsupported';
-  }
+  if (!hasPushApi) return 'unsupported';
   return Notification.permission; // default | granted | denied
 }
 
@@ -56,12 +57,24 @@ async function isSubscribed() {
 /** Pede permissao e subscreve o push. Devolve true se subscrito. */
 export async function enablePush() {
   const support = pushSupport();
-  if (support === 'unsupported' || support === 'ios-add-home') {
-    await showAlert(t('notif_unsupported_msg'));
+  if (support === 'needs-install') {
+    await showAlert(t(isIOS() ? 'notif_needs_install_ios' : 'notif_needs_install_other'));
+    return false;
+  }
+  if (support === 'unsupported') {
+    await showAlert(t('notif_browser_unsupported_msg'));
     return false;
   }
 
+  // Once denied, the browser resolves this instantly with no prompt - so
+  // without this branch, a user who denied (or whose OS/browser denies by
+  // default) got zero feedback on every future click: no prompt, no alert,
+  // no state change. The button just looked dead.
   const permission = await Notification.requestPermission();
+  if (permission === 'denied') {
+    await showAlert(t('notif_denied_msg'));
+    return false;
+  }
   if (permission !== 'granted') return false;
 
   const { publicKey, enabled } = await api('/push/vapid-public-key');
@@ -105,17 +118,13 @@ export async function refreshNotifButton(btnId = 'notif-btn') {
   }
 
   notifBtn.classList.remove('hidden');
-  const needsHomeScreen = state === 'ios-add-home';
+  const needsInstall = state === 'needs-install';
   const isOn = state === 'granted' && (await isSubscribed());
   notifBtn.classList.toggle('active', isOn);
-  const label = t(needsHomeScreen ? 'notif_ios_add_home' : isOn ? 'notif_on' : 'notif_enable');
+  const label = t(needsInstall ? 'notif_needs_install_label' : isOn ? 'notif_on' : 'notif_enable');
   notifBtn.title = label;
   notifBtn.setAttribute('aria-label', label);
 }
-
-// Shown at most once, ever - after that, toggling notifications on/off is
-// just a plain toggle with no repeated nagging.
-const HOME_TIP_SHOWN_KEY = 'appivo_home_tip_shown';
 
 /** Wires a notif icon button's click handler (any page): a real toggle -
  * on while off enables, on while on disables (see disablePush()). */
@@ -129,17 +138,7 @@ export function wireNotifButton(btnId = 'notif-btn') {
         await showAlert(t('notif_disabled_msg'));
       } else {
         const ok = await enablePush();
-        if (ok) {
-          await showAlert(t('notif_enabled_msg'));
-          // Push works in a plain browser tab too, but it's far more
-          // reliable (and feels like a real app) once installed to the
-          // home screen - worth a nudge right after someone opts in, but
-          // only the first time they ever hit this (not every toggle).
-          if (!isStandalone() && !localStorage.getItem(HOME_TIP_SHOWN_KEY)) {
-            localStorage.setItem(HOME_TIP_SHOWN_KEY, '1');
-            await showAlert(t(isIOS() ? 'notif_add_home_tip_ios' : 'notif_add_home_tip_other'));
-          }
-        }
+        if (ok) await showAlert(t('notif_enabled_msg'));
       }
     } catch { /* mensagens tratadas acima */ }
     refreshNotifButton(btnId);

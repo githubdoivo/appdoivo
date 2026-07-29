@@ -61,7 +61,7 @@ html.mode-light {
   --paper-3:  #fdfafc;
   --ink:      #4a3f4d;
   /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
-     italic/muted text (.muted, .help, table cells) this drives all over
+     muted text (.muted, .help, table cells) this drives all over
      Settings and the admin panel. Darkened to ~5:1. */
   --ink-soft: #756980;
   --line:     #e3d4e0;
@@ -81,6 +81,8 @@ html.mode-light {
   --type-poll: #6b4c8a;
   --status-pending: #2a6ca6;
   --status-done: #2f7d32;
+  --status-fila: #5b6472;
+  --status-atribuir: #a3406b;
 }
 
 html.mode-dark {
@@ -106,6 +108,8 @@ html.mode-dark {
   --type-poll: #b294d6;
   --status-pending: #6badde;
   --status-done: #7ed181;
+  --status-fila: #9aa4b5;
+  --status-atribuir: #e08fb0;
 }
 
 * { box-sizing: border-box; }
@@ -120,6 +124,11 @@ body {
   color: var(--ink);
   text-transform: lowercase;
   background-color: var(--paper);
+  /* Backs up the viewport meta's maximum-scale/user-scalable=no (some
+     browsers still trigger a double-tap zoom regardless) - a real app
+     shouldn't zoom on a stray double-tap. Normal scroll/swipe still work,
+     this only disables the double-tap/pinch zoom gesture specifically. */
+  touch-action: manipulation;
   /* textura de papel subtil */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
   min-height: 100vh;
@@ -130,30 +139,46 @@ body {
 .hidden { display: none !important; }
 
 /* Tiny reference number, not a UI feature - lets QA vs prod be compared at
-   a glance when reporting a bug (see version.js / GET /api/version). */
+   a glance when reporting a bug (see version.js / GET /api/version). Sits
+   as the last element in the DOM (after #login/#app, both of which toggle
+   via .hidden), so in normal document flow it always lands at the true
+   bottom of whichever page/section is currently showing - a fixed
+   floating badge used to sit on top of page content instead. */
 .version-badge {
-  position: fixed;
-  right: 10px;
-  bottom: calc(6px + env(safe-area-inset-bottom));
+  display: block;
+  text-align: right;
+  padding: 20px 4px calc(10px + env(safe-area-inset-bottom));
   font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.4;
   letter-spacing: 0.02em;
-  pointer-events: none;
   user-select: none;
-  z-index: 5;
 }
 
-.muted { color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
-.error { color: var(--danger); min-height: 1.2em; font-style: italic; }
+.muted { color: var(--ink-soft); font-size: 0.92rem; }
+/* Kill-switch confirmation ("apagado.") sits on its own line below the
+   danger button, not crammed beside it like the other inline action msgs. */
+.wipe-msg { display: block; margin-top: 10px; }
+/* Contestant registration type: solo has a subtle warm tint, duo a cool one. */
+@media (prefers-color-scheme: dark) {
+  tr.contestant-solo { background: color-mix(in srgb, #e8a76c 8%, transparent); }
+  tr.contestant-duo { background: color-mix(in srgb, #7aa3d0 8%, transparent); }
+}
+html.mode-light tr.contestant-solo { background: color-mix(in srgb, #f5c689 10%, transparent); }
+html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, transparent); }
+.error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
-   #auth-error), so plain italic text was too easy to miss - a solid chip
-   gives it real contrast regardless of what's behind it. */
+   #auth-error), so plain colored text was too easy to miss regardless of
+   which part of the photo happened to be behind it - a solid light chip
+   guarantees contrast for the dark text no matter what's underneath. */
 #login-error:not(:empty) {
+  display: inline-block;
+  background: #ece5d5;
   color: #7a2416;
-  font-style: normal;
   font-weight: 700;
   text-align: center;
+  padding: 8px 16px;
+  border-radius: var(--radius);
 }
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
@@ -342,41 +367,66 @@ label.field { display: block; margin: 4px 0 2px; font-size: var(--text-sm); font
 
 /* -------------------------------- Botoes --------------------------------- */
 
+/* -------------------------------- Buttons --------------------------------- */
 button, .btn {
   cursor: pointer;
-  /* iOS Safari draws its own translucent rounded-rect "tap highlight" over
-     any tapped button, regardless of `outline` - that's the "square limit"
-     that shows up on a tab tap even with the focus ring itself suppressed. */
   -webkit-tap-highlight-color: transparent;
-  border: 1px solid var(--ink);
   border-radius: var(--radius);
-  padding: 12px 20px;
   font-family: var(--body);
-  font-size: 0.78rem;
   font-weight: 600;
   text-transform: lowercase;
   letter-spacing: 0.16em;
-  background: var(--ink);
-  color: var(--paper-3);
-  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s;
   text-decoration: none;
   display: inline-block;
   text-align: center;
 }
-button:hover, .btn:hover { background: transparent; color: var(--ink); }
-button:disabled { opacity: 0.45; cursor: default; }
 
+/* DEFAULT: Primary solid dark button (submit, create, send, save). */
+button, .btn {
+  border: 1px solid var(--ink);
+  padding: 12px 20px;
+  font-size: 0.78rem;
+  background: var(--ink);
+  color: var(--paper-3);
+}
+button:hover, .btn:hover {
+  background: var(--ink);
+  color: var(--paper-3);
+  opacity: 0.8;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Secondary: Ghost button (transparent, subtle). */
 button.ghost, a.ghost {
-  background: transparent;
-  color: var(--ink);
   border: 1px solid var(--line);
   padding: 7px 12px;
   font-size: var(--text-xs);
+  background: transparent;
+  color: var(--ink);
 }
-button.ghost:hover, a.ghost:hover { border-color: var(--ink); background: transparent; }
+button.ghost:hover, a.ghost:hover {
+  border-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+/* Size modifier: small buttons, just padding/font size, inherit color scheme. */
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
-button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
-button.danger:hover { background: var(--danger); color: var(--paper-3); }
+
+/* Destructive: Red danger button (delete, wipe, reset). */
+button.danger {
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+}
+button.danger:hover {
+  background: var(--danger);
+  color: var(--paper-3);
+}
 
 /* -------------------------------- Topbar --------------------------------- */
 
@@ -384,18 +434,20 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  /* center, not flex-end: flex-end bottom-aligns the two boxes exactly
+     (verified: both hit the same y-coordinate), but a script face's
+     visible ink extends well above its own compressed line-box (line-
+     height: 0.8) - so box-bottom-alignment still let the tall ascenders
+     visually poke up past the icon buttons' top edge, reading as floating
+     above the row. Center align splits the difference instead of pinning
+     either edge, since there's no alignment that makes an oversized-ascender
+     script face and a plain square icon line up by both edges at once. */
   align-items: center;
-  padding-bottom: 14px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   gap: 12px;
 }
-/* align-items: center, not baseline - the cursive brand-name font
-   (line-height: 0.8) doesn't have predictable baseline metrics, so
-   baseline-aligning it against the small role badge could put the badge
-   noticeably off relative to the logo depending on font-load timing/
-   rendering engine. Center alignment doesn't depend on font metrics at
-   all, so it's consistent everywhere. */
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* Uses --brand (declared on <html> alongside mode-light/mode-dark, not
    var(--clay)): the logo keeps one identity color regardless of active
@@ -411,7 +463,15 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .brand .brand-name {
   font-family: var(--script);
   font-weight: 700;
-  font-size: 2.2rem;
+  /* clamp() instead of a fixed rem + breakpoint: a fixed size that looked
+     right in one screenshot overflowed off both edges of a real (narrower)
+     phone, because "appdoivo" in this wide cursive face plus 4 icon
+     buttons plus gaps simply doesn't fit a fixed large size on every
+     screen. Scaling continuously with viewport width (8.5vw) guarantees it
+     never exceeds the available space, while the min/max bounds keep it
+     from ever reading as too small on a narrow phone or comically large on
+     a wide one. */
+  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand, #a96b4b);
@@ -443,7 +503,12 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 
 /* Publication-type badges (Regular/Poll on the Wall admin list) - own
    colors, deliberately outside the role palette above so a post type is
-   never visually confused with a user role. */
+   never visually confused with a user role. Nudged left by exactly the
+   pill's own left padding (see .badge's shared padding: 3px 9px) - a pill
+   shape needs that padding to not look cramped, but it was throwing the
+   badge's own text out of alignment with the plain text (byline,
+   question, options) below it in the same list. */
+.badge.type-announcement, .badge.type-poll { margin-left: -9px; }
 .badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
 .badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
 
@@ -453,6 +518,17 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
    of those containers. */
 .rata-history-item { border-top: 1px solid var(--line); padding: 14px 0; }
 .rata-history-item:first-child { border-top: none; padding-top: 0; }
+/* The currently-revealed consequence, in the admin list - used to also get
+   a separate, much louder .highlight box duplicating the same text above
+   this same list. A soft tint here (same color-mix technique .highlight
+   uses, just faint) is enough to mark it as "the current one" without
+   competing with it. */
+.rata-history-item.rata-current {
+  background: color-mix(in srgb, var(--rata) 6%, transparent);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 0 -14px;
+}
 .rata-history-text { font-family: var(--serif); font-size: 1.05rem; margin: 0; }
 .rata-history-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .rata-badge {
@@ -466,27 +542,19 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
   padding: 3px 9px;
   border-radius: 999px;
 }
-.rata-badge.rata-status-pending { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
-.rata-badge.rata-status-done { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
+/* Four distinct colors, one per state, reading roughly as a progression:
+   fila (grey, nothing to do yet) -> atribuir (rose, needs the owner to
+   pick someone) -> pendente (blue, in progress) -> feita (green, done). */
+.rata-badge.rata-status-fila { border-color: var(--status-fila, #5b6472); color: var(--status-fila, #5b6472); }
+.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir, #a3406b); color: var(--status-atribuir, #a3406b); }
+.rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
+.rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
    (neutral ink for "all roles"), inactive stays a plain outline. */
 .role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Regular/Poll type + Publish share one row above the message/poll
-   fields, so the type choice (which controls what's shown below) and the
-   submit action both read as form-level controls, not buried under the
-   content. Publish pushed to the far edge via space-between since it's
-   the row's only other child. */
-.plaza-post-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.plaza-post-footer button[type="submit"] { margin-left: auto; }
 .role-pill {
   font-family: var(--body);
   text-transform: lowercase;
@@ -504,9 +572,17 @@ button.danger:hover { background: var(--danger); color: var(--paper-3); }
 .role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
 .role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
 .role-pill[data-role="user"].active { background: var(--role-user); border-color: var(--role-user); }
+
+/* Rata status filter - same colors as the rata-badge each state renders
+   with in the list below, so the filter pill you toggled and what it's
+   showing read as the same thing. */
+.role-pill[data-status="fila"].active { background: var(--status-fila, #5b6472); border-color: var(--status-fila, #5b6472); }
+.role-pill[data-status="atribuir"].active { background: var(--status-atribuir, #a3406b); border-color: var(--status-atribuir, #a3406b); }
+.role-pill[data-status="pendente"].active { background: var(--status-pending, #2a6ca6); border-color: var(--status-pending, #2a6ca6); }
+.role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
-.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 
 /* Botoes de icone (tema, notificacoes, idioma, gerir, sair) na topbar -
    todos a mesma caixa quadrada. Auto-suficiente (nao depende de .ghost)
@@ -529,7 +605,7 @@ button.icon-btn:hover,
 a.icon-btn:hover { border-color: var(--ink); background: transparent; }
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
-.lang-toggle { font-family: var(--serif); font-style: italic; font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
+.lang-toggle { font-family: var(--serif); font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
 
 /* Theme toggle: shows the icon for what you'll switch TO. Light (default)
    shows the moon (switch to dark); dark mode shows the sun (switch to light). */
@@ -549,6 +625,12 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 .tabs {
   display: flex;
+  /* space-between spreads the tabs across the full row width instead of
+     clustering them on the left with empty space to the right - gap stays
+     as a floor so they never crowd together if the row is narrower than
+     the content (space-between only kicks in once there's surplus width;
+     below that it falls back to normal flow + the overflow-x scroll). */
+  justify-content: space-between;
   gap: 26px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
@@ -626,7 +708,7 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
    looks like a stray bracket rather than a subtle edge. Blend it toward
    the card's own background, same treatment as the tab-row border. */
 html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
-.card h2 { font-size: 1.15rem; font-style: italic; font-weight: 500; margin-bottom: 6px; }
+.card h2 { font-size: 1.15rem; margin-bottom: 6px; }
 
 .hero-line {
   font-family: var(--serif);
@@ -731,7 +813,13 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .user-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .user-row-name { font-weight: 600; }
 .user-row-name .badge { margin-left: 6px; }
-.user-row-token {
+/* .account-token (the Settings "your account" card) shares this exact
+   look-and-behavior with Manage Users' own row token below, but stays a
+   separate class - Playwright tests query .user-row-token unscoped to mean
+   specifically a Manage Users list row, and the account card now renders
+   earlier in the DOM than that list. */
+.user-row-token,
+.account-token {
   font-family: 'SFMono-Regular', ui-monospace, monospace;
   font-size: 0.8rem;
   color: var(--rata);
@@ -745,10 +833,10 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
   flex-basis: 100%;
   margin-top: 4px;
 }
-.user-row-token.censored { letter-spacing: 2px; }
+.user-row-token.censored, .account-token.censored { letter-spacing: 2px; }
 /* Brief confirmation that a click also copied the key - doesn't touch the
    text itself (unlike the old copy button, which safely could). */
-.user-row-token.just-copied { color: var(--clay); transition: color 0.15s; }
+.user-row-token.just-copied, .account-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
 
 /* Click-to-rename a contestant or user (see loadContestants()/renderUsersList()). */
@@ -764,7 +852,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 
-.help { font-size: 0.95rem; font-style: italic; color: var(--ink-soft); margin: 0 0 14px; }
+.help { font-size: 0.95rem; color: var(--ink-soft); margin: 0 0 14px; }
 
 /* Search-result chips under the "team up with" input on Best Outfit's
    self-registration form (see #register-partner-results in app.js). */
@@ -780,7 +868,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
      whole tier up together with the bigger body copy below. */
   html { font-size: 18px; }
   body { font-size: 19px; }
-  .brand .brand-name { font-size: 1.9rem; }
+  /* No brand-name override here anymore - its clamp() above is in vw, which
+     is already relative to the real viewport width regardless of this
+     breakpoint's html{font-size} bump, so stacking a rem override on top of
+     it here would silently inflate it again (exactly what caused the
+     overflow this replaces). */
   .tabs { gap: 20px; }
   .tab { font-size: 1.2rem; }
   .card { padding: 18px; }
@@ -798,7 +890,7 @@ body { transition: background-color 0.45s ease; }
 
 .voting-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .voting-controls button { width: 100%; }
-.voting-state { font-family: var(--serif); font-style: italic; font-size: 1.2rem; }
+.voting-state { font-family: var(--serif); font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
@@ -958,11 +1050,16 @@ body.theme-mural {
      a subtle lift. Tightened to match the other themes' rhythm. */
   --paper-3:  #deb69c;
   --ink:      #3d2216;
-  /* Was #7a5138 (~3.7:1 against --paper-3) - failed WCAG AA for the
-     italic/muted text (bylines, help text) this drives on the Wall tab.
-     Darkened to ~5.3:1. */
-  --ink-soft: #5c3c29;
-  --line:     #a9744f;
+  /* Was #7a5138 (~3.7:1 against --paper-3), then #5c3c29 (~4.8:1 against
+     --paper-2, but only ~4.05:1 against the darker --paper the pattern
+     sits on directly - still failed WCAG AA there). Darkened again to
+     ~5.1:1 against --paper, ~6:1 against --paper-2/3. */
+  --ink-soft: #4a2e1c;
+  /* Was #a9744f - measured ~1.4:1 against the page background (#c48f6d),
+     effectively invisible, so the topbar's own divider line (and the tabs'
+     border-bottom) rendered as no line at all. Darkened to ~3.3:1 - meets
+     the 3:1 WCAG guideline for meaningful UI-element boundaries. */
+  --line:     #663f26;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
   --clay-2:   #a84631;
@@ -973,8 +1070,13 @@ body.theme-mural {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Crect width='120' height='40' fill='%23c48f6d'/%3E%3Cg stroke='%238f3a26' stroke-opacity='0.30' stroke-width='2.5' fill='none'%3E%3Cpath d='M0 0H120M0 20H120M0 40H120'/%3E%3Cpath d='M0 0V20M60 0V20M120 0V20'/%3E%3Cpath d='M30 20V40M90 20V40'/%3E%3C/g%3E%3C/svg%3E");
 }
 body.theme-mural .hero-line { color: var(--clay-2); }
+/* Stronger shadow + a visible border than the other themes get - the brick
+   background pattern sits closer in tone to --paper-2 than the other
+   themes' patterns do to theirs, so cards need more definition to read as
+   lifted surfaces instead of blending into the wall behind them. */
 body.theme-mural .card {
-  box-shadow: 0 12px 34px rgba(61, 34, 22, 0.2);
+  border-color: var(--line);
+  box-shadow: 0 12px 34px rgba(61, 34, 22, 0.28);
 }
 
 html.mode-dark body.theme-mural {
@@ -1065,7 +1167,7 @@ html.mode-dark body.theme-plaza {
   border-left: 3px solid var(--clay);
   text-wrap: balance;
 }
-.plaza-byline { font-family: var(--body); font-size: var(--text-sm); font-style: italic; color: var(--ink-soft); margin: 10px 0 0; }
+.plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
 .plaza-post-announcement {
   background: var(--paper-2);
@@ -1101,7 +1203,7 @@ html.mode-dark body.theme-plaza {
   margin: 10px 0;
 }
 .plaza-post-poll.plaza-post:first-child { margin-top: 0; }
-.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; font-style: normal; }
+.plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */
 .plaza-post-poll.pinned { border-color: var(--clay); }
@@ -1288,5 +1390,5 @@ html.mode-dark body.theme-plaza {
 .chat-msg-author { font-family: var(--body); font-size: var(--text-xs); text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
 .chat-msg-time { font-family: var(--body); font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
-.chat-empty { color: var(--ink-soft); font-style: italic; font-weight: 600; font-size: 0.92rem; }
+.chat-empty { color: var(--ink-soft); font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }

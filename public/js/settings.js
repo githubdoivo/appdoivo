@@ -52,14 +52,51 @@ let plazaEnabled = false;
 let myUserId = null;
 let myName = '';
 
+// Your own name, role and access key, click-to-reveal/copy same as a row
+// in Manage Users below - the token itself never needs a server round-trip,
+// it's already what's in localStorage (see getToken() in api.js).
+function renderAccountCard() {
+  $('account-name').textContent = myName;
+  $('account-role-badge').className = `badge ${isOwner ? 'role-owner' : isAdmin ? 'role-admin' : 'role-user'}`;
+  $('account-role-badge').textContent = isOwner ? 'owner' : isAdmin ? 'admin' : 'user';
+  const tokenEl = $('account-token');
+  tokenEl.dataset.token = getToken();
+  const toggle = async () => {
+    const revealed = tokenEl.classList.toggle('censored') === false;
+    tokenEl.textContent = revealed ? tokenEl.dataset.token : '••••••••••••';
+    await copyToClipboard(tokenEl.dataset.token);
+    tokenEl.classList.add('just-copied');
+    setTimeout(() => tokenEl.classList.remove('just-copied'), 600);
+  };
+  tokenEl.addEventListener('click', toggle);
+  tokenEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+  });
+}
+
+// renderAccountCard() only ever runs once at boot, so without this the
+// account card kept showing/copying the OLD key after a self-service
+// change (see wireChangeKeyForm()) - one that no longer even works to log
+// in - until a full page reload synced it back up.
+function refreshAccountToken() {
+  const tokenEl = $('account-token');
+  tokenEl.dataset.token = getToken();
+  if (!tokenEl.classList.contains('censored')) tokenEl.textContent = tokenEl.dataset.token;
+}
+
 async function boot() {
   applyMode();
   applyI18n();
   updateLangUI();
   wireVersionBadge();
   await registerServiceWorker().catch(() => {});
+  // Not authenticated (no token, or one the server no longer accepts) -
+  // land on the actual login page, same as the main app does on a failed
+  // /me (see boot() in app.js). This used to just print an error message
+  // here and leave the visitor stranded on a dead-end admin page with no
+  // way back in except manually navigating to "/" themselves.
   if (!getToken()) {
-    $('auth-error').textContent = t('admin_no_session');
+    location.href = '/';
     return;
   }
   let me;
@@ -71,9 +108,11 @@ async function boot() {
     plazaEnabled = !!me.plazaEnabled;
     myUserId = me.id;
     myName = me.name;
-    wireLogoEasterEgg(me.name);
-  } catch (err) {
-    $('auth-error').textContent = err.message;
+    wireLogoEasterEgg(me.name, me.logo_customized);
+    renderAccountCard();
+  } catch {
+    clearToken();
+    location.href = '/';
     return;
   }
 
@@ -95,17 +134,13 @@ async function boot() {
     $('users-management').classList.add('hidden');
   } else {
     // User management now lives inside Settings (below change-key), not
-    // its own tab - any admin sees it, same as before.
-    $('users-management').classList.remove('hidden');
+    // its own tab - owner-only. A regular (non-owner) admin only ever gets
+    // their own row back from the API (see GET /admin/users), with no
+    // actions on it either (rename/regenerate/promote are all owner-gated
+    // further down) - that's just a read-only duplicate of the account
+    // card already at the top of this page, not a useful section.
+    $('users-management').classList.toggle('hidden', !isOwner);
     if (!isOwner) {
-      // A regular admin can see the Users list too, but the API only ever
-      // gives them their own row (see GET /admin/users) - so nobody else's
-      // key is ever exposed here, they just get to see it exist and their
-      // own entry in it. Creating users and resetting event content are
-      // owner-only actions on the backend regardless, so hide both instead
-      // of showing controls that would just 403 if clicked.
-      $('user-search-card').classList.add('hidden');
-      $('reset-content-card').classList.add('hidden');
       // The Wall tab (pseudonym mapping + its timezone card) was opened up to
       // regular admins temporarily so testers could see it existed - that's
       // done now, so it's owner-only again, whole tab hidden rather than just
@@ -113,6 +148,18 @@ async function boot() {
       document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
+      // Per-feature kill switches (see POST /admin/consequences/wipe etc.)
+      // are owner-only, same golden rule as everything else destructive.
+      // chat-wipe-card doesn't need listing here - it lives inside the
+      // wall tab, already hidden above.
+      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card'].forEach((id) => {
+        $(id).classList.add('hidden');
+      });
+      // Contestant creation/removal is owner-only too (see requireOwner on
+      // POST /admin/contestants/register and DELETE /admin/contestants/:id)
+      // - a regular admin still sees the contestants list itself (search +
+      // table), just not the form or the remove button on each row.
+      $('admin-register-form').classList.add('hidden');
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -158,20 +205,21 @@ function startRoleWatcher() {
 }
 
 function reloadAll() {
-  loadSettings();
   loadVotingState();
-  loadUsers();
+  // Manage Users is owner-only now (see boot()) - skip the fetch entirely
+  // for a regular admin rather than pulling a list that's never shown.
+  if (isOwner) loadUsers();
   loadContestants();
   loadVotes();
   loadConsequences();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
-// Single square button, like the theme toggle: shows the language you'll
-// switch TO, not the one that's active.
+// Single square button, like the theme toggle: shows the language that's
+// currently active, not the one it switches to.
 
 function updateLangUI() {
-  $('lang-toggle').textContent = getLang() === 'pt' ? 'en' : 'pt';
+  $('lang-toggle').textContent = getLang();
 }
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
@@ -298,39 +346,6 @@ $('voting-reset-all-btn').addEventListener('click', async () => {
   }
 });
 
-/* ------------------------------ Definicoes ------------------------------- */
-
-// There's only one timezone setting, but it's edited from two places now -
-// A Rata (where it drives the day rollover) and Wall (added so any admin,
-// not just the owner, can fix it without needing the A Rata tab). Both
-// inputs always show the same value.
-async function loadSettings() {
-  const s = await api('/admin/settings');
-  $('timezone').value = s.timezone;
-  $('timezone-wall').value = s.timezone;
-}
-
-async function saveTimezone(value, msgEl) {
-  try {
-    await api('/admin/settings', { method: 'PUT', body: { timezone: value.trim() } });
-    msgEl.textContent = t('saved');
-    setTimeout(() => (msgEl.textContent = ''), 2000);
-    loadSettings();
-  } catch (err) {
-    msgEl.textContent = err.message;
-  }
-}
-
-$('settings-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveTimezone($('timezone').value, $('settings-msg'));
-});
-
-$('settings-form-wall').addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveTimezone($('timezone-wall').value, $('settings-msg-wall'));
-});
-
 /* ------------------------------ Utilizadores ----------------------------- */
 
 let allUsers = [];
@@ -350,7 +365,6 @@ function renderUsersList(users) {
         <div class="row-actions">
           ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
           <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-          ${u.is_owner ? `<button class="small ghost" data-change-own-key="${u.id}">${t('change_own_key_btn')}</button>` : ''}
           ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
         </div>` : ''}
       </div>`).join('')
@@ -431,44 +445,6 @@ function renderUsersList(users) {
       } catch (err) {
         await showAlert(err.message);
       }
-    });
-  });
-
-  // Owner's own row: unlike "nova chave" (random) above, this lets the
-  // owner type the exact key they want (e.g. "moss" -> "rock"), same as
-  // the standalone change-key form everyone else uses - just inline here
-  // instead of its own section, since the owner's tab is this list.
-  $('users-list').querySelectorAll('[data-change-own-key]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const row = b.closest('.user-row');
-      if (row.querySelector('.own-key-form')) return;
-      const form = document.createElement('form');
-      form.className = 'own-key-form';
-      form.style.marginTop = '10px';
-      form.innerHTML = `
-        <input type="password" class="own-key-current" placeholder="${esc(t('current_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
-        <input type="password" class="own-key-new" placeholder="${esc(t('new_key_ph'))}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" style="margin-top:8px" />
-        <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
-          <button type="submit" class="small">${t('save')}</button>
-          <button type="button" class="small ghost own-key-cancel">${t('modal_cancel')}</button>
-        </div>`;
-      row.appendChild(form);
-      form.querySelector('.own-key-current').focus();
-      form.querySelector('.own-key-cancel').addEventListener('click', () => form.remove());
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const currentToken = form.querySelector('.own-key-current').value.trim();
-        const newToken = form.querySelector('.own-key-new').value.trim();
-        try {
-          await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
-          setToken(newToken);
-          form.remove();
-          await showAlert(t('key_changed_msg'));
-          loadUsers();
-        } catch (err) {
-          await showAlert(err.message);
-        }
-      });
     });
   });
 
@@ -606,32 +582,61 @@ $('user-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('reset-content-btn').addEventListener('click', async () => {
-  if (!(await showConfirm(t('confirm_reset_content'), { danger: true }))) return;
-  try {
-    await api('/admin/reset-content', { method: 'POST' });
-    $('reset-content-msg').textContent = t('reset_content_done_msg');
-    setTimeout(() => ($('reset-content-msg').textContent = ''), 3000);
-    reloadAll();
-  } catch (err) {
-    $('reset-content-msg').textContent = err.message;
-  }
+// Per-feature kill switches - each hits its own dedicated wipe route (see
+// POST /admin/consequences/wipe etc. in routes.js), scoped to just that
+// feature's data, unlike the single cross-feature reset this replaced.
+function wireWipeButton(btnId, msgId, endpoint, confirmKey, doneMsgKey, afterWipe) {
+  $(btnId).addEventListener('click', async () => {
+    if (!(await showConfirm(t(confirmKey), { danger: true }))) return;
+    try {
+      await api(endpoint, { method: 'POST' });
+      $(msgId).textContent = t(doneMsgKey);
+      setTimeout(() => ($(msgId).textContent = ''), 3000);
+      afterWipe();
+    } catch (err) {
+      $(msgId).textContent = err.message;
+    }
+  });
+}
+
+wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
+wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
+  loadVotingState();
+  loadContestants();
+  loadVotes();
 });
+wireWipeButton('plaza-wipe-btn', 'plaza-wipe-msg', '/admin/plaza-posts/wipe', 'confirm_plaza_wipe', 'plaza_wipe_done_msg', loadPlazaPosts);
+// Nothing on this admin tab displays chat messages themselves (just the
+// pseudonym mapping, a separate table untouched by this), so no reload
+// needed after wiping.
+wireWipeButton('chat-wipe-btn', 'chat-wipe-msg', '/admin/chat/wipe', 'confirm_chat_wipe', 'chat_wipe_done_msg', () => {});
 
 /* ------------------------------ Concorrentes ----------------------------- */
 
+let allContestants = [];
+
 async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
+  allContestants = contestants;
+  renderContestants();
+}
+
+function renderContestants() {
+  const term = foldAccents($('contestant-search').value.trim().toLowerCase());
+  const contestants = term
+    ? allContestants.filter((c) => foldAccents(c.name.toLowerCase()).includes(term))
+    : allContestants;
   $('contestants-table').innerHTML = contestants.length
     ? `<tr><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
         const who = c.partner_name
           ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
           : c.registered_by ? esc(c.registered_by) : '-';
+        const isSolo = !c.partner_name;
         return `
-        <tr>
+        <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span></td>
           <td class="muted">${who}</td>
-          <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td>
+          <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
         </tr>`;
       }).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
@@ -685,16 +690,120 @@ async function loadContestants() {
   });
 }
 
-$('contestant-form').addEventListener('submit', async (e) => {
+$('contestant-search').addEventListener('input', renderContestants);
+
+// Same registration capability as the public candidatura form in app.js
+// (renderRegistration() there) - solo or teamed up with a partner - just
+// admin-facing: an extra search-and-pick field up front for WHO this entry
+// is for, since (unlike the public form) there's no implicit "self" here.
+let adminRegisterUsersCache = null;
+async function ensureAdminRegisterUsersCache() {
+  // /users/basic excludes the caller (see loadConsequences() for why) - the
+  // admin filling this in might be registering themselves, so add self back.
+  if (!adminRegisterUsersCache) {
+    const others = await api('/users/basic');
+    adminRegisterUsersCache = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return adminRegisterUsersCache;
+}
+
+// Wires a search input to a results container: type to filter
+// /users/basic by name, click a result to pick it (calling onPick with the
+// chosen user's id). Used twice below (participant, partner) - identical
+// behavior to app.js's own partner-search, just parameterized so it's not
+// duplicated per field.
+function wireAdminUserSearch(inputEl, resultsEl, onPick) {
+  inputEl.addEventListener('input', async () => {
+    onPick(null);
+    const term = inputEl.value.trim().toLowerCase();
+    if (term.length < 2) { resultsEl.innerHTML = ''; return; }
+    const users = await ensureAdminRegisterUsersCache();
+    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
+    resultsEl.querySelectorAll('[data-user-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        onPick(Number(btn.dataset.userId));
+        inputEl.value = btn.textContent;
+        resultsEl.innerHTML = '';
+      });
+    });
+  });
+}
+
+let adminRegisterMode = 'solo';
+let adminRegisterParticipantId = null;
+let adminRegisterPartnerId = null;
+
+wireAdminUserSearch(
+  $('admin-register-participant-search'),
+  $('admin-register-participant-results'),
+  (id) => { adminRegisterParticipantId = id; },
+);
+wireAdminUserSearch(
+  $('admin-register-partner-search'),
+  $('admin-register-partner-results'),
+  (id) => { adminRegisterPartnerId = id; },
+);
+
+$('admin-register-mode-switch').querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    adminRegisterMode = b.dataset.mode;
+    $('admin-register-mode-switch').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    $('admin-register-partner-wrap').classList.toggle('hidden', adminRegisterMode !== 'duo');
+    $('admin-register-name').placeholder = t(adminRegisterMode === 'duo' ? 'admin_register_name_ph_duo' : 'admin_register_name_ph');
+    if (adminRegisterMode === 'solo') {
+      adminRegisterPartnerId = null;
+      $('admin-register-partner-search').value = '';
+      $('admin-register-partner-results').innerHTML = '';
+    }
+  });
+});
+
+$('admin-register-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const name = $('contestant-name').value.trim();
+  $('admin-register-msg').textContent = '';
+  const name = $('admin-register-name').value.trim();
   if (!name) return;
-  await api('/admin/contestants', { method: 'POST', body: { name, night: currentNight() } });
-  $('contestant-name').value = '';
+  if (!adminRegisterParticipantId) {
+    $('admin-register-msg').textContent = t('admin_register_participant_required');
+    return;
+  }
+  if (adminRegisterMode === 'duo' && !adminRegisterPartnerId) {
+    $('admin-register-msg').textContent = t('outfit_register_partner_required');
+    return;
+  }
+  try {
+    await api('/admin/contestants/register', {
+      method: 'POST',
+      body: {
+        userId: adminRegisterParticipantId,
+        partnerUserId: adminRegisterMode === 'duo' ? adminRegisterPartnerId : null,
+        name,
+        night: currentNight(),
+      },
+    });
+  } catch (err) {
+    $('admin-register-msg').textContent = err.message;
+    return;
+  }
+  $('admin-register-name').value = '';
+  $('admin-register-participant-search').value = '';
+  $('admin-register-partner-search').value = '';
+  adminRegisterParticipantId = null;
+  adminRegisterPartnerId = null;
   loadContestants();
 });
 
 /* --------------------------------- Votos --------------------------------- */
+
+// Same pairing as app.js's own contestantLabel() - a character name alone
+// doesn't tell an admin (or a live crowd they're reading results out to)
+// who's actually behind it.
+function contestantLabel(c) {
+  if (!c.registeredBy) return c.name;
+  const who = c.partnerName ? `${c.registeredBy} & ${c.partnerName}` : c.registeredBy;
+  return `${c.name} (${who})`;
+}
 
 async function loadVotes() {
   // votes (who voted for whom) is owner-only - a regular admin only gets
@@ -706,7 +815,7 @@ async function loadVotes() {
   const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
-      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+      results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
   $('voter-log-card').classList.toggle('hidden', !votes);
@@ -720,7 +829,11 @@ async function loadVotes() {
 
 /* ------------------------------ Rata Game -------------------------------- */
 
-$('reveal-btn').addEventListener('click', async () => {
+// Fixed position next to the status filter, above the (filtered) list -
+// same spot regardless of what's currently revealed or filtered, so it's
+// never a moving target.
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-reveal-next]')) return;
   $('reveal-msg').textContent = '';
   try {
     await api('/admin/consequences/reveal', { method: 'POST' });
@@ -730,20 +843,32 @@ $('reveal-btn').addEventListener('click', async () => {
   }
 });
 
-function rataStatusBadge(c) {
-  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
-  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
-  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+// Four states a consequence moves through: fila (queued, not revealed) ->
+// atribuir (revealed, needs the owner to pick who's responsible) ->
+// pendente (assigned, awaiting the assignee's self-report then the
+// owner's approval - both count as "pendente", no separate tag for each
+// half) -> feita (approved, final). All derived from columns that already
+// exist - nothing about this is stored as a literal status string.
+function rataStatus(c) {
+  if (c.status !== 'used') return { state: 'fila', key: 'rata_status_fila', cls: 'rata-status-fila' };
+  if (c.approved_at) return { state: 'feita', key: 'rata_status_feita', cls: 'rata-status-feita' };
+  if (!c.assigned_user_id) return { state: 'atribuir', key: 'rata_status_atribuir', cls: 'rata-status-atribuir' };
+  return { state: 'pendente', key: 'rata_status_pendente', cls: 'rata-status-pendente' };
 }
 
-async function loadConsequences() {
-  const rows = await api('/admin/consequences');
-  // rows are sorted most-recently-touched first (see GET /admin/consequences),
-  // so the first 'used' one encountered is simply the current one.
-  const revealed = rows.find((c) => c.status === 'used');
-  $('revealed-consequence').classList.toggle('hidden', !revealed);
-  if (revealed) $('revealed-consequence').textContent = revealed.text;
+// Cumulative OR toggle, same pattern as Manage Users' own role filter -
+// narrows the Histórico view only, never affects the data itself. Only
+// covers fila/pendente/feita - atribuir isn't filterable, it always shows
+// in full in the Consequências card above (see renderConsequences()). All
+// three start selected (matches the pills' own default "active" state in
+// the HTML) - deselecting one hides it, rather than starting from
+// "nothing picked means show everything".
+const rataStatusFilter = new Set(['fila', 'pendente', 'feita']);
+let rataRows = [];
+let rataAssignableUsers = [];
 
+async function loadConsequences() {
+  rataRows = await api('/admin/consequences');
   // Any admin (not owner-only) records who was actually holding the rata
   // for each revealed consequence, entered by hand since it can't be
   // inferred from anything in the app - not "right now", can be set any
@@ -754,54 +879,109 @@ async function loadConsequences() {
   // (that picker never needs to team up with yourself), but here the
   // admin filling this in might themselves be who had it - add self back.
   const others = await api('/users/basic');
-  const users = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
-  const userOptions = (selectedId) => `<option value="">${t('rata_assign_placeholder')}</option>` +
-    users.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
-
-  $('consequences-table').innerHTML = rows.length
-    ? `<tr><th>${t('col_text')}</th><th>${t('col_author')}</th><th>${t('col_day')}</th><th>${t('col_status')}</th><th>${t('col_assigned')}</th><th>${t('col_progress')}</th></tr>` +
-      rows.map((c) => {
-        if (c.status !== 'used') {
-          return `<tr>
-            <td>${esc(c.text)}</td>
-            <td>${esc(c.author)}</td>
-            <td class="muted">${esc(formatEuDate(c.day))}</td>
-            <td>${t('status_pending')}</td>
-            <td class="muted">-</td>
-            <td class="muted">-</td>
-          </tr>`;
-        }
-        const status = rataStatusBadge(c);
-        const assignedCell = `<select data-assign-id="${c.id}">${userOptions(c.assigned_user_id)}</select>`;
-        const canApprove = isOwner && c.done_at && !c.approved_at;
-        return `<tr>
-          <td>${esc(c.text)}</td>
-          <td>${esc(c.author)}</td>
-          <td class="muted">${esc(formatEuDate(c.day))}</td>
-          <td>${t('status_used')}</td>
-          <td>${assignedCell}</td>
-          <td>
-            <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-            ${canApprove ? `<br><button type="button" class="small ghost" data-approve-id="${c.id}" style="margin-top:6px">${t('rata_approve_btn')}</button>` : ''}
-          </td>
-        </tr>`;
-      }).join('')
-    : `<tr><td class="muted">${t('no_consequences')}</td></tr>`;
+  rataAssignableUsers = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  renderConsequences();
 }
 
-$('consequences-table').addEventListener('change', async (e) => {
+function userOptionsHtml(selectedId) {
+  return `<option value="">${t('rata_assign_placeholder')}</option>` +
+    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+}
+
+// Card list, not a grid: same shape as the user-facing rata-history-item
+// (see loadRataHistory in app.js) - a table forced this text into a
+// narrow column and wrapped it one word per line, and combining italic +
+// small + serif + grey on top of that made it worse. Text first, full
+// width; everything else drops to a second, plainer meta line. Shared
+// between the Consequências (atribuir only) and Histórico (everything
+// else) cards - same row shape either way, just a different subset of
+// rows feeds each one (see renderConsequences()).
+function renderConsequenceCard(c, revealed) {
+  // Hours and minutes here (this is the admin view) - only revealed items
+  // have a revealed_at to show one for at all.
+  const time = c.revealed_at ? String(c.revealed_at).split(' ')[1].slice(0, 5) : '';
+  const byline = `${esc(c.author)} · ${esc(formatEuDate(c.day))}${time ? ` · ${time}` : ''}`;
+  const status = rataStatus(c);
+  if (c.status !== 'used') {
+    return `<div class="rata-history-item">
+      <p class="rata-history-text">${esc(c.text)}</p>
+      <div class="rata-history-meta">
+        <span class="muted">${byline}</span>
+        <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+      </div>
+    </div>`;
+  }
+  // The current consequence used to also get a separate, much louder
+  // .highlight box duplicating the exact same text - now it's just this
+  // one card with a subtler tint (.rata-current) wherever it ends up
+  // rendering (Consequências if still unassigned, Histórico otherwise).
+  const isCurrent = revealed && c.id === revealed.id;
+  const canApprove = isOwner && c.done_at && !c.approved_at;
+  return `<div class="rata-history-item${isCurrent ? ' rata-current' : ''}">
+    <p class="rata-history-text">${esc(c.text)}</p>
+    <div class="rata-history-meta">
+      <span class="muted">${byline}</span>
+      <span class="rata-badge ${status.cls}">${t(status.key)}</span>
+      <select data-assign-id="${c.id}"${c.done_at ? ' disabled' : ''}>${userOptionsHtml(c.assigned_user_id)}</select>
+      ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderConsequences() {
+  // rows are sorted most-recently-touched first (see GET /admin/consequences),
+  // so the first 'used' one encountered is simply the current one.
+  const revealed = rataRows.find((c) => c.status === 'used');
+
+  const assignRows = rataRows.filter((c) => rataStatus(c).state === 'atribuir');
+  $('consequences-assign-list').innerHTML = assignRows.length
+    ? assignRows.map((c) => renderConsequenceCard(c, revealed)).join('')
+    : `<p class="muted">${t('rata_admin_assign_empty')}</p>`;
+
+  const historyRows = rataRows.filter((c) => {
+    const state = rataStatus(c).state;
+    return state !== 'atribuir' && rataStatusFilter.has(state);
+  }).sort((a, b) => {
+    // Most recent timestamp (approved, then done, then revealed) sorts first.
+    const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
+    const aTime = getLatestTime(a);
+    const bTime = getLatestTime(b);
+    return bTime.localeCompare(aTime);
+  });
+  $('consequences-table').innerHTML = historyRows.length
+    ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')
+    : `<p class="muted">${t('no_consequences')}</p>`;
+}
+
+$('rata-status-filter').querySelectorAll('.role-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (rataStatusFilter.has(btn.dataset.status)) rataStatusFilter.delete(btn.dataset.status);
+    else rataStatusFilter.add(btn.dataset.status);
+    btn.classList.toggle('active', rataStatusFilter.has(btn.dataset.status));
+    renderConsequences();
+  });
+});
+
+// Delegated on document, not #consequences-table - an assign select can
+// now render in either #consequences-assign-list (atribuir) or
+// #consequences-table (Histórico, once it's moved past atribuir).
+document.addEventListener('change', async (e) => {
   const select = e.target.closest('[data-assign-id]');
   if (!select) return;
   const userId = select.value ? Number(select.value) : null;
   try {
     await api(`/admin/consequences/${select.dataset.assignId}/assign`, { method: 'PATCH', body: { userId } });
+    // Assigning moves it from atribuir to pendente (and from the
+    // Consequências card into Histórico) - re-render so that happens
+    // immediately instead of waiting for the next poll.
+    loadConsequences();
   } catch (err) {
     await showAlert(err.message);
     loadConsequences();
   }
 });
 
-$('consequences-table').addEventListener('click', async (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-approve-id]');
   if (!btn) return;
   try {
@@ -888,10 +1068,10 @@ async function loadPlazaPosts() {
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
-        <p class="muted" style="margin:4px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
+        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
         <p style="margin:8px 0 0">${esc(p.text)}</p>
         ${p.type === 'poll' ? `
-        <ul class="muted" style="margin:8px 0 0;padding-left:18px">
+        <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
           ${p.options.map((o) => {
             const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
             return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
@@ -899,7 +1079,7 @@ async function loadPlazaPosts() {
         </ul>` : ''}
         <div class="row-actions">
           ${isOwner ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
-          <button class="small danger" data-del-post="${p.id}">${t('remove')}</button>
+          ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
         </div>
       </div>`).join('')
     : `<p class="muted">${t('plaza_no_posts')}</p>`;
@@ -968,6 +1148,15 @@ document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
 
+// The top-left logo used to do nothing here - now it's "go home", same as
+// clicking a site's logo anywhere else: back to the landing admin tab from
+// wherever you've wandered off to (Rata, Wall, Users...).
+const brandLogo = document.querySelector('.brand-name');
+if (brandLogo) {
+  brandLogo.style.cursor = 'pointer';
+  brandLogo.addEventListener('click', () => selectAdminTab('settings'));
+}
+
 /* ------------------------------ Change key -------------------------------- */
 // Self-service, open to every logged-in user (not admin-gated) - requires
 // the current key as confirmation, new key is letters/numbers only.
@@ -983,6 +1172,7 @@ function wireChangeKeyForm() {
     try {
       await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
       setToken(newToken);
+      refreshAccountToken();
       $('current-key-input').value = '';
       $('new-key-input').value = '';
       $('change-key-msg').textContent = t('key_changed_msg');

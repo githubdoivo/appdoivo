@@ -13,9 +13,7 @@ const PUBLIC_DIR = join(__dirname, '..', 'public');
 
 // Seed the admin + settings (result used by server.js to print the token).
 export const seedResult = seed({
-  adminToken: process.env.ADMIN_TOKEN,
   adminName: process.env.ADMIN_NAME,
-  timezone: process.env.TIMEZONE,
 });
 
 // Configure Web Push (disabled if VAPID keys are missing).
@@ -41,6 +39,21 @@ app.use(express.static(PUBLIC_DIR));
 // SPA fallback: any non-API route returns the index.
 app.get('*', (req, res) => {
   res.sendFile(join(PUBLIC_DIR, 'index.html'));
+});
+
+// Catch-all for anything a route handler didn't handle itself (a thrown
+// error, a rejected promise in an async handler). Without this, Express's
+// own default handler returns an HTML page with the full stack trace -
+// NODE_ENV is never set in this deployment, so that page was going out to
+// real users, showing up in the app as a raw "Erro 500" (see api.js, which
+// falls back to that string when the response body isn't JSON) and leaking
+// internals (file paths, line numbers) to anyone who happened to trigger
+// an error. Logs the real error server-side, returns a clean, translatable
+// message client-side.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[error]', err);
+  res.status(500).json({ error: 'Ocorreu um erro. Tenta novamente.' });
 });
 
 export default app;

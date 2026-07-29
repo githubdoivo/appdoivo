@@ -25,11 +25,18 @@ export function advanceResultsPhase(night) {
   return next;
 }
 
-/** Contestants registered for a night. */
+/** Contestants registered for a night, with the real user(s) behind the
+ * character name (null for admin-added entries with no registrant) - a
+ * character name is often improvised at submission time, so voters can't
+ * be expected to recognize who's actually behind it otherwise. */
 export function contestantsForNight(night) {
-  return db.prepare(
-    'SELECT id, name FROM contestants WHERE night = ? ORDER BY name COLLATE NOCASE'
-  ).all(night);
+  return db.prepare(`
+    SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
+  `).all(night);
 }
 
 /** The user's vote for this night, if any. */
@@ -146,11 +153,15 @@ export function castVote(userId, contestantId, night) {
   return { ok: true };
 }
 
-/** Full ranking of contestants for a night, each with its rank (admin view). */
+/** Full ranking of contestants for a night, each with its rank (admin view).
+ * Carries the same registeredBy/partnerName pair as contestantsForNight() -
+ * results are just as identity-ambiguous as the vote picker otherwise. */
 export function resultsForNight(night) {
   const rows = db.prepare(`
-    SELECT c.id, c.name, COUNT(v.id) AS votes
+    SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName, COUNT(v.id) AS votes
     FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
     LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night
     WHERE c.night = ?
     GROUP BY c.id

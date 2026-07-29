@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#e7e3d6" />
   <link rel="icon" href="/favicon.ico?v=2" sizes="32x32" />
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=3" />
@@ -43,7 +43,6 @@
         </a>
       </div>
     </header>
-    <p id="auth-error" class="error"></p>
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
@@ -61,12 +60,9 @@
           <h2 data-i18n="plaza_admin_title">Nova publicação</h2>
           <p class="help" data-i18n="plaza_admin_help">Explicação</p>
           <form id="plaza-post-form" style="margin-top:12px">
-            <div class="plaza-post-footer">
-              <div class="role-pills" id="plaza-post-type">
-                <button type="button" class="role-pill active" data-post-type="announcement" data-i18n="plaza_type_announcement">Regular</button>
-                <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Poll</button>
-              </div>
-              <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
+            <div class="role-pills" id="plaza-post-type">
+              <button type="button" class="role-pill active" data-post-type="announcement" data-i18n="plaza_type_announcement">Regular</button>
+              <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Poll</button>
             </div>
             <textarea id="plaza-post-text" rows="3" maxlength="500" data-i18n-ph="plaza_post_text_ph" placeholder="Mensagem..." style="margin-top:12px"></textarea>
             <div id="plaza-poll-options" class="hidden" style="margin-top:12px">
@@ -75,6 +71,9 @@
               <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
               <button type="button" id="plaza-add-option-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_option">Adicionar opção</button>
             </div>
+            <div style="text-align:right;margin-top:12px">
+              <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
+            </div>
             <span id="plaza-post-msg" class="muted"></span>
           </form>
         </div>
@@ -82,6 +81,16 @@
         <div class="card">
           <h2 data-i18n="plaza_posts_list_title">Publicações</h2>
           <div id="plaza-posts-list" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/plaza-posts/wipe) - hidden for a regular admin in
+             boot() in settings.js. -->
+        <div class="card" id="plaza-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="plaza_wipe_help">Explicação</p>
+          <button id="plaza-wipe-btn" type="button" class="danger" data-i18n="plaza_wipe_btn">Apagar tudo do Wall</button>
+          <span id="plaza-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
 
@@ -92,9 +101,11 @@
              isso fica solta no topo, fora de qualquer card. Mesmo
              componente "switch" da Best Look principal (theme-switch),
              não um <select>. -->
-        <div class="theme-switch night-switch" id="admin-night-switch">
-          <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
-          <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
+        <div style="text-align:right">
+          <div class="theme-switch night-switch" id="admin-night-switch">
+            <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
+            <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
+          </div>
         </div>
 
         <div class="card">
@@ -114,10 +125,32 @@
 
         <div class="card">
           <h2 data-i18n="contestants_title">Concorrentes da noite</h2>
-          <form id="contestant-form" class="inline" style="margin-top:12px">
-            <input id="contestant-name" type="text" data-i18n-ph="contestant_name_ph" placeholder="Nome do concorrente" />
-            <button type="submit" class="small" data-i18n="add">Adicionar</button>
+          <!-- Same registration capability as the public candidatura form
+               (solo/duo toggle, partner search when duo, persona name) -
+               just admin-facing: an extra search field up front to pick
+               WHO this entry is for, since there's no implicit "self"
+               here. Replaces the old free-text-plus-optional-single-link
+               form, which couldn't do duo entries at all. -->
+          <form id="admin-register-form" style="margin-top:12px">
+            <div class="theme-switch" id="admin-register-mode-switch">
+              <button type="button" data-mode="solo" class="active" data-i18n="outfit_register_solo">sozinhe</button>
+              <button type="button" data-mode="duo" data-i18n="outfit_register_duo">com alguém</button>
+            </div>
+            <div style="margin-top:10px">
+              <input id="admin-register-participant-search" type="text" data-i18n-ph="admin_register_participant_ph" placeholder="Procura quem se vai inscrever..." autocomplete="off" />
+              <div id="admin-register-participant-results" class="partner-results"></div>
+            </div>
+            <div id="admin-register-partner-wrap" class="hidden" style="margin-top:10px">
+              <input id="admin-register-partner-search" type="text" data-i18n-ph="outfit_register_partner_ph" placeholder="Procura o nome da pessoa..." autocomplete="off" />
+              <div id="admin-register-partner-results" class="partner-results"></div>
+            </div>
+            <input id="admin-register-name" type="text" maxlength="60" data-i18n-ph="admin_register_name_ph" placeholder="Nome da personagem..." style="margin-top:10px" autocomplete="off" />
+            <div style="text-align:right;margin-top:10px">
+              <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
+            </div>
+            <span id="admin-register-msg" class="muted"></span>
           </form>
+          <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:16px" />
           <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
 
@@ -135,26 +168,53 @@
           <p class="help" data-i18n="voter_log_help">Explicação</p>
           <div class="table-scroll"><table id="voter-log-table"></table></div>
         </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/contestants/wipe) - hidden for a regular admin in
+             boot() in settings.js. Distinct from "Reiniciar tudo" above,
+             which only clears whichever night is currently selected. -->
+        <div class="card" id="outfit-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="outfit_wipe_help">Explicação</p>
+          <button id="outfit-wipe-btn" type="button" class="danger" data-i18n="outfit_wipe_btn">Apagar tudo do Snatch</button>
+          <span id="outfit-wipe-msg" class="muted wipe-msg"></span>
+        </div>
       </div>
 
       <!-- Separador: A Rata -->
       <div id="atab-rata" class="tab-panel hidden">
+        <!-- What needs the owner's attention right now: reveal the next
+             one, and assign anyone still waiting for someone to be
+             picked. Everything past that point (queued, awaiting
+             confirmation, done) moves to Histórico below. -->
         <div class="card">
           <h2 data-i18n="rata_admin_title">Consequências</h2>
           <p class="help" id="reveal-help" data-i18n="rata_admin_help">Explicação</p>
-          <button id="reveal-btn" class="small" data-i18n="reveal_now">Revelar consequência</button>
+          <div style="text-align:right;margin-top:8px">
+            <button type="button" data-reveal-next class="small" data-i18n="reveal_now">Revelar consequência</button>
+          </div>
           <span id="reveal-msg" class="muted"></span>
-          <div id="revealed-consequence" class="highlight hidden" style="margin-top:12px"></div>
-          <div class="table-scroll"><table id="consequences-table" style="margin-top:16px"></table></div>
+          <div id="consequences-assign-list" style="margin-top:16px"></div>
         </div>
 
-        <div class="card" id="timezone-card">
-          <h2 data-i18n="timezone">Fuso horário</h2>
-          <form id="settings-form" style="margin-top:12px">
-            <input id="timezone" type="text" placeholder="Europe/Lisbon" />
-            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
-            <span id="settings-msg" class="muted"></span>
-          </form>
+        <div class="card">
+          <h2 data-i18n="rata_admin_history_title">Histórico</h2>
+          <div class="role-pills" id="rata-status-filter" style="margin-top:8px">
+            <button type="button" class="role-pill active" data-status="fila" data-i18n="rata_status_fila">fila</button>
+            <button type="button" class="role-pill active" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
+            <button type="button" class="role-pill active" data-status="feita" data-i18n="rata_status_feita">feita</button>
+          </div>
+          <div id="consequences-table" style="margin-top:16px"></div>
+        </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/consequences/wipe) - hidden for a regular admin
+             in boot() in settings.js. -->
+        <div class="card" id="rata-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="rata_wipe_help">Explicação</p>
+          <button id="rata-wipe-btn" type="button" class="danger" data-i18n="rata_wipe_btn">Apagar tudo da Rata</button>
+          <span id="rata-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
 
@@ -167,18 +227,40 @@
           <div class="table-scroll"><table id="wall-pseudonyms-table" style="margin-top:12px"></table></div>
         </div>
 
-        <div class="card" id="timezone-wall-card">
-          <h2 data-i18n="timezone">Fuso horário</h2>
-          <form id="settings-form-wall" style="margin-top:12px">
-            <input id="timezone-wall" type="text" placeholder="Europe/Lisbon" />
-            <button type="submit" style="margin-top:12px" data-i18n="save">Guardar</button>
-            <span id="settings-msg-wall" class="muted"></span>
-          </form>
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/chat/wipe). This whole tab is already owner-only,
+             so no extra hiding needed here beyond that. -->
+        <div class="card" id="chat-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="chat_wipe_help">Explicação</p>
+          <button id="chat-wipe-btn" type="button" class="danger" data-i18n="chat_wipe_btn">Apagar tudo da Plaza</button>
+          <span id="chat-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
 
       <!-- Separador: Definições (todos os utilizadores, incluindo o dono) -->
       <div id="atab-settings" class="tab-panel">
+        <!-- First card in the tab, before change-key - your own identity,
+             key (click to reveal/copy, same convention as the Manage Users
+             list below) and logout, all in one place and reachable without
+             scrolling past anything else. Logout stays its own button here
+             rather than living inside change-key-form - right next to a
+             "save password" submit, it risked an accidental sign-out when
+             the user meant to save a new key. -->
+        <div class="card" id="account-card">
+          <h2 data-i18n="account_title">A tua conta</h2>
+          <div class="user-row-top">
+            <div class="user-row-name">
+              <span id="account-name"></span>
+              <span class="badge" id="account-role-badge"></span>
+            </div>
+            <div class="account-token censored" id="account-token" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          </div>
+          <div style="text-align:right;margin-top:14px">
+            <button type="button" id="logout-btn" class="small" data-i18n="logout">Sair</button>
+          </div>
+        </div>
+
         <div class="card" id="change-key-card">
           <h2 data-i18n="change_key_title">Mudar chave de acesso</h2>
           <p class="help" data-i18n="change_key_help">Explicação</p>
@@ -197,7 +279,7 @@
               </button>
             </div>
             <div class="password-field" style="margin-top:10px">
-              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" />
+              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" minlength="7" />
               <button type="button" id="new-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -209,10 +291,7 @@
                 </svg>
               </button>
             </div>
-            <div class="card-head" style="margin-top:12px">
-              <button type="submit" class="small" data-i18n="save">Guardar</button>
-              <button type="button" id="logout-btn" class="small ghost" data-i18n="logout">Sair</button>
-            </div>
+            <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
           </form>
           <span id="change-key-msg" class="muted"></span>
         </div>
@@ -237,13 +316,6 @@
               <p id="user-search-hint" class="muted hidden" data-i18n="user_search_no_match"></p>
             </div>
             <div id="users-list" class="user-list" style="margin-top:16px"></div>
-          </div>
-
-          <div class="card" id="reset-content-card">
-            <h2 data-i18n="reset_content_title">Zona perigosa</h2>
-            <p class="help" data-i18n="reset_content_help">Explicação</p>
-            <button id="reset-content-btn" type="button" class="danger" data-i18n="reset_content_btn">Reiniciar conteúdo do evento</button>
-            <span id="reset-content-msg" class="muted"></span>
           </div>
         </div>
       </div>

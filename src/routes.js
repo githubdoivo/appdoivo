@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import db from './db.js';
-import { authenticate, requireAdmin, requireOwner } from './auth.js';
+import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
 import { generateUserToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
-import { today, nightStatus, getTimezone } from './time.js';
+import { today, nightStatus } from './time.js';
 import { NIGHTS, isNight, DEFAULT_NIGHT } from './nights.js';
 import {
   revealRandomConsequence,
@@ -66,7 +66,7 @@ router.get('/version', (req, res) => {
 router.post('/auth/login', loginRateLimit, (req, res) => {
   const token = (req.body?.token || '').trim().toLowerCase();
   if (!token) return res.status(400).json({ error: 'Token em falta.' });
-  const user = db.prepare('SELECT id, name, is_admin FROM users WHERE token_hash = ?').get(hashToken(token));
+  const user = findUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Token invalido.' });
   // Proves they know their key - same claimed-key stamp authenticate()
   // applies (see auth.js), so they stop showing up in the first-time
@@ -133,8 +133,8 @@ router.post('/me/change-token', (req, res) => {
   if (!/^[a-z0-9]+$/.test(newToken)) {
     return res.status(400).json({ error: 'A nova chave só pode ter letras e números.' });
   }
-  if (newToken.length < 4) {
-    return res.status(400).json({ error: 'A nova chave deve ter pelo menos 4 caracteres.' });
+  if (newToken.length < 7) {
+    return res.status(400).json({ error: 'A nova chave deve ter pelo menos 7 caracteres.' });
   }
 
   const newHash = hashToken(newToken);
@@ -189,7 +189,7 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   });
 });
 
-router.delete('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
+router.delete('/admin/plaza-posts/:id', requireOwner, (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
   const result = deletePlazaPost(Number(req.params.id));
   if (result.error) return res.status(404).json({ error: result.error });
@@ -421,6 +421,17 @@ router.post('/admin/users/:id/regenerate-token', (req, res) => {
   res.json({ ok: true, id, name: user.name, token });
 });
 
+// Toggle the logo customization state (appde<firstname> vs plain appdoivo).
+// Self-only; returns the new state.
+router.post('/me/logo-customized', (req, res) => {
+  const customized = req.body?.customized;
+  if (customized !== true && customized !== false) {
+    return res.status(400).json({ error: 'Invalid logo_customized value.' });
+  }
+  db.prepare('UPDATE users SET logo_customized = ? WHERE id = ?').run(customized ? 1 : 0, req.user.id);
+  res.json({ ok: true, logo_customized: customized });
+});
+
 router.delete('/admin/users/:id', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT is_owner FROM users WHERE id = ?').get(id);
@@ -479,13 +490,40 @@ router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) =>
   res.json(result);
 });
 
-// Owner-only: wipe game content (contestants, votes, consequences) to start
-// a fresh event, without touching user accounts/keys. Production data is
-// otherwise permanent (persistent volume, never reset on deploy).
-router.post('/admin/reset-content', requireOwner, (req, res) => {
-  db.prepare('DELETE FROM contestants').run(); // cascades to votes
+// Owner-only kill switches, one per feature - each wipes only its own
+// data (never touches user accounts/keys, and never another feature's
+// data), unlike the single cross-feature "reset everything" this
+// replaced. Lives on each feature's own admin tab, not a shared "danger
+// zone" bundling all of them together.
+
+// Rata: every consequence, any status/day.
+router.post('/admin/consequences/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM consequences').run();
-  for (const night of NIGHTS) setSetting(`voting_status_${night}`, 'closed');
+  res.json({ ok: true });
+});
+
+// Snatch: every contestant (cascades to votes), both nights at once - the
+// existing per-night "Reiniciar tudo" on the voting-controls card only
+// ever clears whichever night is currently selected.
+router.post('/admin/contestants/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM contestants').run();
+  for (const night of NIGHTS) {
+    setSetting(`voting_status_${night}`, 'closed');
+    setSetting(`voting_started_${night}`, '0');
+    resetResultsPhase(night);
+  }
+  res.json({ ok: true });
+});
+
+// Wall: every post (announcements + polls, cascades poll options/votes).
+router.post('/admin/plaza-posts/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM plaza_posts').run();
+  res.json({ ok: true });
+});
+
+// Plaza: every chat message.
+router.post('/admin/chat/wipe', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM messages').run();
   res.json({ ok: true });
 });
 
@@ -575,14 +613,43 @@ router.get('/admin/contestants', (req, res) => {
   res.json({ night, contestants: rows });
 });
 
+// userId optionally links this entry to a real registered user (picked
+// from /users/basic on the frontend, not typed) - same identity link
+// self-registration already gets, so an admin adding someone else's entry
+// doesn't leave it unattributed forever (see contestantsForNight()).
 router.post('/admin/contestants', (req, res) => {
   const name = (req.body?.name || '').trim();
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  let userId = null;
+  if (req.body?.userId) {
+    userId = Number(req.body.userId);
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(400).json({ error: 'Utilizador invalido.' });
+    const taken = db.prepare(
+      'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+    ).get(night, userId, userId);
+    if (taken) return res.status(400).json({ error: 'Essa pessoa ja esta inscrita nesta noite.' });
+  }
   const info = db.prepare(
-    'INSERT INTO contestants (name, night) VALUES (?, ?)'
-  ).run(name, night);
+    'INSERT INTO contestants (name, night, user_id) VALUES (?, ?, ?)'
+  ).run(name, night, userId);
   res.status(201).json({ id: info.lastInsertRowid, name, night });
+});
+
+// Same registration capability as /outfit/register (solo or teamed up with
+// a partner), just usable from admin on someone else's behalf instead of
+// only for yourself - reuses registerContestant() as-is rather than
+// duplicating its rules (duplicate-entry checks, partner validation, the
+// night having to actually be in "registration"), so an admin follows the
+// exact same constraints a self-registering guest would.
+router.post('/admin/contestants/register', requireOwner, (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const userId = Number(req.body?.userId);
+  if (!userId) return res.status(400).json({ error: 'Escolhe um utilizador.' });
+  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
 });
 
 // Renames a contestant (e.g. fixing a typo in a self-registered entry, or
@@ -596,24 +663,21 @@ router.patch('/admin/contestants/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/admin/contestants/:id', (req, res) => {
+router.delete('/admin/contestants/:id', requireOwner, (req, res) => {
   db.prepare('DELETE FROM contestants WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 
-// Settings (timezone/rollover of the "day" used by A Rata)
+// Settings (day-rollover hour used by A Rata - timezone is fixed to
+// Europe/Lisbon, see getTimezone() in time.js, not user-configurable)
 router.get('/admin/settings', (req, res) => {
   res.json({
-    timezone: getTimezone(),
     dayRolloverHour: Number(getSetting('day_rollover_hour', 6)),
   });
 });
 
 router.put('/admin/settings', (req, res) => {
-  const { timezone, dayRolloverHour } = req.body || {};
-  if (timezone !== undefined && String(timezone).trim()) {
-    setSetting('timezone', String(timezone).trim());
-  }
+  const { dayRolloverHour } = req.body || {};
   if (dayRolloverHour !== undefined) {
     const h = Number(dayRolloverHour);
     if (!Number.isInteger(h) || h < 0 || h > 23) return res.status(400).json({ error: 'Hora de rollover invalida (0-23).' });

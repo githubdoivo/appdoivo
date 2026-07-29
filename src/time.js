@@ -1,8 +1,12 @@
 import { getSetting } from './db.js';
 
+// The event is always in Portugal - not user-configurable (a bad free-text
+// value here used to crash every Intl.DateTimeFormat call keyed off it).
+const TIMEZONE = 'Europe/Lisbon';
+
 /** Configured timezone. */
 export function getTimezone() {
-  return getSetting('timezone', 'Europe/Lisbon');
+  return TIMEZONE;
 }
 
 /**

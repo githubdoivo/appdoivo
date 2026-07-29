@@ -14,15 +14,17 @@ import { webkit, devices } from 'playwright';
 
 const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`);
 process.env.DB_FILE = DB;
-process.env.ADMIN_TOKEN = 'ui-test-admin-token';
 process.env.ADMIN_NAME = 'UI Test Admin';
-process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
-const { default: app } = await import('../src/app.js');
+const { default: app, seedResult } = await import('../src/app.js');
 
-const ADMIN = 'ui-test-admin-token';
+// The admin's real key is always generated (see seed() in db.js - no more
+// ADMIN_TOKEN pinning it, even outside production), so this reads the
+// actual generated value off seedResult rather than assuming a fixed
+// string.
+const ADMIN = seedResult.token;
 // GitHub Actions' shared runners occasionally get resource-starved enough
 // that a login flow taking well under 5s locally blows past a 5000ms
 // waitForSelector everywhere at once (seen firsthand: identical commits
@@ -67,21 +69,16 @@ async function iphoneContext(deviceName) {
 
 /** Logs in via localStorage (like the app itself does) and waits for the app shell. */
 async function loginPage(context, token, path = '/') {
+  // First-session tutorial overlay would otherwise intercept every click in
+  // tests that aren't specifically testing it - the tutorial has no skip
+  // button by design (see the "no skip" feedback fix), so mark it seen via
+  // the API up front instead of clicking through every step.
+  await api('POST', '/me/tutorial-seen', { token });
   const page = await context.newPage();
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
   await page.goto(base + path);
   await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  // First-session tutorial overlay would otherwise intercept every click in
-  // tests that aren't specifically testing it - dismiss it if it's showing
-  // (language choice first, then skip the content step).
-  const langBtn = await page.$('#tutorial-lang-pt');
-  if (langBtn && await langBtn.isVisible()) {
-    await langBtn.click();
-    await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
-    await page.click('#tutorial-skip');
-    await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
-  }
   return page;
 }
 
@@ -162,6 +159,28 @@ test('every topbar icon button stays vertically aligned', async () => {
   await context.close();
 });
 
+/* ------------------- Brand logo fits the viewport (regression) ----------- */
+// document-level scrollWidth (the check above) can pass even when the logo
+// itself is too wide, because .topbar's flex-wrap just drops topbar-actions
+// to its own line below - the page never scrolls horizontally, but the
+// logo's own box still overflows past both edges. Check its own
+// bounding rect directly, on the narrowest real device, since a fixed
+// rem size that looks fine at a wide viewport can still not fit a phone.
+
+for (const deviceName of IOS_DEVICES) {
+  test(`brand logo never overflows the viewport on ${deviceName}`, async () => {
+    const context = await iphoneContext(deviceName);
+    const page = await loginPage(context, ADMIN, '/');
+    const { left, right, viewportWidth } = await page.evaluate(() => {
+      const r = document.querySelector('.brand-name').getBoundingClientRect();
+      return { left: r.left, right: r.right, viewportWidth: window.innerWidth };
+    });
+    assert.ok(left >= -1, `brand logo starts off the left edge (left=${left.toFixed(1)}) on ${deviceName}`);
+    assert.ok(right <= viewportWidth + 1, `brand logo extends off the right edge (right=${right.toFixed(1)}, viewport=${viewportWidth}) on ${deviceName}`);
+    await context.close();
+  });
+}
+
 /* ------------------------ Login flash (regression) ------------------------ */
 // #login used to be visible by default, so an authenticated user briefly saw
 // the login form before the session check resolved. It must ship hidden.
@@ -186,6 +205,18 @@ test('body carries no night-theme class while the login screen is showing', asyn
   const bodyClasses = await page.evaluate(() => document.body.className);
   assert.doesNotMatch(bodyClasses, /theme-(rata|furnished|swamp|mural|plaza)/, `body should carry no night-theme class pre-login, got: "${bodyClasses}"`);
 
+  await context.close();
+});
+
+// Regression: visiting /settings.html with no session used to strand the
+// visitor on a dead-end admin page with just an error message - no way
+// back to login short of manually navigating to "/" themselves.
+test('visiting /settings.html with no session redirects to the login page', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/settings.html');
+  await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(new URL(page.url()).pathname, '/', 'should have redirected to the login page');
   await context.close();
 });
 
@@ -489,6 +520,41 @@ test('access keys are censored by default, reveal on click, and copy automatical
   await context.close();
 });
 
+// Regression: renderAccountCard() only ran once at boot, so the "A tua
+// conta" card kept showing/copying the OLD key after a self-service
+// change via the change-key form - one that no longer even worked to log
+// in - until a full page reload synced it back up.
+test('the account card\'s key updates immediately after a self-service key change', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'accountcardtest' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, created.token, '/settings.html');
+
+  const tokenEl = page.locator('#account-token');
+  await tokenEl.click();
+  await page.waitForTimeout(50);
+  const shownOld = await tokenEl.textContent();
+  assert.equal(shownOld, created.token, 'account card should reveal the current real key on click');
+
+  const newKey = 'freshkey789';
+  await page.fill('#current-key-input', created.token);
+  await page.fill('#new-key-input', newKey);
+  await page.click('#change-key-form button[type="submit"]');
+  await page.waitForSelector('#change-key-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+
+  await tokenEl.click(); // re-censor
+  await page.waitForTimeout(50);
+  await tokenEl.click(); // reveal again
+  await page.waitForTimeout(50);
+  const shownNew = await tokenEl.textContent();
+  assert.equal(shownNew, newKey, 'account card should reflect the new key without a page reload');
+
+  await context.close();
+  const updated = await api('GET', '/admin/users', { token: ADMIN });
+  const tester = updated.find((u) => u.name === 'accountcardtest');
+  await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
+});
+
 /* -------------- Golden rule: non-owner admin UI (regression) ------------- */
 
 test('a non-owner admin gets voting control, reveal-consequence, and a self-only Users view', async () => {
@@ -498,29 +564,21 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, promoted.token, '/settings.html');
 
-  // Sees user management inside Settings now (so they can get familiar with
-  // it), but the API only ever returns their own row - see GET /admin/users -
-  // so there's nothing here to further lock down on the frontend.
-  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
-  const rows = await page.$$('#users-list .user-row');
-  assert.equal(rows.length, 1, 'non-owner admin should only see their own row in Users');
-  const rowActionsCount = await page.$$eval('#users-list .row-actions', (els) => els.length);
-  assert.equal(rowActionsCount, 0, 'non-owner admin should get a read-only row, no action buttons');
+  // Manage Users is owner-only - a regular admin's own row is all the API
+  // would ever return them anyway (see GET /admin/users), with no actions
+  // on it either, so it would just be a read-only duplicate of the account
+  // card already at the top of this page. Whole section hidden instead.
+  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('[data-atab="settings"]');
+  await page.waitForTimeout(300);
+  const usersManagementHidden = await page.$eval('#users-management', (el) => el.classList.contains('hidden'));
+  assert.ok(usersManagementHidden, 'non-owner admin should not see Manage Users at all - it would just duplicate the account card');
 
   // The Plaza (pseudonym-unmasking) admin tab - internal id "wall", see
   // tab_chat in i18n.js - was opened up to admins temporarily for testing;
   // it's owner-only again now, whole tab hidden.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
   assert.ok(wallTabHidden, 'non-owner admin should no longer see the Plaza admin tab');
-
-  const searchCardHidden = await page.$eval('#user-search-card', (el) => el.classList.contains('hidden'));
-  assert.ok(searchCardHidden, 'non-owner admin cannot create/search users (owner-only on the backend)');
-
-  const resetCardHidden = await page.$eval('#reset-content-card', (el) => el.classList.contains('hidden'));
-  assert.ok(resetCardHidden, 'non-owner admin cannot reset event content (owner-only on the backend)');
-
-  const timezoneCardHidden = await page.$eval('#timezone-card', (el) => el.classList.contains('hidden'));
-  assert.ok(!timezoneCardHidden, 'non-owner admin should be able to see and fix the timezone setting too');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
   assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');
@@ -535,7 +593,10 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(voterLogHidden, 'non-owner admin must not see the who-voted-for-whom card');
 
   await page.click('[data-atab="rata"]');
-  const revealBtnVisible = await page.$eval('#reveal-btn', (el) => el.getBoundingClientRect().width > 0);
+  // Lives in one of two spots depending on state - the standalone slot
+  // (nothing revealed yet) or inside the current card (once something is)
+  // - so check whichever one is actually visible right now.
+  const revealBtnVisible = await page.$$eval('[data-reveal-next]', (els) => els.some((el) => el.getBoundingClientRect().width > 0));
   assert.ok(revealBtnVisible, 'non-owner admin should still see the reveal-consequence button');
 
   await context.close();
@@ -587,7 +648,9 @@ test('a role change made by the owner syncs to an already-open Settings session 
   await settingsPage.evaluate((tok) => localStorage.setItem('appivo_token', tok), target.token);
   await settingsPage.goto(base + '/settings.html');
   await settingsPage.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.ok(await settingsPage.$eval('#users-management', (el) => !el.classList.contains('hidden')), 'should start with admin-only Manage Users visible');
+  // Manage Users is owner-only (this target is admin, not owner) - check a
+  // tab a regular admin does see instead, as the "currently admin" signal.
+  assert.ok(await settingsPage.$eval('[data-atab="outfit"]', (el) => !el.classList.contains('hidden')), 'should start with admin tabs visible');
 
   await api('PATCH', `/admin/users/${target.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
 
@@ -778,9 +841,14 @@ test('first-session tutorial shows once, steps through, then never shows again',
   let activeDots = await page.$$eval('.tutorial-dots .dot.active', (els) => els.length);
   assert.equal(activeDots, 1, 'exactly one dot should be active at a time');
 
-  // Step through every step via "next" (6 total steps, so 5 clicks to
+  // A plain (non-admin, non-owner) account gets no skip - has to read
+  // through the whole tour.
+  const skipHidden = await page.$eval('#tutorial-skip', (el) => el.classList.contains('hidden'));
+  assert.ok(skipHidden, 'a regular user should not see a tutorial skip button');
+
+  // Step through every step via "next" (8 total steps, so 7 clicks to
   // reach the last one; the final "finish" click happens after the loop).
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 7; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);
@@ -798,6 +866,33 @@ test('first-session tutorial shows once, steps through, then never shows again',
   await page.waitForTimeout(300);
   const stillHidden = await page.$eval('#tutorial-overlay', (el) => el.classList.contains('hidden'));
   assert.ok(stillHidden, 'tutorial reappeared after being completed once');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
+test('an admin account gets a tutorial skip button, and using it marks the tutorial seen', async () => {
+  const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'tutorialadmintest' } });
+  await api('PATCH', `/admin/users/${created.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), created.token);
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#tutorial-lang-en');
+  await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const skipHidden = await page.$eval('#tutorial-skip', (el) => el.classList.contains('hidden'));
+  assert.ok(!skipHidden, 'an admin account should see a tutorial skip button');
+
+  await page.click('#tutorial-skip');
+  await page.waitForSelector('#tutorial-overlay.hidden', { state: 'attached', timeout: WAIT_TIMEOUT });
+
+  const me = await api('GET', '/me', { token: created.token });
+  assert.ok(me.tutorialSeen, 'skipping should mark the tutorial as seen, same as finishing it');
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });

@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -320,9 +320,11 @@ if (!columnExists('consequences', 'approved_at')) {
   db.exec('ALTER TABLE consequences ADD COLUMN approved_at TEXT');
 }
 
-/** Generates a secure, readable token. */
-export function generateToken() {
-  return randomBytes(24).toString('base64url');
+// Migration: persist the customized logo state (triple-click "appdoivo" to
+// swap to "appde<firstname>") across app close/reopen. Defaults to false
+// (the vanilla "appdoivo" logo).
+if (!columnExists('users', 'logo_customized')) {
+  db.exec('ALTER TABLE users ADD COLUMN logo_customized INTEGER NOT NULL DEFAULT 0');
 }
 
 /** Strips a name down to the plain-ASCII, lowercase base used by every token. */
@@ -379,8 +381,8 @@ export function setSetting(key, value) {
   `).run(key, String(value));
 }
 
-/** Seeds settings and the admin user on first start. */
-export function seed({ adminToken, adminName, timezone }) {
+/** Seeds settings and the admin (owner) user on first start. */
+export function seed({ adminName }) {
   // Per-night voting status (closed by default).
   for (const night of NIGHTS) {
     if (getSetting(`voting_status_${night}`) === null) {
@@ -388,13 +390,27 @@ export function seed({ adminToken, adminName, timezone }) {
     }
   }
   if (getSetting('day_rollover_hour') === null) setSetting('day_rollover_hour', 6);
-  if (getSetting('timezone') === null) setSetting('timezone', timezone || 'Europe/Lisbon');
 
   let admin = db.prepare('SELECT * FROM users WHERE is_admin = 1').get();
   if (!admin) {
-    const token = adminToken || generateToken();
-    // The owner already knows their own key from setup - never eligible
-    // for the first-time name-search key retrieval (see keyClaim.js).
+    // Same generateUserToken() every regular user gets via POST /admin/users
+    // - in every environment, no exceptions. This used to also accept an
+    // ADMIN_TOKEN override outside production, which defeated the whole
+    // point on QA (its DB is ephemeral, so it reseeds - and re-pins the
+    // owner's real key to ADMIN_TOKEN's literal value - on every deploy):
+    // the owner's actual stored key was silently "mossy" there, not a
+    // generated one. The "mossy" dev-only quick-login (see /auth/login in
+    // routes.js) is a separate, login-time-only shortcut that never
+    // touches what's actually stored here - the real key is always
+    // generated and never surfaced as "mossy" anywhere.
+    const token = generateUserToken(adminName || 'Admin');
+    // Still pre-claimed unlike a regular user - not because the owner
+    // "already knows their key" (they may not, now that it's generated
+    // the same as anyone else's), but because the public, unauthenticated
+    // first-time key-retrieval flow (keyClaim.js) does zero identity
+    // verification beyond a name match. That's an acceptable trade-off
+    // for a guest account; it is not for the one account with full admin
+    // control over everyone else's keys and data.
     const info = db.prepare(
       "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at, key_claimed_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
@@ -407,7 +423,7 @@ export function seed({ adminToken, adminName, timezone }) {
     throw new Error(
       'TOKEN_SECRET does not match the one used to create the existing admin user, so their ' +
       'token cannot be read. Either restore the previous TOKEN_SECRET, or delete the admin row ' +
-      "(DELETE FROM users WHERE is_admin = 1) so a new admin is seeded with the current ADMIN_TOKEN."
+      "(DELETE FROM users WHERE is_admin = 1) so a new admin is reseeded."
     );
   }
 }

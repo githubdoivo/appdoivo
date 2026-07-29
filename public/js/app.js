@@ -22,6 +22,11 @@ let myUserId = null;
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
 // before /me resolves; showApp() corrects it immediately after.
 let plazaEnabled = true;
+// Set from /me in showApp() - gates the tutorial's skip button (see
+// startTutorial()): only admin/owner accounts can skip, everyone else
+// has to read through it.
+let isAdmin = false;
+let isOwner = false;
 
 /* ------------------------------- Arranque -------------------------------- */
 
@@ -57,11 +62,13 @@ function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
   myUserId = me.id;
+  isAdmin = !!me.isAdmin;
+  isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
-  wireLogoEasterEgg(me.name);
+  wireLogoEasterEgg(me.name, me.logo_customized);
   // No role badge in the main app's topbar - every tab is open to
   // everyone regardless of role, and it was fighting the logo-swap
   // easter egg for space. Settings still shows a role badge, where it's
@@ -119,11 +126,13 @@ function startSessionWatcher() {
 
 const TUTORIAL_STEPS = [
   ['tutorial_1_title', 'tutorial_1_text'],
+  ['tutorial_plaza_title', 'tutorial_plaza_text'],
   ['tutorial_2_title', 'tutorial_2_text'],
   ['tutorial_3_title', 'tutorial_3_text'],
   ['tutorial_wall_title', 'tutorial_wall_text'],
   ['tutorial_4_title', 'tutorial_4_text'],
   ['tutorial_5_title', 'tutorial_5_text'],
+  ['tutorial_6_title', 'tutorial_6_text'],
 ];
 let tutorialStep = 0;
 
@@ -143,6 +152,9 @@ function startTutorial() {
   $('tutorial-lang-step').classList.remove('hidden');
   $('tutorial-content-step').classList.add('hidden');
   $('tutorial-overlay').classList.remove('hidden');
+  // Regular users read through the whole thing (no skip) - admin/owner
+  // accounts already know the app, so they can jump straight past it.
+  $('tutorial-skip').classList.toggle('hidden', !(isAdmin || isOwner));
 }
 
 function beginTutorialContent(lang) {
@@ -162,6 +174,7 @@ async function endTutorial() {
 
 $('tutorial-lang-pt').addEventListener('click', () => beginTutorialContent('pt'));
 $('tutorial-lang-en').addEventListener('click', () => beginTutorialContent('en'));
+$('tutorial-skip').addEventListener('click', () => endTutorial());
 
 $('tutorial-next').addEventListener('click', () => {
   if (tutorialStep < TUTORIAL_STEPS.length - 1) {
@@ -172,14 +185,13 @@ $('tutorial-next').addEventListener('click', () => {
   }
 });
 
-$('tutorial-skip').addEventListener('click', () => endTutorial());
-
 /* -------------------------------- Idioma --------------------------------- */
-// Single square button, like the theme toggle: it shows the language you'll
-// switch TO, not the one that's active.
+// Single square button, like the theme toggle: shows the language that's
+// currently active, not the one it switches to (that read as confusing -
+// "en" showing while the app was in Portuguese).
 
 function updateLangUI() {
-  $('lang-toggle').textContent = getLang() === 'pt' ? 'en' : 'pt';
+  $('lang-toggle').textContent = getLang();
 }
 
 $('lang-toggle').addEventListener('click', () => {
@@ -551,10 +563,13 @@ async function loadPlaza() {
 // scheduled cron (or an admin's manual reveal) shows up without a manual reload.
 let rataPollTimer = null;
 
+// Same derivation as rataStatus() in settings.js - every consequence here
+// is already revealed (this only ever reads /consequences/revealed), so
+// the only question is where it sits between atribuir/pendente/feita.
 function rataStatusBadge(c) {
-  if (c.approved_at) return { key: 'rata_status_done', cls: 'rata-status-done' };
-  if (c.done_at) return { key: 'rata_status_pending_approval', cls: 'rata-status-pending' };
-  return { key: 'rata_status_queued', cls: 'rata-status-queued' };
+  if (c.approved_at) return { key: 'rata_status_feita', cls: 'rata-status-feita' };
+  if (!c.assigned_user_id) return { key: 'rata_status_atribuir', cls: 'rata-status-atribuir' };
+  return { key: 'rata_status_pendente', cls: 'rata-status-pendente' };
 }
 
 async function loadRataHistory() {
@@ -565,11 +580,15 @@ async function loadRataHistory() {
         const status = rataStatusBadge(c);
         const assignedLine = c.assignedName ? t('rata_assigned_to', { name: esc(c.assignedName) }) : t('rata_unassigned');
         const canMarkDone = c.assigned_user_id === myUserId && !c.done_at;
+        // Just the hour here (this is the guest-facing view) - the admin
+        // side shows hours and minutes, this one only needs to say
+        // roughly when.
+        const hour = c.revealed_at ? `${String(c.revealed_at).split(' ')[1].slice(0, 2)}h` : '';
         return `<div class="rata-history-item">
           <p class="rata-history-text">${esc(c.text)}</p>
           <div class="rata-history-meta">
             <span class="rata-badge ${status.cls}">${t(status.key)}</span>
-            <span class="muted">${assignedLine}</span>
+            <span class="muted">${assignedLine}${hour ? ` · ${hour}` : ''}</span>
           </div>
           ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
@@ -617,8 +636,11 @@ async function loadConsequences() {
     } else {
       $('suggest-msg').textContent = '';
     }
-  } catch (err) {
-    $('current-consequence').textContent = err.message;
+  } catch {
+    // Never surface a raw error/status code here - it used to leak "Erro
+    // 500" straight into the card on a server-side crash (see app.js's
+    // new global error handler + the timezone validation that caused it).
+    $('current-consequence').textContent = t('rata_load_error');
   }
 }
 
@@ -808,6 +830,16 @@ function stopOutfitPolling() {
   }
 }
 
+// Character names are often improvised at submission time, so pairing the
+// real registrant's name alongside it is the only way a voter can actually
+// tell who they're voting for. Admin-added contestants have no registrant,
+// so they just show the bare character name.
+function contestantLabel(c) {
+  if (!c.registeredBy) return c.name;
+  const who = c.partnerName ? `${c.registeredBy} & ${c.partnerName}` : c.registeredBy;
+  return `${c.name} (${who})`;
+}
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -828,10 +860,10 @@ async function loadVotes() {
 
     if (data.status === 'open' && !data.myVote) {
       area.innerHTML = data.contestants.length
-        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join('')
+        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
-        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.name));
+        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label));
       });
     } else if (data.myVote) {
       // Once cast, a vote is final (see castVote() server-side) and this
@@ -839,7 +871,7 @@ async function loadVotes() {
       // pending-results no longer overwrites it with a generic status
       // message, so "who did I vote for" stays visible throughout.
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
-      const msg = chosen ? t('outfit_voted_name', { name: esc(chosen.name) }) : t('outfit_voted');
+      const msg = chosen ? t('outfit_voted_name', { name: esc(contestantLabel(chosen)) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
     } else {
       area.innerHTML = '';
@@ -854,7 +886,8 @@ async function loadVotes() {
       // wrong for a partial set) - e.g. "3rd place" appearing alone first.
       list.classList.toggle('podium-reveal', data.resultsPhase !== 'all');
       list.innerHTML = results.map((r) => {
-        const label = data.resultsPhase === 'all' ? esc(r.name) : `${t(`rank_${r.rank}`)} · ${esc(r.name)}`;
+        const name = esc(contestantLabel(r));
+        const label = data.resultsPhase === 'all' ? name : `${t(`rank_${r.rank}`)} · ${name}`;
         return `<li><span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
       }).join('');
     } else {

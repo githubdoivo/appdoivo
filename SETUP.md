@@ -84,9 +84,13 @@ The only requirement is a **persistent disk** for the SQLite database. If the ho
    `fly volumes create appdoivo_data --region cdg --size 1`
 4. Set the secrets (these are never committed to the repository):
    ```
-   fly secrets set TOKEN_SECRET=<32-byte hex> ADMIN_TOKEN=<your-admin-password> ADMIN_NAME=Ivo `
+   fly secrets set TOKEN_SECRET=<32-byte hex> ADMIN_NAME=Ivo `
      VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:you@yourdomain
    ```
+   No `ADMIN_TOKEN` here on purpose - `fly.toml` sets `NODE_ENV=production`, which
+   makes the owner's real key generate the same random way any user's does. Look
+   it up after deploying with `npm run admin-token` (or `fly ssh console -C
+   'node scripts/print-admin-token.js'`).
 5. Deploy: `fly deploy` (or, from a branch already checked out, `scripts/deploy.sh prod` - runs the test suite first and refuses to deploy if it fails)
 
 `min_machines_running` is set to 1 in `fly.toml` so the Rata reveal (every 3 hours) fires even with no traffic. Outside events you may set it to 0 to save resources (the cron then only runs when there is a visit).
@@ -119,9 +123,13 @@ Avoid GoDaddy (up-sells and expensive renewals). Suggested names: `appdoivo.com`
 ## Environment variables (.env)
 
 - `PORT` - server port (default 3000; this project uses 3001 locally).
-- `ADMIN_TOKEN` - the owner's access key. If empty, one is generated on first start.
+- `NODE_ENV` - set to `production` only in the real deployment (`fly.toml`). Gates
+  two dev/test-only conveniences: `ADMIN_TOKEN` below, and a `mossy` quick-login
+  that always logs in as the owner regardless of their real key (see
+  `/auth/login` in `src/routes.js`) - neither works when this is `production`.
+- `ADMIN_TOKEN` - pins the owner's access key outside production. If empty (or
+  in production), one is generated the same way any user's key is.
 - `ADMIN_NAME` - the owner's display name.
-- `TIMEZONE` - timezone used for Rata's "day" and reveal window (e.g. `Europe/Lisbon`).
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of the database and never share it. If you change it, nobody can log in (the stored hashes no longer match).
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` - Web Push keys (generate with `npm run genkeys`).
 - `ENABLE_ADMIN_PROMOTION` - lets the owner promote/revoke other users' admin status from Settings. On in QA, off in production.

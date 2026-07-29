@@ -5,19 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
 
-// Isolated test environment: temporary DB + known admin token.
-// (Set BEFORE importing the app, so the seed uses these values.)
+// Isolated test environment: temporary DB. The admin's real key is always
+// generated (see seed() in db.js - no more ADMIN_TOKEN pinning it, even
+// outside production), so ADMIN below reads the actual generated value
+// off seedResult rather than assuming a fixed string.
 const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
 process.env.DB_FILE = DB;
-process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.ADMIN_NAME = 'Test Admin';
-process.env.TIMEZONE = 'Europe/Lisbon';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 
-const { default: app } = await import('../src/app.js');
+const { default: app, seedResult } = await import('../src/app.js');
 
-const ADMIN = 'test-admin-token';
+const ADMIN = seedResult.token;
 let server;
 let base;
 let userToken;
@@ -554,37 +554,45 @@ test('reset-all clears votes AND contestants, back to a never-started night', as
 // Wipes contestants/votes/consequences - runs last so it doesn't disturb
 // the shared state the tests above rely on.
 
-test('a non-owner admin can read and change the timezone setting', async () => {
+test('a non-owner admin can read and change the day-rollover-hour setting', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
   const get = await api('GET', '/admin/settings', { token: userToken });
   assert.equal(get.status, 200);
-  const put = await api('PUT', '/admin/settings', { token: userToken, body: { timezone: 'Europe/Lisbon' } });
+  const put = await api('PUT', '/admin/settings', { token: userToken, body: { dayRolloverHour: 6 } });
   assert.equal(put.status, 200);
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
-test('a non-owner admin cannot reset event content', async () => {
+test('a non-owner admin cannot use any feature wipe switch', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  const r = await api('POST', '/admin/reset-content', { token: userToken });
-  assert.equal(r.status, 403);
+  for (const path of ['/admin/consequences/wipe', '/admin/contestants/wipe', '/admin/plaza-posts/wipe', '/admin/chat/wipe']) {
+    const r = await api('POST', path, { token: userToken });
+    assert.equal(r.status, 403, `${path} should be owner-only`);
+  }
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
-test('the owner can reset event content, users are untouched', async () => {
-  const r = await api('POST', '/admin/reset-content', { token: ADMIN });
-  assert.equal(r.status, 200);
+test('a non-owner admin cannot register or remove Best Look contestants - owner-only', async () => {
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  await api('POST', `/admin/voting/${NIGHT}/registration`, { token: ADMIN });
 
-  const contestants = await api('GET', `/admin/contestants?night=${NIGHT}`, { token: ADMIN });
-  assert.equal(contestants.data.contestants.length, 0);
+  const register = await api('POST', '/admin/contestants/register', {
+    token: userToken,
+    body: { userId, name: 'Should Not Register', night: NIGHT },
+  });
+  assert.equal(register.status, 403);
 
-  const consequences = await api('GET', '/admin/consequences', { token: ADMIN });
-  assert.equal(consequences.data.length, 0);
+  const owned = await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId, name: 'Owner Registered', night: NIGHT },
+  });
+  assert.equal(owned.status, 201);
 
-  const voting = await api('GET', '/admin/voting', { token: ADMIN });
-  assert.ok(voting.data.nights.every((n) => n.status === 'closed'));
+  const remove = await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: userToken });
+  assert.equal(remove.status, 403);
 
-  const users = await api('GET', '/admin/users', { token: ADMIN });
-  assert.ok(users.data.some((u) => u.id === userId), 'user accounts must survive a content reset');
+  await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: ADMIN });
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
 /* ----------------------------------- Chat ---------------------------------- */
@@ -681,6 +689,11 @@ test('a user can change their own access key, given the correct current one', as
     token: oldToken, body: { currentToken: oldToken, newToken: 'has-a-dash!' },
   });
   assert.equal(badChars.status, 400);
+
+  const tooShort = await api('POST', '/me/change-token', {
+    token: oldToken, body: { currentToken: oldToken, newToken: 'abc123' },
+  });
+  assert.equal(tooShort.status, 400, 'a 6-character key should be rejected - minimum is 7');
 
   const ok = await api('POST', '/me/change-token', {
     token: oldToken, body: { currentToken: oldToken, newToken: 'newkey1234' },
@@ -855,13 +868,21 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
   await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
 });
 
-test('Plaza posts: only an admin can delete, and deleting one leaves the rest of the feed untouched', async () => {
+test('Plaza posts: only the owner can delete, and deleting one leaves the rest of the feed untouched', async () => {
   const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;
 
+  // Regular user cannot delete
   const forbidden = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: userToken });
   assert.equal(forbidden.status, 403);
 
+  // Non-owner admin cannot delete
+  const admin2 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'test-admin-2' } });
+  await api('PATCH', `/admin/users/${admin2.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const forbiddenAdmin = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: admin2.data.token });
+  assert.equal(forbiddenAdmin.status, 403);
+
+  // Owner can delete
   const del = await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
   assert.equal(del.status, 200);
 
@@ -889,6 +910,47 @@ test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', 
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }
+});
+
+/* --------------------------- Feature wipe switches --------------------------- */
+// Runs at the very end (just before rate-limiting, which itself has to be
+// last) - each wipe is broad on purpose (every consequence/contestant/
+// post/message, not scoped to one night or user), so nothing earlier in
+// the file can depend on that data still being there afterward.
+
+test('the owner can wipe each feature independently - only that feature\'s data is cleared, everything else (including user accounts) survives', async () => {
+  await api('POST', '/consequences', { token: userToken, body: { text: 'wipe-test consequence' } });
+  await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'WipeTestContestant', night: NIGHT } });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wipe-test post' } });
+  await api('POST', '/chat/messages', { token: ADMIN, body: { text: 'wipe-test message' } });
+
+  // Wiping Rata only touches consequences.
+  await api('POST', '/admin/consequences/wipe', { token: ADMIN });
+  const afterRataWipe = await api('GET', '/admin/consequences', { token: ADMIN });
+  assert.equal(afterRataWipe.data.length, 0, 'consequences should be gone after the Rata wipe');
+  const contestantsSurvived = await api('GET', `/admin/contestants?night=${NIGHT}`, { token: ADMIN });
+  assert.ok(contestantsSurvived.data.contestants.some((c) => c.name === 'WipeTestContestant'), 'Snatch data should survive a Rata-only wipe');
+
+  // Wiping Snatch only touches contestants/votes, both nights.
+  await api('POST', '/admin/contestants/wipe', { token: ADMIN });
+  const contestantsGone = await api('GET', `/admin/contestants?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(contestantsGone.data.contestants.length, 0, 'contestants should be gone after the Snatch wipe');
+  const voting = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.ok(voting.data.nights.every((n) => n.status === 'closed'), 'Snatch wipe should also close voting for every night');
+
+  // Wiping Wall only touches plaza_posts.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  const posts = await api('GET', '/admin/plaza-posts', { token: ADMIN });
+  assert.equal(posts.data.posts.length, 0, 'posts should be gone after the Wall wipe');
+
+  // Wiping Plaza only touches chat messages.
+  await api('POST', '/admin/chat/wipe', { token: ADMIN });
+  const messages = await api('GET', '/chat/messages', { token: ADMIN });
+  assert.equal(messages.data.messages.length, 0, 'messages should be gone after the Plaza wipe');
+
+  // None of this touched user accounts.
+  const users = await api('GET', '/admin/users', { token: ADMIN });
+  assert.ok(users.data.some((u) => u.id === userId), 'user accounts must survive every wipe');
 });
 
 /* ------------------------------- Rate limiting ------------------------------ */

@@ -3,6 +3,26 @@ import { hashToken } from './tokens.js';
 import { checkAuthAttempt } from './rateLimit.js';
 
 /**
+ * Resolves a submitted token (already lowercased/trimmed) to a user row.
+ * Shared by /auth/login (routes.js) and authenticate() below - the app has
+ * no separate session token, the frontend just replays whatever was typed
+ * at login on every subsequent request, so both places need to agree on
+ * what counts as valid or a login that works once and then 401s on the
+ * very next request. Dev/QA-only convenience: "mossy" always resolves to
+ * the owner, whatever their real (randomly-generated, see seed() in
+ * db.js) key actually is - never honored when NODE_ENV=production (see
+ * fly.toml), so there's no guessable backdoor on the real deployment.
+ */
+export function findUserByToken(token) {
+  const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
+  let user = db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
+  if (!user && token === 'mossy' && process.env.NODE_ENV !== 'production') {
+    user = db.prepare(`SELECT ${columns} FROM users WHERE is_owner = 1`).get();
+  }
+  return user;
+}
+
+/**
  * Token authentication middleware.
  * Accepts "Authorization: Bearer <token>" or "?token=" (for the service worker).
  */
@@ -15,10 +35,8 @@ export function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Token em falta.' });
   }
 
-  // Keys are always lowercase (see /auth/login) - normalize here too, since
-  // the frontend just replays whatever was typed at login on every
-  // subsequent request.
-  const user = db.prepare('SELECT id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at FROM users WHERE token_hash = ?').get(hashToken(String(token).toLowerCase()));
+  // Keys are always lowercase (see /auth/login) - normalize here too.
+  const user = findUserByToken(String(token).trim().toLowerCase());
   if (!user) {
     // Shares /auth/login's rate-limit budget - guessing tokens against any
     // endpoint that accepts a Bearer token is throttled the same way,
@@ -45,6 +63,7 @@ export function authenticate(req, res, next) {
     isOwner: !!user.is_owner,
     tutorialSeen: !!user.tutorial_seen,
     lang: user.lang,
+    logo_customized: !!user.logo_customized,
   };
   next();
 }
