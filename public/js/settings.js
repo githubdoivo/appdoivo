@@ -155,6 +155,11 @@ async function boot() {
       ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card'].forEach((id) => {
         $(id).classList.add('hidden');
       });
+      // Contestant creation/removal is owner-only too (see requireOwner on
+      // POST /admin/contestants/register and DELETE /admin/contestants/:id)
+      // - a regular admin still sees the contestants list itself (search +
+      // table), just not the form or the remove button on each row.
+      $('admin-register-form').classList.add('hidden');
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -631,7 +636,7 @@ function renderContestants() {
         <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span></td>
           <td class="muted">${who}</td>
-          <td style="text-align:right"><button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button></td>
+          <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
         </tr>`;
       }).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
@@ -693,7 +698,12 @@ $('contestant-search').addEventListener('input', renderContestants);
 // is for, since (unlike the public form) there's no implicit "self" here.
 let adminRegisterUsersCache = null;
 async function ensureAdminRegisterUsersCache() {
-  if (!adminRegisterUsersCache) adminRegisterUsersCache = await api('/users/basic');
+  // /users/basic excludes the caller (see loadConsequences() for why) - the
+  // admin filling this in might be registering themselves, so add self back.
+  if (!adminRegisterUsersCache) {
+    const others = await api('/users/basic');
+    adminRegisterUsersCache = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  }
   return adminRegisterUsersCache;
 }
 

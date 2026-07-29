@@ -572,6 +572,29 @@ test('a non-owner admin cannot use any feature wipe switch', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
+test('a non-owner admin cannot register or remove Best Look contestants - owner-only', async () => {
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  await api('POST', `/admin/voting/${NIGHT}/registration`, { token: ADMIN });
+
+  const register = await api('POST', '/admin/contestants/register', {
+    token: userToken,
+    body: { userId, name: 'Should Not Register', night: NIGHT },
+  });
+  assert.equal(register.status, 403);
+
+  const owned = await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId, name: 'Owner Registered', night: NIGHT },
+  });
+  assert.equal(owned.status, 201);
+
+  const remove = await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: userToken });
+  assert.equal(remove.status, 403);
+
+  await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: ADMIN });
+  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+});
+
 /* ----------------------------------- Chat ---------------------------------- */
 
 test('posting and reading a chat message', async () => {

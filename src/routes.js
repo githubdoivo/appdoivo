@@ -643,7 +643,7 @@ router.post('/admin/contestants', (req, res) => {
 // duplicating its rules (duplicate-entry checks, partner validation, the
 // night having to actually be in "registration"), so an admin follows the
 // exact same constraints a self-registering guest would.
-router.post('/admin/contestants/register', (req, res) => {
+router.post('/admin/contestants/register', requireOwner, (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   const userId = Number(req.body?.userId);
   if (!userId) return res.status(400).json({ error: 'Escolhe um utilizador.' });
@@ -663,7 +663,7 @@ router.patch('/admin/contestants/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/admin/contestants/:id', (req, res) => {
+router.delete('/admin/contestants/:id', requireOwner, (req, res) => {
   db.prepare('DELETE FROM contestants WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
