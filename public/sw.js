@@ -35,12 +35,19 @@ self.addEventListener('notificationclick', (event) => {
       const client = clients[0];
       if (!client) return self.clients.openWindow(url);
       // Take the user straight to the result being announced, not just
-      // whatever page the app happened to be left open on.
+      // whatever page the app happened to be left open on. navigate() is
+      // the "real" way to do this, but iOS Safari often silently refuses
+      // it when the PWA is already open in the foreground - postMessage
+      // is the reliable fallback (the page applies the deep link itself,
+      // see the message listener in app.js), so it's sent regardless of
+      // whether navigate() below appears to succeed.
+      client.postMessage({ type: 'deep-link', url });
       if ('navigate' in client) {
         try {
           await client.navigate(url);
         } catch {
-          // Navigate can be refused in some states; focusing is still better than nothing.
+          // Navigate can be refused in some states; postMessage above
+          // already covers it, and focusing is still better than nothing.
         }
       }
       return 'focus' in client ? client.focus() : undefined;
