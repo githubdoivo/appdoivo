@@ -701,7 +701,7 @@ async function ensureAdminRegisterUsersCache() {
 // Wires a search input to a results container: type to filter
 // /users/basic by name, click a result to pick it (calling onPick with the
 // chosen user's id). Used twice below (participant, partner) - identical
-// behavior to app.js's own partner-search, just parameterized so it's not
+// behaviour to app.js's own partner-search, just parameterized so it's not
 // duplicated per field.
 function wireAdminUserSearch(inputEl, resultsEl, onPick) {
   inputEl.addEventListener('input', async () => {

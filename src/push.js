@@ -96,7 +96,7 @@ export async function broadcast(payload, { excludeUserId } = {}) {
 /**
  * Sends a notification to a single user's devices (all of them, if they're
  * logged in on more than one), in their own `lang`. Same payload shape and
- * cleanup behavior as broadcast() - just filtered to one recipient instead
+ * cleanup behaviour as broadcast() - just filtered to one recipient instead
  * of everyone.
  */
 export async function notifyUser(userId, payload) {
