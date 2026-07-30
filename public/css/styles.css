@@ -1180,6 +1180,27 @@ html.mode-dark body.theme-plaza {
   text-wrap: balance;
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
+/* Small, unobtrusive text link (same treatment as .link-btn) - post content
+   is admin-authored free text with no built-in PT/EN pair, unlike the
+   app's own UI chrome, so this triggers an on-demand machine translation
+   (see translate.js) rather than sitting there as a normal action button. */
+.plaza-translate-btn {
+  background: none;
+  border: none;
+  padding: 2px 0 0 14px;
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-family: var(--body);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  display: block;
+}
+.plaza-translate-btn:hover { color: var(--ink); }
+.plaza-translate-btn:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
+.plaza-post-poll .plaza-translate-btn { padding-left: 0; }
 
 .plaza-post-announcement {
   background: var(--paper-2);
