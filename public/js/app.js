@@ -468,23 +468,32 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
-// Post text is whatever the admin typed, in whatever language - unlike the
-// app's own UI chrome (i18n.js), there's no built-in PT/EN pair for it. A
-// translated post's text/button state lives here (keyed by post id),
-// separate from lastPlazaPosts, so a poll-driven re-render (every 4s, see
+// Post text - and, for a poll, its option labels too - is whatever the
+// admin typed, in whatever language, unlike the app's own UI chrome
+// (i18n.js) which has a built-in PT/EN pair for everything. A translated
+// post's content/button state lives here (keyed by post id, value is
+// 'pending' or { text, options: string[] | null }), separate from
+// lastPlazaPosts, so a poll-driven re-render (every 4s, see
 // startPlazaPolling()) doesn't silently revert an open translation back to
 // the original.
-const translatedPostText = new Map();
+const translatedPostContent = new Map();
 
 function plazaPostTextHtml(post) {
-  const translating = translatedPostText.get(post.id) === 'pending';
-  const translated = translatedPostText.get(post.id);
-  const showingTranslation = translated && translated !== 'pending';
-  const text = showingTranslation ? translated : post.text;
+  const entry = translatedPostContent.get(post.id);
+  const translating = entry === 'pending';
+  const showingTranslation = entry && entry !== 'pending';
+  const text = showingTranslation ? entry.text : post.text;
   const btnLabel = translating ? t('plaza_translating') : showingTranslation ? t('plaza_show_original_btn') : t('plaza_translate_btn');
   return `
         <p class="plaza-post-text">${esc(text)}</p>
         <button type="button" class="plaza-translate-btn" data-translate-post="${post.id}"${translating ? ' disabled' : ''}>${esc(btnLabel)}</button>`;
+}
+
+/** Poll option label for `post`, translated if a translation is currently showing for this post. */
+function plazaOptionLabel(post, option, index) {
+  const entry = translatedPostContent.get(post.id);
+  if (entry && entry !== 'pending' && entry.options) return entry.options[index];
+  return option.label;
 }
 
 function renderPlazaPost(post) {
@@ -507,14 +516,14 @@ function renderPlazaPost(post) {
   // pendingPollSelections; nothing reaches the server until "votar" below
   // is pressed, so a misclick before then costs nothing.
   const pendingOptionId = pendingPollSelections.get(post.id);
-  const optionsHtml = post.options.map((o) => {
+  const optionsHtml = post.options.map((o, i) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
     const isMine = post.myOptionId === o.id;
     const isPending = !alreadyVoted && pendingOptionId === o.id;
     const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
     const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
-        <span class="plaza-poll-option-label">${esc(o.label)}</span>
+        <span class="plaza-poll-option-label">${esc(plazaOptionLabel(post, o, i))}</span>
         <span class="plaza-poll-option-pct">${pct}%</span>`;
     // Once you've voted, the choice is locked - render plain divs instead of
     // buttons so there's nothing left to click, rather than disabling a
@@ -581,23 +590,32 @@ function renderPlazaFeed(posts) {
   $('plaza-feed').querySelectorAll('[data-translate-post]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const postId = Number(btn.dataset.translatePost);
-      const current = translatedPostText.get(postId);
+      const current = translatedPostContent.get(postId);
       // Already showing a translation - "show original" just clears it,
       // no need to hit the API again.
       if (current && current !== 'pending') {
-        translatedPostText.delete(postId);
+        translatedPostContent.delete(postId);
         renderPlazaFeed(lastPlazaPosts);
         return;
       }
       const post = lastPlazaPosts.find((p) => p.id === postId);
       if (!post) return;
-      translatedPostText.set(postId, 'pending');
+      translatedPostContent.set(postId, 'pending');
       renderPlazaFeed(lastPlazaPosts);
-      const translated = await translateText(post.text, getLang());
+      const lang = getLang();
+      // A poll's options need translating too, not just its question - all
+      // requests fire together so this doesn't take options.length times
+      // as long as a plain announcement.
+      const [text, options] = await Promise.all([
+        translateText(post.text, lang),
+        post.type === 'poll'
+          ? Promise.all(post.options.map((o) => translateText(o.label, lang)))
+          : Promise.resolve(null),
+      ]);
       // The post could have been removed, or the feed already re-rendered
-      // past this pending state, by the time the request resolves.
-      if (translatedPostText.get(postId) === 'pending') {
-        translatedPostText.set(postId, translated);
+      // past this pending state, by the time the requests resolve.
+      if (translatedPostContent.get(postId) === 'pending') {
+        translatedPostContent.set(postId, { text, options });
         renderPlazaFeed(lastPlazaPosts);
       }
     });
