@@ -55,11 +55,11 @@ function getOrAssignPseudonym(userId) {
  * { ok, pseudonym } or { error }. */
 export function resetPseudonym(userId) {
   const user = db.prepare('SELECT wall_pseudonym, wall_pseudonym_reset_day FROM users WHERE id = ?').get(userId);
-  if (!user) return { error: 'Utilizador nao encontrado.' };
+  if (!user) return { error: 'err_user_not_found' };
 
   const day = today();
   if (user.wall_pseudonym_reset_day === day) {
-    return { error: 'Só podes gerar uma nova alcunha uma vez por dia.' };
+    return { error: 'err_pseudonym_reset_limit' };
   }
 
   const pseudonym = randomPseudonym();
@@ -125,8 +125,8 @@ function sanitizeMessage(text) {
 /** Posts a message. Returns { ok, pseudonym } or { error }. */
 export function postMessage(userId, text) {
   const sanitized = sanitizeMessage(String(text || ''));
-  if (!sanitized) return { error: 'Mensagem vazia.' };
-  if (sanitized.length > MAX_TEXT_LENGTH) return { error: `Mensagem demasiado longa (max ${MAX_TEXT_LENGTH} caracteres).` };
+  if (!sanitized) return { error: 'err_empty_message' };
+  if (sanitized.length > MAX_TEXT_LENGTH) return { error: 'err_message_too_long' };
 
   const pseudonym = getOrAssignPseudonym(userId);
   db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, sanitized, pseudonym);

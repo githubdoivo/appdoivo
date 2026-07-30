@@ -1,4 +1,6 @@
 // API and session helpers (token stored in the browser).
+import { t } from './i18n.js';
+
 const TOKEN_KEY = 'appivo_token';
 
 export function getToken() {
@@ -11,7 +13,15 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-/** Pedido a API com token no header. Lanca Error com mensagem do servidor. */
+/**
+ * Request to the API with the token in the header. Throws an Error with the
+ * server's message. The server returns a stable error CODE (e.g.
+ * "err_token_missing"), not literal text - it has no idea which language
+ * the caller wants, so translation happens here, client-side, same as
+ * every other piece of text in the app. A code with no matching i18n key
+ * (shouldn't happen, but not fatal if it does) falls back to itself via
+ * t()'s own fallback behavior.
+ */
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
@@ -25,7 +35,7 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || `Erro ${res.status}`);
+    const err = new Error(data.error ? t(data.error) : `Error ${res.status}`);
     err.status = res.status;
     throw err;
   }

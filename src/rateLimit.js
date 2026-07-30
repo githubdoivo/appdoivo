@@ -30,7 +30,7 @@ export function loginRateLimit(req, res, next) {
   const result = checkAndCount(req.ip);
   if (result.blocked) {
     res.set('Retry-After', String(result.retryAfter));
-    return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
+    return res.status(429).json({ error: 'err_rate_limited' });
   }
   next();
 }

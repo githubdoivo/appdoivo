@@ -53,7 +53,7 @@ app.get('*', (req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('[error]', err);
-  res.status(500).json({ error: 'Ocorreu um erro. Tenta novamente.' });
+  res.status(500).json({ error: 'err_generic' });
 });
 
 export default app;

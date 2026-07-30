@@ -38,8 +38,8 @@ export function searchUnclaimedUsers(name) {
  */
 export function claimKey(userId) {
   const user = db.prepare('SELECT id, name, token_enc, key_claimed_at FROM users WHERE id = ?').get(userId);
-  if (!user) return { error: 'Utilizador não encontrado.' };
-  if (user.key_claimed_at) return { error: 'Esta chave já foi levantada. Fala com quem organiza o evento.' };
+  if (!user) return { error: 'err_user_not_found' };
+  if (user.key_claimed_at) return { error: 'err_key_already_claimed' };
 
   db.prepare("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(userId);
   return { ok: true, name: user.name, token: decryptToken(user.token_enc) };

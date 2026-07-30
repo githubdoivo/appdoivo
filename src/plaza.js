@@ -82,19 +82,19 @@ export function listPlazaPostsForAdmin() {
  */
 export function createPlazaPost(authorId, { type, text, options }) {
   const trimmedText = String(text ?? '').trim();
-  if (!trimmedText) return { error: 'Escreve o texto da publicação.' };
-  if (trimmedText.length > MAX_TEXT_LENGTH) return { error: `Máximo ${MAX_TEXT_LENGTH} caracteres.` };
+  if (!trimmedText) return { error: 'err_post_text_required' };
+  if (trimmedText.length > MAX_TEXT_LENGTH) return { error: 'err_post_too_long' };
 
-  if (type !== 'announcement' && type !== 'poll') return { error: 'Tipo de publicação inválido.' };
+  if (type !== 'announcement' && type !== 'poll') return { error: 'err_invalid_post_type' };
 
   let cleanOptions = [];
   if (type === 'poll') {
     cleanOptions = Array.isArray(options)
       ? options.map((o) => String(o ?? '').trim()).filter(Boolean)
       : [];
-    if (cleanOptions.length < MIN_OPTIONS) return { error: `Uma sondagem precisa de pelo menos ${MIN_OPTIONS} opções.` };
-    if (cleanOptions.length > MAX_OPTIONS) return { error: `Máximo ${MAX_OPTIONS} opções.` };
-    if (cleanOptions.some((o) => o.length > MAX_OPTION_LENGTH)) return { error: `Cada opção: máximo ${MAX_OPTION_LENGTH} caracteres.` };
+    if (cleanOptions.length < MIN_OPTIONS) return { error: 'err_poll_min_options' };
+    if (cleanOptions.length > MAX_OPTIONS) return { error: 'err_poll_max_options' };
+    if (cleanOptions.some((o) => o.length > MAX_OPTION_LENGTH)) return { error: 'err_poll_option_too_long' };
   }
 
   const info = db.prepare('INSERT INTO plaza_posts (type, author_id, text) VALUES (?, ?, ?)')
@@ -112,7 +112,7 @@ export function createPlazaPost(authorId, { type, text, options }) {
 /** Removes a post (options/votes cascade). Returns { ok } or { error }. */
 export function deletePlazaPost(id) {
   const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
-  if (!post) return { error: 'Publicação não encontrada.' };
+  if (!post) return { error: 'err_post_not_found' };
   db.prepare('DELETE FROM plaza_posts WHERE id = ?').run(id);
   return { ok: true };
 }
@@ -126,7 +126,7 @@ export function deletePlazaPost(id) {
  */
 export function pinPlazaPost(id, pinned) {
   const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
-  if (!post) return { error: 'Publicação não encontrada.' };
+  if (!post) return { error: 'err_post_not_found' };
 
   if (pinned) {
     db.prepare("UPDATE plaza_posts SET pinned_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(id);
@@ -146,20 +146,20 @@ export function pinPlazaPost(id, pinned) {
  */
 export function castPlazaVote(userId, postId, optionId) {
   const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(postId);
-  if (!post) return { error: 'Publicação não encontrada.' };
-  if (post.type !== 'poll') return { error: 'Esta publicação não é uma sondagem.' };
+  if (!post) return { error: 'err_post_not_found' };
+  if (post.type !== 'poll') return { error: 'err_not_a_poll' };
 
   const option = db.prepare('SELECT id FROM plaza_poll_options WHERE id = ? AND post_id = ?').get(optionId, postId);
-  if (!option) return { error: 'Opção inválida.' };
+  if (!option) return { error: 'err_invalid_option' };
 
   const existing = db.prepare('SELECT id FROM plaza_poll_votes WHERE user_id = ? AND post_id = ?').get(userId, postId);
-  if (existing) return { error: 'Já votaste nesta sondagem.' };
+  if (existing) return { error: 'err_already_voted_poll' };
 
   try {
     db.prepare('INSERT INTO plaza_poll_votes (post_id, option_id, user_id) VALUES (?, ?, ?)').run(postId, optionId, userId);
   } catch (err) {
     if (err.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(err.message)) {
-      return { error: 'Já votaste nesta sondagem.' };
+      return { error: 'err_already_voted_poll' };
     }
     throw err;
   }

@@ -32,7 +32,7 @@ export function authenticate(req, res, next) {
   const token = bearer || req.query.token;
 
   if (!token) {
-    return res.status(401).json({ error: 'Token em falta.' });
+    return res.status(401).json({ error: 'err_token_missing' });
   }
 
   // Keys are always lowercase (see /auth/login) - normalize here too.
@@ -44,9 +44,9 @@ export function authenticate(req, res, next) {
     const result = checkAuthAttempt(req.ip);
     if (result.blocked) {
       res.set('Retry-After', String(result.retryAfter));
-      return res.status(429).json({ error: 'Demasiadas tentativas. Tenta novamente mais tarde.' });
+      return res.status(429).json({ error: 'err_rate_limited' });
     }
-    return res.status(401).json({ error: 'Token invalido.' });
+    return res.status(401).json({ error: 'err_token_invalid' });
   }
 
   // Any successful authenticated request proves this user already has
@@ -71,7 +71,7 @@ export function authenticate(req, res, next) {
 /** Middleware that requires admin privileges. */
 export function requireAdmin(req, res, next) {
   if (!req.user?.isAdmin) {
-    return res.status(403).json({ error: 'Acesso restrito ao administrador.' });
+    return res.status(403).json({ error: 'err_admin_only' });
   }
   next();
 }
@@ -83,7 +83,7 @@ export function requireAdmin(req, res, next) {
  */
 export function requireOwner(req, res, next) {
   if (!req.user?.isOwner) {
-    return res.status(403).json({ error: 'Acesso restrito ao dono da conta.' });
+    return res.status(403).json({ error: 'err_owner_only' });
   }
   next();
 }
