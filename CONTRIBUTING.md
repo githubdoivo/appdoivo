@@ -7,7 +7,7 @@ Every change happens on its own branch off `main`, named by type:
 - `feat/<description>` - new features
 - `fix/<description>` - bug fixes
 - `test/<description>` - test-only changes
-- `chore/<description>` - config, docs, tooling (no app behavior change)
+- `chore/<description>` - config, docs, tooling (no app behaviour change)
 
 Never commit straight to `main`.
 
@@ -22,7 +22,7 @@ Never commit straight to `main`.
   persistent volume. Only ever deployed from `main`.
 
 Databases are intentionally isolated between the two - QA is for testing
-behavior safely, not for managing real users.
+behaviour safely, not for managing real users.
 
 ## Process for a change
 

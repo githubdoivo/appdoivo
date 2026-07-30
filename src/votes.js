@@ -28,7 +28,7 @@ export function advanceResultsPhase(night) {
 /** Contestants registered for a night, with the real user(s) behind the
  * character name (null for admin-added entries with no registrant) - a
  * character name is often improvised at submission time, so voters can't
- * be expected to recognize who's actually behind it otherwise. */
+ * be expected to recognise who's actually behind it otherwise. */
 export function contestantsForNight(night) {
   return db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName

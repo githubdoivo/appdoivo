@@ -90,7 +90,7 @@ function showApp(me) {
   // from this redundant call could silently wipe out text someone's mid-
   // typing (the newer selectTab() load re-renders the same DOM nodes).
   // Always opens on the announcements feed (internally "plaza", now
-  // labeled "Wall" - see the tab nav comment in index.html) - a
+  // labelled "Wall" - see the tab nav comment in index.html) - a
   // notification's own ?tab= (handled right after) is the only thing
   // allowed to land somewhere else.
   applyDeepLinkParams();
@@ -695,9 +695,9 @@ function applyNight() {
   });
   document.body.classList.toggle('theme-rata', currentTab === 'rata');
   // Theme classes follow the DISPLAYED name, not the internal tab id: the
-  // chat feature is now labeled "Plaza" and gets the plaza-motif
+  // chat feature is now labelled "Plaza" and gets the plaza-motif
   // background (city-square/agora), while the old plaza/announcements
-  // feature is now labeled "Wall" and gets the mural texture that used to
+  // feature is now labelled "Wall" and gets the mural texture that used to
   // belong to the chat tab - swapped on purpose, see index.html's tab nav
   // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
   document.body.classList.toggle('theme-mural', currentTab === 'plaza');
@@ -897,7 +897,7 @@ async function loadVotes() {
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
       const list = $('results-list');
-      // Before "all", show just what's been revealed so far, labeled by its
+      // Before "all", show just what's been revealed so far, labelled by its
       // actual rank (not the tier list's auto-numbering, which would be
       // wrong for a partial set) - e.g. "3rd place" appearing alone first.
       list.classList.toggle('podium-reveal', data.resultsPhase !== 'all');

@@ -20,7 +20,7 @@ export function clearToken() {
  * the caller wants, so translation happens here, client-side, same as
  * every other piece of text in the app. A code with no matching i18n key
  * (shouldn't happen, but not fatal if it does) falls back to itself via
- * t()'s own fallback behavior.
+ * t()'s own fallback behaviour.
  */
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
