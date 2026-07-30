@@ -63,8 +63,8 @@ export const translations = {
     time_ago_hours: 'há {n} horas',
     time_ago_day: 'há 1 dia',
     time_ago_days: 'há {n} dias',
-    // Mural (agora "Plaza" - espaço de partilha aberto ao grupo, as
-    // mensagens desaparecem sozinhas)
+    // Mural (now "Plaza" - open group sharing space, messages disappear
+    // on their own)
     chat_hero: 'diz o que quiseres - desaparece sozinho.',
     chat_help: 'só os mais recentes sobrevivem. o resto vira pó.',
     chat_ph: 'escreve uma mensagem...',

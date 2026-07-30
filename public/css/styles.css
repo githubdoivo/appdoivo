@@ -183,7 +183,7 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
 
-/* ------------------------------- Tipografia ------------------------------ */
+/* ------------------------------- Typography ------------------------------ */
 
 h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em; margin: 0; }
 
@@ -364,8 +364,6 @@ select:hover { border-color: var(--clay); }
 #admin-night-switch button.active:hover { background: var(--clay); color: var(--paper-3); }
 
 label.field { display: block; margin: 4px 0 2px; font-size: var(--text-sm); font-weight: 600; text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
-
-/* -------------------------------- Botoes --------------------------------- */
 
 /* -------------------------------- Buttons --------------------------------- */
 button, .btn {
@@ -860,7 +858,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
    self-registration form (see #register-partner-results in app.js). */
 .partner-results { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
-/* ------------------------------ Responsivo ------------------------------- */
+/* ------------------------------ Responsive -------------------------------- */
 
 @media (max-width: 480px) {
   /* Most small text (badges, muted captions, help text, table cells,
@@ -897,11 +895,11 @@ body { transition: background-color 0.45s ease; }
 .voting-state.is-open { color: var(--rata); }
 .voting-state.is-closed { color: var(--danger); }
 
-/* ============ Best Outfit: tema comutavel (furnished / swamp) =========== */
-/* O tema e aplicado a <body> (pagina TODA) apenas quando o Best Outfit esta
-   ativo. As restantes divisoes ficam limpas (sem classe de tema). */
+/* ============ Best Outfit: switchable theme (furnished / swamp) ========= */
+/* The theme is applied to <body> (the WHOLE page) only while Best Outfit is
+   active. Every other section stays plain (no theme class). */
 
-/* --- FURNISHED: interior domestico, veludo teal, papel de parede quente --- */
+/* --- FURNISHED: cozy interior, teal velvet, warm wallpaper --- */
 body.theme-furnished {
   --paper:    #d6ded7;
   --paper-2:  #e2e8e1;
@@ -923,7 +921,7 @@ body.theme-furnished {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23cdd8d0'/%3E%3Cg stroke='%23305049' stroke-opacity='0.16' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%23305049' fill-opacity='0.13'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23cdd8d0'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
 }
 
-/* --- SWAMP: pantano, musgo/oliva, aguas paradas, juncos e nenufares --- */
+/* --- SWAMP: bog, moss/olive, still water, reeds and water lilies --- */
 body.theme-swamp {
   --paper:    #ccd4b3;
   --paper-2:  #d7dcc0;
@@ -979,7 +977,7 @@ body.theme-rata .card {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
 }
 
-/* --- Variantes noturnas para modo escuro/claro: cada tema ganha um par --- */
+/* --- Dark/light variants per night: each theme gets its own pair --- */
 html.mode-dark body.theme-furnished {
   --paper:    #182420;
   --paper-2:  #1f2e29;
