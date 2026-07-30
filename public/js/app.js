@@ -7,6 +7,7 @@ import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
+import { translateText } from './translate.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -67,6 +68,11 @@ function showApp(me) {
   isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
+  // Reopens on whatever tab was last open, not always Wall - a stored tab
+  // that's no longer valid (e.g. Wall while plazaEnabled is now false)
+  // falls back to the plazaEnabled check right after, same as before.
+  const storedTab = localStorage.getItem(TAB_KEY);
+  if (TABS.includes(storedTab) && storedTab !== currentTab) selectTab(storedTab);
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name, me.logo_customized);
@@ -315,6 +321,7 @@ $('token-input').addEventListener('input', () => {
 function selectTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
+  localStorage.setItem(TAB_KEY, tab);
   $('tab-plaza').classList.toggle('hidden', currentTab !== 'plaza');
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
@@ -461,6 +468,25 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
+// Post text is whatever the admin typed, in whatever language - unlike the
+// app's own UI chrome (i18n.js), there's no built-in PT/EN pair for it. A
+// translated post's text/button state lives here (keyed by post id),
+// separate from lastPlazaPosts, so a poll-driven re-render (every 4s, see
+// startPlazaPolling()) doesn't silently revert an open translation back to
+// the original.
+const translatedPostText = new Map();
+
+function plazaPostTextHtml(post) {
+  const translating = translatedPostText.get(post.id) === 'pending';
+  const translated = translatedPostText.get(post.id);
+  const showingTranslation = translated && translated !== 'pending';
+  const text = showingTranslation ? translated : post.text;
+  const btnLabel = translating ? t('plaza_translating') : showingTranslation ? t('plaza_show_original_btn') : t('plaza_translate_btn');
+  return `
+        <p class="plaza-post-text">${esc(text)}</p>
+        <button type="button" class="plaza-translate-btn" data-translate-post="${post.id}"${translating ? ' disabled' : ''}>${esc(btnLabel)}</button>`;
+}
+
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
@@ -469,7 +495,7 @@ function renderPlazaPost(post) {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${pinnedBadge}
-        <p class="plaza-post-text">${esc(post.text)}</p>
+        ${plazaPostTextHtml(post)}
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -504,7 +530,7 @@ function renderPlazaPost(post) {
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${pinnedBadge}
-      <p class="plaza-post-text">${esc(post.text)}</p>
+      ${plazaPostTextHtml(post)}
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
@@ -548,6 +574,31 @@ function renderPlazaFeed(posts) {
         // landed - resync from the server so the UI locks to read-only
         // instead of leaving stale, still-selectable options on screen.
         loadPlaza();
+      }
+    });
+  });
+
+  $('plaza-feed').querySelectorAll('[data-translate-post]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const postId = Number(btn.dataset.translatePost);
+      const current = translatedPostText.get(postId);
+      // Already showing a translation - "show original" just clears it,
+      // no need to hit the API again.
+      if (current && current !== 'pending') {
+        translatedPostText.delete(postId);
+        renderPlazaFeed(lastPlazaPosts);
+        return;
+      }
+      const post = lastPlazaPosts.find((p) => p.id === postId);
+      if (!post) return;
+      translatedPostText.set(postId, 'pending');
+      renderPlazaFeed(lastPlazaPosts);
+      const translated = await translateText(post.text, getLang());
+      // The post could have been removed, or the feed already re-rendered
+      // past this pending state, by the time the request resolves.
+      if (translatedPostText.get(postId) === 'pending') {
+        translatedPostText.set(postId, translated);
+        renderPlazaFeed(lastPlazaPosts);
       }
     });
   });
@@ -680,6 +731,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
 const TABS = ['plaza', 'rata', 'outfit', 'chat'];
+const TAB_KEY = 'appivo_tab';
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);
