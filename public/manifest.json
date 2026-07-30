@@ -1,7 +1,7 @@
 {
   "name": "appdoivo",
   "short_name": "appdoivo",
-  "description": "Wall, rata, snatch e plaza - tudo para a festa.",
+  "description": "Wall, rata, snatch and plaza - everything for the party.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#e7e3d6",

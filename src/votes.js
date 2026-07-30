@@ -81,28 +81,28 @@ export function myContestantForNight(userId, night) {
  * { ok, id, name } or { error }.
  */
 export function registerContestant(userId, night, name, partnerUserId) {
-  if (!isNight(night)) return { error: 'Noite invalida.' };
-  if (nightStatus(night) !== 'registration') return { error: 'As candidaturas desta noite nao estao abertas.' };
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
 
   const already = db.prepare(
     'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
   ).get(night, userId, userId);
-  if (already) return { error: 'Ja estas inscrito/a nesta noite.' };
+  if (already) return { error: 'err_you_already_registered' };
 
   const trimmedName = String(name || '').trim();
-  if (!trimmedName) return { error: 'Escreve o nome da tua personagem.' };
-  if (trimmedName.length > 60) return { error: 'Maximo 60 caracteres.' };
+  if (!trimmedName) return { error: 'err_persona_name_required' };
+  if (trimmedName.length > 60) return { error: 'err_max_60_chars' };
 
   let partnerId = null;
   if (partnerUserId) {
     partnerId = Number(partnerUserId);
-    if (partnerId === userId) return { error: 'Nao podes candidatar-te contigo mesmo/a.' };
+    if (partnerId === userId) return { error: 'err_cannot_partner_with_self' };
     const partner = db.prepare('SELECT id FROM users WHERE id = ?').get(partnerId);
-    if (!partner) return { error: 'Utilizador invalido.' };
+    if (!partner) return { error: 'err_user_invalid' };
     const partnerTaken = db.prepare(
       'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
     ).get(night, partnerId, partnerId);
-    if (partnerTaken) return { error: 'Essa pessoa ja esta inscrita nesta noite.' };
+    if (partnerTaken) return { error: 'err_already_registered_this_night' };
   }
 
   const info = db.prepare(
@@ -119,31 +119,31 @@ export function registerContestant(userId, night, name, partnerUserId) {
  */
 export function castVote(userId, contestantId, night) {
   if (!isNight(night)) {
-    return { error: 'Noite invalida.' };
+    return { error: 'err_invalid_night' };
   }
   if (nightStatus(night) !== 'open') {
-    return { error: 'A votacao desta noite nao esta aberta.' };
+    return { error: 'err_voting_not_open' };
   }
 
   const contestant = db.prepare(
     'SELECT id FROM contestants WHERE id = ? AND night = ?'
   ).get(contestantId, night);
   if (!contestant) {
-    return { error: 'Concorrente invalido para esta noite.' };
+    return { error: 'err_contestant_invalid_for_night' };
   }
 
   const existing = db.prepare(
     'SELECT id FROM votes WHERE user_id = ? AND night = ?'
   ).get(userId, night);
   if (existing) {
-    return { error: 'Ja votaste nesta noite.' };
+    return { error: 'err_already_voted' };
   }
 
   const partnerId = duoPartnerId(userId, night);
   if (partnerId) {
     const partnerVoted = db.prepare('SELECT id FROM votes WHERE user_id = ? AND night = ?').get(partnerId, night);
     if (partnerVoted) {
-      return { error: 'Tu e o teu par ja usaram o vosso voto conjunto esta noite.' };
+      return { error: 'err_duo_already_voted' };
     }
   }
 

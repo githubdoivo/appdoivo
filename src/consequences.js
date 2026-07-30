@@ -96,9 +96,9 @@ export async function assignConsequenceUser(consequenceId, userId) {
  */
 export function markConsequenceDone(consequenceId, userId) {
   const consequence = db.prepare(`SELECT id, assigned_user_id, done_at FROM consequences WHERE id = ? AND status = 'used'`).get(consequenceId);
-  if (!consequence) return { error: 'Consequência não encontrada.' };
-  if (consequence.assigned_user_id !== userId) return { error: 'Esta consequência não te foi atribuída.' };
-  if (consequence.done_at) return { error: 'Já marcaste esta consequência como feita.' };
+  if (!consequence) return { error: 'err_consequence_not_found' };
+  if (consequence.assigned_user_id !== userId) return { error: 'err_consequence_not_assigned_to_you' };
+  if (consequence.done_at) return { error: 'err_consequence_already_done' };
   db.prepare(`UPDATE consequences SET done_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?`).run(consequenceId);
   return { consequence: getConsequenceWithAssignment(consequenceId) };
 }
@@ -110,9 +110,9 @@ export function markConsequenceDone(consequenceId, userId) {
  */
 export function approveConsequence(consequenceId) {
   const consequence = db.prepare(`SELECT id, done_at, approved_at FROM consequences WHERE id = ?`).get(consequenceId);
-  if (!consequence) return { error: 'Consequência não encontrada.' };
-  if (!consequence.done_at) return { error: 'Ainda não foi marcada como feita.' };
-  if (consequence.approved_at) return { error: 'Já foi aprovada.' };
+  if (!consequence) return { error: 'err_consequence_not_found' };
+  if (!consequence.done_at) return { error: 'err_consequence_not_done_yet' };
+  if (consequence.approved_at) return { error: 'err_consequence_already_approved' };
   db.prepare(`UPDATE consequences SET approved_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?`).run(consequenceId);
   return { consequence: getConsequenceWithAssignment(consequenceId) };
 }

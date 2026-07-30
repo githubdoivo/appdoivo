@@ -65,9 +65,9 @@ router.get('/version', (req, res) => {
 // the first letter doesn't lock someone out.
 router.post('/auth/login', loginRateLimit, (req, res) => {
   const token = (req.body?.token || '').trim().toLowerCase();
-  if (!token) return res.status(400).json({ error: 'Token em falta.' });
+  if (!token) return res.status(400).json({ error: 'err_token_missing' });
   const user = findUserByToken(token);
-  if (!user) return res.status(401).json({ error: 'Token invalido.' });
+  if (!user) return res.status(401).json({ error: 'err_token_invalid' });
   // Proves they know their key - same claimed-key stamp authenticate()
   // applies (see auth.js), so they stop showing up in the first-time
   // name-search flow (keyClaim.js) from here on.
@@ -128,19 +128,19 @@ router.post('/me/change-token', (req, res) => {
 
   const user = db.prepare('SELECT token_hash FROM users WHERE id = ?').get(req.user.id);
   if (hashToken(currentToken) !== user.token_hash) {
-    return res.status(401).json({ error: 'Chave atual incorreta.' });
+    return res.status(401).json({ error: 'err_current_key_wrong' });
   }
   if (!/^[a-z0-9]+$/.test(newToken)) {
-    return res.status(400).json({ error: 'A nova chave só pode ter letras e números.' });
+    return res.status(400).json({ error: 'err_key_invalid_chars' });
   }
   if (newToken.length < 7) {
-    return res.status(400).json({ error: 'A nova chave deve ter pelo menos 7 caracteres.' });
+    return res.status(400).json({ error: 'err_key_too_short' });
   }
 
   const newHash = hashToken(newToken);
   const collision = db.prepare('SELECT id FROM users WHERE token_hash = ? AND id != ?').get(newHash, req.user.id);
   if (collision) {
-    return res.status(409).json({ error: 'Essa chave já está em uso. Escolhe outra.' });
+    return res.status(409).json({ error: 'err_key_taken' });
   }
 
   db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
@@ -164,17 +164,17 @@ router.post('/me/change-token', (req, res) => {
 // on/off-by-env-var pattern as ENABLE_ADMIN_PROMOTION/SEED_DEMO.
 
 router.get('/plaza-posts', (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   res.json({ posts: listPlazaPosts(req.user.id) });
 });
 
 router.get('/admin/plaza-posts', requireAdmin, (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   res.json({ posts: listPlazaPostsForAdmin() });
 });
 
 router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = createPlazaPost(req.user.id, req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
@@ -190,7 +190,7 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
 });
 
 router.delete('/admin/plaza-posts/:id', requireOwner, (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = deletePlazaPost(Number(req.params.id));
   if (result.error) return res.status(404).json({ error: result.error });
   res.json(result);
@@ -200,14 +200,14 @@ router.delete('/admin/plaza-posts/:id', requireOwner, (req, res) => {
 // to the top of everyone's Plaza feed. Not exposed to regular admins - same
 // reuse of requireOwner as the rest of the golden-rule-gated admin actions.
 router.patch('/admin/plaza-posts/:id/pin', requireOwner, (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = pinPlazaPost(Number(req.params.id), !!req.body?.pinned);
   if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
 });
 
 router.post('/plaza-posts/:id/vote', (req, res) => {
-  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'Not found.' });
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = castPlazaVote(req.user.id, Number(req.params.id), Number(req.body?.optionId));
   if (result.error) return res.status(400).json({ error: result.error });
   res.json({ posts: listPlazaPosts(req.user.id) });
@@ -218,11 +218,11 @@ router.post('/plaza-posts/:id/vote', (req, res) => {
 // Suggest one consequence per day.
 router.post('/consequences', (req, res) => {
   const text = (req.body?.text || '').trim();
-  if (!text) return res.status(400).json({ error: 'Escreve uma consequencia.' });
-  if (text.length > 200) return res.status(400).json({ error: 'Maximo 200 caracteres.' });
+  if (!text) return res.status(400).json({ error: 'err_consequence_text_required' });
+  if (text.length > 200) return res.status(400).json({ error: 'err_max_200_chars' });
 
   const existing = mySuggestionToday(req.user.id);
-  if (existing) return res.status(409).json({ error: 'Ja sugeriste uma consequencia hoje.' });
+  if (existing) return res.status(409).json({ error: 'err_consequence_already_suggested_today' });
 
   // Explicit millisecond-precision timestamp rather than relying on the
   // table's own DEFAULT - that only takes effect for tables created fresh
@@ -306,7 +306,7 @@ router.get('/users/basic', (req, res) => {
 router.post('/votes', (req, res) => {
   const contestantId = Number(req.body?.contestantId);
   const night = req.body?.night;
-  if (!contestantId) return res.status(400).json({ error: 'Escolhe um concorrente.' });
+  if (!contestantId) return res.status(400).json({ error: 'err_choose_contestant' });
   const result = castVote(req.user.id, contestantId, night);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json({ ok: true });
@@ -344,7 +344,7 @@ router.get('/push/vapid-public-key', (req, res) => {
 
 router.post('/push/subscribe', (req, res) => {
   const sub = req.body?.subscription;
-  if (!sub?.endpoint) return res.status(400).json({ error: 'Subscricao invalida.' });
+  if (!sub?.endpoint) return res.status(400).json({ error: 'err_invalid_subscription' });
   saveSubscription(req.user.id, sub);
   res.status(201).json({ ok: true });
 });
@@ -384,7 +384,7 @@ router.use('/admin/users', requireOwner);
 
 router.post('/admin/users', (req, res) => {
   const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  if (!name) return res.status(400).json({ error: 'err_name_missing' });
   const token = generateUserToken(name);
   const info = db.prepare(
     "INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -398,9 +398,9 @@ router.post('/admin/users', (req, res) => {
 router.patch('/admin/users/:id/name', (req, res) => {
   const id = Number(req.params.id);
   const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  if (!name) return res.status(400).json({ error: 'err_name_missing' });
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
-  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  if (!user) return res.status(404).json({ error: 'err_user_not_found' });
   db.prepare("UPDATE users SET name = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(name, id);
   res.json({ ok: true, id, name });
 });
@@ -414,7 +414,7 @@ router.patch('/admin/users/:id/name', (req, res) => {
 router.post('/admin/users/:id/regenerate-token', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(id);
-  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  if (!user) return res.status(404).json({ error: 'err_user_not_found' });
   const token = generateUserToken(user.name);
   db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), key_claimed_at = NULL WHERE id = ?")
     .run(hashToken(token), encryptToken(token), id);
@@ -426,7 +426,7 @@ router.post('/admin/users/:id/regenerate-token', (req, res) => {
 router.post('/me/logo-customized', (req, res) => {
   const customized = req.body?.customized;
   if (customized !== true && customized !== false) {
-    return res.status(400).json({ error: 'Invalid logo_customized value.' });
+    return res.status(400).json({ error: 'err_invalid_logo_value' });
   }
   db.prepare('UPDATE users SET logo_customized = ? WHERE id = ?').run(customized ? 1 : 0, req.user.id);
   res.json({ ok: true, logo_customized: customized });
@@ -435,10 +435,10 @@ router.post('/me/logo-customized', (req, res) => {
 router.delete('/admin/users/:id', (req, res) => {
   const id = Number(req.params.id);
   const user = db.prepare('SELECT is_owner FROM users WHERE id = ?').get(id);
-  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  if (!user) return res.status(404).json({ error: 'err_user_not_found' });
   // Only the owner is protected from removal. A promoted admin is still
   // just a regular user with an extra role, so they stay deletable.
-  if (user.is_owner) return res.status(400).json({ error: 'Nao podes remover o dono da conta.' });
+  if (user.is_owner) return res.status(400).json({ error: 'err_cannot_remove_owner' });
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
   res.json({ ok: true });
 });
@@ -450,22 +450,22 @@ router.delete('/admin/users/:id', (req, res) => {
 // regardless of this flag.
 router.patch('/admin/users/:id/admin', (req, res) => {
   if (process.env.ENABLE_ADMIN_PROMOTION !== 'true') {
-    return res.status(403).json({ error: 'Funcionalidade desativada neste ambiente.' });
+    return res.status(403).json({ error: 'err_feature_disabled' });
   }
 
   const id = Number(req.params.id);
   const isAdmin = !!req.body?.isAdmin;
   const user = db.prepare('SELECT is_admin, is_owner FROM users WHERE id = ?').get(id);
-  if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+  if (!user) return res.status(404).json({ error: 'err_user_not_found' });
 
   if (!isAdmin && user.is_owner) {
-    return res.status(400).json({ error: 'Nao podes remover o admin principal.' });
+    return res.status(400).json({ error: 'err_cannot_demote_owner' });
   }
 
   if (!isAdmin && user.is_admin) {
     const { c: adminCount } = db.prepare('SELECT count(*) c FROM users WHERE is_admin = 1').get();
     if (adminCount <= 1) {
-      return res.status(400).json({ error: 'Tem de existir sempre pelo menos um admin.' });
+      return res.status(400).json({ error: 'err_last_admin' });
     }
   }
 
@@ -569,7 +569,7 @@ router.get('/admin/consequences', (req, res) => {
 // Reveal a consequence manually (for testing).
 router.post('/admin/consequences/reveal', async (req, res) => {
   const revealed = await revealRandomConsequence();
-  if (!revealed) return res.status(404).json({ error: 'Nao ha consequencias pendentes - ja foi tudo revelado.' });
+  if (!revealed) return res.status(404).json({ error: 'err_no_pending_consequences' });
   res.json({ ok: true, revealed });
 });
 
@@ -583,12 +583,12 @@ router.patch('/admin/consequences/:id/assign', async (req, res) => {
   const userId = req.body?.userId === null ? null : Number(req.body?.userId);
   if (userId !== null) {
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
-    if (!user) return res.status(404).json({ error: 'Utilizador nao encontrado.' });
+    if (!user) return res.status(404).json({ error: 'err_user_not_found' });
   }
   // assignConsequenceUser() already notifies the assigned user directly
   // (see src/consequences.js) - a second notification here duplicated it.
   const updated = await assignConsequenceUser(Number(req.params.id), userId);
-  if (!updated) return res.status(404).json({ error: 'Consequencia nao encontrada.' });
+  if (!updated) return res.status(404).json({ error: 'err_consequence_not_found' });
   res.json({ ok: true, consequence: updated });
 });
 
@@ -622,16 +622,16 @@ router.get('/admin/contestants', (req, res) => {
 router.post('/admin/contestants', (req, res) => {
   const name = (req.body?.name || '').trim();
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
-  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
+  if (!name) return res.status(400).json({ error: 'err_name_missing' });
   let userId = null;
   if (req.body?.userId) {
     userId = Number(req.body.userId);
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
-    if (!user) return res.status(400).json({ error: 'Utilizador invalido.' });
+    if (!user) return res.status(400).json({ error: 'err_user_invalid' });
     const taken = db.prepare(
       'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
     ).get(night, userId, userId);
-    if (taken) return res.status(400).json({ error: 'Essa pessoa ja esta inscrita nesta noite.' });
+    if (taken) return res.status(400).json({ error: 'err_already_registered_this_night' });
   }
   const info = db.prepare(
     'INSERT INTO contestants (name, night, user_id) VALUES (?, ?, ?)'
@@ -648,7 +648,7 @@ router.post('/admin/contestants', (req, res) => {
 router.post('/admin/contestants/register', requireOwner, (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   const userId = Number(req.body?.userId);
-  if (!userId) return res.status(400).json({ error: 'Escolhe um utilizador.' });
+  if (!userId) return res.status(400).json({ error: 'err_choose_user' });
   const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId);
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json(result);
@@ -658,10 +658,10 @@ router.post('/admin/contestants/register', requireOwner, (req, res) => {
 // just reviewing/cleaning up submissions before opening voting).
 router.patch('/admin/contestants/:id', (req, res) => {
   const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Nome em falta.' });
-  if (name.length > 60) return res.status(400).json({ error: 'Maximo 60 caracteres.' });
+  if (!name) return res.status(400).json({ error: 'err_name_missing' });
+  if (name.length > 60) return res.status(400).json({ error: 'err_max_60_chars' });
   const info = db.prepare('UPDATE contestants SET name = ? WHERE id = ?').run(name, Number(req.params.id));
-  if (info.changes === 0) return res.status(404).json({ error: 'Concorrente nao encontrado.' });
+  if (info.changes === 0) return res.status(404).json({ error: 'err_contestant_not_found' });
   res.json({ ok: true });
 });
 
@@ -682,7 +682,7 @@ router.put('/admin/settings', (req, res) => {
   const { dayRolloverHour } = req.body || {};
   if (dayRolloverHour !== undefined) {
     const h = Number(dayRolloverHour);
-    if (!Number.isInteger(h) || h < 0 || h > 23) return res.status(400).json({ error: 'Hora de rollover invalida (0-23).' });
+    if (!Number.isInteger(h) || h < 0 || h > 23) return res.status(400).json({ error: 'err_invalid_rollover_hour' });
     setSetting('day_rollover_hour', h);
   }
   res.json({ ok: true });
@@ -714,7 +714,7 @@ const NIGHT_LABEL = { furnished: 'Furnished', swamp: 'Swamp' };
 // directly in the Contestants table.
 router.post('/admin/voting/:night/registration', async (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'registration');
   setSetting(`voting_started_${night}`, '1');
@@ -730,7 +730,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
 
 router.post('/admin/voting/:night/open', async (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -747,7 +747,7 @@ router.post('/admin/voting/:night/open', async (req, res) => {
 // reveals results in stages afterwards via /reveal-next.
 router.post('/admin/voting/:night/close', async (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   setSetting(`voting_status_${night}`, 'closed');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
@@ -771,7 +771,7 @@ const REVEAL_NOTIFY = {
 // the whole point of staging it like an awards countdown.
 router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   const phase = advanceResultsPhase(night);
   res.json({ ok: true, night, resultsPhase: phase });
   if (REVEAL_NOTIFY[phase]) {
@@ -788,7 +788,7 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
 // contestant roster - for redoing a vote without making everyone re-enter.
 router.post('/admin/voting/:night/reset', (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
@@ -801,7 +801,7 @@ router.post('/admin/voting/:night/reset', (req, res) => {
 // when the whole night needs redoing from scratch, entries included.
 router.post('/admin/voting/:night/reset-all', (req, res) => {
   const { night } = req.params;
-  if (!isNight(night)) return res.status(404).json({ error: 'Noite invalida.' });
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM contestants WHERE night = ?').run(night);
   setSetting(`voting_status_${night}`, 'closed');
   setSetting(`voting_started_${night}`, '0');

@@ -13,7 +13,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
-/** Copia texto para o clipboard e dá feedback breve no botão. */
+/** Copies text to the clipboard and gives brief feedback on the button. */
 async function copyToClipboard(text, btn) {
   try {
     await navigator.clipboard.writeText(text);
