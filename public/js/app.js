@@ -13,6 +13,9 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
+// Strips accents so "cesar" matches "César" - typing the plain-ASCII form
+// of a name should always find it, not just the exact accented spelling.
+const foldAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 let currentTab = 'plaza';
 // Set from /me in showApp() - lets the Rata history tell "assigned to
@@ -209,9 +212,41 @@ $('lang-toggle').addEventListener('click', () => {
   refreshNotifButton();
   loadConsequences();
   loadVotes();
+  renderPlazaFeed(lastPlazaPosts);
+  renderChat(lastChatMessages);
 });
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
+
+/* ---------------------------- Auto-traducao ------------------------------- */
+// Wall posts/polls and Plaza messages are free text the admin/guests typed
+// - each assumed authored in its own "native" language (Portuguese for
+// posts and chat messages, English for the built-in Plaza pseudonyms, see
+// FURNISHED_OBJECTS/SWAMP_BEINGS in chat.js) - unlike the app's own UI
+// chrome (i18n.js), which has a built-in PT/EN pair for everything.
+// translated() only calls out to the API when the reader's current
+// language differs from a piece of content's native one, so a pt reader
+// looking at pt posts, or an en reader looking at the already-English
+// pseudonym pool, never makes a request. Renders the original text
+// synchronously and swaps in the translation once it resolves (via
+// onReady) rather than blocking the render on a network round trip.
+const translationCache = new Map(); // `${nativeLang}:${text}` -> string | 'pending'
+
+function translated(text, nativeLang, onReady) {
+  const lang = getLang();
+  if (lang === nativeLang || !text) return text;
+  const key = `${nativeLang}:${text}`;
+  const cached = translationCache.get(key);
+  if (cached && cached !== 'pending') return cached;
+  if (!cached) {
+    translationCache.set(key, 'pending');
+    translateText(text, lang).then((result) => {
+      translationCache.set(key, result);
+      onReady();
+    });
+  }
+  return text;
+}
 
 /* -------------------------------- Login ---------------------------------- */
 
@@ -352,6 +387,52 @@ document.querySelector('.brand-name').addEventListener('click', () => {
 // Open, ephemeral group chat. Polled (not real-time/websocket) - simplest
 // fit for this app's minimal-stack style. Messages expire server-side.
 
+// Pseudonyms (e.g. "chairwisp") are built from a fixed object+being word
+// pool, not free text - mirrors FURNISHED_OBJECTS/SWAMP_BEINGS in chat.js
+// (kept here too since localizing them is a display-only concern). Only
+// the being list is needed to find the split point (an object is
+// whatever's left over); translateText() isn't used for these the way it
+// is for post/message text below, because MyMemory has no idea what a
+// "chairwisp" is and just echoes invented compound words back unchanged -
+// a dictionary lookup over this fixed, small pool is both correct and
+// instant, no network round trip needed.
+const PSEUDONYM_BEINGS = [
+  'wisp', 'sprite', 'witch', 'wraith', 'ghoul', 'specter', 'goblin',
+  'troll', 'hag', 'banshee', 'phantom', 'imp', 'fae', 'gremlin',
+  'mudwitch', 'bogfae', 'mosswraith', 'fenghoul', 'mirewisp', 'swampfae',
+];
+const PSEUDONYM_WORD_PT = {
+  chair: 'cadeira', lamp: 'candeeiro', rug: 'tapete', sofa: 'sofá',
+  curtain: 'cortina', mirror: 'espelho', vase: 'jarra', shelf: 'prateleira',
+  candle: 'vela', cushion: 'almofada', teapot: 'bule', drawer: 'gaveta',
+  doormat: 'capacho', clock: 'relógio', stool: 'banco', mug: 'caneca',
+  kettle: 'chaleira', blanket: 'cobertor', pillow: 'travesseiro',
+  doorknob: 'puxador', footstool: 'escabelo', teacup: 'chávena',
+  wisp: 'fátuo', sprite: 'duende', witch: 'bruxa', wraith: 'espectro',
+  ghoul: 'carniçal', specter: 'espírito', goblin: 'trasgo', troll: 'troll',
+  hag: 'megera', banshee: 'alma-penada', phantom: 'fantasma', imp: 'diabrete',
+  fae: 'fada', gremlin: 'gremlin', mudwitch: 'bruxa-da-lama',
+  bogfae: 'fada-do-brejo', mosswraith: 'espectro-de-musgo',
+  fenghoul: 'carniçal-do-charco', mirewisp: 'fátuo-do-lamaçal',
+  swampfae: 'fada-do-pântano',
+};
+
+/** Localizes a Plaza pseudonym like "chairwisp" into its pt equivalent
+ * ("cadeirafátuo"). Falls back to the original string for any shape that
+ * doesn't match the known word pool (e.g. an older pseudonym generated
+ * from a word list that's since changed), rather than showing nothing. */
+function localizePseudonym(pseudonym) {
+  for (const being of PSEUDONYM_BEINGS) {
+    if (pseudonym.endsWith(being)) {
+      const object = pseudonym.slice(0, -being.length);
+      if (PSEUDONYM_WORD_PT[object]) {
+        return `${PSEUDONYM_WORD_PT[object]}${PSEUDONYM_WORD_PT[being]}`;
+      }
+    }
+  }
+  return pseudonym;
+}
+
 let chatPollTimer = null;
 
 function startChatPolling() {
@@ -367,22 +448,31 @@ function stopChatPolling() {
   }
 }
 
+// Last-fetched messages, so a resolved auto-translation (see translated()
+// above) can re-render in place without waiting for the next poll.
+let lastChatMessages = [];
+
+function renderChat(messages) {
+  lastChatMessages = messages;
+  const el = $('chat-messages');
+  const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+  el.innerHTML = messages.length
+    ? messages.map((m) => `
+        <div class="chat-msg">
+          <div class="chat-msg-head">
+            <span class="chat-msg-author">${esc(getLang() === 'pt' ? localizePseudonym(m.author) : m.author)}</span>
+            <span class="chat-msg-time">${esc(m.time)}</span>
+          </div>
+          <div class="chat-msg-text">${esc(translated(m.text, 'pt', () => renderChat(lastChatMessages)))}</div>
+        </div>`).join('')
+    : `<p class="chat-empty">${t('chat_empty')}</p>`;
+  if (wasAtBottom) el.scrollTop = el.scrollHeight;
+}
+
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
-    const el = $('chat-messages');
-    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
-    el.innerHTML = messages.length
-      ? messages.map((m) => `
-        <div class="chat-msg">
-          <div class="chat-msg-head">
-            <span class="chat-msg-author">${esc(m.author)}</span>
-            <span class="chat-msg-time">${esc(m.time)}</span>
-          </div>
-          <div class="chat-msg-text">${esc(m.text)}</div>
-        </div>`).join('')
-      : `<p class="chat-empty">${t('chat_empty')}</p>`;
-    if (wasAtBottom) el.scrollTop = el.scrollHeight;
+    renderChat(messages);
   } catch { /* transient network hiccup - the next poll will retry */ }
 }
 
@@ -469,31 +559,16 @@ function timeAgo(dbTimestamp) {
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
 // Post text - and, for a poll, its option labels too - is whatever the
-// admin typed, in whatever language, unlike the app's own UI chrome
-// (i18n.js) which has a built-in PT/EN pair for everything. A translated
-// post's content/button state lives here (keyed by post id, value is
-// 'pending' or { text, options: string[] | null }), separate from
-// lastPlazaPosts, so a poll-driven re-render (every 4s, see
-// startPlazaPolling()) doesn't silently revert an open translation back to
-// the original.
-const translatedPostContent = new Map();
-
+// admin typed, in whatever language, auto-translated same as everything
+// else (see translated() above) rather than needing a per-post click.
 function plazaPostTextHtml(post) {
-  const entry = translatedPostContent.get(post.id);
-  const translating = entry === 'pending';
-  const showingTranslation = entry && entry !== 'pending';
-  const text = showingTranslation ? entry.text : post.text;
-  const btnLabel = translating ? t('plaza_translating') : showingTranslation ? t('plaza_show_original_btn') : t('plaza_translate_btn');
   return `
-        <p class="plaza-post-text">${esc(text)}</p>
-        <button type="button" class="plaza-translate-btn" data-translate-post="${post.id}"${translating ? ' disabled' : ''}>${esc(btnLabel)}</button>`;
+        <p class="plaza-post-text">${esc(translated(post.text, 'pt', () => renderPlazaFeed(lastPlazaPosts)))}</p>`;
 }
 
-/** Poll option label for `post`, translated if a translation is currently showing for this post. */
-function plazaOptionLabel(post, option, index) {
-  const entry = translatedPostContent.get(post.id);
-  if (entry && entry !== 'pending' && entry.options) return entry.options[index];
-  return option.label;
+/** Poll option label, auto-translated same as the post text above. */
+function plazaOptionLabel(option) {
+  return translated(option.label, 'pt', () => renderPlazaFeed(lastPlazaPosts));
 }
 
 function renderPlazaPost(post) {
@@ -516,14 +591,14 @@ function renderPlazaPost(post) {
   // pendingPollSelections; nothing reaches the server until "votar" below
   // is pressed, so a misclick before then costs nothing.
   const pendingOptionId = pendingPollSelections.get(post.id);
-  const optionsHtml = post.options.map((o, i) => {
+  const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
     const isMine = post.myOptionId === o.id;
     const isPending = !alreadyVoted && pendingOptionId === o.id;
     const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
     const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
-        <span class="plaza-poll-option-label">${esc(plazaOptionLabel(post, o, i))}</span>
+        <span class="plaza-poll-option-label">${esc(plazaOptionLabel(o))}</span>
         <span class="plaza-poll-option-pct">${pct}%</span>`;
     // Once you've voted, the choice is locked - render plain divs instead of
     // buttons so there's nothing left to click, rather than disabling a
@@ -583,40 +658,6 @@ function renderPlazaFeed(posts) {
         // landed - resync from the server so the UI locks to read-only
         // instead of leaving stale, still-selectable options on screen.
         loadPlaza();
-      }
-    });
-  });
-
-  $('plaza-feed').querySelectorAll('[data-translate-post]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const postId = Number(btn.dataset.translatePost);
-      const current = translatedPostContent.get(postId);
-      // Already showing a translation - "show original" just clears it,
-      // no need to hit the API again.
-      if (current && current !== 'pending') {
-        translatedPostContent.delete(postId);
-        renderPlazaFeed(lastPlazaPosts);
-        return;
-      }
-      const post = lastPlazaPosts.find((p) => p.id === postId);
-      if (!post) return;
-      translatedPostContent.set(postId, 'pending');
-      renderPlazaFeed(lastPlazaPosts);
-      const lang = getLang();
-      // A poll's options need translating too, not just its question - all
-      // requests fire together so this doesn't take options.length times
-      // as long as a plain announcement.
-      const [text, options] = await Promise.all([
-        translateText(post.text, lang),
-        post.type === 'poll'
-          ? Promise.all(post.options.map((o) => translateText(o.label, lang)))
-          : Promise.resolve(null),
-      ]);
-      // The post could have been removed, or the feed already re-rendered
-      // past this pending state, by the time the requests resolve.
-      if (translatedPostContent.get(postId) === 'pending') {
-        translatedPostContent.set(postId, { text, options });
-        renderPlazaFeed(lastPlazaPosts);
       }
     });
   });
@@ -863,10 +904,10 @@ function renderRegistration(data) {
   const resultsEl = $('register-partner-results');
   searchInput.addEventListener('input', async () => {
     registerPartnerId = null;
-    const term = searchInput.value.trim().toLowerCase();
+    const term = foldAccents(searchInput.value.trim().toLowerCase());
     if (term.length < 2) { resultsEl.innerHTML = ''; return; }
     const users = await ensureUsersCache();
-    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    const matches = users.filter((u) => foldAccents(u.name.toLowerCase()).includes(term)).slice(0, 6);
     resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-partner-id="${u.id}">${esc(u.name)}</button>`).join('');
     resultsEl.querySelectorAll('[data-partner-id]').forEach((btn) => {
       btn.addEventListener('click', () => {

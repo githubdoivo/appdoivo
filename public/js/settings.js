@@ -706,10 +706,10 @@ async function ensureAdminRegisterUsersCache() {
 function wireAdminUserSearch(inputEl, resultsEl, onPick) {
   inputEl.addEventListener('input', async () => {
     onPick(null);
-    const term = inputEl.value.trim().toLowerCase();
+    const term = foldAccents(inputEl.value.trim().toLowerCase());
     if (term.length < 2) { resultsEl.innerHTML = ''; return; }
     const users = await ensureAdminRegisterUsersCache();
-    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    const matches = users.filter((u) => foldAccents(u.name.toLowerCase()).includes(term)).slice(0, 6);
     resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
     resultsEl.querySelectorAll('[data-user-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
