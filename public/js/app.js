@@ -7,7 +7,6 @@ import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
-import { translateText } from './translate.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
@@ -212,41 +211,9 @@ $('lang-toggle').addEventListener('click', () => {
   refreshNotifButton();
   loadConsequences();
   loadVotes();
-  renderPlazaFeed(lastPlazaPosts);
-  renderChat(lastChatMessages);
 });
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
-
-/* ---------------------------- Auto-traducao ------------------------------- */
-// Wall posts/polls and Plaza messages are free text the admin/guests typed
-// - each assumed authored in its own "native" language (Portuguese for
-// posts and chat messages, English for the built-in Plaza pseudonyms, see
-// FURNISHED_OBJECTS/SWAMP_BEINGS in chat.js) - unlike the app's own UI
-// chrome (i18n.js), which has a built-in PT/EN pair for everything.
-// translated() only calls out to the API when the reader's current
-// language differs from a piece of content's native one, so a pt reader
-// looking at pt posts, or an en reader looking at the already-English
-// pseudonym pool, never makes a request. Renders the original text
-// synchronously and swaps in the translation once it resolves (via
-// onReady) rather than blocking the render on a network round trip.
-const translationCache = new Map(); // `${nativeLang}:${text}` -> string | 'pending'
-
-function translated(text, nativeLang, onReady) {
-  const lang = getLang();
-  if (lang === nativeLang || !text) return text;
-  const key = `${nativeLang}:${text}`;
-  const cached = translationCache.get(key);
-  if (cached && cached !== 'pending') return cached;
-  if (!cached) {
-    translationCache.set(key, 'pending');
-    translateText(text, lang).then((result) => {
-      translationCache.set(key, result);
-      onReady();
-    });
-  }
-  return text;
-}
 
 /* -------------------------------- Login ---------------------------------- */
 
@@ -387,52 +354,6 @@ document.querySelector('.brand-name').addEventListener('click', () => {
 // Open, ephemeral group chat. Polled (not real-time/websocket) - simplest
 // fit for this app's minimal-stack style. Messages expire server-side.
 
-// Pseudonyms (e.g. "chairwisp") are built from a fixed object+being word
-// pool, not free text - mirrors FURNISHED_OBJECTS/SWAMP_BEINGS in chat.js
-// (kept here too since localizing them is a display-only concern). Only
-// the being list is needed to find the split point (an object is
-// whatever's left over); translateText() isn't used for these the way it
-// is for post/message text below, because MyMemory has no idea what a
-// "chairwisp" is and just echoes invented compound words back unchanged -
-// a dictionary lookup over this fixed, small pool is both correct and
-// instant, no network round trip needed.
-const PSEUDONYM_BEINGS = [
-  'wisp', 'sprite', 'witch', 'wraith', 'ghoul', 'specter', 'goblin',
-  'troll', 'hag', 'banshee', 'phantom', 'imp', 'fae', 'gremlin',
-  'mudwitch', 'bogfae', 'mosswraith', 'fenghoul', 'mirewisp', 'swampfae',
-];
-const PSEUDONYM_WORD_PT = {
-  chair: 'cadeira', lamp: 'candeeiro', rug: 'tapete', sofa: 'sofá',
-  curtain: 'cortina', mirror: 'espelho', vase: 'jarra', shelf: 'prateleira',
-  candle: 'vela', cushion: 'almofada', teapot: 'bule', drawer: 'gaveta',
-  doormat: 'capacho', clock: 'relógio', stool: 'banco', mug: 'caneca',
-  kettle: 'chaleira', blanket: 'cobertor', pillow: 'travesseiro',
-  doorknob: 'puxador', footstool: 'escabelo', teacup: 'chávena',
-  wisp: 'fátuo', sprite: 'duende', witch: 'bruxa', wraith: 'espectro',
-  ghoul: 'carniçal', specter: 'espírito', goblin: 'trasgo', troll: 'troll',
-  hag: 'megera', banshee: 'alma-penada', phantom: 'fantasma', imp: 'diabrete',
-  fae: 'fada', gremlin: 'gremlin', mudwitch: 'bruxa-da-lama',
-  bogfae: 'fada-do-brejo', mosswraith: 'espectro-de-musgo',
-  fenghoul: 'carniçal-do-charco', mirewisp: 'fátuo-do-lamaçal',
-  swampfae: 'fada-do-pântano',
-};
-
-/** Localizes a Plaza pseudonym like "chairwisp" into its pt equivalent
- * ("cadeirafátuo"). Falls back to the original string for any shape that
- * doesn't match the known word pool (e.g. an older pseudonym generated
- * from a word list that's since changed), rather than showing nothing. */
-function localizePseudonym(pseudonym) {
-  for (const being of PSEUDONYM_BEINGS) {
-    if (pseudonym.endsWith(being)) {
-      const object = pseudonym.slice(0, -being.length);
-      if (PSEUDONYM_WORD_PT[object]) {
-        return `${PSEUDONYM_WORD_PT[object]}${PSEUDONYM_WORD_PT[being]}`;
-      }
-    }
-  }
-  return pseudonym;
-}
-
 let chatPollTimer = null;
 
 function startChatPolling() {
@@ -448,31 +369,22 @@ function stopChatPolling() {
   }
 }
 
-// Last-fetched messages, so a resolved auto-translation (see translated()
-// above) can re-render in place without waiting for the next poll.
-let lastChatMessages = [];
-
-function renderChat(messages) {
-  lastChatMessages = messages;
-  const el = $('chat-messages');
-  const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
-  el.innerHTML = messages.length
-    ? messages.map((m) => `
-        <div class="chat-msg">
-          <div class="chat-msg-head">
-            <span class="chat-msg-author">${esc(getLang() === 'pt' ? localizePseudonym(m.author) : m.author)}</span>
-            <span class="chat-msg-time">${esc(m.time)}</span>
-          </div>
-          <div class="chat-msg-text">${esc(translated(m.text, 'pt', () => renderChat(lastChatMessages)))}</div>
-        </div>`).join('')
-    : `<p class="chat-empty">${t('chat_empty')}</p>`;
-  if (wasAtBottom) el.scrollTop = el.scrollHeight;
-}
-
 async function loadChat() {
   try {
     const { messages } = await api('/chat/messages');
-    renderChat(messages);
+    const el = $('chat-messages');
+    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+    el.innerHTML = messages.length
+      ? messages.map((m) => `
+        <div class="chat-msg">
+          <div class="chat-msg-head">
+            <span class="chat-msg-author">${esc(m.author)}</span>
+            <span class="chat-msg-time">${esc(m.time)}</span>
+          </div>
+          <div class="chat-msg-text">${esc(m.text)}</div>
+        </div>`).join('')
+      : `<p class="chat-empty">${t('chat_empty')}</p>`;
+    if (wasAtBottom) el.scrollTop = el.scrollHeight;
   } catch { /* transient network hiccup - the next poll will retry */ }
 }
 
@@ -558,19 +470,6 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
-// Post text - and, for a poll, its option labels too - is whatever the
-// admin typed, in whatever language, auto-translated same as everything
-// else (see translated() above) rather than needing a per-post click.
-function plazaPostTextHtml(post) {
-  return `
-        <p class="plaza-post-text">${esc(translated(post.text, 'pt', () => renderPlazaFeed(lastPlazaPosts)))}</p>`;
-}
-
-/** Poll option label, auto-translated same as the post text above. */
-function plazaOptionLabel(option) {
-  return translated(option.label, 'pt', () => renderPlazaFeed(lastPlazaPosts));
-}
-
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
@@ -579,7 +478,7 @@ function renderPlazaPost(post) {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${pinnedBadge}
-        ${plazaPostTextHtml(post)}
+        <p class="plaza-post-text">${esc(post.text)}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -598,7 +497,7 @@ function renderPlazaPost(post) {
     const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
     const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
-        <span class="plaza-poll-option-label">${esc(plazaOptionLabel(o))}</span>
+        <span class="plaza-poll-option-label">${esc(o.label)}</span>
         <span class="plaza-poll-option-pct">${pct}%</span>`;
     // Once you've voted, the choice is locked - render plain divs instead of
     // buttons so there's nothing left to click, rather than disabling a
@@ -614,7 +513,7 @@ function renderPlazaPost(post) {
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${pinnedBadge}
-      ${plazaPostTextHtml(post)}
+      <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
