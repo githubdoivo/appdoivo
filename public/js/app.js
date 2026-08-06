@@ -885,8 +885,13 @@ async function loadVotes() {
     $('voting-status').textContent = t(statusKey);
 
     if (data.status === 'open' && !data.myVote) {
-      area.innerHTML = data.contestants.length
-        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
+      // You can't vote for your own entry (see castVote() server-side) -
+      // left out of the list entirely rather than shown and then rejected
+      // on click, same as you'd never see yourself in a "vote for the best"
+      // list elsewhere.
+      const votable = data.contestants.filter((c) => c.id !== data.myContestant?.id);
+      area.innerHTML = votable.length
+        ? votable.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
         b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label));

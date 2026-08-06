@@ -113,9 +113,9 @@ export function registerContestant(userId, night, name, partnerUserId) {
 
 /**
  * Records a vote for a night. Validates the night, the voting status, the
- * contestant and duplicates. A duo (see registerContestant()) shares one
- * combined vote - once either partner votes, the other is blocked. Returns
- * { ok } or { error }.
+ * contestant, duplicates, and that the voter isn't voting for their own
+ * entry. A duo (see registerContestant()) shares one combined vote - once
+ * either partner votes, the other is blocked. Returns { ok } or { error }.
  */
 export function castVote(userId, contestantId, night) {
   if (!isNight(night)) {
@@ -130,6 +130,14 @@ export function castVote(userId, contestantId, night) {
   ).get(contestantId, night);
   if (!contestant) {
     return { error: 'err_contestant_invalid_for_night' };
+  }
+
+  // Solo or as part of a duo, a contestant can't vote for their own entry -
+  // left open, everyone would just vote for themselves, and a duo's shared
+  // entry would get an "extra" vote nobody else's entry could get.
+  const ownEntry = myContestantForNight(userId, night);
+  if (ownEntry && ownEntry.id === contestant.id) {
+    return { error: 'err_cannot_vote_self' };
   }
 
   const existing = db.prepare(
