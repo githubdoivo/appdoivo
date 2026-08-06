@@ -310,12 +310,29 @@ $('voting-advance-btn').addEventListener('click', async () => {
   $('voting-msg').textContent = '';
   try {
     await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
-    loadVotingState();
-    loadVotes();
-    loadContestants();
   } catch (err) {
-    $('voting-msg').textContent = err.message;
+    // Closing with duo proposals nobody confirmed strands them - they
+    // never counted and closing means they never will. The server refuses
+    // once (409) and reports how many, so this can say the number rather
+    // than a vague warning; confirming re-sends with force.
+    if (err.status === 409 && err.data?.error === 'err_pending_duo_votes') {
+      const n = err.data.pending;
+      const ok = await showConfirm(t(n === 1 ? 'confirm_close_pending_one' : 'confirm_close_pending_other', { n }));
+      if (!ok) return;
+      try {
+        await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST', body: { force: true } });
+      } catch (forced) {
+        $('voting-msg').textContent = forced.message;
+        return;
+      }
+    } else {
+      $('voting-msg').textContent = err.message;
+      return;
+    }
   }
+  loadVotingState();
+  loadVotes();
+  loadContestants();
 });
 
 $('voting-reset-btn').addEventListener('click', async () => {

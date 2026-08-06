@@ -25,6 +25,9 @@ import {
   myContestantForNight,
   registerContestant,
   castVote,
+  confirmDuoVote,
+  cancelPendingVote,
+  pendingVoteCount,
   resultsForNight,
   visibleResultsForNight,
   resetResultsPhase,
@@ -309,7 +312,25 @@ router.post('/votes', (req, res) => {
   if (!contestantId) return res.status(400).json({ error: 'err_choose_contestant' });
   const result = castVote(req.user.id, contestantId, night);
   if (result.error) return res.status(400).json({ error: result.error });
-  res.status(201).json({ ok: true });
+  // pending: a duo's proposal, not a vote yet - the partner still has to
+  // confirm it below before it counts for anything.
+  res.status(201).json({ ok: true, pending: !!result.pending });
+});
+
+// The other half of a duo's shared vote (see confirmDuoVote()): only the
+// partner who did NOT propose it can sign it off.
+router.post('/votes/confirm', (req, res) => {
+  const result = confirmDuoVote(req.user.id, req.body?.night);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+// Drops a duo's unconfirmed proposal so they can pick someone else -
+// either partner, and only while it's still unconfirmed.
+router.delete('/votes/pending', (req, res) => {
+  const result = cancelPendingVote(req.user.id, req.body?.night);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
 });
 
 /* ---------------------------------- Chat ---------------------------------- */
@@ -538,8 +559,12 @@ router.get('/admin/votes', (req, res) => {
   if (!req.user.isOwner) {
     return res.json({ night, results });
   }
+  // confirmed flags a duo proposal still waiting on the partner - it isn't
+  // counted in `results` above, so the log would look like it disagreed
+  // with the tally if these were listed indistinguishably.
   const rows = db.prepare(`
-    SELECT v.id, v.night, u.name AS voter, c.name AS contestant, v.created_at
+    SELECT v.id, v.night, u.name AS voter, c.name AS contestant, v.created_at,
+           v.confirmed_at IS NOT NULL AS confirmed
     FROM votes v
     JOIN users u ON u.id = v.user_id
     JOIN contestants c ON c.id = v.contestant_id
@@ -748,6 +773,15 @@ router.post('/admin/voting/:night/open', async (req, res) => {
 router.post('/admin/voting/:night/close', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  // A duo proposal nobody confirmed never counted and never will, so
+  // closing quietly strands it. Warn once with the count and let the
+  // owner decide (force) rather than either silently dropping them or
+  // blocking the close outright - they may well be chasing the last
+  // couple around the party, or may not care.
+  const pending = pendingVoteCount(night);
+  if (pending > 0 && !req.body?.force) {
+    return res.status(409).json({ error: 'err_pending_duo_votes', pending });
+  }
   setSetting(`voting_status_${night}`, 'closed');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });

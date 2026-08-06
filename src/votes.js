@@ -39,13 +39,6 @@ export function contestantsForNight(night) {
   `).all(night);
 }
 
-/** The user's vote for this night, if any. */
-export function myVoteForNight(userId, night) {
-  return db.prepare(
-    'SELECT contestant_id FROM votes WHERE user_id = ? AND night = ?'
-  ).get(userId, night) || null;
-}
-
 /** The OTHER user_id sharing this user's contestant entry for a night
  * (their duo partner), if they're registered as a duo. Null if solo or not
  * registered at all. */
@@ -55,6 +48,38 @@ function duoPartnerId(userId, night) {
   ).get(night, userId, userId);
   if (!row) return null;
   return row.user_id === userId ? row.partner_user_id : row.user_id;
+}
+
+/** The single vote row that belongs to this user tonight - their own if
+ * they're solo, or the one shared with their duo partner whichever of the
+ * two actually proposed it. */
+function voteRowFor(userId, night) {
+  const partnerId = duoPartnerId(userId, night);
+  const row = partnerId
+    ? db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND user_id IN (?, ?)').get(night, userId, partnerId)
+    : db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND user_id = ?').get(night, userId);
+  return { row: row || null, partnerId };
+}
+
+/**
+ * The vote that counts for this user tonight, or null if nothing's been
+ * cast yet. A duo shares one - so this deliberately returns the partner's
+ * proposal too, and says whose it is (proposedByMe) and whether it's gone
+ * through the partner's confirmation yet (confirmed), which is what the
+ * frontend needs to tell "waiting on them" apart from "waiting on you".
+ */
+export function myVoteForNight(userId, night) {
+  const { row, partnerId } = voteRowFor(userId, night);
+  if (!row) return null;
+  const partnerName = partnerId
+    ? db.prepare('SELECT name FROM users WHERE id = ?').get(partnerId)?.name ?? null
+    : null;
+  return {
+    contestant_id: row.contestant_id,
+    confirmed: !!row.confirmed_at,
+    proposedByMe: row.user_id === userId,
+    partnerName,
+  };
 }
 
 /** The contestant entry this user registered (solo or as part of a duo)
@@ -112,10 +137,16 @@ export function registerContestant(userId, night, name, partnerUserId) {
 }
 
 /**
- * Records a vote for a night. Validates the night, the voting status, the
- * contestant, duplicates, and that the voter isn't voting for their own
- * entry. A duo (see registerContestant()) shares one combined vote - once
- * either partner votes, the other is blocked. Returns { ok } or { error }.
+ * Casts (solo) or proposes (duo) a vote for a night. Validates the night,
+ * the voting status, the contestant, duplicates, and that the voter isn't
+ * voting for their own entry.
+ *
+ * A duo (see registerContestant()) shares ONE vote, and it takes both of
+ * them to spend it: this only proposes it, and the partner has to
+ * confirmDuoVote() on their own account before it counts for anything.
+ * Whoever gets there first no longer decides for the pair on their own.
+ * Returns { ok, pending } or { error } - pending true means it's a
+ * proposal still waiting on the partner.
  */
 export function castVote(userId, contestantId, night) {
   if (!isNight(night)) {
@@ -140,37 +171,88 @@ export function castVote(userId, contestantId, night) {
     return { error: 'err_cannot_vote_self' };
   }
 
-  const existing = db.prepare(
-    'SELECT id FROM votes WHERE user_id = ? AND night = ?'
-  ).get(userId, night);
+  // One row per person, or per pair - voteRowFor() already looks under
+  // both names for a duo, so a partner's pending proposal blocks a second
+  // one just as a finished vote does (they settle it between them via
+  // confirm/cancel instead of racing each other).
+  const { row: existing, partnerId } = voteRowFor(userId, night);
   if (existing) {
-    return { error: 'err_already_voted' };
+    return { error: partnerId ? 'err_duo_already_voted' : 'err_already_voted' };
   }
 
-  const partnerId = duoPartnerId(userId, night);
-  if (partnerId) {
-    const partnerVoted = db.prepare('SELECT id FROM votes WHERE user_id = ? AND night = ?').get(partnerId, night);
-    if (partnerVoted) {
-      return { error: 'err_duo_already_voted' };
-    }
-  }
-
-  db.prepare(
+  const info = db.prepare(
     'INSERT INTO votes (user_id, contestant_id, night) VALUES (?, ?, ?)'
   ).run(userId, contestantId, night);
+  // Solo: nobody left to agree with, so it counts immediately. Duo: left
+  // unconfirmed until the partner signs off (see confirmDuoVote()).
+  if (!partnerId) {
+    db.prepare("UPDATE votes SET confirmed_at = datetime('now') WHERE id = ?").run(info.lastInsertRowid);
+  }
+  return { ok: true, pending: !!partnerId };
+}
+
+/**
+ * The partner's half of a duo vote: confirms the proposal the other one
+ * left, which is what actually makes it count. Deliberately refuses when
+ * the caller is the proposer - letting them confirm their own proposal
+ * would just be the old first-past-the-post rule with extra steps.
+ * Returns { ok } or { error }.
+ */
+export function confirmDuoVote(userId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'open') return { error: 'err_voting_not_open' };
+
+  const { row, partnerId } = voteRowFor(userId, night);
+  if (!partnerId) return { error: 'err_not_a_duo' };
+  if (!row) return { error: 'err_no_pending_vote' };
+  if (row.confirmed_at) return { error: 'err_already_voted' };
+  if (row.user_id === userId) return { error: 'err_partner_must_confirm' };
+
+  db.prepare("UPDATE votes SET confirmed_at = datetime('now') WHERE id = ?").run(row.id);
   return { ok: true };
+}
+
+/**
+ * Drops a duo's unconfirmed proposal, freeing the pair to propose a
+ * different contestant. Either of them can do it - the proposer changing
+ * their mind and the partner disagreeing are the same operation, and
+ * there's nothing to lose either way since it never counted. A confirmed
+ * vote is final and can't be taken back. Returns { ok } or { error }.
+ */
+export function cancelPendingVote(userId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'open') return { error: 'err_voting_not_open' };
+
+  const { row, partnerId } = voteRowFor(userId, night);
+  if (!partnerId) return { error: 'err_not_a_duo' };
+  if (!row) return { error: 'err_no_pending_vote' };
+  if (row.confirmed_at) return { error: 'err_already_voted' };
+
+  db.prepare('DELETE FROM votes WHERE id = ?').run(row.id);
+  return { ok: true };
+}
+
+/** How many duo proposals are still waiting on a partner tonight - the
+ * owner gets warned about these before closing, since closing strands
+ * them (they never counted and never will). */
+export function pendingVoteCount(night) {
+  return db.prepare(
+    'SELECT COUNT(*) AS n FROM votes WHERE night = ? AND confirmed_at IS NULL'
+  ).get(night).n;
 }
 
 /** Full ranking of contestants for a night, each with its rank (admin view).
  * Carries the same registeredBy/partnerName pair as contestantsForNight() -
- * results are just as identity-ambiguous as the vote picker otherwise. */
+ * results are just as identity-ambiguous as the vote picker otherwise.
+ * Only confirmed votes are counted: a duo proposal nobody signed off on
+ * isn't a vote yet (see castVote()/confirmDuoVote()). */
 export function resultsForNight(night) {
   const rows = db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName, COUNT(v.id) AS votes
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
-    LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night
+    LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night AND v.confirmed_at IS NOT NULL
     WHERE c.night = ?
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE

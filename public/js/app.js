@@ -686,6 +686,9 @@ $('suggest-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('suggest-text').value.trim();
   if (!text) return;
+  // One suggestion per day, and it's spent the moment this lands - same
+  // "no take-backs" prompt Snatch voting gets, for the same reason.
+  if (!(await showConfirm(t('rata_suggest_confirm')))) return;
   try {
     await api('/consequences', { method: 'POST', body: { text } });
     loadConsequences();
@@ -897,23 +900,50 @@ async function loadVotes() {
     else statusKey = 'outfit_closed';
     $('voting-status').textContent = t(statusKey);
 
+    // A duo shares one vote and it takes both of them to spend it, so
+    // there's a middle state solo voters never see: proposed by one,
+    // waiting on the other (see castVote()/confirmDuoVote() server-side).
+    const isDuo = !!data.myContestant?.partnerName;
+    const pending = data.myVote && !data.myVote.confirmed;
+
     if (data.status === 'open' && !data.myVote) {
       // You can't vote for your own entry (see castVote() server-side) -
       // left out of the list entirely rather than shown and then rejected
       // on click, same as you'd never see yourself in a "vote for the best"
       // list elsewhere.
       const votable = data.contestants.filter((c) => c.id !== data.myContestant?.id);
+      const help = isDuo ? `<p class="help">${esc(t('outfit_duo_help'))}</p>` : '';
       area.innerHTML = votable.length
-        ? votable.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
+        ? help + votable.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
-        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label));
+        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label, isDuo));
       });
+    } else if (pending && data.status === 'open') {
+      const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
+      const name = chosen ? contestantLabel(chosen) : '';
+      const partner = data.myVote.partnerName || '';
+      // Whoever proposed it can only wait or take it back; the other one
+      // is the only person who can actually make it count.
+      const msg = data.myVote.proposedByMe
+        ? t('outfit_vote_waiting_partner', { name: esc(name), partner: esc(partner) })
+        : t('outfit_vote_needs_confirm', { name: esc(name), partner: esc(partner) });
+      const confirmBtn = data.myVote.proposedByMe
+        ? ''
+        : `<button type="button" class="small" id="confirm-vote-btn">${esc(t('outfit_vote_confirm_btn'))}</button>`;
+      area.innerHTML = `
+        <p class="highlight">${msg}</p>
+        <div class="inline" style="margin-top:10px">
+          ${confirmBtn}
+          <button type="button" class="small ghost" id="change-vote-btn">${esc(t('outfit_vote_change_btn'))}</button>
+        </div>`;
+      $('confirm-vote-btn')?.addEventListener('click', confirmVote);
+      $('change-vote-btn').addEventListener('click', changeVote);
     } else if (data.myVote) {
-      // Once cast, a vote is final (see castVote() server-side) and this
-      // stays the vote area's content for the rest of the night - closed/
-      // pending-results no longer overwrites it with a generic status
-      // message, so "who did I vote for" stays visible throughout.
+      // Once confirmed, a vote is final (see castVote() server-side) and
+      // this stays the vote area's content for the rest of the night -
+      // closed/pending-results no longer overwrites it with a generic
+      // status message, so "who did I vote for" stays visible throughout.
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(contestantLabel(chosen)) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -942,13 +972,40 @@ async function loadVotes() {
   }
 }
 
-async function vote(contestantId, name) {
-  // A vote is final the moment it's submitted (see castVote() server-side,
-  // same rule as Plaza polls) - confirm first, since there's no changing
-  // your mind after.
-  if (!(await showConfirm(t('outfit_confirm_vote', { name })))) return;
+async function vote(contestantId, name, isDuo) {
+  // Solo, a vote is final the moment it's submitted (see castVote()
+  // server-side, same rule as Plaza polls) - so confirm first, there's no
+  // changing your mind after. In a duo this only proposes it and the
+  // partner still has to sign off, so the wording promises less.
+  const key = isDuo ? 'outfit_confirm_propose' : 'outfit_confirm_vote';
+  if (!(await showConfirm(t(key, { name })))) return;
   try {
     await api('/votes', { method: 'POST', body: { contestantId, night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+}
+
+// The partner's half of a duo vote - this is the click that actually makes
+// it count, so it's the one that gets no second-guessing prompt (they're
+// confirming something already spelled out on screen).
+async function confirmVote() {
+  try {
+    await api('/votes/confirm', { method: 'POST', body: { night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+}
+
+// Drops the pair's unconfirmed proposal so they can pick someone else -
+// same action whether the proposer changed their mind or the partner
+// disagreed, since nothing counted either way.
+async function changeVote() {
+  if (!(await showConfirm(t('outfit_confirm_change_vote')))) return;
+  try {
+    await api('/votes/pending', { method: 'DELETE', body: { night: getNight() } });
     loadVotes();
   } catch (err) {
     await showAlert(err.message);
