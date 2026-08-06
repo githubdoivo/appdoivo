@@ -169,15 +169,26 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
 .error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
    #auth-error), so plain colored text was too easy to miss regardless of
-   which part of the photo happened to be behind it - a solid light chip
-   guarantees contrast for the dark text no matter what's underneath. */
+   which part of the photo happened to be behind it - a solid fill
+   guarantees contrast no matter what's underneath. Deep red rather than
+   the cream this chip used to be: cream is exactly what the "entrar"
+   button above it is made of, so a cream chip sitting right under it read
+   as a second button instead of an alert. Full form width for the same
+   reason the button is - a narrower chip made the stack step in and out.
+   (8:1 against the text below, comfortably past AA.) */
 #login-error:not(:empty) {
-  display: inline-block;
-  background: #ece5d5;
-  color: #7a2416;
-  font-weight: 700;
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  background: #7a2416;
+  color: #ece5d5;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-align: center;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-radius: var(--radius);
 }
 
