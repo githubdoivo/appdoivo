@@ -727,7 +727,7 @@ test('a notification click while the app is already open switches tabs via postM
   await context.close();
 });
 
-test('reloading the page stays on whatever tab was last open, not always Wall', async () => {
+test('opening the app always lands on Wall, whatever tab was last used', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   await page.click('[data-tab="chat"]');
@@ -737,16 +737,20 @@ test('reloading the page stays on whatever tab was last open, not always Wall', 
   await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.waitForTimeout(300);
 
-  const chatActive = await page.$eval('[data-tab="chat"]', (el) => el.classList.contains('active'));
-  assert.ok(chatActive, 'a reload should stay on the last tab used, not reset to Wall');
+  const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
+  assert.ok(plazaActive, 'opening the app should land on Wall, like an app opening on its home tab');
+  // The tab isn't remembered at all any more, so nothing should be left
+  // behind to resume from either.
+  const stored = await page.evaluate(() => localStorage.getItem('appivo_tab'));
+  assert.equal(stored, null, 'the last-used tab should no longer be persisted');
   await context.close();
 });
 
-test('a first-ever login (no stored tab yet) lands on Wall by default', async () => {
+test('a first login lands on Wall by default', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
   const plazaActive = await page.$eval('[data-tab="plaza"]', (el) => el.classList.contains('active'));
-  assert.ok(plazaActive, 'with no stored tab, the default landing tab should still be Wall');
+  assert.ok(plazaActive, 'the default landing tab should be Wall');
   await context.close();
 });
 

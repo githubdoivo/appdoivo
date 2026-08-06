@@ -83,11 +83,13 @@ function showApp(me) {
   isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
-  // Reopens on whatever tab was last open, not always Wall - a stored tab
-  // that's no longer valid (e.g. Wall while plazaEnabled is now false)
-  // falls back to the plazaEnabled check right after, same as before.
-  const storedTab = localStorage.getItem(TAB_KEY);
-  if (TABS.includes(storedTab) && storedTab !== currentTab) selectTab(storedTab);
+  // Always opens on Wall (the landing tab - see currentTab above), the way
+  // an app opens on its home tab, rather than resuming wherever it was
+  // last left. The tab someone was on is deliberately NOT remembered: on
+  // an installed PWA there's no address bar to refresh from, so "reopening
+  // the app" is the only thing that ever happens, and landing somewhere
+  // mid-app is disorienting. A notification's own ?tab= is the one thing
+  // allowed to override this (see applyDeepLinkParams() below).
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name, me.logo_customized);
@@ -336,7 +338,6 @@ $('token-input').addEventListener('input', () => {
 function selectTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
-  localStorage.setItem(TAB_KEY, tab);
   $('tab-plaza').classList.toggle('hidden', currentTab !== 'plaza');
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
@@ -705,7 +706,6 @@ $('suggest-form').addEventListener('submit', async (e) => {
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
 const TABS = ['plaza', 'rata', 'outfit', 'chat'];
-const TAB_KEY = 'appivo_tab';
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);
