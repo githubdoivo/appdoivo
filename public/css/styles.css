@@ -247,10 +247,18 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
 
 /* Text-only button - "forgot my key" / "back to login" links, not a
-   bordered button competing with the real Entrar submit. */
+   bordered button competing with the real Entrar submit. Needs the same
+   appearance reset as .tab below - without it, a <button>'s native WebKit
+   chrome renders its own filled, rounded box (from the general button
+   rule's border-radius) right over these "background: none" declarations,
+   so on real iOS Safari this shows as a solid blank pill instead of plain
+   underlined text. */
 .link-btn {
+  -webkit-appearance: none;
+  appearance: none;
   background: none;
   border: none;
+  border-radius: 0;
   padding: 4px;
   color: var(--ink-soft);
   font-family: var(--body);
@@ -259,7 +267,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.link-btn:hover { color: var(--ink); }
+/* Explicit background:none here too, not just on the base rule above -
+   "button:hover, .btn:hover" (higher specificity than plain .link-btn,
+   since :hover adds a specificity point) fills it with --ink otherwise.
+   Invisible on a mouse (hover clears on mouseout), but iOS Safari latches
+   a tap into a "stuck" :hover with no mouse to clear it - the button then
+   transitions to solid --ink and stays that way, permanently, after a
+   single tap. */
+.link-btn:hover { background: none; color: var(--ink); }
 
 #find-key-results {
   width: 100%;
@@ -566,6 +581,12 @@ button.danger:hover {
   border-radius: 999px;
   cursor: pointer;
 }
+/* Same fix as .link-btn above: without this, "button:hover, .btn:hover"
+   outranks the plain (non-hover) rule above on specificity and fills an
+   inactive pill solid on a tap that gets stuck in :hover on iOS Safari.
+   .active already wins regardless (two classes beats button:hover), so
+   this only needs to guard the inactive state. */
+.role-pill:hover { background: none; }
 .role-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
 .role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
