@@ -881,9 +881,17 @@ async function loadConsequences() {
   renderConsequences();
 }
 
+// The one place the app's global lowercase rule can't be done in CSS: iOS
+// renders an OPEN <select> as a native OS picker that ignores page styles
+// entirely, so `text-transform: lowercase` (styles.css) only reaches the
+// closed control and the expanded list comes out capitalised. Lowercasing
+// the option text itself is what holds the rule here - everywhere else,
+// keep using the CSS.
+const lower = (s) => String(s).toLowerCase();
+
 function userOptionsHtml(selectedId) {
-  return `<option value="">${t('rata_assign_placeholder')}</option>` +
-    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+  return `<option value="">${esc(lower(t('rata_assign_placeholder')))}</option>` +
+    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(lower(u.name))}</option>`).join('');
 }
 
 // Card list, not a grid: same shape as the user-facing rata-history-item

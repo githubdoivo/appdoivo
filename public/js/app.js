@@ -628,7 +628,7 @@ async function loadRataHistory() {
           <div class="rata-history-meta">
             <span class="muted">${line}${hour ? ` · ${hour}` : ''}</span>
           </div>
-          ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
+          ${canMarkDone ? `<button type="button" class="small" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
       }).join('')
       : `<p class="muted">${t('rata_history_empty')}</p>`;
