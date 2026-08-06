@@ -8,6 +8,11 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
 
+// See the matching comment in app.js - stops an installed iOS PWA from
+// restoring a stale scroll position when its backgrounded WKWebView is
+// resumed instead of freshly loaded.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -76,6 +81,7 @@ function refreshAccountToken() {
 }
 
 async function boot() {
+  window.scrollTo(0, 0);
   applyMode();
   applyI18n();
   updateLangUI();
@@ -157,6 +163,7 @@ async function boot() {
   // "Settings" first - admins/owner can still switch to their other tabs.
   selectAdminTab('settings');
   $('admin-content').classList.remove('hidden');
+  window.scrollTo(0, 0);
   refreshNotifButton('notif-btn');
   wireChangeKeyForm();
   if (isAdmin) reloadAll();

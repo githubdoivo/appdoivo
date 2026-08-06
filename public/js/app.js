@@ -8,6 +8,16 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
 
+// An installed iOS PWA keeps its WKWebView alive in the background rather
+// than doing a real fresh load every time you reopen it - the OS restores
+// wherever it was left scrolled to, which reads as "the app opens
+// somewhere in the middle/bottom instead of the top". Setting this to
+// 'manual' stops the browser from doing that restoration on its own;
+// boot() below still forces a scroll-to-top itself as a belt-and-braces
+// measure, since this alone doesn't cover every case (e.g. iOS resuming a
+// suspended tab without a real navigation at all).
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -35,6 +45,7 @@ let isOwner = false;
 /* ------------------------------- Arranque -------------------------------- */
 
 async function boot() {
+  window.scrollTo(0, 0);
   applyMode();
   applyI18n();
   updateLangUI();
@@ -59,12 +70,14 @@ async function boot() {
 function showLogin() {
   $('login').classList.remove('hidden');
   $('app').classList.add('hidden');
+  window.scrollTo(0, 0);
 }
 
 
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  window.scrollTo(0, 0);
   myUserId = me.id;
   isAdmin = !!me.isAdmin;
   isOwner = !!me.isOwner;
