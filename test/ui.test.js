@@ -962,3 +962,48 @@ test('sending a chat message shows it in the list for another user', async () =>
 
   await context.close();
 });
+
+/* ------------------- Snatch: photo required at registration --------------- */
+
+// Smallest possible real PNG (1x1 transparent pixel) - resizePhotoToJpeg()
+// runs it through an actual <canvas>, so a fake/truncated buffer wouldn't
+// decode; this needs to be genuinely valid, unlike api.test.js's fake-magic-
+// bytes fixture which only has to pass the server's own check.
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
+
+test('Snatch registration requires a photo, previews it once attached, and blocks submitting without one', async () => {
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo UI Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  // Name filled, no photo yet - submitting should warn, not register.
+  await page.fill('#register-name', 'Ghost of Photos Past');
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const alertText = await page.textContent('.modal-message');
+  assert.ok(/photo|foto/i.test(alertText), 'submitting without a photo should say one is required, not silently fail');
+  await page.click('.modal-actions button');
+
+  // Attaching a photo resizes/re-encodes it client-side and previews the result.
+  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  const entryText = await page.textContent('#register-area .highlight');
+  assert.ok(entryText.includes('Ghost of Photos Past'), 'entry should register once a photo is attached');
+
+  // The registrant can always preview their own entry's photo.
+  await page.waitForSelector('#register-area .entry-photo-preview', { timeout: WAIT_TIMEOUT });
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});

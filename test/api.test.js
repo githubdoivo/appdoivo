@@ -47,8 +47,8 @@ async function api(method, path, { token, body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   let data = null;
-  try { data = await res.json(); } catch { /* no body */ }
-  return { status: res.status, data };
+  try { data = await res.json(); } catch { /* no body, or non-JSON (e.g. a served photo) */ }
+  return { status: res.status, data, headers: res.headers };
 }
 
 /* -------------------------------- Version --------------------------------- */
@@ -423,6 +423,11 @@ test('only the assigned user can mark a consequence done, only once, and only th
 
 const NIGHT = 'furnished';
 
+// Minimal structurally-valid JPEG (just the SOI+EOI markers) - enough to
+// pass decodePhoto()'s magic-byte check without needing a real renderable
+// image, since these tests only exercise the server-side validation.
+const TEST_PHOTO = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+
 test('a night that has never been opened reports started: false', async () => {
   const voting = await api('GET', '/admin/voting', { token: ADMIN });
   const night = voting.data.nights.find((n) => n.night === NIGHT);
@@ -555,7 +560,7 @@ test('a solo contestant cannot vote for their own entry', async () => {
   const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Solo Voter' } });
 
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
-  const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night } });
+  const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night, photoBase64: TEST_PHOTO } });
   assert.equal(reg.status, 201);
 
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
@@ -578,7 +583,7 @@ test('neither half of a duo can vote for their own shared entry', async () => {
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   const reg = await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Duo Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Duo Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   assert.equal(reg.status, 201);
   // A duo entry now needs its named partner to sign off before it's a
@@ -608,7 +613,7 @@ test("a duo's vote only counts once the partner confirms it", async () => {
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Pair Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Pair Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // A duo entry now needs its named partner to sign off before it's a
   // real contestant (see confirmContestant()) - these tests are about
@@ -656,7 +661,7 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Swap Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Swap Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // A duo entry now needs its named partner to sign off before it's a
   // real contestant (see confirmContestant()) - these tests are about
@@ -694,7 +699,7 @@ test('a duo entry is not in the running until the named partner confirms it', as
 
   const reg = await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Unconfirmed Pair', night, partnerUserId: b.data.id },
+    body: { name: 'Unconfirmed Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   assert.equal(reg.status, 201);
   assert.equal(reg.data.pending, true);
@@ -740,20 +745,20 @@ test('a refused duo entry frees both people to enter again', async () => {
 
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Doomed Pair', night, partnerUserId: b.data.id },
+    body: { name: 'Doomed Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // While it stands, it reserves both of them - neither can enter separately.
-  const blocked = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo Try', night } });
+  const blocked = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo Try', night, photoBase64: TEST_PHOTO } });
   assert.equal(blocked.status, 400);
 
   const refuse = await api('DELETE', '/outfit/register/pending', { token: b.data.token, body: { night } });
   assert.equal(refuse.status, 200);
 
   // Both are free again afterwards.
-  const soloB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo B', night } });
+  const soloB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo B', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloB.status, 201);
   assert.equal(soloB.data.pending, false, 'a solo entry needs nobody to confirm it');
-  const soloA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo A', night } });
+  const soloA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo A', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloA.status, 201);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -775,14 +780,14 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
 
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Second Thoughts', night, partnerUserId: b.data.id },
+    body: { name: 'Second Thoughts', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
 
   // A change of heart is the same operation as a refusal - the registrant
   // can drop their own still-pending entry, not just the named partner.
   const selfCancel = await api('DELETE', '/outfit/register/pending', { token: a.data.token, body: { night } });
   assert.equal(selfCancel.status, 200);
-  const soloAgain = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo Again', night } });
+  const soloAgain = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo Again', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloAgain.status, 201);
 
   // Once confirmed, it's a real entry - cancel/confirm no longer apply to
@@ -791,7 +796,7 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
   const d = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel Four' } });
   await api('POST', '/outfit/register', {
     token: c.data.token,
-    body: { name: 'Settled Pair', night, partnerUserId: d.data.id },
+    body: { name: 'Settled Pair', night, partnerUserId: d.data.id, photoBase64: TEST_PHOTO },
   });
   await api('POST', '/outfit/register/confirm', { token: d.data.token, body: { night } });
 
@@ -821,6 +826,126 @@ test('an admin entering a pair on their behalf does not need a confirmation', as
   const listed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
   assert.ok(listed.data.contestants.find((c) => c.id === reg.data.id),
     'an organiser-created pair should be in the running immediately');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('self-registration requires a valid photo, but an organiser registering on someone\'s behalf does not', async () => {
+  const night = 'swamp';
+  const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Required' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const noPhoto = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'No Photo', night } });
+  assert.equal(noPhoto.status, 400);
+  assert.equal(noPhoto.data.error, 'err_photo_required');
+
+  const notAnImage = await api('POST', '/outfit/register', {
+    token: solo.data.token,
+    body: { name: 'Bad Photo', night, photoBase64: 'data:image/jpeg;base64,bm90IGEgamZpZg==' },
+  });
+  assert.equal(notAnImage.status, 400);
+  assert.equal(notAnImage.data.error, 'err_photo_invalid');
+
+  const wrongMime = await api('POST', '/outfit/register', {
+    token: solo.data.token,
+    body: { name: 'Wrong Mime', night, photoBase64: 'data:image/png;base64,aWJ2ZXI=' },
+  });
+  assert.equal(wrongMime.status, 400);
+  assert.equal(wrongMime.data.error, 'err_photo_invalid');
+
+  const tooBig = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(500 * 1024, 1)]).toString('base64');
+  const oversized = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Huge Photo', night, photoBase64: tooBig } });
+  assert.equal(oversized.status, 400);
+  assert.equal(oversized.data.error, 'err_photo_too_large');
+
+  const ok = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Good Photo', night, photoBase64: TEST_PHOTO } });
+  assert.equal(ok.status, 201);
+
+  // The organiser registering someone else skips the whole requirement,
+  // same as it already skips duo confirmation (autoConfirm).
+  const c = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Organiser Solo' } });
+  const organiserReg = await api('POST', '/admin/contestants/register', { token: ADMIN, body: { userId: c.data.id, name: 'No Photo Needed', night } });
+  assert.equal(organiserReg.status, 201);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('either half of a duo can replace the entry photo before voting opens, not after', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Swap One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Swap Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/outfit/register', {
+    token: a.data.token,
+    body: { name: 'Swappable Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
+  });
+  await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
+
+  // The partner didn't register it, but the photo belongs to the entry,
+  // not to whoever uploaded it first.
+  const swapByPartner = await api('PUT', '/outfit/register/photo', { token: b.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(swapByPartner.status, 200);
+  const swapByRegistrant = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(swapByRegistrant.status, 200);
+
+  // Nobody without an entry tonight can "replace" a photo that isn't theirs.
+  const stranger = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Stranger' } });
+  const noEntry = await api('PUT', '/outfit/register/photo', { token: stranger.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(noEntry.status, 400);
+  assert.equal(noEntry.data.error, 'err_no_contestant_entry');
+
+  // Opening voting locks the roster - the photo included.
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  const afterOpen = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(afterOpen.status, 400);
+  assert.equal(afterOpen.data.error, 'err_registration_not_open');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('a contestant photo is visible to its own entrants and admins any time, but to everyone else only once revealed', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Owner' } });
+  const rival = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Rival' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Reveal Persona', night, photoBase64: TEST_PHOTO } });
+  const photoUrl = `/outfit/contestants/${reg.data.id}/photo`;
+
+  // The registrant can always see their own entry's photo.
+  const ownView = await api('GET', photoUrl, { token: a.data.token });
+  assert.equal(ownView.status, 200);
+  // An admin can always see it too, for moderation.
+  const adminView = await api('GET', photoUrl, { token: ADMIN });
+  assert.equal(adminView.status, 200);
+  // Nobody else can, before it's been revealed.
+  const earlyPeek = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(earlyPeek.status, 404);
+
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', '/votes', { token: rival.data.token, body: { contestantId: reg.data.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
+
+  // Still hidden while the reveal is staged and hasn't reached this rank.
+  const stillHidden = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(stillHidden.status, 404);
+
+  // Once the reveal actually reaches "all", it opens up to everyone -
+  // advance through every stage (hidden -> third -> second -> first -> all)
+  // regardless of how many contestants there are.
+  for (let i = 0; i < 4; i++) {
+    await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  }
+  const revealed = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(revealed.status, 200);
+  assert.ok(revealed.headers.get('content-type').startsWith('image/jpeg'));
+
+  // A contestant with no photo at all (e.g. an organiser quick-add) 404s
+  // rather than crashing.
+  const noPhotoEntry = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Photoless', night } });
+  const missing = await api('GET', `/outfit/contestants/${noPhotoEntry.data.id}/photo`, { token: ADMIN });
+  assert.equal(missing.status, 404);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });

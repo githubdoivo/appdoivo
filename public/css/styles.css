@@ -729,7 +729,7 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 .card {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 22px;
   margin-bottom: 18px;
@@ -827,6 +827,20 @@ html.mode-light .hero-line { color: var(--ink); }
 .tier.podium-reveal li::before { content: none; }
 .tier.podium-reveal .name { font-weight: 600; }
 .tier li:first-child::before { color: var(--outfit); }
+
+/* Outfit photo thumbnail - shown on a guest's own entry (registration/
+   confirmation cards) and, once revealed, in the results tier above. Never
+   shown to other guests during voting - see photoUrl() in app.js. */
+.entry-photo-preview {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.tier .entry-photo-preview { width: 44px; height: 44px; flex-shrink: 0; }
+#contestants-table .entry-photo-preview { width: 32px; height: 32px; }
 
 /* --------------------------------- Admin --------------------------------- */
 
@@ -1061,8 +1075,12 @@ html.mode-light body.theme-rata {
   --paper-3:  #f6f0f0;
   --ink:      #302629;
   --ink-soft: #6d5c60;
-  --line:     #dcc9cc;
-  --line-2:   #e6d6d8;
+  /* Was #dcc9cc/#e6d6d8 - barely distinguishable from --paper-2 (#f1e9ea),
+     so card borders read as missing entirely on this tab specifically,
+     unlike every other night theme. Darkened within the same dusty-pink
+     family so the border stays visible without losing the muted mood. */
+  --line:     #b8969b;
+  --line-2:   #c7a8ac;
   --clay:     #8a3f2c;
   --clay-2:   #6e3122;
   --rata:     #8a3f2c;
@@ -1153,13 +1171,14 @@ body.theme-plaza {
   --ink-soft: #6e5a2c;
   --line:     #c7a659;
   --line-2:   #d4b876;
-  /* Was brown-gold (#8a5c00/#a67815) - a monochrome newsprint mood.
-     Blue accent against the yellow paper instead, for a livelier
-     newsstand/masthead contrast rather than one tone throughout. */
-  --clay:     #2a4a7a;
-  --clay-2:   #3f679c;
-  --clay-active: #2a4a7a;
-  --rata:     #2a4a7a;
+  /* Was a blue accent (#2a4a7a/#3f679c) for newsstand/masthead contrast -
+     read as out of place next to every other theme's warm, single-hue
+     accent. Back to a monochrome newsprint mood: a darker, more saturated
+     yellow/mustard than the paper itself, not a different hue. */
+  --clay:     #7a5200;
+  --clay-2:   #9c6e15;
+  --clay-active: #7a5200;
+  --rata:     #7a5200;
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1174,11 +1193,11 @@ html.mode-dark body.theme-plaza {
   --ink-soft: #b8a06a;
   --line:     #4a3d1f;
   --line-2:   #5c4c28;
-  /* Same yellow+blue pairing as the light variant above - bright blue
-     against the dark gold, instead of a monochrome gold-on-gold. */
-  --clay:     #4a7fc4;
-  --clay-2:   #6a9bd8;
-  --rata:     #4a7fc4;
+  /* Same monochrome mustard-on-gold pairing as the light variant above,
+     lightened to read against the dark paper instead of darkened against it. */
+  --clay:     #d9a536;
+  --clay-2:   #e8bb5c;
+  --rata:     #d9a536;
   background-color: #2b2107;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1201,7 +1220,12 @@ html.mode-dark body.theme-plaza {
    so it reads as prominent rather than blending into the column. */
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
-.plaza-post:first-child { border-top: none; padding-top: 0; }
+/* Excludes the boxed types below (announcement/poll): they carry their own
+   full border/padding on all four sides, so the plain divider this zeroes
+   doesn't apply to them - without the :not()s, this still won, its
+   :first-child pseudo-class outranking their plain-class border/padding
+   overrides, leaving whichever post landed first missing its top edge. */
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll) { border-top: none; padding-top: 0; }
 .plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
@@ -1215,7 +1239,7 @@ html.mode-dark body.theme-plaza {
 
 .plaza-post-announcement {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
@@ -1241,7 +1265,7 @@ html.mode-dark body.theme-plaza {
 
 .plaza-post-poll {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;

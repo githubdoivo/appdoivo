@@ -28,7 +28,10 @@ const app = express();
 // Fly.io terminates TLS and proxies requests, so trust its X-Forwarded-For
 // header to get each client's real IP (needed for per-IP rate limiting).
 app.set('trust proxy', 1);
-app.use(express.json());
+// Default 100kb is too small for a base64-encoded outfit photo (client
+// resizes to ~800px JPEG first, but base64 still adds ~33% overhead) - 2mb
+// leaves generous headroom while still bounding the request body.
+app.use(express.json({ limit: '2mb' }));
 
 // API.
 app.use('/api', apiRouter);

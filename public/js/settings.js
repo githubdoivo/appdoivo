@@ -648,7 +648,7 @@ function renderContestants() {
     ? allContestants.filter((c) => foldAccents(c.name.toLowerCase()).includes(term))
     : allContestants;
   $('contestants-table').innerHTML = contestants.length
-    ? `<tr><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
+    ? `<tr><th></th><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
         const who = c.partner_name
           ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
           : c.registered_by ? esc(c.registered_by) : '-';
@@ -657,8 +657,15 @@ function renderContestants() {
         // shows entries the partner hasn't confirmed - they're exactly
         // what the owner needs to chase before opening the voting.
         const pending = c.confirmed ? '' : ` <span class="badge">${esc(t('contestant_pending_label'))}</span>`;
+        // Admins can see any entry's photo any time (moderation), unlike
+        // guests who only get it once results are revealed - see GET
+        // /outfit/contestants/:id/photo.
+        const photo = c.hasPhoto
+          ? `<img class="entry-photo-preview" src="/api/outfit/contestants/${c.id}/photo?token=${encodeURIComponent(getToken())}" alt="" />`
+          : '';
         return `
         <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
+          <td>${photo}</td>
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span>${pending}</td>
           <td class="muted">${who}</td>
           <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>

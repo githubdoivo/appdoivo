@@ -317,6 +317,18 @@ if (!columnExists('contestants', 'confirmed_at')) {
   db.exec('UPDATE contestants SET confirmed_at = created_at');
 }
 
+// Migration: a photo of the outfit, attached to the entry (not the user) -
+// captured at registration since it has to match the specific night's
+// costume, and shared by both halves of a duo rather than doubled up (see
+// registerContestant()/replaceContestantPhoto() in votes.js). Required for
+// a guest's own self-registration, but existing rows and admin/organiser
+// entries can go without one - stored as a plain BLOB since the volume
+// (dozens of small JPEGs) doesn't justify external storage.
+if (!columnExists('contestants', 'photo')) {
+  db.exec('ALTER TABLE contestants ADD COLUMN photo BLOB');
+  db.exec('ALTER TABLE contestants ADD COLUMN photo_mime TEXT');
+}
+
 // Migration: owner-only pinning for Plaza announcements (renamed from
 // "note"). NULL means not pinned; a timestamp both flags it and orders
 // multiple pins by most-recently-pinned first.

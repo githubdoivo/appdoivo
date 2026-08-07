@@ -751,11 +751,46 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
 
 let registerMode = 'solo';
 let registerPartnerId = null;
+let registerPhotoDataUrl = null;
 let usersCache = null;
 
 async function ensureUsersCache() {
   if (!usersCache) usersCache = await api('/users/basic');
   return usersCache;
+}
+
+// Resizes/re-encodes a picked photo client-side before upload - a phone
+// camera photo can easily be 5-10MB at full resolution, and the request
+// (base64, in a JSON body) needs to stay small. This is a courtesy, not
+// the enforcement - the server has its own hard cap (see decodePhoto() in
+// src/votes.js) since a client-side limit alone can't be trusted.
+const PHOTO_MAX_DIMENSION = 800;
+const PHOTO_JPEG_QUALITY = 0.8;
+
+function resizePhotoToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('err_photo_invalid'))); };
+    img.src = url;
+  });
+}
+
+// Builds an <img> src for a contestant's photo. The endpoint needs a
+// Bearer token like every other request, but an <img> tag can't send
+// custom headers - authenticate() also accepts ?token= for exactly this
+// (see auth.js, originally added for the service worker).
+function photoUrl(contestantId) {
+  return `/api/outfit/contestants/${contestantId}/photo?token=${encodeURIComponent(getToken())}`;
 }
 
 function renderRegistration(data) {
@@ -780,6 +815,13 @@ function renderRegistration(data) {
     // registerContestant() server-side), so the two of them see different
     // things until then: whoever entered it can only wait or pull it, and
     // the partner is the only one who can make it real.
+    // Either half of the pair can swap the photo any time before voting
+    // opens (see replaceContestantPhoto() server-side) - it belongs to the
+    // entry, not to whoever happened to upload it first.
+    const photoPreview = mine.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(mine.id)}" alt="" />` : '';
+    const changePhotoControls = `
+      <button type="button" class="small ghost" id="change-photo-btn">${esc(t('outfit_change_photo_btn'))}</button>
+      <input type="file" accept="image/*" id="change-photo-input" class="hidden" />`;
     if (!mine.confirmed) {
       const msg = mine.registeredByMe
         ? t('outfit_entry_waiting_partner', { name: esc(mine.name), partner: esc(mine.partnerName || '') })
@@ -789,23 +831,31 @@ function renderRegistration(data) {
         : `<button type="button" class="small" id="confirm-entry-btn">${esc(t('outfit_entry_confirm_btn'))}</button>`;
       area.innerHTML = `
         <p class="highlight">${msg}</p>
+        ${photoPreview}
         <div class="inline" style="margin-top:10px">
           ${confirmBtn}
           <button type="button" class="small ghost" id="cancel-entry-btn">${esc(t('outfit_entry_cancel_btn'))}</button>
+          ${changePhotoControls}
         </div>`;
       $('confirm-entry-btn')?.addEventListener('click', confirmEntry);
       $('cancel-entry-btn').addEventListener('click', cancelEntry);
+      wireChangePhotoInput();
       return;
     }
     const msg = mine.partnerName
       ? t('outfit_registered_with', { name: esc(mine.name), partner: esc(mine.partnerName) })
       : t('outfit_registered_as', { name: esc(mine.name) });
-    area.innerHTML = `<p class="highlight">${msg}</p>`;
+    area.innerHTML = `
+      <p class="highlight">${msg}</p>
+      ${photoPreview}
+      <div class="inline" style="margin-top:10px">${changePhotoControls}</div>`;
+    wireChangePhotoInput();
     return;
   }
 
   registerMode = 'solo';
   registerPartnerId = null;
+  registerPhotoDataUrl = null;
   area.innerHTML = `
     <form id="register-form">
       <div class="theme-switch" id="register-mode-switch">
@@ -817,6 +867,9 @@ function renderRegistration(data) {
         <div id="register-partner-results" class="partner-results"></div>
       </div>
       <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
+      <p class="help" style="margin-top:10px">${esc(t('outfit_register_photo_help'))}</p>
+      <input id="register-photo-input" type="file" accept="image/*" capture="environment" style="margin-top:6px" />
+      <div id="register-photo-preview" class="hidden" style="margin-top:10px"><img class="entry-photo-preview" alt="" /></div>
       <button type="submit" style="margin-top:10px">${t('outfit_register_btn')}</button>
     </form>`;
 
@@ -855,12 +908,38 @@ function renderRegistration(data) {
     });
   });
 
+  $('register-photo-input').addEventListener('change', async () => {
+    const file = $('register-photo-input').files[0];
+    const preview = $('register-photo-preview');
+    if (!file) {
+      registerPhotoDataUrl = null;
+      preview.classList.add('hidden');
+      return;
+    }
+    try {
+      registerPhotoDataUrl = await resizePhotoToJpeg(file);
+      preview.querySelector('img').src = registerPhotoDataUrl;
+      preview.classList.remove('hidden');
+    } catch (err) {
+      registerPhotoDataUrl = null;
+      preview.classList.add('hidden');
+      await showAlert(err.message);
+    }
+  });
+
   $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('register-name').value.trim();
     if (!name) return;
     if (registerMode === 'duo' && !registerPartnerId) {
       await showAlert(t('outfit_register_partner_required'));
+      return;
+    }
+    // A photo is required to complete an entry (see registerContestant()'s
+    // requirePhoto server-side) - checked here too so the error shows up
+    // right by the field instead of only after a round-trip.
+    if (!registerPhotoDataUrl) {
+      await showAlert(t('outfit_register_photo_required'));
       return;
     }
     // Entering as a pair puts someone else's name on it, so say plainly
@@ -872,7 +951,12 @@ function renderRegistration(data) {
     try {
       await api('/outfit/register', {
         method: 'POST',
-        body: { name, night: getNight(), partnerUserId: registerMode === 'duo' ? registerPartnerId : null },
+        body: {
+          name,
+          night: getNight(),
+          partnerUserId: registerMode === 'duo' ? registerPartnerId : null,
+          photoBase64: registerPhotoDataUrl,
+        },
       });
       loadVotes();
     } catch (err) {
@@ -987,10 +1071,15 @@ async function loadVotes() {
       // actual rank (not the tier list's auto-numbering, which would be
       // wrong for a partial set) - e.g. "3rd place" appearing alone first.
       list.classList.toggle('podium-reveal', data.resultsPhase !== 'all');
+      // Photos are a reveal-night surprise, not shown during voting - this
+      // is the first time they can appear at all (the server only serves
+      // a photo once its contestant is actually in this results array, see
+      // GET /outfit/contestants/:id/photo).
       list.innerHTML = results.map((r) => {
         const name = esc(contestantLabel(r));
         const label = data.resultsPhase === 'all' ? name : `${t(`rank_${r.rank}`)} · ${name}`;
-        return `<li><span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
+        const photo = r.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(r.id)}" alt="" />` : '';
+        return `<li>${photo}<span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
       }).join('');
     } else {
       $('results-card').classList.add('hidden');
@@ -1022,6 +1111,26 @@ async function cancelEntry() {
   } catch (err) {
     await showAlert(err.message);
   }
+}
+
+// Wires the "change photo" button next to an existing entry (pending or
+// confirmed) - either half of a duo can use it (see replaceContestantPhoto()
+// server-side). Re-rendered every time renderRegistration() redraws the
+// card, so this re-wires the fresh elements each call.
+function wireChangePhotoInput() {
+  const input = $('change-photo-input');
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const photoBase64 = await resizePhotoToJpeg(file);
+      await api('/outfit/register/photo', { method: 'PUT', body: { night: getNight(), photoBase64 } });
+      loadVotes();
+    } catch (err) {
+      await showAlert(err.message);
+    }
+  });
+  $('change-photo-btn').addEventListener('click', () => input.click());
 }
 
 async function vote(contestantId, name, isDuo) {

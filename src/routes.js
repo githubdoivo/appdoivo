@@ -27,6 +27,8 @@ import {
   confirmContestant,
   cancelPendingContestant,
   pendingContestantCount,
+  replaceContestantPhoto,
+  contestantPhotoRow,
   castVote,
   confirmDuoVote,
   cancelPendingVote,
@@ -295,7 +297,13 @@ router.get('/votes/status', (req, res) => {
 // the duo-matching and vote-merging rules.
 router.post('/outfit/register', (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
-  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId);
+  // A photo is required to complete a self-registration (not to use the
+  // app at all) - see registerContestant()'s requirePhoto. Organiser-
+  // created entries below skip it, same as they skip duo confirmation.
+  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId, {
+    photoBase64: req.body?.photoBase64 || null,
+    requirePhoto: true,
+  });
   if (result.error) return res.status(400).json({ error: result.error });
   // pending: a duo entry the named partner hasn't agreed to yet - not on
   // the voting list until they confirm below.
@@ -318,6 +326,34 @@ router.delete('/outfit/register/pending', (req, res) => {
   const result = cancelPendingContestant(req.user.id, night);
   if (result.error) return res.status(400).json({ error: result.error });
   res.json({ ok: true });
+});
+
+// Swaps the entry's photo - either half of a duo, any time before voting
+// opens (see replaceContestantPhoto()).
+router.put('/outfit/register/photo', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = replaceContestantPhoto(req.user.id, night, req.body?.photoBase64 || '');
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+// Serves a contestant's outfit photo. Either half of the entry and any
+// admin can always see it (their own preview, or moderation); anyone else
+// only once that contestant's rank has actually been revealed to guests
+// (see visibleResultsForNight()) - photos are a reveal-night surprise, not
+// visible during voting, so this is enforced here rather than trusted to
+// the frontend alone.
+router.get('/outfit/contestants/:id/photo', (req, res) => {
+  const row = contestantPhotoRow(Number(req.params.id));
+  if (!row) return res.status(404).end();
+  const isOwn = row.user_id === req.user.id || row.partner_user_id === req.user.id;
+  if (!isOwn && !req.user.isAdmin) {
+    const { results } = visibleResultsForNight(row.night);
+    if (!results.some((r) => r.id === row.id)) return res.status(404).end();
+  }
+  res.set('Content-Type', row.photo_mime);
+  res.set('Cache-Control', 'no-store');
+  res.send(row.photo);
 });
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
@@ -655,7 +691,7 @@ router.get('/admin/contestants', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
   const rows = db.prepare(`
     SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name,
-           c.confirmed_at IS NOT NULL AS confirmed
+           c.confirmed_at IS NOT NULL AS confirmed, c.photo IS NOT NULL AS hasPhoto
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
