@@ -739,6 +739,10 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
   b.addEventListener('click', () => {
     localStorage.setItem(NIGHT_KEY, b.dataset.theme);
     applyNight();
+    // A different night has its own separate registration state - force a
+    // fresh render instead of leaving the other night's blank form up (see
+    // registerFormReady in renderRegistration()).
+    registerFormReady = false;
     loadVotes();
   });
 });
@@ -753,6 +757,44 @@ let registerMode = 'solo';
 let registerPartnerId = null;
 let registerPhotoDataUrl = null;
 let usersCache = null;
+
+// Best Look polls for updates every few seconds (see outfitPollTimer
+// below), which re-renders this whole area - fine while nothing's in
+// progress, destructive while it is. Picking a photo hands control to the
+// OS camera/library picker for as long as the user takes, which both
+// blurs focus (defeating the activeElement check in renderRegistration())
+// and, if a re-render lands mid-pick, would swap out the very <input> the
+// native picker is bound to - its eventual change event would then fire on
+// a detached element with no listener, silently doing nothing. Set the
+// moment a picker is opened. Cleared as soon as a file is actually chosen
+// (the input's own change event - see openPhotoPicker() below), which is
+// the one unambiguous signal available; focus/visibility firing on return
+// is a backup for the "dismissed without choosing anything" case, since
+// there's no picker-cancelled event to rely on instead. A stuck-true flag
+// would silently freeze every future poll update on this tab, so a hard
+// timeout backs both of those up regardless - worth a few seconds of
+// missed polling in the worst case, not an indefinitely frozen tab.
+let photoPickerOpen = false;
+let photoPickerOpenTimer = null;
+function openPhotoPicker(input) {
+  photoPickerOpen = true;
+  clearTimeout(photoPickerOpenTimer);
+  photoPickerOpenTimer = setTimeout(() => { photoPickerOpen = false; }, 60000);
+  input.click();
+}
+window.addEventListener('focus', () => { photoPickerOpen = false; });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') photoPickerOpen = false;
+});
+// True once the blank "you haven't registered yet" form has been built for
+// the current not-registered state - skip rebuilding it on every poll tick
+// past that point. Unlike the registered/confirmed view below, nothing
+// about this state changes from the outside while it's showing, so there's
+// no legitimate reason to redraw it - only reasons that would wipe
+// whatever the user has typed/attached so far, including the gap right
+// after returning from the photo picker but before refocusing the name
+// field, which photoPickerOpen alone doesn't cover.
+let registerFormReady = false;
 
 async function ensureUsersCache() {
   if (!usersCache) usersCache = await api('/users/basic');
@@ -798,6 +840,7 @@ function renderRegistration(data) {
   const area = $('register-area');
   if (data.status !== 'registration') {
     card.classList.add('hidden');
+    registerFormReady = false;
     return;
   }
   card.classList.remove('hidden');
@@ -805,11 +848,13 @@ function renderRegistration(data) {
   // Now that Best Look polls for updates (see startOutfitPolling()), a
   // refresh landing mid-keystroke would otherwise wipe out whatever the
   // user is typing into the name/partner-search fields below - skip the
-  // re-render entirely while focus is inside this form, nothing about
-  // their own not-yet-submitted entry could have changed anyway.
-  if (area.contains(document.activeElement)) return;
+  // re-render entirely while focus is inside this form or a native photo
+  // picker is open (see photoPickerOpen above), nothing about their own
+  // not-yet-submitted entry could have changed anyway.
+  if (area.contains(document.activeElement) || photoPickerOpen) return;
 
   if (data.myContestant) {
+    registerFormReady = false;
     const mine = data.myContestant;
     // A duo entry isn't live until the named partner agrees to it (see
     // registerContestant() server-side), so the two of them see different
@@ -852,6 +897,15 @@ function renderRegistration(data) {
     wireChangePhotoInput();
     return;
   }
+
+  // Already showing the blank form and nothing external could have changed
+  // about it - skip rebuilding (see registerFormReady above). Without this,
+  // a poll landing in the gap after the user returns from the photo picker
+  // but before they've refocused a field (photoPickerOpen alone only
+  // covers while the picker is actually open) would still wipe the name
+  // they'd typed and the photo they just attached.
+  if (registerFormReady) return;
+  registerFormReady = true;
 
   registerMode = 'solo';
   registerPartnerId = null;
@@ -918,8 +972,9 @@ function renderRegistration(data) {
   // that would skip iOS's native picker sheet (photo library / take photo /
   // browse) and jump straight into the camera, which is less useful here
   // than the choice.
-  $('register-photo-btn').addEventListener('click', () => $('register-photo-input').click());
+  $('register-photo-btn').addEventListener('click', () => openPhotoPicker($('register-photo-input')));
   $('register-photo-input').addEventListener('change', async () => {
+    photoPickerOpen = false;
     const file = $('register-photo-input').files[0];
     const preview = $('register-photo-preview');
     if (!file) {
@@ -1137,6 +1192,7 @@ async function cancelEntry() {
 function wireChangePhotoInput() {
   const input = $('change-photo-input');
   input.addEventListener('change', async () => {
+    photoPickerOpen = false;
     const file = input.files[0];
     if (!file) return;
     try {
@@ -1147,7 +1203,7 @@ function wireChangePhotoInput() {
       await showAlert(err.message);
     }
   });
-  $('change-photo-btn').addEventListener('click', () => input.click());
+  $('change-photo-btn').addEventListener('click', () => openPhotoPicker(input));
 }
 
 async function vote(contestantId, name, isDuo) {

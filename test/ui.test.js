@@ -1051,3 +1051,51 @@ test('Snatch registration warns on a missing name, requires a photo, previews it
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();
 });
+
+test('a Best Look poll tick landing while a photo is picked does not wipe the in-progress name/photo', async () => {
+  // Reproduces a real bug: Best Look polls for updates every 4s
+  // (outfitPollTimer), and picking a photo hands control to the OS
+  // camera/library picker - which blurs focus, defeating the "skip while
+  // typing" guard, and for however long the user is away. A poll landing
+  // in that gap used to fully rebuild the blank registration form,
+  // silently wiping the name field and the just-attached photo - reported
+  // on a real iPhone as "erases the name box, photo doesn't upload,
+  // nothing works". Attaching via setInputFiles() here (not the
+  // button-triggering-a-filechooser dance used above) is deliberate: this
+  // test is about surviving a poll tick mid-interaction, not about the
+  // click-opens-a-picker mechanism the other test already covers.
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Poll Race Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  await page.fill('#register-name', 'Surviving The Poll');
+  // Blurring simulates the focus loss a real native picker sheet causes -
+  // the activeElement guard alone no longer protects the form past this
+  // point, same as it wouldn't on a real device.
+  await page.evaluate(() => document.activeElement?.blur());
+  // Longer than outfitPollTimer's 4000ms interval, so at least one poll
+  // tick is guaranteed to land before checking the field survived it.
+  await page.waitForTimeout(4500);
+  assert.equal(await page.inputValue('#register-name'), 'Surviving The Poll', 'a poll tick should not wipe the name field');
+
+  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+  await page.waitForTimeout(4500);
+  assert.ok(
+    await page.isVisible('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]'),
+    'a poll tick should not clear the attached photo preview either'
+  );
+
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  const entryText = await page.textContent('#register-area .highlight');
+  assert.ok(entryText.includes('Surviving The Poll'), 'the entry should register with the name/photo that survived the poll');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
