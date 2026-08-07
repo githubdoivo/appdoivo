@@ -728,11 +728,11 @@ function applyNight() {
   // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
   document.body.classList.toggle('theme-mural', currentTab === 'plaza');
   document.body.classList.toggle('theme-plaza', currentTab === 'chat');
+  // The switch's own highlighted half already names the night, so there's
+  // no separate "noite · swamp" line to keep in sync any more.
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
-  const label = $('outfit-theme-name');
-  if (label) label.textContent = t(night === 'swamp' ? 'theme_swamp' : 'theme_furnished');
 }
 
 document.querySelectorAll('#theme-switch button').forEach((b) => {
@@ -775,9 +775,31 @@ function renderRegistration(data) {
   if (area.contains(document.activeElement)) return;
 
   if (data.myContestant) {
-    const msg = data.myContestant.partnerName
-      ? t('outfit_registered_with', { name: esc(data.myContestant.name), partner: esc(data.myContestant.partnerName) })
-      : t('outfit_registered_as', { name: esc(data.myContestant.name) });
+    const mine = data.myContestant;
+    // A duo entry isn't live until the named partner agrees to it (see
+    // registerContestant() server-side), so the two of them see different
+    // things until then: whoever entered it can only wait or pull it, and
+    // the partner is the only one who can make it real.
+    if (!mine.confirmed) {
+      const msg = mine.registeredByMe
+        ? t('outfit_entry_waiting_partner', { name: esc(mine.name), partner: esc(mine.partnerName || '') })
+        : t('outfit_entry_needs_confirm', { name: esc(mine.name), partner: esc(mine.partnerName || '') });
+      const confirmBtn = mine.registeredByMe
+        ? ''
+        : `<button type="button" class="small" id="confirm-entry-btn">${esc(t('outfit_entry_confirm_btn'))}</button>`;
+      area.innerHTML = `
+        <p class="highlight">${msg}</p>
+        <div class="inline" style="margin-top:10px">
+          ${confirmBtn}
+          <button type="button" class="small ghost" id="cancel-entry-btn">${esc(t('outfit_entry_cancel_btn'))}</button>
+        </div>`;
+      $('confirm-entry-btn')?.addEventListener('click', confirmEntry);
+      $('cancel-entry-btn').addEventListener('click', cancelEntry);
+      return;
+    }
+    const msg = mine.partnerName
+      ? t('outfit_registered_with', { name: esc(mine.name), partner: esc(mine.partnerName) })
+      : t('outfit_registered_as', { name: esc(mine.name) });
     area.innerHTML = `<p class="highlight">${msg}</p>`;
     return;
   }
@@ -840,6 +862,12 @@ function renderRegistration(data) {
     if (registerMode === 'duo' && !registerPartnerId) {
       await showAlert(t('outfit_register_partner_required'));
       return;
+    }
+    // Entering as a pair puts someone else's name on it, so say plainly
+    // that it's on them to agree before it's a real entry.
+    if (registerMode === 'duo') {
+      const partner = $('register-partner-search').value.trim();
+      if (!(await showConfirm(t('outfit_confirm_register_duo', { name, partner })))) return;
     }
     try {
       await api('/outfit/register', {
@@ -969,6 +997,30 @@ async function loadVotes() {
     }
   } catch (err) {
     $('voting-status').textContent = err.message;
+  }
+}
+
+// The named partner agreeing to a duo entry - the click that puts the
+// pair on the voting list. No extra prompt: what they're agreeing to is
+// already spelled out on screen.
+async function confirmEntry() {
+  try {
+    await api('/outfit/register/confirm', { method: 'POST', body: { night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+}
+
+// Pulls an unconfirmed duo entry, freeing both to enter again - same
+// action whether the partner refused or the registrant changed their mind.
+async function cancelEntry() {
+  if (!(await showConfirm(t('outfit_confirm_cancel_entry')))) return;
+  try {
+    await api('/outfit/register/pending', { method: 'DELETE', body: { night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
   }
 }
 

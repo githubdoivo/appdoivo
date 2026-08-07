@@ -311,13 +311,19 @@ $('voting-advance-btn').addEventListener('click', async () => {
   try {
     await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
   } catch (err) {
-    // Closing with duo proposals nobody confirmed strands them - they
-    // never counted and closing means they never will. The server refuses
-    // once (409) and reports how many, so this can say the number rather
-    // than a vague warning; confirming re-sends with force.
-    if (err.status === 409 && err.data?.error === 'err_pending_duo_votes') {
+    // Two ways an advance can strand a half-finished duo: opening the
+    // voting locks out entries the partner never confirmed, closing it
+    // locks out votes the partner never confirmed. Either way the server
+    // refuses once (409) with the count, so this can name the number
+    // rather than warn vaguely; confirming re-sends with force.
+    const PENDING_CONFIRM = {
+      err_pending_duo_entries: ['confirm_open_pending_one', 'confirm_open_pending_other'],
+      err_pending_duo_votes: ['confirm_close_pending_one', 'confirm_close_pending_other'],
+    };
+    const keys = PENDING_CONFIRM[err.data?.error];
+    if (err.status === 409 && keys) {
       const n = err.data.pending;
-      const ok = await showConfirm(t(n === 1 ? 'confirm_close_pending_one' : 'confirm_close_pending_other', { n }));
+      const ok = await showConfirm(t(n === 1 ? keys[0] : keys[1], { n }));
       if (!ok) return;
       try {
         await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST', body: { force: true } });
@@ -647,9 +653,13 @@ function renderContestants() {
           ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
           : c.registered_by ? esc(c.registered_by) : '-';
         const isSolo = !c.partner_name;
+        // Unlike the guest-facing voting list, the roster deliberately
+        // shows entries the partner hasn't confirmed - they're exactly
+        // what the owner needs to chase before opening the voting.
+        const pending = c.confirmed ? '' : ` <span class="badge">${esc(t('contestant_pending_label'))}</span>`;
         return `
         <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
-          <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span></td>
+          <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span>${pending}</td>
           <td class="muted">${who}</td>
           <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
         </tr>`;

@@ -25,17 +25,21 @@ export function advanceResultsPhase(night) {
   return next;
 }
 
-/** Contestants registered for a night, with the real user(s) behind the
- * character name (null for admin-added entries with no registrant) - a
- * character name is often improvised at submission time, so voters can't
- * be expected to recognise who's actually behind it otherwise. */
+/** Contestants actually in the running for a night, with the real user(s)
+ * behind the character name (null for admin-added entries with no
+ * registrant) - a character name is often improvised at submission time,
+ * so voters can't be expected to recognise who's actually behind it
+ * otherwise. A duo entry the named partner hasn't confirmed yet isn't a
+ * real entry, so it's left out of the voting list entirely (see
+ * registerContestant()/confirmContestant()). */
 export function contestantsForNight(night) {
   return db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
-    WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+    ORDER BY c.name COLLATE NOCASE
   `).all(night);
 }
 
@@ -87,7 +91,7 @@ export function myVoteForNight(userId, night) {
  * registration form. */
 export function myContestantForNight(userId, night) {
   const row = db.prepare(`
-    SELECT c.id, c.name, c.user_id, u1.name AS registrant_name, u2.name AS partner_name
+    SELECT c.id, c.name, c.user_id, c.confirmed_at, u1.name AS registrant_name, u2.name AS partner_name
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
@@ -95,17 +99,34 @@ export function myContestantForNight(userId, night) {
   `).get(night, userId, userId);
   if (!row) return null;
   const partnerName = row.user_id === userId ? row.partner_name : row.registrant_name;
-  return { id: row.id, name: row.name, partnerName: partnerName || null };
+  return {
+    id: row.id,
+    name: row.name,
+    partnerName: partnerName || null,
+    // A duo entry isn't live until the named partner confirms it, and the
+    // two of them see different things until then - hence who registered it.
+    confirmed: !!row.confirmed_at,
+    registeredByMe: row.user_id === userId,
+  };
 }
 
 /**
  * Self-registers the caller as a Best Look contestant for a night. Pass
  * partnerUserId to team up with another user (picked from /users/basic on
  * the frontend, not typed) - both then share one contestant entry, and one
- * combined vote for the night between them (see castVote()). Returns
- * { ok, id, name } or { error }.
+ * combined vote for the night between them (see castVote()).
+ *
+ * A duo entry starts UNCONFIRMED: you can't put someone in a costume pair
+ * without them agreeing, so the named partner has to confirmContestant()
+ * on their own account before it's a real entry (until then it's hidden
+ * from the voting list). Solo entries have nobody to agree with and go
+ * live immediately. autoConfirm skips the whole dance for entries an admin
+ * creates on someone's behalf - that's the organiser acting deliberately,
+ * and blocking them behind a guest's phone would just get in the way.
+ *
+ * Returns { ok, id, name, pending } or { error }.
  */
-export function registerContestant(userId, night, name, partnerUserId) {
+export function registerContestant(userId, night, name, partnerUserId, { autoConfirm = false } = {}) {
   if (!isNight(night)) return { error: 'err_invalid_night' };
   if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
 
@@ -133,7 +154,64 @@ export function registerContestant(userId, night, name, partnerUserId) {
   const info = db.prepare(
     'INSERT INTO contestants (name, night, user_id, partner_user_id) VALUES (?, ?, ?, ?)'
   ).run(trimmedName, night, userId, partnerId);
-  return { ok: true, id: info.lastInsertRowid, name: trimmedName };
+  // Only a self-registered duo waits on anyone.
+  const pending = !!partnerId && !autoConfirm;
+  if (!pending) {
+    db.prepare("UPDATE contestants SET confirmed_at = datetime('now') WHERE id = ?").run(info.lastInsertRowid);
+  }
+  return { ok: true, id: info.lastInsertRowid, name: trimmedName, pending };
+}
+
+/**
+ * The named partner's half of a duo entry: confirms they're actually in
+ * it, which is what puts the pair on the voting list. Only they can - the
+ * person who registered it obviously already agrees. Entries are locked
+ * once voting opens, so this is only possible while registration is still
+ * running. Returns { ok } or { error }.
+ */
+export function confirmContestant(userId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
+
+  const row = db.prepare(
+    'SELECT id, user_id, partner_user_id, confirmed_at FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+  ).get(night, userId, userId);
+  if (!row) return { error: 'err_no_pending_entry' };
+  if (row.confirmed_at) return { error: 'err_you_already_registered' };
+  if (row.user_id === userId) return { error: 'err_partner_must_confirm_entry' };
+
+  db.prepare("UPDATE contestants SET confirmed_at = datetime('now') WHERE id = ?").run(row.id);
+  return { ok: true };
+}
+
+/**
+ * Drops an unconfirmed duo entry, freeing both of them to enter again
+ * (alone, or with someone else). Either can do it: the partner saying "no,
+ * I'm not doing that" and the registrant thinking better of it are the
+ * same operation, and neither loses anything since it was never live.
+ * Returns { ok } or { error }.
+ */
+export function cancelPendingContestant(userId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
+
+  const row = db.prepare(
+    'SELECT id, confirmed_at FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+  ).get(night, userId, userId);
+  if (!row) return { error: 'err_no_pending_entry' };
+  if (row.confirmed_at) return { error: 'err_you_already_registered' };
+
+  db.prepare('DELETE FROM contestants WHERE id = ?').run(row.id);
+  return { ok: true };
+}
+
+/** How many duo entries are still waiting on their named partner - the
+ * owner gets warned about these before opening the voting, since opening
+ * locks entries and strands them. */
+export function pendingContestantCount(night) {
+  return db.prepare(
+    'SELECT COUNT(*) AS n FROM contestants WHERE night = ? AND confirmed_at IS NULL'
+  ).get(night).n;
 }
 
 /**
@@ -253,7 +331,7 @@ export function resultsForNight(night) {
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
     LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night AND v.confirmed_at IS NOT NULL
-    WHERE c.night = ?
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
   `).all(night);

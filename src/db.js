@@ -305,6 +305,18 @@ if (!columnExists('votes', 'confirmed_at')) {
   db.exec('UPDATE votes SET confirmed_at = created_at');
 }
 
+// Migration: same two-step rule for the entry itself - you can't put
+// someone in a duo without them agreeing to it, so a self-registered duo
+// stays unconfirmed (and out of the voting list) until the named partner
+// signs off on their own account. Solo entries, and anything an admin
+// creates on someone's behalf, are confirmed on the spot. Existing rows
+// predate the rule and were already live entries, so they're backfilled
+// as confirmed rather than vanishing from the roster.
+if (!columnExists('contestants', 'confirmed_at')) {
+  db.exec('ALTER TABLE contestants ADD COLUMN confirmed_at TEXT');
+  db.exec('UPDATE contestants SET confirmed_at = created_at');
+}
+
 // Migration: owner-only pinning for Plaza announcements (renamed from
 // "note"). NULL means not pinned; a timestamp both flags it and orders
 // multiple pins by most-recently-pinned first.
