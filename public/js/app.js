@@ -868,9 +868,10 @@ function renderRegistration(data) {
       </div>
       <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
       <p class="help" style="margin-top:10px">${esc(t('outfit_register_photo_help'))}</p>
-      <input id="register-photo-input" type="file" accept="image/*" capture="environment" style="margin-top:6px" />
+      <button type="button" class="small ghost" id="register-photo-btn" style="margin-top:6px">${esc(t('outfit_choose_photo_btn'))}</button>
+      <input type="file" accept="image/*" id="register-photo-input" class="hidden" />
       <div id="register-photo-preview" class="hidden" style="margin-top:10px"><img class="entry-photo-preview" alt="" /></div>
-      <button type="submit" style="margin-top:10px">${t('outfit_register_btn')}</button>
+      <button type="submit" class="small" style="margin-top:10px">${t('outfit_register_btn')}</button>
     </form>`;
 
   const modeButtons = area.querySelectorAll('#register-mode-switch button');
@@ -908,6 +909,13 @@ function renderRegistration(data) {
     });
   });
 
+  // A styled button standing in for the raw file input (hidden) - a bare
+  // <input type=file> renders as the browser's own unstyled control,
+  // clashing with the rest of the app. Deliberately no `capture` attribute:
+  // that would skip iOS's native picker sheet (photo library / take photo /
+  // browse) and jump straight into the camera, which is less useful here
+  // than the choice.
+  $('register-photo-btn').addEventListener('click', () => $('register-photo-input').click());
   $('register-photo-input').addEventListener('change', async () => {
     const file = $('register-photo-input').files[0];
     const preview = $('register-photo-preview');

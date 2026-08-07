@@ -734,12 +734,6 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
   padding: 22px;
   margin-bottom: 18px;
 }
-/* In light mode, --line-2 is pale enough to blend into the card's own
-   --paper-2 background. In dark mode it reads as a bright, hard outline -
-   most visible at the rounded corners, where a small radius zoomed in
-   looks like a stray bracket rather than a subtle edge. Blend it toward
-   the card's own background, same treatment as the tab-row border. */
-html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
 .card h2 { font-size: 1.15rem; margin-bottom: 6px; }
 
 .hero-line {
@@ -1009,8 +1003,11 @@ body.theme-rata {
   --paper-3:  #2e2529;
   --ink:      #e8dfe1;
   --ink-soft: #9c8b8e;
-  --line:     #3d3237;
-  --line-2:   #4b3e43;
+  /* Was #3d3237/#4b3e43 - too close to --paper-2 (#271f22) for the card
+     border to read at all, the dark-mode counterpart of the light-mode fix
+     above. Lightened within the same dusty-mauve family. */
+  --line:     #665261;
+  --line-2:   #7a6070;
   --clay:     #a8452f;
   --clay-2:   #c25a3f;
   --rata:     #a8452f;
