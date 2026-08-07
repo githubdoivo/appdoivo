@@ -37,6 +37,10 @@ export async function api(path, { method = 'GET', body } = {}) {
   if (!res.ok) {
     const err = new Error(data.error ? t(data.error) : `Error ${res.status}`);
     err.status = res.status;
+    // Some failures carry more than a code - e.g. closing the voting with
+    // duo proposals still pending returns how many, so the caller can say
+    // so in the confirmation instead of just "there are some".
+    err.data = data;
     throw err;
   }
   return data;

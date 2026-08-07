@@ -292,6 +292,19 @@ db.exec(`
     ON contestants(user_id, night) WHERE user_id IS NOT NULL;
 `);
 
+// Migration: a duo's single shared vote is now a two-step approval - one
+// partner proposes it, the other has to confirm on their own account
+// before it counts. NULL confirmed_at means "proposed, waiting on the
+// partner" and is excluded from every tally; a solo voter's row is
+// confirmed the instant it's cast, so nothing changes for them. Same
+// two-nullable-timestamps shape as consequences' done_at/approved_at.
+// Rows that predate this were already final by the old rules, so they're
+// backfilled as confirmed rather than silently reverting to pending.
+if (!columnExists('votes', 'confirmed_at')) {
+  db.exec('ALTER TABLE votes ADD COLUMN confirmed_at TEXT');
+  db.exec('UPDATE votes SET confirmed_at = created_at');
+}
+
 // Migration: owner-only pinning for Plaza announcements (renamed from
 // "note"). NULL means not pinned; a timestamp both flags it and orders
 // multiple pins by most-recently-pinned first.

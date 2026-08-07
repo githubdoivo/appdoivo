@@ -169,15 +169,26 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
 .error { color: var(--danger); min-height: 1.2em; }
 /* Sits directly on the busy cover photo (not a paper/card surface like
    #auth-error), so plain colored text was too easy to miss regardless of
-   which part of the photo happened to be behind it - a solid light chip
-   guarantees contrast for the dark text no matter what's underneath. */
+   which part of the photo happened to be behind it - a solid fill
+   guarantees contrast no matter what's underneath. Deep red rather than
+   the cream this chip used to be: cream is exactly what the "entrar"
+   button above it is made of, so a cream chip sitting right under it read
+   as a second button instead of an alert. Full form width for the same
+   reason the button is - a narrower chip made the stack step in and out.
+   (8:1 against the text below, comfortably past AA.) */
 #login-error:not(:empty) {
-  display: inline-block;
-  background: #ece5d5;
-  color: #7a2416;
-  font-weight: 700;
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  background: #7a2416;
+  color: #ece5d5;
+  font-family: var(--body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-align: center;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-radius: var(--radius);
 }
 
@@ -247,10 +258,18 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
 
 /* Text-only button - "forgot my key" / "back to login" links, not a
-   bordered button competing with the real Entrar submit. */
+   bordered button competing with the real Entrar submit. Needs the same
+   appearance reset as .tab below - without it, a <button>'s native WebKit
+   chrome renders its own filled, rounded box (from the general button
+   rule's border-radius) right over these "background: none" declarations,
+   so on real iOS Safari this shows as a solid blank pill instead of plain
+   underlined text. */
 .link-btn {
+  -webkit-appearance: none;
+  appearance: none;
   background: none;
   border: none;
+  border-radius: 0;
   padding: 4px;
   color: var(--ink-soft);
   font-family: var(--body);
@@ -259,7 +278,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.link-btn:hover { color: var(--ink); }
+/* Explicit background:none here too, not just on the base rule above -
+   "button:hover, .btn:hover" (higher specificity than plain .link-btn,
+   since :hover adds a specificity point) fills it with --ink otherwise.
+   Invisible on a mouse (hover clears on mouseout), but iOS Safari latches
+   a tap into a "stuck" :hover with no mouse to clear it - the button then
+   transitions to solid --ink and stays that way, permanently, after a
+   single tap. */
+.link-btn:hover { background: none; color: var(--ink); }
 
 #find-key-results {
   width: 100%;
@@ -566,6 +592,12 @@ button.danger:hover {
   border-radius: 999px;
   cursor: pointer;
 }
+/* Same fix as .link-btn above: without this, "button:hover, .btn:hover"
+   outranks the plain (non-hover) rule above on specificity and fills an
+   inactive pill solid on a tap that gets stuck in :hover on iOS Safari.
+   .active already wins regardless (two classes beats button:hover), so
+   this only needs to guard the inactive state. */
+.role-pill:hover { background: none; }
 .role-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
 .role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
@@ -1180,27 +1212,6 @@ html.mode-dark body.theme-plaza {
   text-wrap: balance;
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
-/* Small, unobtrusive text link (same treatment as .link-btn) - post content
-   is admin-authored free text with no built-in PT/EN pair, unlike the
-   app's own UI chrome, so this triggers an on-demand machine translation
-   (see translate.js) rather than sitting there as a normal action button. */
-.plaza-translate-btn {
-  background: none;
-  border: none;
-  padding: 2px 0 0 14px;
-  margin: 4px 0 0;
-  color: var(--ink-soft);
-  font-family: var(--body);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-  display: block;
-}
-.plaza-translate-btn:hover { color: var(--ink); }
-.plaza-translate-btn:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
-.plaza-post-poll .plaza-translate-btn { padding-left: 0; }
 
 .plaza-post-announcement {
   background: var(--paper-2);

@@ -8,6 +8,11 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
 
+// See the matching comment in app.js - stops an installed iOS PWA from
+// restoring a stale scroll position when its backgrounded WKWebView is
+// resumed instead of freshly loaded.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -76,6 +81,7 @@ function refreshAccountToken() {
 }
 
 async function boot() {
+  window.scrollTo(0, 0);
   applyMode();
   applyI18n();
   updateLangUI();
@@ -157,6 +163,7 @@ async function boot() {
   // "Settings" first - admins/owner can still switch to their other tabs.
   selectAdminTab('settings');
   $('admin-content').classList.remove('hidden');
+  window.scrollTo(0, 0);
   refreshNotifButton('notif-btn');
   wireChangeKeyForm();
   if (isAdmin) reloadAll();
@@ -303,12 +310,29 @@ $('voting-advance-btn').addEventListener('click', async () => {
   $('voting-msg').textContent = '';
   try {
     await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
-    loadVotingState();
-    loadVotes();
-    loadContestants();
   } catch (err) {
-    $('voting-msg').textContent = err.message;
+    // Closing with duo proposals nobody confirmed strands them - they
+    // never counted and closing means they never will. The server refuses
+    // once (409) and reports how many, so this can say the number rather
+    // than a vague warning; confirming re-sends with force.
+    if (err.status === 409 && err.data?.error === 'err_pending_duo_votes') {
+      const n = err.data.pending;
+      const ok = await showConfirm(t(n === 1 ? 'confirm_close_pending_one' : 'confirm_close_pending_other', { n }));
+      if (!ok) return;
+      try {
+        await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST', body: { force: true } });
+      } catch (forced) {
+        $('voting-msg').textContent = forced.message;
+        return;
+      }
+    } else {
+      $('voting-msg').textContent = err.message;
+      return;
+    }
   }
+  loadVotingState();
+  loadVotes();
+  loadContestants();
 });
 
 $('voting-reset-btn').addEventListener('click', async () => {
@@ -706,10 +730,10 @@ async function ensureAdminRegisterUsersCache() {
 function wireAdminUserSearch(inputEl, resultsEl, onPick) {
   inputEl.addEventListener('input', async () => {
     onPick(null);
-    const term = inputEl.value.trim().toLowerCase();
+    const term = foldAccents(inputEl.value.trim().toLowerCase());
     if (term.length < 2) { resultsEl.innerHTML = ''; return; }
     const users = await ensureAdminRegisterUsersCache();
-    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    const matches = users.filter((u) => foldAccents(u.name.toLowerCase()).includes(term)).slice(0, 6);
     resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-user-id="${u.id}">${esc(u.name)}</button>`).join('');
     resultsEl.querySelectorAll('[data-user-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -874,9 +898,17 @@ async function loadConsequences() {
   renderConsequences();
 }
 
+// The one place the app's global lowercase rule can't be done in CSS: iOS
+// renders an OPEN <select> as a native OS picker that ignores page styles
+// entirely, so `text-transform: lowercase` (styles.css) only reaches the
+// closed control and the expanded list comes out capitalised. Lowercasing
+// the option text itself is what holds the rule here - everywhere else,
+// keep using the CSS.
+const lower = (s) => String(s).toLowerCase();
+
 function userOptionsHtml(selectedId) {
-  return `<option value="">${t('rata_assign_placeholder')}</option>` +
-    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+  return `<option value="">${esc(lower(t('rata_assign_placeholder')))}</option>` +
+    rataAssignableUsers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(lower(u.name))}</option>`).join('');
 }
 
 // Card list, not a grid: same shape as the user-facing rata-history-item

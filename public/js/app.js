@@ -7,12 +7,24 @@ import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
-import { translateText } from './translate.js';
+
+// An installed iOS PWA keeps its WKWebView alive in the background rather
+// than doing a real fresh load every time you reopen it - the OS restores
+// wherever it was left scrolled to, which reads as "the app opens
+// somewhere in the middle/bottom instead of the top". Setting this to
+// 'manual' stops the browser from doing that restoration on its own;
+// boot() below still forces a scroll-to-top itself as a belt-and-braces
+// measure, since this alone doesn't cover every case (e.g. iOS resuming a
+// suspended tab without a real navigation at all).
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
+// Strips accents so "cesar" matches "César" - typing the plain-ASCII form
+// of a name should always find it, not just the exact accented spelling.
+const foldAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 let currentTab = 'plaza';
 // Set from /me in showApp() - lets the Rata history tell "assigned to
@@ -33,6 +45,7 @@ let isOwner = false;
 /* ------------------------------- Arranque -------------------------------- */
 
 async function boot() {
+  window.scrollTo(0, 0);
   applyMode();
   applyI18n();
   updateLangUI();
@@ -57,22 +70,26 @@ async function boot() {
 function showLogin() {
   $('login').classList.remove('hidden');
   $('app').classList.add('hidden');
+  window.scrollTo(0, 0);
 }
 
 
 function showApp(me) {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  window.scrollTo(0, 0);
   myUserId = me.id;
   isAdmin = !!me.isAdmin;
   isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
-  // Reopens on whatever tab was last open, not always Wall - a stored tab
-  // that's no longer valid (e.g. Wall while plazaEnabled is now false)
-  // falls back to the plazaEnabled check right after, same as before.
-  const storedTab = localStorage.getItem(TAB_KEY);
-  if (TABS.includes(storedTab) && storedTab !== currentTab) selectTab(storedTab);
+  // Always opens on Wall (the landing tab - see currentTab above), the way
+  // an app opens on its home tab, rather than resuming wherever it was
+  // last left. The tab someone was on is deliberately NOT remembered: on
+  // an installed PWA there's no address bar to refresh from, so "reopening
+  // the app" is the only thing that ever happens, and landing somewhere
+  // mid-app is disorienting. A notification's own ?tab= is the one thing
+  // allowed to override this (see applyDeepLinkParams() below).
   if (!plazaEnabled && currentTab === 'plaza') selectTab('rata');
   applyNight();
   wireLogoEasterEgg(me.name, me.logo_customized);
@@ -321,7 +338,6 @@ $('token-input').addEventListener('input', () => {
 function selectTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
-  localStorage.setItem(TAB_KEY, tab);
   $('tab-plaza').classList.toggle('hidden', currentTab !== 'plaza');
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
@@ -468,34 +484,6 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
-// Post text - and, for a poll, its option labels too - is whatever the
-// admin typed, in whatever language, unlike the app's own UI chrome
-// (i18n.js) which has a built-in PT/EN pair for everything. A translated
-// post's content/button state lives here (keyed by post id, value is
-// 'pending' or { text, options: string[] | null }), separate from
-// lastPlazaPosts, so a poll-driven re-render (every 4s, see
-// startPlazaPolling()) doesn't silently revert an open translation back to
-// the original.
-const translatedPostContent = new Map();
-
-function plazaPostTextHtml(post) {
-  const entry = translatedPostContent.get(post.id);
-  const translating = entry === 'pending';
-  const showingTranslation = entry && entry !== 'pending';
-  const text = showingTranslation ? entry.text : post.text;
-  const btnLabel = translating ? t('plaza_translating') : showingTranslation ? t('plaza_show_original_btn') : t('plaza_translate_btn');
-  return `
-        <p class="plaza-post-text">${esc(text)}</p>
-        <button type="button" class="plaza-translate-btn" data-translate-post="${post.id}"${translating ? ' disabled' : ''}>${esc(btnLabel)}</button>`;
-}
-
-/** Poll option label for `post`, translated if a translation is currently showing for this post. */
-function plazaOptionLabel(post, option, index) {
-  const entry = translatedPostContent.get(post.id);
-  if (entry && entry !== 'pending' && entry.options) return entry.options[index];
-  return option.label;
-}
-
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
@@ -504,7 +492,7 @@ function renderPlazaPost(post) {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${pinnedBadge}
-        ${plazaPostTextHtml(post)}
+        <p class="plaza-post-text">${esc(post.text)}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -516,14 +504,14 @@ function renderPlazaPost(post) {
   // pendingPollSelections; nothing reaches the server until "votar" below
   // is pressed, so a misclick before then costs nothing.
   const pendingOptionId = pendingPollSelections.get(post.id);
-  const optionsHtml = post.options.map((o, i) => {
+  const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
     const isMine = post.myOptionId === o.id;
     const isPending = !alreadyVoted && pendingOptionId === o.id;
     const classes = `plaza-poll-option${isMine ? ' voted' : ''}${isPending ? ' pending' : ''}${alreadyVoted ? ' readonly' : ''}`;
     const body = `
         <span class="plaza-poll-option-fill" style="width:${pct}%"></span>
-        <span class="plaza-poll-option-label">${esc(plazaOptionLabel(post, o, i))}</span>
+        <span class="plaza-poll-option-label">${esc(o.label)}</span>
         <span class="plaza-poll-option-pct">${pct}%</span>`;
     // Once you've voted, the choice is locked - render plain divs instead of
     // buttons so there's nothing left to click, rather than disabling a
@@ -539,7 +527,7 @@ function renderPlazaPost(post) {
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${pinnedBadge}
-      ${plazaPostTextHtml(post)}
+      <p class="plaza-post-text">${esc(post.text)}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
@@ -583,40 +571,6 @@ function renderPlazaFeed(posts) {
         // landed - resync from the server so the UI locks to read-only
         // instead of leaving stale, still-selectable options on screen.
         loadPlaza();
-      }
-    });
-  });
-
-  $('plaza-feed').querySelectorAll('[data-translate-post]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const postId = Number(btn.dataset.translatePost);
-      const current = translatedPostContent.get(postId);
-      // Already showing a translation - "show original" just clears it,
-      // no need to hit the API again.
-      if (current && current !== 'pending') {
-        translatedPostContent.delete(postId);
-        renderPlazaFeed(lastPlazaPosts);
-        return;
-      }
-      const post = lastPlazaPosts.find((p) => p.id === postId);
-      if (!post) return;
-      translatedPostContent.set(postId, 'pending');
-      renderPlazaFeed(lastPlazaPosts);
-      const lang = getLang();
-      // A poll's options need translating too, not just its question - all
-      // requests fire together so this doesn't take options.length times
-      // as long as a plain announcement.
-      const [text, options] = await Promise.all([
-        translateText(post.text, lang),
-        post.type === 'poll'
-          ? Promise.all(post.options.map((o) => translateText(o.label, lang)))
-          : Promise.resolve(null),
-      ]);
-      // The post could have been removed, or the feed already re-rendered
-      // past this pending state, by the time the requests resolve.
-      if (translatedPostContent.get(postId) === 'pending') {
-        translatedPostContent.set(postId, { text, options });
-        renderPlazaFeed(lastPlazaPosts);
       }
     });
   });
@@ -675,7 +629,7 @@ async function loadRataHistory() {
           <div class="rata-history-meta">
             <span class="muted">${line}${hour ? ` · ${hour}` : ''}</span>
           </div>
-          ${canMarkDone ? `<button type="button" class="small ghost" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
+          ${canMarkDone ? `<button type="button" class="small" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
       }).join('')
       : `<p class="muted">${t('rata_history_empty')}</p>`;
@@ -733,6 +687,9 @@ $('suggest-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('suggest-text').value.trim();
   if (!text) return;
+  // One suggestion per day, and it's spent the moment this lands - same
+  // "no take-backs" prompt Snatch voting gets, for the same reason.
+  if (!(await showConfirm(t('rata_suggest_confirm')))) return;
   try {
     await api('/consequences', { method: 'POST', body: { text } });
     loadConsequences();
@@ -749,7 +706,6 @@ $('suggest-form').addEventListener('submit', async (e) => {
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
 const TABS = ['plaza', 'rata', 'outfit', 'chat'];
-const TAB_KEY = 'appivo_tab';
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);
@@ -863,10 +819,10 @@ function renderRegistration(data) {
   const resultsEl = $('register-partner-results');
   searchInput.addEventListener('input', async () => {
     registerPartnerId = null;
-    const term = searchInput.value.trim().toLowerCase();
+    const term = foldAccents(searchInput.value.trim().toLowerCase());
     if (term.length < 2) { resultsEl.innerHTML = ''; return; }
     const users = await ensureUsersCache();
-    const matches = users.filter((u) => u.name.toLowerCase().includes(term)).slice(0, 6);
+    const matches = users.filter((u) => foldAccents(u.name.toLowerCase()).includes(term)).slice(0, 6);
     resultsEl.innerHTML = matches.map((u) => `<button type="button" class="small ghost" data-partner-id="${u.id}">${esc(u.name)}</button>`).join('');
     resultsEl.querySelectorAll('[data-partner-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -944,18 +900,50 @@ async function loadVotes() {
     else statusKey = 'outfit_closed';
     $('voting-status').textContent = t(statusKey);
 
+    // A duo shares one vote and it takes both of them to spend it, so
+    // there's a middle state solo voters never see: proposed by one,
+    // waiting on the other (see castVote()/confirmDuoVote() server-side).
+    const isDuo = !!data.myContestant?.partnerName;
+    const pending = data.myVote && !data.myVote.confirmed;
+
     if (data.status === 'open' && !data.myVote) {
-      area.innerHTML = data.contestants.length
-        ? data.contestants.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
+      // You can't vote for your own entry (see castVote() server-side) -
+      // left out of the list entirely rather than shown and then rejected
+      // on click, same as you'd never see yourself in a "vote for the best"
+      // list elsewhere.
+      const votable = data.contestants.filter((c) => c.id !== data.myContestant?.id);
+      const help = isDuo ? `<p class="help">${esc(t('outfit_duo_help'))}</p>` : '';
+      area.innerHTML = votable.length
+        ? help + votable.map((c) => `<button class="vote-option" data-id="${c.id}" data-label="${esc(contestantLabel(c))}">${esc(contestantLabel(c))}</button>`).join('')
         : `<p class="muted">${t('outfit_no_contestants')}</p>`;
       area.querySelectorAll('.vote-option').forEach((b) => {
-        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label));
+        b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.label, isDuo));
       });
+    } else if (pending && data.status === 'open') {
+      const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
+      const name = chosen ? contestantLabel(chosen) : '';
+      const partner = data.myVote.partnerName || '';
+      // Whoever proposed it can only wait or take it back; the other one
+      // is the only person who can actually make it count.
+      const msg = data.myVote.proposedByMe
+        ? t('outfit_vote_waiting_partner', { name: esc(name), partner: esc(partner) })
+        : t('outfit_vote_needs_confirm', { name: esc(name), partner: esc(partner) });
+      const confirmBtn = data.myVote.proposedByMe
+        ? ''
+        : `<button type="button" class="small" id="confirm-vote-btn">${esc(t('outfit_vote_confirm_btn'))}</button>`;
+      area.innerHTML = `
+        <p class="highlight">${msg}</p>
+        <div class="inline" style="margin-top:10px">
+          ${confirmBtn}
+          <button type="button" class="small ghost" id="change-vote-btn">${esc(t('outfit_vote_change_btn'))}</button>
+        </div>`;
+      $('confirm-vote-btn')?.addEventListener('click', confirmVote);
+      $('change-vote-btn').addEventListener('click', changeVote);
     } else if (data.myVote) {
-      // Once cast, a vote is final (see castVote() server-side) and this
-      // stays the vote area's content for the rest of the night - closed/
-      // pending-results no longer overwrites it with a generic status
-      // message, so "who did I vote for" stays visible throughout.
+      // Once confirmed, a vote is final (see castVote() server-side) and
+      // this stays the vote area's content for the rest of the night -
+      // closed/pending-results no longer overwrites it with a generic
+      // status message, so "who did I vote for" stays visible throughout.
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(contestantLabel(chosen)) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -984,13 +972,40 @@ async function loadVotes() {
   }
 }
 
-async function vote(contestantId, name) {
-  // A vote is final the moment it's submitted (see castVote() server-side,
-  // same rule as Plaza polls) - confirm first, since there's no changing
-  // your mind after.
-  if (!(await showConfirm(t('outfit_confirm_vote', { name })))) return;
+async function vote(contestantId, name, isDuo) {
+  // Solo, a vote is final the moment it's submitted (see castVote()
+  // server-side, same rule as Plaza polls) - so confirm first, there's no
+  // changing your mind after. In a duo this only proposes it and the
+  // partner still has to sign off, so the wording promises less.
+  const key = isDuo ? 'outfit_confirm_propose' : 'outfit_confirm_vote';
+  if (!(await showConfirm(t(key, { name })))) return;
   try {
     await api('/votes', { method: 'POST', body: { contestantId, night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+}
+
+// The partner's half of a duo vote - this is the click that actually makes
+// it count, so it's the one that gets no second-guessing prompt (they're
+// confirming something already spelled out on screen).
+async function confirmVote() {
+  try {
+    await api('/votes/confirm', { method: 'POST', body: { night: getNight() } });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+  }
+}
+
+// Drops the pair's unconfirmed proposal so they can pick someone else -
+// same action whether the proposer changed their mind or the partner
+// disagreed, since nothing counted either way.
+async function changeVote() {
+  if (!(await showConfirm(t('outfit_confirm_change_vote')))) return;
+  try {
+    await api('/votes/pending', { method: 'DELETE', body: { night: getNight() } });
     loadVotes();
   } catch (err) {
     await showAlert(err.message);
