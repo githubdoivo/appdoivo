@@ -759,6 +759,52 @@ test('a refused duo entry frees both people to enter again', async () => {
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });
 
+test('either half of a pending duo can cancel it themselves, but not once it is confirmed', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  // Nothing registered yet - both actions 400 rather than crash.
+  const noEntryConfirm = await api('POST', '/outfit/register/confirm', { token: a.data.token, body: { night } });
+  assert.equal(noEntryConfirm.status, 400);
+  assert.equal(noEntryConfirm.data.error, 'err_no_pending_entry');
+  const noEntryCancel = await api('DELETE', '/outfit/register/pending', { token: a.data.token, body: { night } });
+  assert.equal(noEntryCancel.status, 400);
+  assert.equal(noEntryCancel.data.error, 'err_no_pending_entry');
+
+  await api('POST', '/outfit/register', {
+    token: a.data.token,
+    body: { name: 'Second Thoughts', night, partnerUserId: b.data.id },
+  });
+
+  // A change of heart is the same operation as a refusal - the registrant
+  // can drop their own still-pending entry, not just the named partner.
+  const selfCancel = await api('DELETE', '/outfit/register/pending', { token: a.data.token, body: { night } });
+  assert.equal(selfCancel.status, 200);
+  const soloAgain = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo Again', night } });
+  assert.equal(soloAgain.status, 201);
+
+  // Once confirmed, it's a real entry - cancel/confirm no longer apply to
+  // it (there's no un-entering yourself; that's the owner's remove button).
+  const c = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel Three' } });
+  const d = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel Four' } });
+  await api('POST', '/outfit/register', {
+    token: c.data.token,
+    body: { name: 'Settled Pair', night, partnerUserId: d.data.id },
+  });
+  await api('POST', '/outfit/register/confirm', { token: d.data.token, body: { night } });
+
+  const reconfirm = await api('POST', '/outfit/register/confirm', { token: d.data.token, body: { night } });
+  assert.equal(reconfirm.status, 400);
+  assert.equal(reconfirm.data.error, 'err_you_already_registered');
+  const lateCancel = await api('DELETE', '/outfit/register/pending', { token: c.data.token, body: { night } });
+  assert.equal(lateCancel.status, 400);
+  assert.equal(lateCancel.data.error, 'err_you_already_registered');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
 test('an admin entering a pair on their behalf does not need a confirmation', async () => {
   const night = 'swamp';
   const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Admin Pair One' } });
