@@ -1300,13 +1300,12 @@ html.mode-dark body.theme-plaza {
   background-repeat: repeat;
   border-bottom: 1px solid var(--line-2);
 }
-/* Centred, not space-between: the night switch is the only thing left in
-   here now that the "noite · swamp" label is gone (it just repeated the
-   switch's own highlighted half), and a lone control pushed to one edge
-   read as misaligned rather than deliberate. */
+/* Right-aligned: the night switch is the only thing left in here now that
+   the "noite · swamp" label is gone (it just repeated the switch's own
+   highlighted half). */
 .outfit-banner-body {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
