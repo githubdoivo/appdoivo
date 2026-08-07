@@ -581,6 +581,10 @@ test('neither half of a duo can vote for their own shared entry', async () => {
     body: { name: 'Duo Persona', night, partnerUserId: b.data.id },
   });
   assert.equal(reg.status, 201);
+  // A duo entry now needs its named partner to sign off before it's a
+  // real contestant (see confirmContestant()) - these tests are about
+  // voting, so get the pair on the roster first.
+  await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
 
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
 
@@ -606,6 +610,10 @@ test("a duo's vote only counts once the partner confirms it", async () => {
     token: a.data.token,
     body: { name: 'Pair Persona', night, partnerUserId: b.data.id },
   });
+  // A duo entry now needs its named partner to sign off before it's a
+  // real contestant (see confirmContestant()) - these tests are about
+  // voting, so get the pair on the roster first.
+  await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
 
   // One partner proposes - accepted, but flagged pending and worth nothing yet.
@@ -650,6 +658,10 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
     token: a.data.token,
     body: { name: 'Swap Persona', night, partnerUserId: b.data.id },
   });
+  // A duo entry now needs its named partner to sign off before it's a
+  // real contestant (see confirmContestant()) - these tests are about
+  // voting, so get the pair on the roster first.
+  await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
 
   await api('POST', '/votes', { token: a.data.token, body: { contestantId: first.data.id, night } });
@@ -670,6 +682,99 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   assert.equal(forced.status, 200);
   const results = await api('GET', `/admin/votes?night=${night}`, { token: ADMIN });
   assert.equal(results.data.results.find((r) => r.id === second.data.id).votes, 0);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('a duo entry is not in the running until the named partner confirms it', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Entry One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Entry Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/outfit/register', {
+    token: a.data.token,
+    body: { name: 'Unconfirmed Pair', night, partnerUserId: b.data.id },
+  });
+  assert.equal(reg.status, 201);
+  assert.equal(reg.data.pending, true);
+
+  // Not votable, and not in anyone's contestant list, while unconfirmed.
+  const listed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
+  assert.equal(listed.data.contestants.find((c) => c.id === reg.data.id), undefined,
+    'an unconfirmed duo entry must stay off the voting list');
+  // ...but the owner's roster does show it, flagged, so it can be chased.
+  const roster = await api('GET', `/admin/contestants?night=${night}`, { token: ADMIN });
+  assert.equal(roster.data.contestants.find((c) => c.id === reg.data.id).confirmed, 0);
+
+  // The person who entered it can't wave it through themselves.
+  const selfConfirm = await api('POST', '/outfit/register/confirm', { token: a.data.token, body: { night } });
+  assert.equal(selfConfirm.status, 400);
+  assert.equal(selfConfirm.data.error, 'err_partner_must_confirm_entry');
+
+  // Opening the voting is refused once, since it would strand the entry.
+  const blocked = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.data.error, 'err_pending_duo_entries');
+  assert.equal(blocked.data.pending, 1);
+
+  // The named partner confirming is what puts them in the running.
+  const confirm = await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
+  assert.equal(confirm.status, 200);
+  const nowListed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
+  assert.ok(nowListed.data.contestants.find((c) => c.id === reg.data.id),
+    'once confirmed the pair should appear as a real contestant');
+
+  // ...and with nothing pending, opening no longer needs forcing.
+  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  assert.equal(opened.status, 200);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('a refused duo entry frees both people to enter again', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Refuse One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Refuse Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  await api('POST', '/outfit/register', {
+    token: a.data.token,
+    body: { name: 'Doomed Pair', night, partnerUserId: b.data.id },
+  });
+  // While it stands, it reserves both of them - neither can enter separately.
+  const blocked = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo Try', night } });
+  assert.equal(blocked.status, 400);
+
+  const refuse = await api('DELETE', '/outfit/register/pending', { token: b.data.token, body: { night } });
+  assert.equal(refuse.status, 200);
+
+  // Both are free again afterwards.
+  const soloB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo B', night } });
+  assert.equal(soloB.status, 201);
+  assert.equal(soloB.data.pending, false, 'a solo entry needs nobody to confirm it');
+  const soloA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo A', night } });
+  assert.equal(soloA.status, 201);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('an admin entering a pair on their behalf does not need a confirmation', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Admin Pair One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Admin Pair Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId: a.data.id, partnerUserId: b.data.id, name: 'Organiser Pair', night },
+  });
+  assert.equal(reg.status, 201);
+  assert.equal(reg.data.pending, false);
+
+  const listed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
+  assert.ok(listed.data.contestants.find((c) => c.id === reg.data.id),
+    'an organiser-created pair should be in the running immediately');
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });

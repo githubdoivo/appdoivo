@@ -24,6 +24,9 @@ import {
   myVoteForNight,
   myContestantForNight,
   registerContestant,
+  confirmContestant,
+  cancelPendingContestant,
+  pendingContestantCount,
   castVote,
   confirmDuoVote,
   cancelPendingVote,
@@ -294,7 +297,27 @@ router.post('/outfit/register', (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId);
   if (result.error) return res.status(400).json({ error: result.error });
+  // pending: a duo entry the named partner hasn't agreed to yet - not on
+  // the voting list until they confirm below.
   res.status(201).json(result);
+});
+
+// The named partner's half of a duo entry (see confirmContestant()): only
+// they can sign it off, and only while registration is still open.
+router.post('/outfit/register/confirm', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = confirmContestant(req.user.id, night);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+// Drops an unconfirmed duo entry so both are free to enter again - either
+// of them, since a refusal and a change of heart amount to the same thing.
+router.delete('/outfit/register/pending', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = cancelPendingContestant(req.user.id, night);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
 });
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
@@ -631,7 +654,8 @@ router.patch('/admin/consequences/:id/approve', requireOwner, (req, res) => {
 router.get('/admin/contestants', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
   const rows = db.prepare(`
-    SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name
+    SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name,
+           c.confirmed_at IS NOT NULL AS confirmed
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
@@ -659,7 +683,7 @@ router.post('/admin/contestants', (req, res) => {
     if (taken) return res.status(400).json({ error: 'err_already_registered_this_night' });
   }
   const info = db.prepare(
-    'INSERT INTO contestants (name, night, user_id) VALUES (?, ?, ?)'
+    "INSERT INTO contestants (name, night, user_id, confirmed_at) VALUES (?, ?, ?, datetime('now'))"
   ).run(name, night, userId);
   res.status(201).json({ id: info.lastInsertRowid, name, night });
 });
@@ -674,7 +698,10 @@ router.post('/admin/contestants/register', requireOwner, (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   const userId = Number(req.body?.userId);
   if (!userId) return res.status(400).json({ error: 'err_choose_user' });
-  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId);
+  // autoConfirm: the organiser entering a pair themselves is a deliberate
+  // act on both their behalfs - making them chase a guest's confirmation
+  // would just block the person fixing the roster.
+  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId, { autoConfirm: true });
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json(result);
 });
@@ -756,6 +783,14 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
 router.post('/admin/voting/:night/open', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  // Opening the voting locks the roster, so a duo entry whose named
+  // partner never confirmed is stranded - it isn't on the voting list and
+  // can't be confirmed any more. Warn once with the count and let the
+  // owner decide (force), same as closing does for pending votes.
+  const pendingEntries = pendingContestantCount(night);
+  if (pendingEntries > 0 && !req.body?.force) {
+    return res.status(409).json({ error: 'err_pending_duo_entries', pending: pendingEntries });
+  }
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
