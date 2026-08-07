@@ -974,7 +974,26 @@ const PNG_1X1 = Buffer.from(
   'base64'
 );
 
-test('Snatch registration requires a photo, previews it once attached, and blocks submitting without one', async () => {
+/** Clicks a button that opens a file input (registerPhotoBtnSelector triggers
+ * a hidden <input type=file> via .click(), same as a real tap would) and
+ * feeds it a file through Playwright's native file-chooser interception -
+ * exercising the actual click -> OS/browser picker -> change event path,
+ * not just setInputFiles() on the underlying input directly. That
+ * distinction matters here: the input is hidden off-screen for a styled
+ * button to stand in for it (see .file-input-visually-hidden in
+ * styles.css), and a hidden-via-display:none input silently failing to
+ * open on iOS Safari when .click()'d programmatically is a real, previously
+ * unrelated failure mode setInputFiles() can't detect since it bypasses the
+ * click/open step entirely. */
+async function pickPhotoViaButton(page, buttonSelector, file) {
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.click(buttonSelector),
+  ]);
+  await chooser.setFiles(file);
+}
+
+test('Snatch registration warns on a missing name, requires a photo, previews it once attached via the real picker button, and blocks submitting without one', async () => {
   const night = 'furnished';
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo UI Tester' } });
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
@@ -984,6 +1003,14 @@ test('Snatch registration requires a photo, previews it once attached, and block
   await page.click('[data-tab="outfit"]');
   await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
 
+  // No name at all - this used to fail silently (a bare `return`, no
+  // message), which reads exactly like a dead/disabled submit button.
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const nameAlertText = await page.textContent('.modal-message');
+  assert.ok(/name|nome/i.test(nameAlertText), 'submitting without a name should say one is required, not silently do nothing');
+  await page.click('.modal-actions button');
+
   // Name filled, no photo yet - submitting should warn, not register.
   await page.fill('#register-name', 'Ghost of Photos Past');
   await page.click('#register-form button[type="submit"]');
@@ -992,9 +1019,15 @@ test('Snatch registration requires a photo, previews it once attached, and block
   assert.ok(/photo|foto/i.test(alertText), 'submitting without a photo should say one is required, not silently fail');
   await page.click('.modal-actions button');
 
-  // Attaching a photo resizes/re-encodes it client-side and previews the result.
-  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  // The file input starts genuinely absent from the file chooser flow until
+  // the styled "choose photo" button is clicked - it's the button, not the
+  // input, a real tap lands on.
+  await pickPhotoViaButton(page, '#register-photo-btn', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
   await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+  // The thumbnail alone is easy to miss on a small screen - a plain
+  // confirmation line has to be there too.
+  const previewText = await page.textContent('#register-photo-preview');
+  assert.ok(/photo|foto/i.test(previewText), 'attaching a photo should say so in text, not just show a thumbnail');
 
   await page.click('#register-form button[type="submit"]');
   await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
@@ -1003,6 +1036,17 @@ test('Snatch registration requires a photo, previews it once attached, and block
 
   // The registrant can always preview their own entry's photo.
   await page.waitForSelector('#register-area .entry-photo-preview', { timeout: WAIT_TIMEOUT });
+
+  // Either half of a duo can swap the photo later via the same
+  // button-triggers-hidden-input pattern - covered here too since it's the
+  // exact mechanism that broke. Byte-for-byte replacement is already
+  // covered server-side (api.test.js); what matters here is that the real
+  // click -> file-chooser -> PUT round trip completes without erroring.
+  await pickPhotoViaButton(page, '#change-photo-btn', { name: 'new-outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('.modal-overlay:not(.hidden)'), false, 'replacing the photo should not surface an error');
+  const status = await api('GET', `/votes/status?night=${night}`, { token: user.token });
+  assert.equal(status.myContestant.hasPhoto, true, 'the entry should still have a photo after replacing it');
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();

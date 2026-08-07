@@ -138,6 +138,24 @@ body {
 
 .hidden { display: none !important; }
 
+/* For a file input standing in behind a styled button (see photoUrl()'s
+   callers in app.js): `display: none` is unreliable on iOS Safari - a
+   `.click()` fired at a hidden input from a JS handler often silently
+   fails to open the picker at all, worst inside an installed PWA. Kept
+   in the layout (zero-size, clipped, off the visual flow) instead, which
+   iOS treats as a valid click target. */
+.file-input-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Tiny reference number, not a UI feature - lets QA vs prod be compared at
    a glance when reporting a bug (see version.js / GET /api/version). Sits
    as the last element in the DOM (after #login/#app, both of which toggle
@@ -835,6 +853,10 @@ html.mode-light .hero-line { color: var(--ink); }
 }
 .tier .entry-photo-preview { width: 44px; height: 44px; flex-shrink: 0; }
 #contestants-table .entry-photo-preview { width: 32px; height: 32px; }
+/* Confirms a photo actually made it in before submitting - the thumbnail
+   alone is easy to miss at a glance on a small screen. */
+#register-photo-preview { display: flex; align-items: center; gap: 10px; }
+.photo-attached-label { color: var(--ink-soft); font-size: var(--text-sm); }
 
 /* --------------------------------- Admin --------------------------------- */
 
@@ -1309,7 +1331,7 @@ html.mode-dark body.theme-plaza {
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {
   position: relative;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 18px;

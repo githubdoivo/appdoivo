@@ -821,7 +821,7 @@ function renderRegistration(data) {
     const photoPreview = mine.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(mine.id)}" alt="" />` : '';
     const changePhotoControls = `
       <button type="button" class="small ghost" id="change-photo-btn">${esc(t('outfit_change_photo_btn'))}</button>
-      <input type="file" accept="image/*" id="change-photo-input" class="hidden" />`;
+      <input type="file" accept="image/*" id="change-photo-input" class="file-input-visually-hidden" />`;
     if (!mine.confirmed) {
       const msg = mine.registeredByMe
         ? t('outfit_entry_waiting_partner', { name: esc(mine.name), partner: esc(mine.partnerName || '') })
@@ -869,8 +869,11 @@ function renderRegistration(data) {
       <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
       <p class="help" style="margin-top:10px">${esc(t('outfit_register_photo_help'))}</p>
       <button type="button" class="small ghost" id="register-photo-btn" style="margin-top:6px">${esc(t('outfit_choose_photo_btn'))}</button>
-      <input type="file" accept="image/*" id="register-photo-input" class="hidden" />
-      <div id="register-photo-preview" class="hidden" style="margin-top:10px"><img class="entry-photo-preview" alt="" /></div>
+      <input type="file" accept="image/*" id="register-photo-input" class="file-input-visually-hidden" />
+      <div id="register-photo-preview" class="hidden" style="margin-top:10px">
+        <img class="entry-photo-preview" alt="" />
+        <span class="photo-attached-label">${esc(t('outfit_photo_attached'))}</span>
+      </div>
       <button type="submit" class="small" style="margin-top:10px">${t('outfit_register_btn')}</button>
     </form>`;
 
@@ -938,7 +941,13 @@ function renderRegistration(data) {
   $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('register-name').value.trim();
-    if (!name) return;
+    // Silent no-ops here read as a dead/disabled button - say what's
+    // missing instead, same wording the server itself would use for the
+    // same rule (see err_persona_name_required in votes.js).
+    if (!name) {
+      await showAlert(t('err_persona_name_required'));
+      return;
+    }
     if (registerMode === 'duo' && !registerPartnerId) {
       await showAlert(t('outfit_register_partner_required'));
       return;
