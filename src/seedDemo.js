@@ -95,7 +95,11 @@ export function seedDemo() {
   // owner always adds contestants manually there) -----------------------------
   const contestantCount = db.prepare('SELECT COUNT(*) AS n FROM contestants').get().n;
   if (contestantCount === 0) {
-    const insContestant = db.prepare('INSERT INTO contestants (name, night) VALUES (?, ?)');
+    // Solo demo entries have nobody to confirm with (see registerContestant()
+    // in votes.js) - without confirmed_at set, they'd sit as permanently
+    // unconfirmed, invisible on the voting list and blocking the admin from
+    // ever opening voting on QA without hitting the force override.
+    const insContestant = db.prepare("INSERT INTO contestants (name, night, confirmed_at) VALUES (?, ?, datetime('now'))");
     NIGHTS.forEach((night, i) => {
       NAMES.slice(i * 5, i * 5 + 5).forEach((name) => insContestant.run(name, night));
     });

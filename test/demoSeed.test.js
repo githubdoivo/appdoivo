@@ -36,8 +36,13 @@ test('seedDemo registers 5 contestants per night, from the demo user template', 
   seedDemo();
 
   for (const night of NIGHTS) {
-    const rows = db.prepare('SELECT name FROM contestants WHERE night = ?').all(night);
+    const rows = db.prepare('SELECT name, confirmed_at FROM contestants WHERE night = ?').all(night);
     assert.equal(rows.length, 5, `expected 5 contestants for ${night}, got ${rows.length}`);
+    // Solo demo entries have nobody to confirm with - unconfirmed would hide
+    // them from the voting list and block opening voting on QA entirely.
+    for (const row of rows) {
+      assert.ok(row.confirmed_at, `seeded contestant ${row.name} should be pre-confirmed`);
+    }
   }
 
   // Calling it again (simulating another boot with the same DB) must not
