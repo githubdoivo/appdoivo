@@ -728,7 +728,7 @@ function renderPlazaPost(post) {
   // Same "poll"/"announcement" labels the admin's own type picker already
   // uses, just surfaced here too - at a glance in a mixed feed, nothing
   // else says which kind of post this is before you start reading it.
-  const typeLabel = `<span class="plaza-post-type">${esc(t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement'))}</span>`;
+  const typeLabel = `<h2 class="plaza-post-type">${esc(t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement'))}</h2>`;
 
   if (post.type !== 'poll') {
     return `

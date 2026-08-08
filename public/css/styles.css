@@ -1585,18 +1585,13 @@ html.mode-light body.theme-memo .card {
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
 .plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll) { border-top: none; padding-top: 0; }
-/* var(--ink) on purpose, not the usual muted byline/help tone - a plain
-   "poll"/"announcement" eyebrow read as an afterthought at --ink-soft,
-   the same brightness bump given to card titles elsewhere in the app. */
-.plaza-post-type {
-  display: block;
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: var(--text-xs);
-  letter-spacing: 0.14em;
-  color: var(--ink);
-  margin-bottom: 6px;
-}
+/* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
+   an announcement/poll post is its own self-contained "boxed" card (see
+   the comment on .plaza-post above), so its type label is that card's
+   title and should look like one, not a caption underneath it. Matches
+   .card h2's size, and gets the same dark-mode-white treatment below. */
+.plaza-post-type { font-size: 1.15rem; margin-bottom: 6px; }
+html.mode-dark .plaza-post-type { color: #fff; }
 .plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
