@@ -525,20 +525,16 @@ function tickMemoCountdowns() {
 
 const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
-// Resolved slots (done or missed - nothing left to act on) sink to the
-// end, so whatever's actually waiting or open next reads first instead of
-// getting buried after an earlier one already dealt with. Sorts a copy -
-// memoSlotsCache itself stays in slot_index order, which other lookups (by
-// id) don't care about anyway.
-const MEMO_STATUS_RANK = { open: 0, waiting: 1, uploaded: 2, missed: 2 };
-
 // Demure by design: 5 small dots instead of a detailed row-per-slot list -
 // filled in as they're completed, no times or countdowns cluttering it.
 // Only the open one is actually interactive (tap it to shoot); waiting/
 // done/missed dots are just a glanceable state, nothing to act on.
 function renderMemoDots() {
-  const ordered = [...memoSlotsCache].sort((a, b) => MEMO_STATUS_RANK[a.status] - MEMO_STATUS_RANK[b.status]);
-  $('memo-dots').innerHTML = ordered.map((s) => {
+  // Fixed left-to-right chronological order (slot_index, as returned by the
+  // API) - not reordered by status. The dots are meant to read like a
+  // progress bar ("2 of 5 done so far"), which only works if position
+  // means something stable instead of shuffling completed ones around.
+  $('memo-dots').innerHTML = memoSlotsCache.map((s) => {
     const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] ?? s.slotIndex + 1 });
     const isOpen = s.status === 'open';
     return `
@@ -551,6 +547,25 @@ function renderMemoDots() {
 }
 
 const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
+
+// Hand-drawn-style line icons instead of the OS's own emoji glyphs - a
+// native emoji renders as whatever the platform's font happens to look
+// like (very "iPhone"), which clashes with the app's own drawn-icon
+// language used everywhere else (sun/moon toggle, eye/eye-off, bell -
+// see index.html). Same 24x24/currentColor/round-cap convention, so these
+// tint correctly with each theme's accent instead of being fixed-color
+// pictures.
+const MEMO_REACTION_ICON = {
+  '❤️': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
+  '🔥': '<path d="M12 3c1 3.2-2.3 4.4-2.3 7.6a2.3 2.3 0 1 0 4.6 0c0-.7-.2-1.2-.5-1.6.7 1.6-.4 2.6-1.4 2.6-1.2 0-1.8-1.1-1-2.6 1-1.9.2-3.8-1.4-5C11.4 6.5 12.6 4.6 12 3z"/><path d="M8 13.5a4 4 0 1 0 8 0c0-1.6-.7-2.6-1.4-3.4"/>',
+  '😂': '<circle cx="12" cy="12" r="9"/><path d="M8.2 10c.5-1.1 1.6-1.1 2.1 0M13.7 10c.5-1.1 1.6-1.1 2.1 0"/><path d="M7.5 13.8c1.6 3 7.4 3 9 0"/>',
+  '😮': '<circle cx="12" cy="12" r="9"/><circle cx="8.7" cy="10" r="1.1"/><circle cx="15.3" cy="10" r="1.1"/><circle cx="12" cy="15.3" r="2"/>',
+  '👍': '<path d="M7 10.5v9H4.5v-9H7Zm2.5-.7 3.4-5.5a1.8 1.8 0 0 1 3.2 1.5L15 9.5h3a2 2 0 0 1 2 2.3l-1 6.2a2.5 2.5 0 0 1-2.5 2H10a1.5 1.5 0 0 1-1.5-1.5v-8Z"/>',
+};
+
+function memoReactionIcon(emoji) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
+}
 
 // Today's shared feed - every guest's uploads so far, like BeReal's own
 // friends-feed, with a light row of quick-tap emoji reactions per photo
@@ -573,7 +588,7 @@ function renderMemoFeed() {
     const reactionBar = MEMO_REACTION_EMOJI.map((emoji) => {
       const count = u.reactions[emoji] || 0;
       const mine = u.myReaction === emoji;
-      return `<button type="button" class="memo-reaction${mine ? ' active' : ''}" data-memo-react="${u.id}" data-emoji="${emoji}">${emoji}${count ? `<span>${count}</span>` : ''}</button>`;
+      return `<button type="button" class="memo-reaction${mine ? ' active' : ''}" data-memo-react="${u.id}" data-emoji="${emoji}">${memoReactionIcon(emoji)}${count ? `<span>${count}</span>` : ''}</button>`;
     }).join('');
     return `
       <div class="memo-feed-item">

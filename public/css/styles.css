@@ -294,7 +294,11 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   max-width: 620px;
   margin: 0 auto;
   padding: 22px 20px 48px;
-  min-height: 88vh;
+  /* Was 88vh - the whole greeting-through-login block sat right up near
+     the top of the illustration; taller here (bottom-anchored, see
+     justify-content below) leaves more of the artwork visible above the
+     text before it starts. */
+  min-height: 94vh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1501,13 +1505,14 @@ html.mode-light body.theme-memo .card {
   border: 1px solid var(--line);
   background: var(--paper-2);
   border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 0.95rem;
+  padding: 5px 9px;
   line-height: 1;
   cursor: pointer;
+  color: var(--ink-soft);
 }
+.memo-reaction svg { width: 16px; height: 16px; flex-shrink: 0; }
 .memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
-.memo-reaction.active { border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
+.memo-reaction.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 
 .plaza-eyebrow {
   display: block;
