@@ -124,15 +124,17 @@ Avoid GoDaddy (up-sells and expensive renewals). Suggested names: `appdoivo.com`
 
 - `PORT` - server port (default 3000; this project uses 3001 locally).
 - `NODE_ENV` - set to `production` only in the real deployment (`fly.toml`). Gates
-  two dev/test-only conveniences: `ADMIN_TOKEN` below, and a `mossy` quick-login
-  that always logs in as the owner regardless of their real key (see
-  `/auth/login` in `src/routes.js`) - neither works when this is `production`.
+  `ADMIN_TOKEN` below (`mossy` has its own switch, see `ENABLE_DEV_LOGIN`).
 - `ADMIN_TOKEN` - pins the owner's access key outside production. If empty (or
   in production), one is generated the same way any user's key is.
 - `ADMIN_NAME` - the owner's display name.
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of the database and never share it. If you change it, nobody can log in (the stored hashes no longer match).
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` - Web Push keys (generate with `npm run genkeys`).
 - `ENABLE_ADMIN_PROMOTION` - lets the owner promote/revoke other users' admin status from Settings. On in QA, off in production.
+- `ENABLE_DEV_LOGIN` - lets a `mossy` login always resolve to the owner
+  regardless of their real key (see `findUserByToken` in `src/auth.js`). Dev/QA
+  only - deliberately never set in `fly.toml`, so the safe default (off) holds
+  even if some other env var fails to propagate correctly.
 - `ENABLE_PLAZA` - turns on the Wall tab. Off by default locally; on in both QA and production.
 - `SEED_DEMO` - auto-loads demo users/contestants/consequences on every boot. QA only - never set in production.
 - `DB_FILE` - (optional) database path; used by the tests and to point production/QA at their mounted volume.

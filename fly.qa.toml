@@ -27,6 +27,11 @@ primary_region = "cdg"
   # fly.toml). Kept here for parity so QA never drifts from what prod
   # actually runs. See routes.js's Plaza section.
   ENABLE_PLAZA = "true"
+  # Only set in QA - lets the "mossy" quick-login work (see auth.js).
+  # Deliberately absent from fly.toml so it defaults to off on prod even
+  # if this variable somehow failed to reach the container, rather than
+  # relying on NODE_ENV!=='production' the way this used to.
+  ENABLE_DEV_LOGIN = "true"
 
 [http_service]
   internal_port = 3000
