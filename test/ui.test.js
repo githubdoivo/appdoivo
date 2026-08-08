@@ -1136,6 +1136,92 @@ test('once results start revealing, "you voted for X" clears instead of sitting 
   // in the vote area above is just clutter once that's true.
   const voteAreaEmpty = await page.evaluate(() => document.getElementById('vote-area').innerHTML.trim() === '');
   assert.ok(voteAreaEmpty, 'the "you voted for X" message should clear once results start revealing');
+  // The whole votação card (not just the vote-area within it) is redundant
+  // now too - it was still showing its "closed" status line on top of the
+  // results card until this was fixed.
+  assert.equal(await page.isVisible('#voting-card'), false, 'the votação card should hide entirely once results are revealed');
+  // With only one contestant, they're both 1st place and the only result -
+  // gold medal included.
+  const firstResultText = await page.textContent('#results-list li');
+  assert.ok(firstResultText.includes('🥇'), 'the winner should get a gold medal emoji in the reveal');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('the admin voting-advance button always confirms first - a misclick declined leaves the night untouched', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#voting-advance-btn', { timeout: WAIT_TIMEOUT });
+
+  // Declining the confirm on "open" should leave registration exactly as
+  // it was - nothing about the night should have changed underneath.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button.ghost');
+  const afterDecline = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.equal(afterDecline.nights.find((n) => n.night === night).status, 'registration', 'declining the confirm should not have opened voting');
+
+  // Confirming should actually perform it.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:not(.ghost)');
+  await page.waitForFunction(
+    () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
+    { timeout: WAIT_TIMEOUT }
+  );
+  const afterConfirm = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.equal(afterConfirm.nights.find((n) => n.night === night).status, 'open', 'confirming should have opened voting');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('the admin download-photos button shows progress, triggers a real download, and reports errors inline', async () => {
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  // Default night is furnished - switch to the empty one first to check
+  // the error path before adding a photo to check the success path.
+  await page.click('[data-night="swamp"]');
+  await page.waitForTimeout(200);
+
+  await page.click('#download-photos-btn');
+  await page.waitForFunction(
+    () => document.getElementById('download-photos-msg')?.textContent.length > 0,
+    { timeout: WAIT_TIMEOUT }
+  );
+  const errorText = await page.textContent('#download-photos-msg');
+  assert.ok(/photo|foto/i.test(errorText), 'a night with no photos yet should report that inline, not fail silently');
+  assert.ok(await page.evaluate(() => document.getElementById('download-photos-msg').classList.contains('error')), 'the error state should be styled as an error');
+
+  // Now with an actual photo, the button should trigger a real download.
+  const owner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Download Flow Persona' } });
+  const fakeJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+  await api('POST', '/outfit/register', { token: owner.token, body: { name: 'Download Flow Target', night, photoBase64: fakeJpeg } });
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#download-photos-btn'),
+  ]);
+  assert.equal(download.suggestedFilename(), `snatch-${night}-photos.zip`);
+  // Hardcoded PT text rather than importing the client's t() into this
+  // Node context - ADMIN's account language defaults to pt, same as every
+  // other test in this file that checks rendered copy.
+  await page.waitForFunction(
+    () => document.getElementById('download-photos-msg')?.textContent === 'descarregado.',
+    { timeout: WAIT_TIMEOUT }
+  );
+  assert.equal(await page.evaluate(() => document.getElementById('download-photos-msg').classList.contains('error')), false);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();

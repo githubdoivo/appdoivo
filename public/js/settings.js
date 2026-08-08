@@ -310,10 +310,25 @@ async function loadVotingState() {
   }
 }
 
+// Every stage transition here is either hard to undo (reveal-next: no way
+// back once a rank is shown) or disruptive mid-event (open/close/registration
+// affect everyone's screen at once) - one stray tap on a phone during a
+// party is enough to trigger any of them, so all four get a plain
+// "are you sure" first, on top of (not instead of) the more specific
+// warnings below for the cases that have one.
+const GENERIC_CONFIRM = {
+  registration: 'confirm_voting_registration',
+  open: 'confirm_voting_open',
+  close: 'confirm_voting_close',
+  'reveal-next': 'confirm_voting_reveal_next',
+};
+
 $('voting-advance-btn').addEventListener('click', async () => {
   const action = $('voting-advance-btn').dataset.action;
   if (!action) return;
   $('voting-msg').textContent = '';
+  const genericKey = GENERIC_CONFIRM[action];
+  if (genericKey && !(await showConfirm(t(genericKey)))) return;
   // Closing while some accounts never voted at all leaves them out with no
   // way back - unlike the two 409 cases below (which the server itself
   // refuses so a stray API call can't skip them either), this is purely
@@ -660,11 +675,44 @@ async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
   allContestants = contestants;
   renderContestants();
-  // A plain <a href> (not a fetch-then-blob dance) so the browser handles
-  // the download itself - needs the token in the query string for the same
-  // reason photoUrl() does in app.js (an <a> can't send a Bearer header).
-  $('download-photos-link').href = `/api/admin/outfit/${encodeURIComponent(currentNight())}/photos.zip?token=${encodeURIComponent(getToken())}`;
 }
+
+// A real fetch()+blob download rather than a plain <a href> - the latter
+// (tried first) had no way to show progress/errors, and target="_blank"
+// pointed at a URL requiring auth meant a bare failure (e.g. no photos
+// yet) just landed the new tab on the app's own default route instead of
+// showing anything - indistinguishable from the button doing nothing at
+// all. This can show real status throughout, and use a normal Bearer
+// header instead of a token in the URL.
+$('download-photos-btn').addEventListener('click', async () => {
+  const night = currentNight();
+  const msg = $('download-photos-msg');
+  msg.classList.remove('error');
+  msg.textContent = t('download_photos_in_progress');
+  try {
+    const res = await fetch(`/api/admin/outfit/${encodeURIComponent(night)}/photos.zip`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snatch-${night}-photos.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msg.textContent = t('download_photos_done');
+    setTimeout(() => { if (msg.textContent === t('download_photos_done')) msg.textContent = ''; }, 3000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
 
 function renderContestants() {
   const term = foldAccents($('contestant-search').value.trim().toLowerCase());

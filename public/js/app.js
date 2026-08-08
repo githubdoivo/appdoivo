@@ -1066,6 +1066,10 @@ function contestantLabel(c) {
   return `${c.name} (${who})`;
 }
 
+// Podium flourish for the results reveal - requested explicitly, unlike the
+// rest of the app which stays emoji-free by default.
+const MEDAL_EMOJI = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -1137,6 +1141,11 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
+    // The votação card above (status text + whatever's left in vote-area)
+    // is entirely redundant once results are actually showing here - both
+    // toggle on the same condition so they always agree.
+    $('voting-card').classList.toggle('hidden', revealing && results.length > 0);
+
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
       const list = $('results-list');
@@ -1149,8 +1158,9 @@ async function loadVotes() {
       // a photo once its contestant is actually in this results array, see
       // GET /outfit/contestants/:id/photo).
       list.innerHTML = results.map((r) => {
+        const medal = MEDAL_EMOJI[r.rank] ? `${MEDAL_EMOJI[r.rank]} ` : '';
         const name = esc(contestantLabel(r));
-        const label = data.resultsPhase === 'all' ? name : `${t(`rank_${r.rank}`)} · ${name}`;
+        const label = data.resultsPhase === 'all' ? `${medal}${name}` : `${medal}${t(`rank_${r.rank}`)} · ${name}`;
         const photo = r.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(r.id)}" alt="" />` : '';
         return `<li>${photo}<span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
       }).join('');
