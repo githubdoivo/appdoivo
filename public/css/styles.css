@@ -41,6 +41,26 @@
   --serif:  'Cormorant Garamond', Georgia, serif;
   --body:   'EB Garamond', Georgia, serif;
   --script: 'Italianno', cursive;
+
+  /* Light-mode values, duplicated here as the real defaults (not just
+     stale placeholder fallbacks) - every var(--role-*/--type-*/--status-*)
+     use below used to lean on a hardcoded fallback argument instead, and
+     those fallbacks quietly went stale (still the old blue/green/purple
+     assignments) the last time this palette changed, since nothing forces
+     a fallback constant to track a var() redefinition elsewhere. Defining
+     them in :root means there's exactly one light-mode source of truth,
+     and it's also what renders during the brief window before JS applies
+     html.mode-light/mode-dark on first paint (see theme.js). */
+  --brand: #a96b4b;
+  --role-owner: #6b4c8a;
+  --role-admin: #a3402f;
+  --role-user:  #2a6ca6;
+  --type-announcement: #5c3a1f;
+  --type-poll: #a35a1a;
+  --status-pending: #8a6a1f;
+  --status-done: #2f7d32;
+  --status-fila: #5b6472;
+  --status-atribuir: #a3406b;
 }
 
 /* ==================== Dark / light mode (UI chrome) ======================
@@ -74,15 +94,8 @@ html.mode-light {
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
   --brand:    #6b3420;
-  --role-owner: #8a4630;
-  --role-admin: #3f7d1f;
-  --role-user:  #1f6d78;
-  --type-announcement: #8a6a1f;
-  --type-poll: #6b4c8a;
-  --status-pending: #2a6ca6;
-  --status-done: #2f7d32;
-  --status-fila: #5b6472;
-  --status-atribuir: #a3406b;
+  /* role-*/type-*/status-* stay at their :root (light-mode) values here -
+     only mode-dark below needs to redefine them. */
 }
 
 html.mode-dark {
@@ -101,12 +114,12 @@ html.mode-dark {
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
   --brand:    #e2a878;
-  --role-owner: #a96b4b;
-  --role-admin: #8fd167;
-  --role-user:  #6fd6e0;
-  --type-announcement: #d4b04a;
-  --type-poll: #b294d6;
-  --status-pending: #6badde;
+  --role-owner: #b294d6;
+  --role-admin: #d9695a;
+  --role-user:  #6badde;
+  --type-announcement: #c9a07a;
+  --type-poll: #e08a4a;
+  --status-pending: #d4b04a;
   --status-done: #7ed181;
   --status-fila: #9aa4b5;
   --status-atribuir: #e08fb0;
@@ -240,21 +253,28 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   --line: rgba(236, 229, 213, 0.35);
   --paper-3: #241d17;
 }
-/* Zoom controlado (a partir do topo) em vez de recortar o ficheiro de
-   origem - mantem a letra "twenty-nine divine" sempre visivel. */
+/* Plain "cover" - no extra transform:scale() on top of it. Cover already
+   guarantees the illustration fills the entire screen with no gaps at its
+   largest non-distorted size; an added scale() only ever throws away more
+   of the artwork (cropping the "twenty-nine divine" lettering at the
+   sides, showing less of the cottage) without filling any more of the
+   page than cover already does on its own. background-position keeps the
+   crop anchored to the top, so the lettering stays whole and the bottom
+   of the illustration (the cottage) is what gets trimmed on tall/narrow
+   screens. The gradient is lighter up top so the artwork and its own
+   lettering stay the focus, darkening only toward the bottom where the
+   form actually needs the contrast. */
 #login::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 0;
   background-image:
-    linear-gradient(180deg, rgba(12, 16, 8, 0.30) 0%, rgba(12, 16, 8, 0.12) 38%, rgba(8, 11, 6, 0.62) 100%),
+    linear-gradient(180deg, rgba(10, 16, 8, 0.10) 0%, rgba(10, 14, 8, 0.04) 34%, rgba(8, 12, 6, 0.80) 80%),
     url('/images/login-bg.png');
   background-size: cover;
   background-position: top center;
   background-repeat: no-repeat;
-  transform: scale(1.22);
-  transform-origin: top center;
 }
 
 #login .cover {
@@ -269,9 +289,28 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   justify-content: flex-end;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 20px;
 }
-.cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
+/* Two beats instead of one run-on sentence - "bem-vinde" is the warm,
+   personal welcome (the illustration's own hand-lettering is the real
+   headline of this screen, so this stays modest rather than competing for
+   header-level weight); "mostra-me a tua chave" is the quieter functional
+   instruction underneath. */
+.greeting { display: flex; flex-direction: column; gap: 5px; }
+.greeting .hello {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.3rem;
+  color: var(--ink);
+  text-shadow: 0 2px 14px rgba(4, 6, 2, 0.55);
+}
+.greeting .instruction {
+  font-family: var(--body);
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 10px rgba(4, 6, 2, 0.5);
+}
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
 
@@ -295,6 +334,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  /* Only ever sits on the login screen's photo background - a plain
+     underline alone can get lost against a busy patch of the image. */
+  text-shadow: 0 1px 8px rgba(4, 6, 2, 0.5);
 }
 /* Explicit background:none here too, not just on the base rule above -
    "button:hover, .btn:hover" (higher specificity than plain .link-btn,
@@ -343,7 +385,12 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 input[type="password"] { text-transform: none; }
-::placeholder { text-transform: lowercase; font-weight: 600; }
+/* Without an explicit color, WebKit's own placeholder default is a
+   neutral cool grey - fine on the app's own neutral paper, but it reads
+   as distinctly blue-tinted by contrast against every warm theme (mural's
+   terracotta, rata's pink, furnished's clay). --ink-soft already tracks
+   each active theme, so this stays in-palette everywhere instead. */
+::placeholder { text-transform: lowercase; font-weight: 600; color: var(--ink-soft); opacity: 1; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
@@ -516,7 +563,7 @@ button.danger:hover {
   font-size: clamp(1.9rem, 8.5vw, 2.6rem);
   line-height: 0.8;
   white-space: nowrap;
-  color: var(--brand, #a96b4b);
+  color: var(--brand);
 }
 .brand .badge,
 .user-row-name .badge {
@@ -539,9 +586,9 @@ button.danger:hover {
    (--role-*), same as --role-owner already had. admin/user used to be a
    single hardcoded dark shade each, which read fine in light mode but was
    nearly illegible against the dark-mode background. */
-.badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
-.badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
-.badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
+.badge.role-owner { border-color: var(--role-owner); color: var(--role-owner); }
+.badge.role-admin { border-color: var(--role-admin); color: var(--role-admin); }
+.badge.role-user { border-color: var(--role-user); color: var(--role-user); }
 
 /* Publication-type badges (Regular/Poll on the Wall admin list) - own
    colors, deliberately outside the role palette above so a post type is
@@ -551,8 +598,8 @@ button.danger:hover {
    badge's own text out of alignment with the plain text (byline,
    question, options) below it in the same list. */
 .badge.type-announcement, .badge.type-poll { margin-left: -9px; }
-.badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
-.badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
+.badge.type-announcement { border-color: var(--type-announcement); color: var(--type-announcement); }
+.badge.type-poll { border-color: var(--type-poll); color: var(--type-poll); }
 
 /* Rata history: each revealed consequence, who was assigned, and its
    completion status - a standalone pill (not .badge, which is scoped to
@@ -587,10 +634,10 @@ button.danger:hover {
 /* Four distinct colors, one per state, reading roughly as a progression:
    fila (grey, nothing to do yet) -> atribuir (rose, needs the owner to
    pick someone) -> pendente (blue, in progress) -> feita (green, done). */
-.rata-badge.rata-status-fila { border-color: var(--status-fila, #5b6472); color: var(--status-fila, #5b6472); }
-.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir, #a3406b); color: var(--status-atribuir, #a3406b); }
-.rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
-.rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
+.rata-badge.rata-status-fila { border-color: var(--status-fila); color: var(--status-fila); }
+.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir); color: var(--status-atribuir); }
+.rata-badge.rata-status-pendente { border-color: var(--status-pending); color: var(--status-pending); }
+.rata-badge.rata-status-feita { border-color: var(--status-done); color: var(--status-done); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
@@ -624,10 +671,10 @@ button.danger:hover {
 /* Rata status filter - same colors as the rata-badge each state renders
    with in the list below, so the filter pill you toggled and what it's
    showing read as the same thing. */
-.role-pill[data-status="fila"].active { background: var(--status-fila, #5b6472); border-color: var(--status-fila, #5b6472); }
-.role-pill[data-status="atribuir"].active { background: var(--status-atribuir, #a3406b); border-color: var(--status-atribuir, #a3406b); }
-.role-pill[data-status="pendente"].active { background: var(--status-pending, #2a6ca6); border-color: var(--status-pending, #2a6ca6); }
-.role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
+.role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); }
+.role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); }
+.role-pill[data-status="pendente"].active { background: var(--status-pending); border-color: var(--status-pending); }
+.role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
@@ -829,7 +876,20 @@ html.mode-light .hero-line { color: var(--ink); }
   color: var(--clay);
   min-width: 40px;
 }
-.tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
+.tier .name {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  line-height: 1.25;
+  /* Duo entries append both real names in parens (see contestantLabel() in
+     app.js) - that can run long, so clamp to 2 lines with an ellipsis
+     rather than letting one row balloon to 4+ lines; the title attribute
+     on the element carries the full text for anyone who needs it. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 .tier .votes { font-family: var(--body); font-size: var(--text-sm); text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 .tier li:nth-child(-n+3) .name { font-weight: 600; }
 
@@ -1388,6 +1448,51 @@ html.mode-dark body.theme-plaza {
 #tab-outfit .vote-option:hover { border-color: var(--ot); }
 #tab-outfit .tier li:first-child::before { color: var(--ot); }
 #tab-outfit input:focus, #tab-outfit textarea:focus { border-color: var(--ot); }
+
+/* Primary CTA buttons take on whichever tab/night they belong to (--clay
+   resolves per active body.theme-* already, furnished/swamp/rata/mural/
+   plaza each set it - see applyNight() in app.js) instead of the generic
+   ink/paper fill every other button uses. A flat fill of the raw accent
+   hex fails contrast in some theme/mode combinations (checked: several
+   dark-mode accents land under 3:1 against either light or dark text) -
+   tinting it into --paper-2 instead and keeping --ink for the label reuses
+   the same ink/paper contrast pairing already verified everywhere else in
+   the app, so it's accessible by construction rather than per-theme luck.
+   Explicit whitelist rather than a blanket "every button in this tab" rule -
+   the furnished/swamp toggle and other already-styled buttons live in the
+   same containers and would otherwise get wrongly reskinned too. */
+#register-form button[type="submit"],
+#confirm-entry-btn,
+#confirm-vote-btn,
+#suggest-form button[type="submit"],
+[data-mark-done],
+.plaza-poll-submit,
+#chat-form button[type="submit"],
+#plaza-post-form button[type="submit"],
+#admin-register-form button[type="submit"],
+#voting-advance-btn,
+[data-reveal-next] {
+  /* 22%, not the 35% first tried - contrast stays 7-10:1 either way (the
+     ink/paper pairing dominates it), so the higher number was just
+     needlessly vivid/heavy-looking in light mode specifically. */
+  background: color-mix(in srgb, var(--clay) 22%, var(--paper-2));
+  border-color: var(--clay);
+  color: var(--ink);
+}
+#register-form button[type="submit"]:hover,
+#confirm-entry-btn:hover,
+#confirm-vote-btn:hover,
+#suggest-form button[type="submit"]:hover,
+[data-mark-done]:hover,
+.plaza-poll-submit:hover,
+#chat-form button[type="submit"]:hover,
+#plaza-post-form button[type="submit"]:hover,
+#admin-register-form button[type="submit"]:hover,
+#voting-advance-btn:hover,
+[data-reveal-next]:hover {
+  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
+  color: var(--ink);
+}
 
 /* ----------------------------- Tutorial overlay --------------------------- */
 

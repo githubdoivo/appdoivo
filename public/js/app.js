@@ -7,6 +7,7 @@ import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
+import { resizePhotoToJpeg } from './photo.js';
 
 // An installed iOS PWA keeps its WKWebView alive in the background rather
 // than doing a real fresh load every time you reopen it - the OS restores
@@ -806,27 +807,6 @@ async function ensureUsersCache() {
 // (base64, in a JSON body) needs to stay small. This is a courtesy, not
 // the enforcement - the server has its own hard cap (see decodePhoto() in
 // src/votes.js) since a client-side limit alone can't be trusted.
-const PHOTO_MAX_DIMENSION = 800;
-const PHOTO_JPEG_QUALITY = 0.8;
-
-function resizePhotoToJpeg(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('err_photo_invalid'))); };
-    img.src = url;
-  });
-}
-
 // Builds an <img> src for a contestant's photo. The endpoint needs a
 // Bearer token like every other request, but an <img> tag can't send
 // custom headers - authenticate() also accepts ?token= for exactly this
@@ -1162,7 +1142,7 @@ async function loadVotes() {
         const name = esc(contestantLabel(r));
         const label = data.resultsPhase === 'all' ? `${medal}${name}` : `${medal}${t(`rank_${r.rank}`)} · ${name}`;
         const photo = r.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(r.id)}" alt="" />` : '';
-        return `<li>${photo}<span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
+        return `<li>${photo}<span class="name" title="${name}">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
       }).join('');
     } else {
       $('results-card').classList.add('hidden');

@@ -36,8 +36,14 @@ app.use(express.json({ limit: '2mb' }));
 // API.
 app.use('/api', apiRouter);
 
-// Static files (PWA).
-app.use(express.static(PUBLIC_DIR));
+// Static files (PWA). "no-cache" (despite the name) still lets the browser
+// keep a local copy, but forces a conditional revalidation against the
+// server's ETag on every single load rather than trusting a max-age blindly -
+// this repo ships several small fixes per session, and a stale JS/CSS bundle
+// silently masking an already-shipped fix (mistaken for "still broken") has
+// repeatedly cost real debugging time. A 304 on an unchanged file is cheap;
+// serving five-year-old JS because a CDN/browser cached it for hours is not.
+app.use(express.static(PUBLIC_DIR, { setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 
 // SPA fallback: any non-API route returns the index.
 app.get('*', (req, res) => {

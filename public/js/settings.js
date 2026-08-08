@@ -242,6 +242,21 @@ function currentNight() {
   return $('admin-night-switch')?.querySelector('.active')?.dataset.night || 'furnished';
 }
 
+// Mirrors applyNight() in app.js so the admin page's action buttons/accents
+// pick up the same per-section colour as their guest-facing counterpart
+// (see the shared button-tint rules in styles.css) instead of everything
+// staying on the default ink/paper palette regardless of which admin tab
+// is open. Theme classes follow the DISPLAYED feature, not the internal
+// tab id - see index.html's tab nav comment for the plaza/wall naming swap.
+function applyAdminTheme(tab) {
+  const night = currentNight();
+  document.body.classList.toggle('theme-furnished', tab === 'outfit' && night === 'furnished');
+  document.body.classList.toggle('theme-swamp', tab === 'outfit' && night === 'swamp');
+  document.body.classList.toggle('theme-rata', tab === 'rata');
+  document.body.classList.toggle('theme-mural', tab === 'plaza');
+  document.body.classList.toggle('theme-plaza', tab === 'wall');
+}
+
 // Latest /admin/voting response per night, keyed by night - lets the close
 // warning below (see the voting-advance-btn handler) reuse what
 // loadVotingState() already fetched instead of a redundant request.
@@ -250,6 +265,7 @@ let votingStateCache = {};
 $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
     $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+    applyAdminTheme('outfit');
     loadVotingState();
     loadContestants();
     loadVotes();
@@ -1252,6 +1268,7 @@ function selectAdminTab(tab) {
   ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
+  applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
 }
