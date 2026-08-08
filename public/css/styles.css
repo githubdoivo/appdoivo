@@ -120,7 +120,10 @@ html.mode-dark {
   --type-announcement: #c9a07a;
   --type-poll: #e08a4a;
   --status-pending: #d4b04a;
-  --status-done: #7ed181;
+  /* Was #7ed181 - a bright mint/lime that clashed with the app's muted,
+     earthy palette everywhere it showed up. Deeper, less saturated sage
+     green instead - still clearly reads as "done" without looking neon. */
+  --status-done: #6aaf6c;
   --status-fila: #9aa4b5;
   --status-atribuir: #e08fb0;
 }
@@ -514,14 +517,15 @@ button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.1
    tint elsewhere in this file) rather than a flat --danger fill with
    --paper-3 text - checked, that combination fails contrast badly in
    several theme/mode pairs (as low as 1.4:1 in mural light), while this
-   stays 6.4-9.7:1 everywhere by construction. */
+   stays 5.2-8.4:1 everywhere at 50%/60% (was 35%/55% - still read as too
+   subtle/not clearly "filled" against some themes' own paper-2). */
 button.danger {
   border: 1px solid var(--danger);
-  background: color-mix(in srgb, var(--danger) 35%, var(--paper-2));
+  background: color-mix(in srgb, var(--danger) 50%, var(--paper-2));
   color: var(--ink);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger) 55%, var(--paper-2));
+  background: color-mix(in srgb, var(--danger) 60%, var(--paper-2));
   color: var(--ink);
 }
 
@@ -842,6 +846,38 @@ html.mode-light .hero-line { color: var(--ink); }
   line-height: 1.35;
   color: var(--ink);
 }
+/* The current-consequence box is the one moment "A Rata" gets playful
+   rather than just informative - swaps the plain flat accent bar for a
+   zigzag "snapped spring" shape plus a small pivot pin, evoking a mouse
+   trap's bent wire instead of a generic sidebar rule. */
+#tab-rata .highlight {
+  position: relative;
+  border-left: none;
+  padding-left: 34px;
+}
+#tab-rata .highlight::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  bottom: 10px;
+  width: 9px;
+  background: var(--rata);
+  clip-path: polygon(
+    50% 0%, 100% 9%, 0% 18%, 100% 27%, 0% 36%,
+    100% 45%, 0% 54%, 100% 63%, 0% 72%, 100% 81%, 0% 90%, 50% 100%
+  );
+}
+#tab-rata .highlight::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rata);
+}
 #tab-outfit .highlight {
   border-left-color: var(--outfit);
   background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
@@ -1111,14 +1147,14 @@ body.theme-rata {
      above. Lightened within the same dusty-mauve family. */
   --line:     #665261;
   --line-2:   #7a6070;
-  /* Was #a8452f/#c25a3f - a brick-red practically indistinguishable from
-     --danger and mural's own terracotta at a glance. Hue-shifted toward a
-     genuine orange (same saturation/lightness, ~30deg hue) so Rata's own
-     buttons read as orange like the other themes' accents read as their
-     own distinct color. */
-  --clay:     #a86c2f;
-  --clay-2:   #c2803f;
-  --rata:     #a86c2f;
+  /* Was orange (#a86c2f/#c2803f), before that brick-red - orange ended up
+     stepping on Wall/mural's own brown-orange territory instead of reading
+     as Rata's own color. Pink keeps Rata in its own established dusty
+     pink-grey family (see --paper/--ink above) instead of borrowing a warm
+     hue that's already spoken for elsewhere. */
+  --clay:     #a82f57;
+  --clay-2:   #cb5c81;
+  --rata:     #a82f57;
   background-color: #190f13;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1190,10 +1226,11 @@ html.mode-light body.theme-rata {
      family so the border stays visible without losing the muted mood. */
   --line:     #b8969b;
   --line-2:   #c7a8ac;
-  /* Same orange hue-shift as the dark variant above - was #8a3f2c/#6e3122. */
-  --clay:     #8a5b2c;
-  --clay-2:   #6e4822;
-  --rata:     #8a5b2c;
+  /* Same pink hue-shift as the dark variant above - was #8a5b2c/#6e4822
+     (orange), before that #8a3f2c/#6e3122 (brick-red). */
+  --clay:     #8a2c4b;
+  --clay-2:   #6e223b;
+  --rata:     #8a2c4b;
   background-color: #efe6e7;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0e8e9'/%3E%3Cg fill='%23978387' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23978387' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1298,6 +1335,11 @@ body.theme-plaza {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
+/* Every other night theme tints its own .hero-line with its accent
+   (furnished/swamp -> --ot-2, rata/mural -> --clay-2) - plaza was missing
+   this override, so it fell through to the generic --ink and read as
+   noticeably bolder/heavier than the same line on every other tab. */
+body.theme-plaza .hero-line { color: var(--clay-2); }
 html.mode-dark body.theme-plaza {
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
@@ -1351,6 +1393,16 @@ html.mode-dark body.theme-plaza {
   padding-left: 14px;
   border-left: 3px solid var(--clay);
   text-wrap: balance;
+  /* A <p> collapses line breaks by default - an admin's multi-line post
+     (one item per line) was rendering as a single run-on paragraph.
+     pre-line keeps each \n as a real break while still collapsing any
+     repeated spaces and wrapping long lines normally. */
+  white-space: pre-line;
+}
+.plaza-post-text a {
+  color: var(--clay);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
@@ -1506,10 +1558,12 @@ html.mode-dark body.theme-plaza {
 #admin-register-form button[type="submit"],
 #voting-advance-btn,
 [data-reveal-next] {
-  /* 22%, not the 35% first tried - contrast stays 7-10:1 either way (the
-     ink/paper pairing dominates it), so the higher number was just
-     needlessly vivid/heavy-looking in light mode specifically. */
-  background: color-mix(in srgb, var(--clay) 22%, var(--paper-2));
+  /* Was 22% (and 35% before that, deemed too vivid/heavy in light mode) -
+     30% strikes a middle ground: some of these (revelar, criar, iniciar)
+     are the one clear primary action on their card and read as too washed-
+     out/easy to miss at 22%. Contrast stays 6-9:1 regardless of percentage
+     here (the ink/paper pairing dominates it). */
+  background: color-mix(in srgb, var(--clay) 30%, var(--paper-2));
   border-color: var(--clay);
   color: var(--ink);
 }

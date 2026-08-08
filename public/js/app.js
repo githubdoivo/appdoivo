@@ -27,6 +27,28 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
 // of a name should always find it, not just the exact accented spelling.
 const foldAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+// Turns plain-text URLs in an already-escaped string into clickable links -
+// matches a scheme (https://...), a www. prefix, or a bare shortlink-style
+// domain+path (shorturl.at/xxxx, as admins actually paste them - requiring
+// the "/path" part on bare domains avoids linkifying incidental "word.tld"
+// look-alikes that aren't followed by anything). Runs on text that's
+// already gone through esc(), so it's operating on HTML-safe input; a
+// trailing sentence-punctuation character is peeled off the match so
+// "check shorturl.at/abc." doesn't swallow the period into the link.
+const URL_RE = /\b(?:https?:\/\/[^\s<]+|www\.[^\s<]+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/[^\s<]*)/gi;
+function linkify(escapedText) {
+  return escapedText.replace(URL_RE, (match) => {
+    let trail = '';
+    const trailMatch = match.match(/[.,;:!?)\]}]+$/);
+    if (trailMatch) {
+      trail = trailMatch[0];
+      match = match.slice(0, -trail.length);
+    }
+    const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>${trail}`;
+  });
+}
+
 let currentTab = 'plaza';
 // Set from /me in showApp() - lets the Rata history tell "assigned to
 // me" apart from "assigned to someone else" so only the actual assignee
@@ -493,7 +515,7 @@ function renderPlazaPost(post) {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${pinnedBadge}
-        <p class="plaza-post-text">${esc(post.text)}</p>
+        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -528,7 +550,7 @@ function renderPlazaPost(post) {
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${pinnedBadge}
-      <p class="plaza-post-text">${esc(post.text)}</p>
+      <p class="plaza-post-text">${linkify(esc(post.text))}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>

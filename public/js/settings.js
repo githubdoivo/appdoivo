@@ -18,6 +18,23 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
+// Same linkify() as app.js - kept here rather than a shared import since
+// this file already keeps its own local esc() the same way. See app.js
+// for why the regex requires "/path" on a bare domain.
+const URL_RE = /\b(?:https?:\/\/[^\s<]+|www\.[^\s<]+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/[^\s<]*)/gi;
+function linkify(escapedText) {
+  return escapedText.replace(URL_RE, (match) => {
+    let trail = '';
+    const trailMatch = match.match(/[.,;:!?)\]}]+$/);
+    if (trailMatch) {
+      trail = trailMatch[0];
+      match = match.slice(0, -trail.length);
+    }
+    const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>${trail}`;
+  });
+}
+
 /** Copies text to the clipboard and gives brief feedback on the button. */
 async function copyToClipboard(text, btn) {
   try {
@@ -1203,7 +1220,7 @@ async function loadPlazaPosts() {
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        <p style="margin:8px 0 0">${esc(p.text)}</p>
+        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0">${linkify(esc(p.text))}</p>
         ${p.type === 'poll' ? `
         <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
           ${p.options.map((o) => {
