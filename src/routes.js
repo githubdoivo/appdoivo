@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ZipFile } from 'yazl';
 import db from './db.js';
 import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
@@ -29,6 +30,7 @@ import {
   pendingContestantCount,
   replaceContestantPhoto,
   contestantPhotoRow,
+  allPhotosForNight,
   castVote,
   confirmDuoVote,
   cancelPendingVote,
@@ -353,7 +355,13 @@ router.get('/outfit/contestants/:id/photo', (req, res) => {
   }
   res.set('Content-Type', row.photo_mime);
   res.set('Cache-Control', 'no-store');
-  res.send(row.photo);
+  // node:sqlite hands back a BLOB column as a plain Uint8Array, not a real
+  // Buffer - Buffer.isBuffer() is false for it, so res.send() doesn't
+  // recognize it as raw binary and instead JSON-serializes it as
+  // {"0":255,"1":216,...}, which browsers duly fail to decode as an image
+  // (silently - an <img> tag has no error UI of its own). Wrapping it in an
+  // actual Buffer is enough for Express to serve it correctly.
+  res.send(Buffer.from(row.photo));
 });
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
@@ -698,6 +706,39 @@ router.get('/admin/contestants', (req, res) => {
     WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
   `).all(night);
   res.json({ night, contestants: rows });
+});
+
+// Bundles every submitted outfit photo for a night into a single zip -
+// an admin/owner convenience for keeping the photos after the party
+// (QA/prod's DB storage, see the migration in db.js, has no browsing UI of
+// its own). Includes pending (unconfirmed) entries too, unlike the guest-
+// facing routes above - see allPhotosForNight() in votes.js. Built
+// entirely in memory: even a generous night's worth of photos (each
+// capped at 400KB, see MAX_PHOTO_BYTES in votes.js) stays a few MB total,
+// nowhere near worth the complexity of streaming from disk.
+router.get('/admin/outfit/:night/photos.zip', (req, res) => {
+  if (!isNight(req.params.night)) return res.status(400).json({ error: 'err_invalid_night' });
+  const night = req.params.night;
+  const photos = allPhotosForNight(night);
+  if (!photos.length) return res.status(404).json({ error: 'err_no_photos' });
+
+  const zip = new ZipFile();
+  const usedNames = new Set();
+  for (const p of photos) {
+    // Contestant names are free-text and often repeated/generic ("gato",
+    // "bruxa") - two entries picking the same one would otherwise silently
+    // overwrite each other inside the zip, so collisions fall back to
+    // appending the contestant id.
+    const base = p.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    let filename = `${base}.jpg`;
+    if (usedNames.has(filename)) filename = `${base}-${p.id}.jpg`;
+    usedNames.add(filename);
+    zip.addBuffer(Buffer.from(p.photo), filename);
+  }
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="snatch-${night}-photos.zip"`);
+  zip.outputStream.pipe(res);
+  zip.end();
 });
 
 // userId optionally links this entry to a real registered user (picked

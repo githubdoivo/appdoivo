@@ -65,7 +65,7 @@ export const translations = {
     time_ago_days: 'há {n} dias',
     // Mural (now "Plaza" - open group sharing space, messages disappear
     // on their own)
-    chat_hero: 'diz o que quiseres - desaparece sozinho.',
+    chat_hero: 'fala à vontade - some sozinho.',
     chat_help: 'só os mais recentes sobrevivem. o resto vira pó.',
     chat_ph: 'escreve uma mensagem...',
     chat_send: 'partilhar',
@@ -245,6 +245,7 @@ export const translations = {
     admin_register_name_ph_duo: 'nome da personagem partilhada...',
     admin_register_btn: 'Criar',
     contestant_search_ph: 'Procurar concorrente...',
+    download_photos_btn: 'descarregar fotos',
     no_contestants: 'Nenhum concorrente nesta noite.',
     col_registered_by: 'Inscrito por',
     confirm_remove_contestant: 'Remover este concorrente?',
@@ -403,7 +404,7 @@ export const translations = {
     time_ago_hours: '{n} hours ago',
     time_ago_day: '1 day ago',
     time_ago_days: '{n} days ago',
-    chat_hero: 'say what you want - it disappears on its own.',
+    chat_hero: 'speak freely - it vanishes.',
     chat_help: 'only the freshest survive. the rest turns to dust.',
     chat_ph: 'write a message...',
     chat_send: 'share',
@@ -578,6 +579,7 @@ export const translations = {
     admin_register_name_ph_duo: "their shared persona's name...",
     admin_register_btn: 'Create',
     contestant_search_ph: 'Search contestants...',
+    download_photos_btn: 'download photos',
     no_contestants: 'No contestants this night.',
     col_registered_by: 'Registered by',
     confirm_remove_contestant: 'Remove this contestant?',

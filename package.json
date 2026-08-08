@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Party web app with four features: wall, rata, snatch and plaza.",
   "type": "module",
   "main": "src/server.js",
@@ -21,9 +21,11 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "node-cron": "^4.6.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "playwright": "^1.62.0"
+    "playwright": "^1.62.0",
+    "yauzl": "^3.4.0"
   }
 }

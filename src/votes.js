@@ -243,6 +243,22 @@ export function contestantPhotoRow(contestantId) {
   ).get(contestantId) || null;
 }
 
+/** Every photo submitted for a night, for the admin/owner zip download
+ * (see GET /admin/outfit/:night/photos.zip) - includes pending (unconfirmed
+ * duo) entries too, unlike contestantsForNight(), since an admin auditing
+ * or archiving a night's submissions has reason to see everything, not
+ * just what guests could vote on. */
+export function allPhotosForNight(night) {
+  return db.prepare(`
+    SELECT c.id, c.name, c.photo, c.photo_mime, u1.name AS registeredBy, u2.name AS partnerName
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? AND c.photo IS NOT NULL
+    ORDER BY c.name COLLATE NOCASE
+  `).all(night);
+}
+
 /**
  * The named partner's half of a duo entry: confirms they're actually in
  * it, which is what puts the pair on the voting list. Only they can - the

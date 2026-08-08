@@ -1099,3 +1099,44 @@ test('a Best Look poll tick landing while a photo is picked does not wipe the in
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();
 });
+
+test('once results start revealing, "you voted for X" clears instead of sitting on top of the results list', async () => {
+  const night = 'furnished';
+  const voter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reveal Vote Tester' } });
+  const contestantOwner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reveal Contestant Owner' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  // A direct API call (not going through the client's resize step - see
+  // resizePhotoToJpeg()), so this needs to already look like a real JPEG to
+  // the server's own magic-byte check, unlike PNG_1X1 above.
+  const fakeJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+  const reg = await api('POST', '/outfit/register', {
+    token: contestantOwner.token,
+    body: { name: 'Reveal Target', night, photoBase64: fakeJpeg },
+  });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', '/votes', { token: voter.token, body: { contestantId: reg.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, voter.token);
+  await page.click('[data-tab="outfit"]');
+
+  // Closed, not revealed yet - the "you voted for X" message is exactly
+  // what tells the voter their vote landed, so it stays up here.
+  await page.waitForSelector('#vote-area .highlight', { timeout: WAIT_TIMEOUT });
+  assert.ok((await page.textContent('#vote-area .highlight')).includes('Reveal Target'), 'should show who was voted for before any reveal');
+
+  // Advance through every reveal stage (hidden -> third -> second -> first
+  // -> all) regardless of how many contestants exist.
+  for (let i = 0; i < 4; i++) {
+    await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  }
+  await page.waitForSelector('#results-card:not(.hidden) .tier li', { timeout: WAIT_TIMEOUT });
+  // The results list is now showing the same information - repeating it
+  // in the vote area above is just clutter once that's true.
+  const voteAreaEmpty = await page.evaluate(() => document.getElementById('vote-area').innerHTML.trim() === '');
+  assert.ok(voteAreaEmpty, 'the "you voted for X" message should clear once results start revealing');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});

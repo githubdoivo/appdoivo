@@ -1089,6 +1089,7 @@ async function loadVotes() {
     // waiting on the other (see castVote()/confirmDuoVote() server-side).
     const isDuo = !!data.myContestant?.partnerName;
     const pending = data.myVote && !data.myVote.confirmed;
+    const revealing = data.status === 'closed' && data.resultsPhase && data.resultsPhase !== 'hidden';
 
     if (data.status === 'open' && !data.myVote) {
       // You can't vote for your own entry (see castVote() server-side) -
@@ -1123,11 +1124,12 @@ async function loadVotes() {
         </div>`;
       $('confirm-vote-btn')?.addEventListener('click', confirmVote);
       $('change-vote-btn').addEventListener('click', changeVote);
-    } else if (data.myVote) {
+    } else if (data.myVote && !revealing) {
       // Once confirmed, a vote is final (see castVote() server-side) and
-      // this stays the vote area's content for the rest of the night -
-      // closed/pending-results no longer overwrites it with a generic
-      // status message, so "who did I vote for" stays visible throughout.
+      // this stays the vote area's content through "closed, not revealed
+      // yet" - once the results themselves start showing below, repeating
+      // "you voted for X" here is just clutter on top of them, so this
+      // clears instead (see the results-card block below).
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(contestantLabel(chosen)) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -1135,7 +1137,6 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    const revealing = data.status === 'closed' && data.resultsPhase && data.resultsPhase !== 'hidden';
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
       const list = $('results-list');

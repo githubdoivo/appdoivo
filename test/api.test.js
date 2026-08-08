@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
+import yauzl from 'yauzl';
 
 // Isolated test environment: temporary DB. The admin's real key is always
 // generated (see seed() in db.js - no more ADMIN_TOKEN pinning it, even
@@ -49,6 +50,40 @@ async function api(method, path, { token, body } = {}) {
   let data = null;
   try { data = await res.json(); } catch { /* no body, or non-JSON (e.g. a served photo) */ }
   return { status: res.status, data, headers: res.headers };
+}
+
+/** Raw (non-JSON) request, for the zip download route - returns the body
+ * as a Buffer rather than trying (and failing) to parse it as JSON. */
+async function apiBuffer(path, { token } = {}) {
+  const res = await fetch(base + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { status: res.status, headers: res.headers, buffer };
+}
+
+/** Unpacks every entry in a zip buffer to { filename, contents } pairs. */
+function readZipEntries(buffer) {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      const entries = [];
+      zipfile.readEntry();
+      zipfile.on('entry', (entry) => {
+        zipfile.openReadStream(entry, (err, readStream) => {
+          if (err) return reject(err);
+          const chunks = [];
+          readStream.on('data', (c) => chunks.push(c));
+          readStream.on('end', () => {
+            entries.push({ filename: entry.fileName, contents: Buffer.concat(chunks) });
+            zipfile.readEntry();
+          });
+        });
+      });
+      zipfile.on('end', () => resolve(entries));
+      zipfile.on('error', reject);
+    });
+  });
 }
 
 /* -------------------------------- Version --------------------------------- */
@@ -946,6 +981,54 @@ test('a contestant photo is visible to its own entrants and admins any time, but
   const noPhotoEntry = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Photoless', night } });
   const missing = await api('GET', `/outfit/contestants/${noPhotoEntry.data.id}/photo`, { token: ADMIN });
   assert.equal(missing.status, 404);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('admin/owner can download every submitted photo for a night as a zip; nobody else can', async () => {
+  const night = 'swamp';
+  const regular = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Bystander' } });
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Persona A' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Persona B' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const regA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Ghost', night, photoBase64: TEST_PHOTO } });
+  // Same character name on purpose - collisions inside the zip should
+  // dedupe by contestant id rather than one entry silently overwriting the
+  // other (see the filename logic in routes.js).
+  const regB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Ghost', night, photoBase64: TEST_PHOTO } });
+
+  // Not an admin - no access at all, regardless of the night's data.
+  const forbidden = await apiBuffer(`/admin/outfit/${night}/photos.zip`, { token: regular.data.token });
+  assert.equal(forbidden.status, 403);
+
+  const zipRes = await apiBuffer(`/admin/outfit/${night}/photos.zip`, { token: ADMIN });
+  assert.equal(zipRes.status, 200);
+  assert.equal(zipRes.headers.get('content-type'), 'application/zip');
+  assert.ok(zipRes.headers.get('content-disposition').includes(`snatch-${night}-photos.zip`));
+
+  const entries = await readZipEntries(zipRes.buffer);
+  assert.equal(entries.length, 2, 'both contestants photos should be in the zip, deduped by id');
+  // Whichever comes first keeps the clean name; the later same-named one
+  // falls back to id-suffixed rather than the two colliding outright - not
+  // asserting which specific one wins, just that dedup actually happened.
+  const filenames = entries.map((e) => e.filename);
+  assert.equal(filenames.filter((f) => f === 'Ghost.jpg').length, 1, 'exactly one entry should keep the clean name');
+  assert.equal(
+    filenames.filter((f) => f === `Ghost-${regA.data.id}.jpg` || f === `Ghost-${regB.data.id}.jpg`).length,
+    1,
+    'the colliding entry should fall back to an id-suffixed name'
+  );
+  // Bytes actually made it through intact, not just the right count/names.
+  const expectedBytes = Buffer.from(TEST_PHOTO.slice('data:image/jpeg;base64,'.length), 'base64');
+  for (const entry of entries) {
+    assert.equal(Buffer.compare(entry.contents, expectedBytes), 0, `${entry.filename} bytes should match what was uploaded`);
+  }
+
+  // A night with confirmed registration but no photos at all (furnished,
+  // untouched by this test) 404s instead of handing back an empty zip.
+  const empty = await apiBuffer('/admin/outfit/furnished/photos.zip', { token: ADMIN });
+  assert.equal(empty.status, 404);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });

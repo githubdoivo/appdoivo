@@ -640,6 +640,10 @@ async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
   allContestants = contestants;
   renderContestants();
+  // A plain <a href> (not a fetch-then-blob dance) so the browser handles
+  // the download itself - needs the token in the query string for the same
+  // reason photoUrl() does in app.js (an <a> can't send a Bearer header).
+  $('download-photos-link').href = `/api/admin/outfit/${encodeURIComponent(currentNight())}/photos.zip?token=${encodeURIComponent(getToken())}`;
 }
 
 function renderContestants() {
