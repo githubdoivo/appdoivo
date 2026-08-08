@@ -66,8 +66,17 @@ export function ensureTodaysSlots() {
   const tz = getTimezone();
   const windowStart = zonedTimeToUtc(day, WINDOW_START_HOUR, 0, tz);
   const windowEnd = zonedTimeToUtc(addDays(day, 1), WINDOW_END_HOUR, 0, tz);
+  // The window is always "11:00 today to 01:00 tomorrow" on the calendar,
+  // but the schedule can end up being generated well after 11:00 (whoever
+  // happens to trigger it first that day - e.g. the first guest to open
+  // the app after lunch). Anchoring purely to windowStart in that case
+  // would place several of the 5 random times in the past already, and
+  // they'd all fire at once on the very next scheduler tick instead of
+  // being spread through the day. Anchoring to whichever is later (window
+  // start, or right now) guarantees every slot is still in the future.
+  const effectiveStart = Math.max(windowStart.getTime(), Date.now());
   const gapMs = MEMO_MIN_GAP_MINUTES * 60 * 1000;
-  const slackMs = (windowEnd.getTime() - windowStart.getTime()) - gapMs * (MEMO_SLOTS_PER_DAY - 1);
+  const slackMs = Math.max(0, (windowEnd.getTime() - effectiveStart) - gapMs * (MEMO_SLOTS_PER_DAY - 1));
 
   // n random offsets into the leftover "slack" time, sorted ascending, then
   // spread apart by the fixed minimum gap. Because the offsets are sorted,
@@ -82,7 +91,7 @@ export function ensureTodaysSlots() {
     VALUES (?, ?, ?)
   `);
   for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
-    const at = new Date(windowStart.getTime() + offsets[i] + i * gapMs);
+    const at = new Date(effectiveStart + offsets[i] + i * gapMs);
     insert.run(day, i, toDbTimestamp(at));
   }
 }

@@ -897,9 +897,10 @@ test('first-session tutorial shows once, steps through, then never shows again',
   const skipHidden = await page.$eval('#tutorial-skip', (el) => el.classList.contains('hidden'));
   assert.ok(skipHidden, 'a regular user should not see a tutorial skip button');
 
-  // Step through every step via "next" (8 total steps, so 7 clicks to
-  // reach the last one; the final "finish" click happens after the loop).
-  for (let i = 0; i < 7; i++) {
+  // Step through every step via "next" (9 total steps with Memo enabled -
+  // see tutorialSteps() in app.js - so 8 clicks to reach the last one; the
+  // final "finish" click happens after the loop).
+  for (let i = 0; i < 8; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);

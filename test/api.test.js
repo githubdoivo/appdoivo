@@ -1518,11 +1518,22 @@ test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () =
 });
 
 test('the 5 daily slots never land close together - each is at least MEMO_MIN_GAP_MINUTES from the next', async () => {
+  const beforeGeneration = Date.now();
   const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
   const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY scheduled_at`).all(...ids);
   for (let i = 1; i < rows.length; i++) {
     const gapMinutes = (new Date(`${rows[i].scheduled_at.replace(' ', 'T')}Z`) - new Date(`${rows[i - 1].scheduled_at.replace(' ', 'T')}Z`)) / 60000;
     assert.ok(gapMinutes >= MEMO_MIN_GAP_MINUTES, `expected at least ${MEMO_MIN_GAP_MINUTES}min between consecutive slots, got ${gapMinutes}`);
+  }
+  // Regression: the window is always "11:00 today" on the calendar, but if
+  // the schedule ends up generated later than that (whoever opens the app
+  // first that day), anchoring purely to 11:00 would place several slots
+  // in the past already, so they'd all fire at once on the next scheduler
+  // tick instead of being spread out. None should ever be scheduled before
+  // the moment generation actually happened.
+  for (const row of rows) {
+    const scheduledMs = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`).getTime();
+    assert.ok(scheduledMs >= beforeGeneration, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
   }
 });
 

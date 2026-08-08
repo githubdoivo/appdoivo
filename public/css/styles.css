@@ -1039,6 +1039,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .inline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
+/* The search-or-create user input otherwise wraps its "criar" button onto
+   its own line (inputs are width:100% by default) - here the button is a
+   short, immediate action tied to what's typed, so it reads better sitting
+   right next to the input instead of below it. */
+#user-form input { flex: 1 1 auto; width: auto; min-width: 0; }
 
 .help { font-size: 0.95rem; color: var(--ink-soft); margin: 0 0 14px; }
 

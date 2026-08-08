@@ -178,24 +178,35 @@ function startSessionWatcher() {
 // user row), not localStorage, so it doesn't repeat on a new device and
 // doesn't reappear just because storage got cleared.
 
-const TUTORIAL_STEPS = [
-  ['tutorial_1_title', 'tutorial_1_text'],
-  ['tutorial_plaza_title', 'tutorial_plaza_text'],
-  ['tutorial_2_title', 'tutorial_2_text'],
-  ['tutorial_3_title', 'tutorial_3_text'],
-  ['tutorial_wall_title', 'tutorial_wall_text'],
-  ['tutorial_4_title', 'tutorial_4_text'],
-  ['tutorial_5_title', 'tutorial_5_text'],
-  ['tutorial_6_title', 'tutorial_6_text'],
-];
+// A function, not a fixed array, because the Memo step only belongs in the
+// tour while memoEnabled is true (QA-only for now) - showing it on
+// production, where the tab itself is hidden, would be a step about a
+// feature nobody can actually see.
+function tutorialSteps() {
+  const steps = [
+    ['tutorial_1_title', 'tutorial_1_text'],
+    ['tutorial_plaza_title', 'tutorial_plaza_text'],
+    ['tutorial_2_title', 'tutorial_2_text'],
+    ['tutorial_3_title', 'tutorial_3_text'],
+    ['tutorial_wall_title', 'tutorial_wall_text'],
+  ];
+  if (memoEnabled) steps.push(['tutorial_memo_title', 'tutorial_memo_text']);
+  steps.push(
+    ['tutorial_4_title', 'tutorial_4_text'],
+    ['tutorial_5_title', 'tutorial_5_text'],
+    ['tutorial_6_title', 'tutorial_6_text'],
+  );
+  return steps;
+}
 let tutorialStep = 0;
 
 function renderTutorialStep() {
-  const [titleKey, textKey] = TUTORIAL_STEPS[tutorialStep];
+  const steps = tutorialSteps();
+  const [titleKey, textKey] = steps[tutorialStep];
   $('tutorial-title').textContent = t(titleKey);
   $('tutorial-text').textContent = t(textKey);
-  $('tutorial-next').textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? t('tutorial_done') : t('tutorial_next');
-  $('tutorial-dots').innerHTML = TUTORIAL_STEPS
+  $('tutorial-next').textContent = tutorialStep === steps.length - 1 ? t('tutorial_done') : t('tutorial_next');
+  $('tutorial-dots').innerHTML = steps
     .map((_, i) => `<span class="dot${i === tutorialStep ? ' active' : ''}"></span>`)
     .join('');
 }
@@ -231,7 +242,7 @@ $('tutorial-lang-en').addEventListener('click', () => beginTutorialContent('en')
 $('tutorial-skip').addEventListener('click', () => endTutorial());
 
 $('tutorial-next').addEventListener('click', () => {
-  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+  if (tutorialStep < tutorialSteps().length - 1) {
     tutorialStep++;
     renderTutorialStep();
   } else {
