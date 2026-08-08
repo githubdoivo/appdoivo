@@ -93,7 +93,9 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
-  --brand:    #6b3420;
+  /* Was #6b3420 (warm brown) - shifted to a dark plum at the same
+     saturation/lightness, by request. */
+  --brand:    #602456;
   /* role-*/type-*/status-* stay at their :root (light-mode) values here -
      only mode-dark below needs to redefine them. */
 }
@@ -827,21 +829,12 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    sets one, see settings.js), where the plain light-mode --clay reads
    pale/salmon against the paper, too soft to read as "selected" at a
    glance. Every regular-page theme below (furnished/swamp/rata/mural/
-   plaza) sets its own --clay-active matching its own --clay, which - set
-   directly on body, closer in the tree than this html-level default -
+   plaza/memo) sets its own --clay-active matching its own --clay, which -
+   set directly on body, closer in the tree than this html-level default -
    wins whenever one of those is active, restoring each tab's own color.
    Dark mode's warmer clays already have enough contrast as-is, no
    equivalent override needed there. */
 html.mode-light { --clay-active: #b5624a; }
-/* Regular pages only: A Rata shares --clay with every other tab there,
-   making its active underline indistinguishable from Wall's right next to
-   it - rats are grey, so it gets its own neutral accent instead. The admin
-   page never switches body theme per tab (unlike the regular pages, whose
-   active-tab color intentionally follows whichever section's theme is
-   open), so every admin tab already renders identically without this -
-   scoped to [data-tab], not [data-atab], on purpose. */
-[data-tab="rata"].active { border-bottom-color: #83807a; }
-html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 /* --------------------------------- Cards --------------------------------- */
 
@@ -1116,9 +1109,12 @@ body { transition: background-color 0.45s ease; }
 
 /* --- FURNISHED: cozy interior, teal velvet, warm wallpaper --- */
 body.theme-furnished {
-  --paper:    #d6ded7;
-  --paper-2:  #e2e8e1;
-  --paper-3:  #ebefe9;
+  /* Was #d6ded7/#e2e8e1/#ebefe9 (~11% saturation) - read as plain grey
+     rather than green next to Swamp's own ~28%. Boosted saturation at the
+     same lightness so it reads as sage green instead of grey-green. */
+  --paper:    #d0e4d3;
+  --paper-2:  #e0ebde;
+  --paper-3:  #eaf1e7;
   --ink:      #22302b;
   --ink-soft: #566a62;
   /* Was #a9bab2 (~1.6:1 against --paper-2) - card/post borders read as
@@ -1278,6 +1274,11 @@ html.mode-light body.theme-rata {
   --clay:     #8a2c4b;
   --clay-2:   #6e223b;
   --rata:     #8a2c4b;
+  /* Missing here despite the html.mode-light fallback's own comment
+     claiming every regular-page theme sets one - fell through to that
+     stray global default (#b5624a, meant only for admin's theme-less
+     Settings tab) instead of Rata's own pink underline. */
+  --clay-active: #8a2c4b;
   background-color: #efe6e7;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0e8e9'/%3E%3Cg fill='%23978387' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23978387' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1384,8 +1385,12 @@ body.theme-plaza {
      light text, so it can't just get brighter). */
   --clay:     #7a6200;
   --clay-2:   #9c6e15;
-  --clay-active: #7a5200;
-  --rata:     #7a5200;
+  /* Both were left at the pre-rotation #7a5200 when --clay above changed -
+     every other theme keeps --clay-active/--rata identical to --clay, so
+     this diverging quietly undid the yellow-not-brown fix for both the
+     tab underline and the .highlight box accent. */
+  --clay-active: #7a6200;
+  --rata:     #7a6200;
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1471,6 +1476,11 @@ html.mode-light body.theme-memo {
   --clay:     #0e90aa;
   --clay-2:   #0a5464;
   --rata:     #0e90aa;
+  /* Missing here despite the html.mode-light fallback's own comment
+     claiming every regular-page theme sets one - fell through to that
+     stray global default (#b5624a, meant only for admin's theme-less
+     Settings tab) instead of Memo's own cyan underline. */
+  --clay-active: #0e90aa;
   /* Was #e2eff3 - the stale pre-darkening paper value, never updated when
      --paper darkened above, so the page background stayed pale while cards
      (which use --paper-2 via .card) correctly picked up the new color -
