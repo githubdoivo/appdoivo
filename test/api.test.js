@@ -1716,22 +1716,22 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   assert.equal(badEmoji.status, 400);
   assert.equal(badEmoji.data.error, 'err_memo_invalid_reaction');
 
-  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '🔥' } });
+  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '👎' } });
   assert.equal(react.status, 200);
-  assert.equal(react.data.emoji, '🔥');
+  assert.equal(react.data.emoji, '👎');
 
   const afterReact = await api('GET', '/memo/feed', { token: bystander.data.token });
   const entryAfter = afterReact.data.uploads.find((u) => u.id === uploadId);
-  assert.equal(entryAfter.myReaction, '🔥');
-  assert.equal(entryAfter.reactions['🔥'], 1);
+  assert.equal(entryAfter.myReaction, '👎');
+  assert.equal(entryAfter.reactions['👎'], 1);
 
   // Reacting again with the same emoji toggles it off.
-  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '🔥' } });
+  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '👎' } });
   assert.equal(toggleOff.data.emoji, null);
   const afterToggleOff = await api('GET', '/memo/feed', { token: bystander.data.token });
   const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
   assert.equal(entryToggledOff.myReaction, null);
-  assert.equal(entryToggledOff.reactions['🔥'] || 0, 0);
+  assert.equal(entryToggledOff.reactions['👎'] || 0, 0);
 });
 
 test('a slot missed past its 15-minute window is reported as missed, not open', async () => {

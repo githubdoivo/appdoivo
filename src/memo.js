@@ -167,7 +167,7 @@ export function getUpload(uploadId) {
 // A small fixed set rather than a full picker - keeps the feed a quick tap,
 // no emoji keyboard needed, and matches the deliberately light BeReal-style
 // reaction weight (a glance, not a comment thread).
-export const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
+export const MEMO_REACTION_EMOJI = ['❤️', '👎', '💧', '🍆'];
 
 /** Today's feed: every guest's uploads, newest first, with reaction counts
  * and this viewer's own reaction (if any) on each. */

@@ -1292,9 +1292,9 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   const bystanderPage = await loginPage(context, bystander.token);
   await bystanderPage.click('[data-tab="memo"]');
   await bystanderPage.waitForSelector(`[data-memo-react="${uploadId}"]`, { timeout: WAIT_TIMEOUT });
-  await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="🔥"]`);
+  await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="👎"]`);
   await bystanderPage.waitForFunction(
-    (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="🔥"]`)?.textContent.includes('1'),
+    (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="👎"]`)?.textContent.includes('1'),
     uploadId,
     { timeout: WAIT_TIMEOUT }
   );

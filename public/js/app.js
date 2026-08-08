@@ -546,7 +546,7 @@ function renderMemoDots() {
   }).join('');
 }
 
-const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
+const MEMO_REACTION_EMOJI = ['❤️', '👎', '💧', '🍆'];
 
 // Hand-drawn-style line icons instead of the OS's own emoji glyphs - a
 // native emoji renders as whatever the platform's font happens to look
@@ -557,10 +557,9 @@ const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
 // pictures.
 const MEMO_REACTION_ICON = {
   '❤️': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
-  '🔥': '<path d="M12 3c1 3.2-2.3 4.4-2.3 7.6a2.3 2.3 0 1 0 4.6 0c0-.7-.2-1.2-.5-1.6.7 1.6-.4 2.6-1.4 2.6-1.2 0-1.8-1.1-1-2.6 1-1.9.2-3.8-1.4-5C11.4 6.5 12.6 4.6 12 3z"/><path d="M8 13.5a4 4 0 1 0 8 0c0-1.6-.7-2.6-1.4-3.4"/>',
-  '😂': '<circle cx="12" cy="12" r="9"/><path d="M8.2 10c.5-1.1 1.6-1.1 2.1 0M13.7 10c.5-1.1 1.6-1.1 2.1 0"/><path d="M7.5 13.8c1.6 3 7.4 3 9 0"/>',
-  '😮': '<circle cx="12" cy="12" r="9"/><circle cx="8.7" cy="10" r="1.1"/><circle cx="15.3" cy="10" r="1.1"/><circle cx="12" cy="15.3" r="2"/>',
-  '👍': '<path d="M7 10.5v9H4.5v-9H7Zm2.5-.7 3.4-5.5a1.8 1.8 0 0 1 3.2 1.5L15 9.5h3a2 2 0 0 1 2 2.3l-1 6.2a2.5 2.5 0 0 1-2.5 2H10a1.5 1.5 0 0 1-1.5-1.5v-8Z"/>',
+  '👎': '<path d="M17 14.5v-9h2.5v9H17Zm-2.5.7-3.4 5.5a1.8 1.8 0 0 1-3.2-1.5L9 14.5H6a2 2 0 0 1-2-2.3l1-6.2a2.5 2.5 0 0 1 2.5-2H14a1.5 1.5 0 0 1 1.5 1.5v8Z"/>',
+  '💧': '<path d="M12 3s6 7.2 6 11.5a6 6 0 0 1-12 0C6 10.2 12 3 12 3Z"/>',
+  '🍆': '<path d="M9 21c-2.5 0-4.5-2.4-4.5-6 0-4.3 3.4-8.4 6.5-9.5" /><ellipse cx="10.3" cy="13.5" rx="4.3" ry="6.8" transform="rotate(-25 10.3 13.5)"/><path d="M13.5 6c.5-1 1.7-2 3-2M15 3.5c.8.2 1.6.3 2 0"/>',
 };
 
 function memoReactionIcon(emoji) {

@@ -1461,7 +1461,13 @@ html.mode-light body.theme-memo {
   --clay:     #0e90aa;
   --clay-2:   #0a5464;
   --rata:     #0e90aa;
-  background-color: #e2eff3;
+  /* Was #e2eff3 - the stale pre-darkening paper value, never updated when
+     --paper darkened above, so the page background stayed pale while cards
+     (which use --paper-2 via .card) correctly picked up the new color -
+     a jarring mismatch instead of the same small "body slightly darker
+     than card" offset every other theme has between its own --paper and
+     this. */
+  background-color: #87b6c3;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160'%3E%3Cg fill='%230e90aa' fill-opacity='0.16'%3E%3Ccircle cx='18' cy='24' r='2.2'/%3E%3Ccircle cx='60' cy='12' r='1.4'/%3E%3Ccircle cx='96' cy='40' r='1.8'/%3E%3Ccircle cx='150' cy='20' r='1.4'/%3E%3Ccircle cx='180' cy='58' r='2.2'/%3E%3Ccircle cx='34' cy='78' r='1.4'/%3E%3Ccircle cx='120' cy='84' r='2.2'/%3E%3Ccircle cx='8' cy='120' r='1.8'/%3E%3Ccircle cx='70' cy='128' r='1.4'/%3E%3Ccircle cx='108' cy='150' r='1.8'/%3E%3Ccircle cx='160' cy='118' r='1.4'/%3E%3Ccircle cx='190' cy='140' r='2.2'/%3E%3C/g%3E%3C/svg%3E");
 }
