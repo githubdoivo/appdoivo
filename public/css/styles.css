@@ -1285,7 +1285,10 @@ body.theme-mural {
   --line:     #8c5a3a;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
-  --clay-2:   #a84631;
+  /* Was #a84631 (~2.4:1 against --paper) - the hero-line ("o que se passa
+     agora") failed WCAG AA even at large-text size. Darkened within the
+     same rust family to ~4.6:1. */
+  --clay-2:   #642818;
   --clay-active: #8f3a26;
   --rata:     #8f3a26;
   background-color: #c48f6d;
@@ -1359,6 +1362,12 @@ body.theme-plaza {
    this override, so it fell through to the generic --ink and read as
    noticeably bolder/heavier than the same line on every other tab. */
 body.theme-plaza .hero-line { color: var(--clay-2); }
+/* Plaza's --ink is a deliberate warm cream/gold (matching its mustard
+   "newsprint" palette elsewhere), which never reads as truly white next to
+   a cooler theme's --ink (e.g. Memo's icy cyan) even though both use the
+   same variable - by explicit request, this card title is neutral white
+   instead of tracking the theme's own tint. */
+html.mode-dark body.theme-plaza #tab-chat h2 { color: #fff; }
 html.mode-dark body.theme-plaza {
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
@@ -1411,12 +1420,16 @@ body.theme-memo .card {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
 }
 html.mode-light body.theme-memo {
-  --paper:    #e2eff3;
-  --paper-2:  #d5e6ec;
-  --paper-3:  #c8dde4;
+  /* Was #e2eff3/#d5e6ec/#c8dde4 - read as glaring/too bright next to every
+     other (warmer, deeper) theme's light mode. Deepened within the same
+     cyan family; --line darkened alongside to hold its border contrast
+     against the now-darker paper. */
+  --paper:    #d3e6ec;
+  --paper-2:  #c7dce3;
+  --paper-3:  #bad0d8;
   --ink:      #152c37;
   --ink-soft: #477285;
-  --line:     #5d9db1;
+  --line:     #4f8ba0;
   --line-2:   #7bb0c2;
   /* Was much lighter (#0e90aa scaled up) - darkened so it holds up as
      .hero-line text against the pale paper here (~4.6:1). */
@@ -1433,63 +1446,66 @@ html.mode-light body.theme-memo .card {
 
 /* ------------------------------- Memo (UI) -------------------------------- */
 
-.memo-slot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: var(--radius);
-  padding: 13px 14px;
-  border: 1px solid var(--line);
-  background: var(--paper-2);
-  margin-bottom: 10px;
-}
-.memo-slot:last-child { margin-bottom: 0; }
-.memo-slot-icon {
-  width: 30px;
-  height: 30px;
+/* Demure by request: 5 small dots instead of a detailed row-per-slot list -
+   waiting is a hollow ring, open pulses solid to invite a tap, done is a
+   plain filled dot, missed is filled but dim. No numbers/times on the dots
+   themselves (see the aria-label for the roman-numeral name instead). */
+.memo-dots { display: flex; gap: 14px; }
+.memo-dot-wrap { position: relative; }
+.memo-dot {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  background: var(--paper-3);
-  color: var(--ink-soft);
+  border: 2px solid var(--line-2);
+  background: transparent;
+  padding: 0;
+  cursor: default;
 }
-.memo-slot-open .memo-slot-icon { background: var(--clay); color: var(--paper); }
-.memo-slot-open {
-  border-color: var(--clay);
-  background: color-mix(in srgb, var(--clay) 12%, var(--paper-2));
+.memo-dot-waiting { opacity: 0.7; }
+.memo-dot-uploaded { background: var(--ink-soft); border-color: var(--ink-soft); }
+.memo-dot-missed { background: var(--line); border-color: var(--line); opacity: 0.5; }
+.memo-dot-open {
+  background: var(--rata);
+  border-color: var(--rata);
+  cursor: pointer;
+  animation: memo-dot-pulse 1.6s ease-in-out infinite;
 }
-.memo-slot-waiting, .memo-slot-missed { opacity: 0.6; }
-.memo-slot-txt { flex: 1; min-width: 0; }
-.memo-slot-label {
-  display: block;
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: 0.86rem;
-  letter-spacing: 0.02em;
+@media (prefers-reduced-motion: reduce) {
+  .memo-dot-open { animation: none; }
 }
-.memo-slot-meta { display: block; font-size: var(--text-sm); color: var(--ink-soft); margin-top: 2px; }
-.memo-slot-thumb {
-  width: 44px;
-  height: 44px;
+@keyframes memo-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rata) 45%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--rata) 0%, transparent); }
+}
+
+.memo-feed-item { margin-bottom: 18px; }
+.memo-feed-item:last-child { margin-bottom: 0; }
+.memo-feed-thumb {
+  width: 100%;
+  max-height: 420px;
   object-fit: cover;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  flex-shrink: 0;
+  background: #000;
+  display: block;
 }
-
-.memo-recap-row {
+.memo-feed-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.memo-feed-name { font-family: var(--serif); font-size: 1rem; color: var(--ink); }
+.memo-reaction-bar { display: flex; gap: 4px; }
+.memo-reaction {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
 }
-.memo-recap-row:last-child { border-bottom: none; padding-bottom: 0; }
-.memo-recap-day { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); }
-.memo-recap-video { width: 100%; border-radius: var(--radius); background: #000; }
+.memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
+.memo-reaction.active { border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 
 .plaza-eyebrow {
   display: block;
@@ -1506,6 +1522,17 @@ html.mode-light body.theme-memo .card {
    for announcements, a boxed "magazine spread" card for polls (the
    interactive one). A pinned announcement borrows the same boxed treatment
    so it reads as prominent rather than blending into the column. */
+.wall-video-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wall-video-row:last-child { border-bottom: none; padding-bottom: 0; }
+.wall-video-day { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); }
+.wall-video-player { width: 100%; border-radius: var(--radius); background: #000; }
+
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
 /* Excludes the boxed types below (announcement/poll): they carry their own

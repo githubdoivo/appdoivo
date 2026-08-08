@@ -164,6 +164,77 @@ export function getUpload(uploadId) {
   return db.prepare('SELECT * FROM memo_uploads WHERE id = ?').get(uploadId);
 }
 
+// A small fixed set rather than a full picker - keeps the feed a quick tap,
+// no emoji keyboard needed, and matches the deliberately light BeReal-style
+// reaction weight (a glance, not a comment thread).
+export const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
+
+/** Today's feed: every guest's uploads, newest first, with reaction counts
+ * and this viewer's own reaction (if any) on each. */
+export function getTodayFeed(viewerUserId) {
+  const day = today();
+  const uploads = db.prepare(`
+    SELECT u.*, us.name AS user_name
+    FROM memo_uploads u
+    JOIN users us ON us.id = u.user_id
+    WHERE u.day = ?
+    ORDER BY u.uploaded_at DESC
+  `).all(day);
+  const reactionRows = db.prepare(`
+    SELECT r.upload_id, r.emoji, r.user_id, COUNT(*) AS n
+    FROM memo_reactions r
+    JOIN memo_uploads u ON u.id = r.upload_id
+    WHERE u.day = ?
+    GROUP BY r.upload_id, r.emoji
+  `).all(day);
+  const myReactionRows = db.prepare(`
+    SELECT r.upload_id, r.emoji
+    FROM memo_reactions r
+    JOIN memo_uploads u ON u.id = r.upload_id
+    WHERE u.day = ? AND r.user_id = ?
+  `).all(day, viewerUserId);
+  const myReactionByUpload = new Map(myReactionRows.map((r) => [r.upload_id, r.emoji]));
+  const countsByUpload = new Map();
+  for (const row of reactionRows) {
+    if (!countsByUpload.has(row.upload_id)) countsByUpload.set(row.upload_id, {});
+    countsByUpload.get(row.upload_id)[row.emoji] = row.n;
+  }
+  return uploads.map((u) => ({
+    id: u.id,
+    userId: u.user_id,
+    userName: u.user_name,
+    kind: u.kind,
+    uploadedAt: u.uploaded_at,
+    reactions: countsByUpload.get(u.id) || {},
+    myReaction: myReactionByUpload.get(u.id) || null,
+  }));
+}
+
+/** Reacting again with the same emoji clears it (toggle); a different one replaces it. */
+export function toggleReaction(uploadId, userId, emoji) {
+  if (!MEMO_REACTION_EMOJI.includes(emoji)) {
+    const err = new Error('err_memo_invalid_reaction');
+    err.status = 400;
+    throw err;
+  }
+  const upload = db.prepare('SELECT id FROM memo_uploads WHERE id = ?').get(uploadId);
+  if (!upload) {
+    const err = new Error('err_memo_slot_not_found');
+    err.status = 404;
+    throw err;
+  }
+  const existing = db.prepare('SELECT emoji FROM memo_reactions WHERE upload_id = ? AND user_id = ?').get(uploadId, userId);
+  if (existing?.emoji === emoji) {
+    db.prepare('DELETE FROM memo_reactions WHERE upload_id = ? AND user_id = ?').run(uploadId, userId);
+    return null;
+  }
+  db.prepare(`
+    INSERT INTO memo_reactions (upload_id, user_id, emoji) VALUES (?, ?, ?)
+    ON CONFLICT(upload_id, user_id) DO UPDATE SET emoji = excluded.emoji, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+  `).run(uploadId, userId, emoji);
+  return emoji;
+}
+
 /** Per-day summary for the admin history view. Slots are shared, but uploads
  * are per-guest, so uploadedCount is the total number of files that came in
  * that day (can exceed totalSlots once more than one guest uses a moment). */

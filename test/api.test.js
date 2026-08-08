@@ -1610,11 +1610,57 @@ test('a slot within its 15-minute window is shared - every guest can upload to i
   assert.equal(own.status, 200);
   assert.deepEqual([...own.buffer], [0xff, 0xd8, 0xff, 0xd9]);
 
-  const notOwner = await apiBuffer(`/memo/uploads/${uploadId}`, { token: bystander.data.token });
-  assert.equal(notOwner.status, 403);
+  // Every guest's moments are visible to every other guest via the shared
+  // feed, not just the uploader/admins.
+  const otherGuest = await apiBuffer(`/memo/uploads/${uploadId}`, { token: bystander.data.token });
+  assert.equal(otherGuest.status, 200, 'any logged-in guest can view any upload, via the shared feed');
 
   const asAdmin = await apiBuffer(`/memo/uploads/${uploadId}`, { token: ADMIN });
   assert.equal(asAdmin.status, 200, 'an admin can view anyone\'s upload');
+});
+
+test('the shared Memo feed shows every guest\'s uploads for today with reaction counts, and reacting twice with the same emoji clears it', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[0];
+  markSlotNotified(slot.id);
+  const ok = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'feed-photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(ok.status, 201);
+  const uploadId = ok.data.id;
+
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Feed Bystander' } });
+
+  const feed = await api('GET', '/memo/feed', { token: bystander.data.token });
+  assert.equal(feed.status, 200);
+  const entry = feed.data.uploads.find((u) => u.id === uploadId);
+  assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
+  assert.equal(entry.myReaction, null);
+  assert.deepEqual(entry.reactions, {});
+
+  const badEmoji = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💀' } });
+  assert.equal(badEmoji.status, 400);
+  assert.equal(badEmoji.data.error, 'err_memo_invalid_reaction');
+
+  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '🔥' } });
+  assert.equal(react.status, 200);
+  assert.equal(react.data.emoji, '🔥');
+
+  const afterReact = await api('GET', '/memo/feed', { token: bystander.data.token });
+  const entryAfter = afterReact.data.uploads.find((u) => u.id === uploadId);
+  assert.equal(entryAfter.myReaction, '🔥');
+  assert.equal(entryAfter.reactions['🔥'], 1);
+
+  // Reacting again with the same emoji toggles it off.
+  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '🔥' } });
+  assert.equal(toggleOff.data.emoji, null);
+  const afterToggleOff = await api('GET', '/memo/feed', { token: bystander.data.token });
+  const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
+  assert.equal(entryToggledOff.myReaction, null);
+  assert.equal(entryToggledOff.reactions['🔥'] || 0, 0);
 });
 
 test('a slot missed past its 15-minute window is reported as missed, not open', async () => {

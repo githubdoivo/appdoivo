@@ -60,6 +60,8 @@ import {
   getTodayForUser,
   recordUpload,
   getUpload,
+  getTodayFeed,
+  toggleReaction,
   listDays,
   listUploadsForDay,
   saveRecap,
@@ -517,8 +519,27 @@ router.get('/memo/uploads/:id', (req, res) => {
   if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const upload = getUpload(Number(req.params.id));
   if (!upload) return res.status(404).end();
-  if (upload.user_id !== req.user.id && !req.user.isAdmin) return res.status(403).end();
+  // Every guest's moments are visible to every other guest via the shared
+  // feed (see GET /memo/feed) - not just the uploader/admins, unlike the
+  // outfit contestant photo route this pattern is otherwise copied from.
   res.sendFile(join(MEMO_DIR, upload.file_path));
+});
+
+// Today's shared feed - everyone's uploads, newest first, with reaction
+// counts and the viewer's own reaction on each.
+router.get('/memo/feed', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ uploads: getTodayFeed(req.user.id) });
+});
+
+router.post('/memo/uploads/:id/react', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  try {
+    const emoji = toggleReaction(Number(req.params.id), req.user.id, req.body?.emoji);
+    res.json({ emoji });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
 });
 
 router.get('/memo/recaps', (req, res) => {

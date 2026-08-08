@@ -141,6 +141,8 @@ async function boot() {
   // Same QA-only gating shape as Plaza above, see ENABLE_MEMO.
   if (!memoEnabled) {
     document.querySelector('#admin-tabs [data-atab="memo"]').classList.add('hidden');
+  } else {
+    $('wall-memo-video-card').classList.remove('hidden');
   }
 
   // This page is now open to every logged-in user, not just admins - a
@@ -240,6 +242,7 @@ function reloadAll() {
   if (isOwner) loadWallPseudonyms();
   if (isAdmin) loadPlazaPosts();
   if (isAdmin && memoEnabled) loadMemoDays();
+  if (isAdmin && memoEnabled) loadWallMemoVideoDays();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -1306,8 +1309,6 @@ async function loadMemoDays() {
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
             <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
-            <button type="button" class="small ghost" data-memo-recap-btn="${esc(d.day)}">${esc(t('memo_admin_recap_btn'))}</button>
-            <input type="file" accept="video/*" class="file-input-visually-hidden" data-memo-recap-input="${esc(d.day)}" />
           </div>
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
@@ -1351,18 +1352,33 @@ $('memo-days-list').addEventListener('click', async (e) => {
     }
     return;
   }
-  const recapBtn = e.target.closest('[data-memo-recap-btn]');
-  if (recapBtn) {
-    $('memo-days-list').querySelector(`[data-memo-recap-input="${recapBtn.dataset.memoRecapBtn}"]`)?.click();
-  }
 });
 
-$('memo-days-list').addEventListener('change', async (e) => {
-  const input = e.target.closest('[data-memo-recap-input]');
-  const file = input?.files?.[0];
+wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
+
+/* ------------------------- Wall: publish a Memo video --------------------- */
+// The recap video is a Wall artifact (everyone watches it there, see
+// loadWallVideo() in app.js), so publishing it lives on Wall's own admin
+// tab instead of Memo's - Memo's admin tab stays focused on the raw
+// per-day upload counts/zip download.
+
+async function loadWallMemoVideoDays() {
+  if (!memoEnabled) return;
+  try {
+    const { days } = await api('/admin/memo/days');
+    $('wall-memo-video-day').innerHTML = days.map((d) =>
+      `<option value="${esc(d.day)}">${esc(formatEuDate(d.day))}${d.hasRecap ? ` (${t('memo_admin_has_recap')})` : ''}</option>`
+    ).join('');
+  } catch { /* transient network hiccup */ }
+}
+
+$('wall-memo-video-btn').addEventListener('click', () => $('wall-memo-video-input').click());
+
+$('wall-memo-video-input').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
   if (!file) return;
-  const day = input.dataset.memoRecapInput;
-  const msg = $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+  const day = $('wall-memo-video-day').value;
+  const msg = $('wall-memo-video-msg');
   msg.classList.remove('error');
   msg.textContent = t('memo_uploading');
   try {
@@ -1378,14 +1394,14 @@ $('memo-days-list').addEventListener('change', async (e) => {
       throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
     }
     msg.textContent = t('memo_upload_done');
-    loadMemoDays();
+    loadWallMemoVideoDays();
   } catch (err) {
     msg.classList.add('error');
     msg.textContent = err.message;
+  } finally {
+    e.target.value = '';
   }
 });
-
-wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -1397,6 +1413,7 @@ function selectAdminTab(tab) {
   applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
+  if (tab === 'plaza' && isAdmin && memoEnabled) loadWallMemoVideoDays();
   if (tab === 'memo' && isAdmin) loadMemoDays();
 }
 

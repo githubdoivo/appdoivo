@@ -98,6 +98,13 @@
          above). Still the default landing tab (see currentTab in app.js). -->
     <div id="tab-plaza" class="tab-panel">
       <p class="hero-line" data-i18n="plaza_hero">O que se passa agora.</p>
+      <!-- Memo's day recap, published here by the owner (see the Wall admin
+           tab) - hidden entirely until at least one day's video exists.
+           QA-only for now, same as Memo itself (see memoEnabled). -->
+      <div class="card hidden" id="wall-video-card">
+        <h2 data-i18n="wall_video_title">Vídeos do dia</h2>
+        <div id="wall-video-list" style="margin-top:12px"></div>
+      </div>
       <div id="plaza-feed" class="plaza-feed"></div>
       <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
     </div>
@@ -183,12 +190,12 @@
       <div class="card">
         <h2 data-i18n="memo_checklist_title">Os teus momentos</h2>
         <p class="help" data-i18n="memo_checklist_help">Explicação</p>
-        <div id="memo-slots" style="margin-top:12px"></div>
+        <div id="memo-dots" class="memo-dots" style="margin-top:12px"></div>
       </div>
-      <div class="card hidden" id="memo-recap-card">
-        <h2 data-i18n="memo_recap_title">Resumos</h2>
-        <p class="help" data-i18n="memo_recap_help">Explicação</p>
-        <div id="memo-recaps" style="margin-top:12px"></div>
+      <div class="card hidden" id="memo-feed-card">
+        <h2 data-i18n="memo_feed_title">O dia de hoje</h2>
+        <p class="help" data-i18n="memo_feed_help">Explicação</p>
+        <div id="memo-feed" style="margin-top:12px"></div>
       </div>
     </div>
   </section>

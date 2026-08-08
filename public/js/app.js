@@ -480,9 +480,10 @@ $('chat-form').addEventListener('submit', async (e) => {
 let memoPollTimer = null;
 let memoTickTimer = null;
 let memoSlotsCache = [];
+let memoFeedCache = [];
 // Set while a slot's upload request is in flight - both the poll and the
-// ticker skip re-rendering while this is set, so neither one clobbers the
-// "a enviar..." button state a fetch already in progress put up.
+// ticker skip re-rendering while this is set, so a fetch already in
+// progress doesn't get its dot clobbered mid-upload.
 let memoUploadingSlotId = null;
 
 function startMemoPolling() {
@@ -500,18 +501,14 @@ function memoUploadUrl(uploadId) {
   return `/api/memo/uploads/${uploadId}?token=${encodeURIComponent(getToken())}`;
 }
 
-function memoRecapUrl(day) {
-  return `/api/memo/recaps/${encodeURIComponent(day)}?token=${encodeURIComponent(getToken())}`;
-}
-
 async function loadMemo() {
   if (memoUploadingSlotId) return;
   try {
     const { slots } = await api('/memo/today');
     memoSlotsCache = slots;
-    renderMemoSlots();
+    renderMemoDots();
   } catch { /* transient network hiccup - the next poll retries */ }
-  loadMemoRecaps();
+  loadMemoFeed();
 }
 
 function tickMemoCountdowns() {
@@ -521,116 +518,92 @@ function tickMemoCountdowns() {
     if (s.status === 'open') {
       s.secondsLeft -= 1;
       if (s.secondsLeft <= 0) { s.status = 'missed'; changed = true; }
-      else changed = true;
     }
   });
-  if (changed) renderMemoSlots();
+  if (changed) renderMemoDots();
 }
 
 const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 // Resolved slots (done or missed - nothing left to act on) sink to the
-// bottom, so whatever's actually waiting or open next is always the first
-// thing seen instead of getting buried after an earlier one already dealt
-// with. Sorts a copy - memoSlotsCache itself stays in slot_index order,
-// which other lookups (by id) don't care about anyway.
+// end, so whatever's actually waiting or open next reads first instead of
+// getting buried after an earlier one already dealt with. Sorts a copy -
+// memoSlotsCache itself stays in slot_index order, which other lookups (by
+// id) don't care about anyway.
 const MEMO_STATUS_RANK = { open: 0, waiting: 1, uploaded: 2, missed: 2 };
 
-function renderMemoSlots() {
+// Demure by design: 5 small dots instead of a detailed row-per-slot list -
+// filled in as they're completed, no times or countdowns cluttering it.
+// Only the open one is actually interactive (tap it to shoot); waiting/
+// done/missed dots are just a glanceable state, nothing to act on.
+function renderMemoDots() {
   const ordered = [...memoSlotsCache].sort((a, b) => MEMO_STATUS_RANK[a.status] - MEMO_STATUS_RANK[b.status]);
-  $('memo-slots').innerHTML = ordered.map((s) => {
-    const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] || s.slotIndex + 1 });
-    if (s.status === 'waiting') {
-      return `
-        <div class="memo-slot memo-slot-waiting">
-          <span class="memo-slot-icon">?</span>
-          <div class="memo-slot-txt">
-            <span class="memo-slot-label">${esc(label)}</span>
-            <span class="memo-slot-meta">${esc(t('memo_slot_waiting'))}</span>
-          </div>
-        </div>`;
-    }
-    if (s.status === 'missed') {
-      return `
-        <div class="memo-slot memo-slot-missed">
-          <span class="memo-slot-icon">�</span>
-          <div class="memo-slot-txt">
-            <span class="memo-slot-label">${esc(label)}</span>
-            <span class="memo-slot-meta">${esc(t('memo_slot_missed'))}</span>
-          </div>
-        </div>`;
-    }
-    if (s.status === 'uploaded') {
-      const preview = s.kind === 'video'
-        ? `<video class="memo-slot-thumb" src="${memoUploadUrl(s.uploadId)}" muted></video>`
-        : `<img class="memo-slot-thumb" src="${memoUploadUrl(s.uploadId)}" alt="" />`;
-      return `
-        <div class="memo-slot memo-slot-uploaded">
-          ${preview}
-          <div class="memo-slot-txt">
-            <span class="memo-slot-label">${esc(label)}</span>
-            <span class="memo-slot-meta">✓ ${esc(t('memo_slot_uploaded'))}</span>
-          </div>
-        </div>`;
-    }
-    // open - unlike the Snatch photo picker (see register-photo-input),
-    // this one DOES use `capture`: the whole point of a moment is catching
-    // whatever's happening right now, not browsing the gallery for
-    // something already taken, so jumping straight into the camera is the
-    // right default here instead of a downside.
-    const mins = String(Math.floor(Math.max(0, s.secondsLeft) / 60)).padStart(2, '0');
-    const secs = String(Math.max(0, s.secondsLeft) % 60).padStart(2, '0');
+  $('memo-dots').innerHTML = ordered.map((s) => {
+    const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] ?? s.slotIndex + 1 });
+    const isOpen = s.status === 'open';
     return `
-      <div class="memo-slot memo-slot-open">
-        <span class="memo-slot-icon">!</span>
-        <div class="memo-slot-txt">
-          <span class="memo-slot-label">${esc(label)} - ${esc(t('memo_slot_open'))}</span>
-          <span class="memo-slot-meta">${mins}:${secs}</span>
-        </div>
-        <button type="button" class="small" data-memo-upload-btn="${s.id}">${esc(t('memo_choose_btn'))}</button>
-        <input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />
+      <div class="memo-dot-wrap">
+        <button type="button" class="memo-dot memo-dot-${s.status}" aria-label="${esc(label)}"
+          ${isOpen ? `data-memo-upload-btn="${s.id}"` : 'disabled'}></button>
+        ${isOpen ? `<input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />` : ''}
       </div>`;
   }).join('');
 }
 
-async function loadMemoRecaps() {
+const MEMO_REACTION_EMOJI = ['❤️', '🔥', '😂', '😮', '👍'];
+
+// Today's shared feed - every guest's uploads so far, like BeReal's own
+// friends-feed, with a light row of quick-tap emoji reactions per photo
+// instead of a comment thread.
+async function loadMemoFeed() {
   try {
-    const { days } = await api('/memo/recaps');
-    // Nothing to watch yet is the common case for most of the party - the
-    // empty-state message was just dead weight sitting on the page, not
-    // useful information. Hidden entirely until the owner posts a first one.
-    $('memo-recap-card').classList.toggle('hidden', days.length === 0);
-    if (days.length) {
-      $('memo-recaps').innerHTML = days.map((day) => `
-        <div class="memo-recap-row">
-          <span class="memo-recap-day">${esc(formatEuDate(day))}</span>
-          <video class="memo-recap-video" controls preload="none" src="${memoRecapUrl(day)}"></video>
-          <a class="small ghost" href="${memoRecapUrl(day)}" download>${esc(t('memo_recap_download'))}</a>
-        </div>`).join('');
-    }
+    const { uploads } = await api('/memo/feed');
+    memoFeedCache = uploads;
+    renderMemoFeed();
   } catch { /* transient network hiccup - the next poll retries */ }
 }
 
-// Delegated (not one listener per slot) since the whole list is rebuilt on
-// every render - a button click just forwards to its own hidden file input,
-// same pattern as the outfit registration photo picker (see
-// #register-photo-btn in settings.js) but scoped to this container.
-$('memo-slots').addEventListener('click', (e) => {
+function renderMemoFeed() {
+  $('memo-feed-card').classList.toggle('hidden', memoFeedCache.length === 0);
+  if (!memoFeedCache.length) return;
+  $('memo-feed').innerHTML = memoFeedCache.map((u) => {
+    const preview = u.kind === 'video'
+      ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`
+      : `<img class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" alt="" />`;
+    const reactionBar = MEMO_REACTION_EMOJI.map((emoji) => {
+      const count = u.reactions[emoji] || 0;
+      const mine = u.myReaction === emoji;
+      return `<button type="button" class="memo-reaction${mine ? ' active' : ''}" data-memo-react="${u.id}" data-emoji="${emoji}">${emoji}${count ? `<span>${count}</span>` : ''}</button>`;
+    }).join('');
+    return `
+      <div class="memo-feed-item">
+        ${preview}
+        <div class="memo-feed-meta">
+          <span class="memo-feed-name">${esc(u.userName)}</span>
+          <div class="memo-reaction-bar">${reactionBar}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// Delegated (not one listener per dot) since the whole thing is rebuilt on
+// every render - a tap just forwards to its own hidden file input, same
+// pattern as the outfit registration photo picker (see #register-photo-btn
+// in settings.js) but scoped to this container.
+$('memo-dots').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-memo-upload-btn]');
   if (!btn) return;
-  $('memo-slots').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
+  $('memo-dots').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
 });
 
-$('memo-slots').addEventListener('change', async (e) => {
+$('memo-dots').addEventListener('change', async (e) => {
   const input = e.target.closest('[data-memo-file-input]');
   const file = input?.files?.[0];
   if (!file) return;
   const slotId = input.dataset.memoFileInput;
-  const slotEl = input.closest('.memo-slot');
-  const btn = slotEl.querySelector('[data-memo-upload-btn]');
+  const dot = input.previousElementSibling;
   memoUploadingSlotId = slotId;
-  btn.disabled = true;
-  btn.textContent = t('memo_uploading');
+  dot.disabled = true;
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -643,13 +616,25 @@ $('memo-slots').addEventListener('change', async (e) => {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
     }
-    btn.textContent = t('memo_upload_done');
   } catch (err) {
     await showAlert(err.message);
   } finally {
     memoUploadingSlotId = null;
     loadMemo();
   }
+});
+
+// Tapping your own already-active reaction clears it (toggle) - see
+// toggleReaction() in memo.js, which mirrors that same rule server-side.
+$('memo-feed').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-memo-react]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api(`/memo/uploads/${btn.dataset.memoReact}/react`, { method: 'POST', body: { emoji: btn.dataset.emoji } });
+    loadMemoFeed();
+  } catch { /* transient - next poll reconciles */ }
+  finally { btn.disabled = false; }
 });
 
 // Shared by both deep-link paths below: a fresh page load reads its own
@@ -833,6 +818,28 @@ async function loadPlaza() {
     const { posts } = await api('/plaza-posts');
     renderPlazaFeed(posts);
   } catch { /* transient - leaves whatever was last shown */ }
+  if (memoEnabled) loadWallVideo();
+}
+
+function memoRecapUrl(day) {
+  return `/api/memo/recaps/${encodeURIComponent(day)}?token=${encodeURIComponent(getToken())}`;
+}
+
+// Memo's daily recap, published to everyone here by the owner (see the
+// Wall admin tab) rather than staying inside Memo itself - hidden entirely
+// until at least one day has a video.
+async function loadWallVideo() {
+  try {
+    const { days } = await api('/memo/recaps');
+    $('wall-video-card').classList.toggle('hidden', days.length === 0);
+    if (days.length) {
+      $('wall-video-list').innerHTML = days.map((day) => `
+        <div class="wall-video-row">
+          <span class="wall-video-day">${esc(formatEuDate(day))}</span>
+          <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(day)}"></video>
+        </div>`).join('');
+    }
+  } catch { /* transient network hiccup - the next poll retries */ }
 }
 
 /* ------------------------------- Rata Game ------------------------------- */

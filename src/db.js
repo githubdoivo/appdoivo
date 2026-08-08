@@ -418,6 +418,15 @@ db.exec(`
     UNIQUE(slot_id, user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS memo_reactions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    upload_id   INTEGER NOT NULL REFERENCES memo_uploads(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji       TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    UNIQUE(upload_id, user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS memo_recaps (
     day         TEXT PRIMARY KEY,
     file_path   TEXT NOT NULL,

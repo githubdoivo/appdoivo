@@ -1248,8 +1248,9 @@ function markMemoSlotNotified(slotId, when = new Date()) {
   db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
 }
 
-test('Memo: a guest can upload to an open slot, and the admin sees it, downloads it, and posts a recap everyone can watch', async () => {
+test('Memo: a guest can shoot an open moment, it shows in the shared feed, another guest can react, and the owner publishes its video to the Wall', async () => {
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Tester' } });
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Bystander' } });
   const today = await api('GET', '/memo/today', { token: user.token });
   const slot = today.slots[0];
   markMemoSlotNotified(slot.id);
@@ -1257,21 +1258,27 @@ test('Memo: a guest can upload to an open slot, and the admin sees it, downloads
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, user.token);
   await page.click('[data-tab="memo"]');
-  await page.waitForSelector('#memo-slots', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#memo-dots', { timeout: WAIT_TIMEOUT });
 
   await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
-  assert.ok(
-    (await page.textContent(`[data-memo-upload-btn="${slot.id}"]`)).length > 0,
-    'the open slot should show an upload button'
-  );
-
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
-  // The upload button disappears once the slot moves to "uploaded" (see
-  // renderMemoSlots() in app.js) - waiting for that beats a fixed sleep.
-  await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { state: 'detached', timeout: WAIT_TIMEOUT });
-  assert.ok(
-    (await page.textContent('#memo-slots')).includes('enviado'),
-    'the checklist should show the slot as sent'
+  // The dot swaps from open to uploaded once the upload lands (see
+  // renderMemoDots() in app.js) - waiting for the class change beats a
+  // fixed sleep.
+  await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
+
+  // It shows up in today's shared feed for everyone, not just the uploader.
+  await page.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
+  const uploadId = await page.getAttribute('[data-memo-react]', 'data-memo-react');
+
+  const bystanderPage = await loginPage(context, bystander.token);
+  await bystanderPage.click('[data-tab="memo"]');
+  await bystanderPage.waitForSelector(`[data-memo-react="${uploadId}"]`, { timeout: WAIT_TIMEOUT });
+  await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="🔥"]`);
+  await bystanderPage.waitForFunction(
+    (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="🔥"]`)?.textContent.includes('1'),
+    uploadId,
+    { timeout: WAIT_TIMEOUT }
   );
 
   const adminPage = await loginPage(context, ADMIN, '/settings.html');
@@ -1281,32 +1288,35 @@ test('Memo: a guest can upload to an open slot, and the admin sees it, downloads
     () => /\d\/\d/.test(document.getElementById('memo-days-list')?.textContent || ''),
     { timeout: WAIT_TIMEOUT }
   );
-  const daysText = await adminPage.textContent('#memo-days-list');
-  assert.ok(daysText.includes('sem resumo'), 'no recap uploaded yet');
-
   const [download] = await Promise.all([
     adminPage.waitForEvent('download'),
     adminPage.click('[data-memo-download-day]'),
   ]);
   assert.ok(download.suggestedFilename().endsWith('.zip'));
 
-  await adminPage.click('[data-memo-recap-btn]');
-  const recapDay = await adminPage.locator('[data-memo-recap-btn]').first().getAttribute('data-memo-recap-btn');
-  await adminPage.setInputFiles(`[data-memo-recap-input="${recapDay}"]`, {
+  // Publishing the day's video is a Wall admin action, not a Memo one -
+  // see the "Vídeo do dia" card added to atab-plaza in settings.html.
+  await adminPage.click('[data-atab="plaza"]');
+  await adminPage.waitForSelector('#wall-memo-video-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await adminPage.waitForFunction(
+    () => document.getElementById('wall-memo-video-day')?.options.length > 0,
+    { timeout: WAIT_TIMEOUT }
+  );
+  await adminPage.setInputFiles('#wall-memo-video-input', {
     name: 'recap.mp4',
     mimeType: 'video/mp4',
     buffer: Buffer.from('fake mp4 bytes'),
   });
   await adminPage.waitForFunction(
-    () => document.getElementById('memo-days-list')?.textContent.includes('com resumo'),
+    () => document.getElementById('wall-memo-video-msg')?.textContent.length > 0,
     { timeout: WAIT_TIMEOUT }
   );
 
-  // Any logged-in guest (not just the uploader/admin) can watch/download the recap.
-  await page.click('[data-tab="rata"]');
-  await page.click('[data-tab="memo"]');
+  // Any logged-in guest (not just the uploader/admin) sees it on the Wall.
+  await page.click('[data-tab="plaza"]');
   await page.waitForFunction(
-    () => document.getElementById('memo-recaps')?.querySelector('video'),
+    () => !document.getElementById('wall-video-card')?.classList.contains('hidden')
+      && document.getElementById('wall-video-list')?.querySelector('video'),
     { timeout: WAIT_TIMEOUT }
   );
 

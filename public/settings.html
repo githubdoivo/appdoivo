@@ -84,6 +84,22 @@
           <div id="plaza-posts-list" style="margin-top:12px"></div>
         </div>
 
+        <!-- Publishes a Memo day's recap video onto the Wall for everyone
+             to watch - hidden entirely when Memo itself is off (see
+             memoEnabled in settings.js), same as the atab-memo separator
+             below. Lives here (not in Memo's own admin tab) since the
+             result is a Wall post, not a Memo-only artifact. -->
+        <div class="card hidden" id="wall-memo-video-card">
+          <h2 data-i18n="wall_memo_video_title">Vídeo do dia</h2>
+          <p class="help" data-i18n="wall_memo_video_help">Explicação</p>
+          <div class="inline" style="margin-top:12px">
+            <select id="wall-memo-video-day"></select>
+            <button type="button" class="small" id="wall-memo-video-btn" data-i18n="memo_admin_recap_btn">Publicar</button>
+            <input type="file" accept="video/*" class="file-input-visually-hidden" id="wall-memo-video-input" />
+          </div>
+          <span id="wall-memo-video-msg" class="muted" style="display:block;margin-top:8px"></span>
+        </div>
+
         <!-- Owner-only kill switch, scoped to just this feature (see
              POST /admin/plaza-posts/wipe) - hidden for a regular admin in
              boot() in settings.js. -->
