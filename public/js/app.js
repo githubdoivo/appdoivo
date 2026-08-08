@@ -1308,6 +1308,7 @@ async function loadVotes() {
     // Status controlled by the admin: registration / open / closed-pending-reveal / closed.
     let statusKey;
     if (data.status === 'registration') statusKey = 'outfit_registration_open';
+    else if (data.status === 'open' && data.runoffActive) statusKey = 'outfit_runoff_open';
     else if (data.status === 'open') statusKey = 'outfit_open';
     else if (!data.started) statusKey = 'outfit_wait';
     else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';

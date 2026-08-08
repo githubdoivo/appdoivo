@@ -426,6 +426,18 @@ $('voting-advance-btn').addEventListener('click', async () => {
   loadContestants();
 });
 
+$('voting-runoff-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_voting_runoff')))) return;
+  $('voting-msg').textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/runoff`, { method: 'POST' });
+    loadVotingState();
+    loadVotes();
+  } catch (err) {
+    $('voting-msg').textContent = err.message;
+  }
+});
+
 $('voting-reset-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_reset')))) return;
   $('voting-msg').textContent = '';
@@ -971,6 +983,14 @@ async function loadVotes() {
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+
+  // The runoff button only makes sense once voting's closed, there's
+  // already a runoff going and it also closed (tie could recur), and the
+  // top spot is a genuine tie (0-0 across the board doesn't count - that's
+  // just nobody having voted yet, not a real tie to break).
+  const status = votingStateCache[currentNight()]?.status;
+  const isTie = results.length >= 2 && results[0].votes > 0 && results[0].votes === results[1].votes;
+  $('voting-runoff-btn').classList.toggle('hidden', !(status === 'closed' && isTie));
 
   $('voter-log-card').classList.toggle('hidden', !votes);
   if (votes) {

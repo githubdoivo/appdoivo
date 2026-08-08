@@ -134,6 +134,11 @@
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" class="small" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
+            <!-- Only shown once voting's closed AND the top spot is tied -
+                 see the tie check in loadVotes() in settings.js. Starts a
+                 fresh vote scoped to just the tied contestants (see
+                 startRunoff() in votes.js). -->
+            <button type="button" class="small hidden" id="voting-runoff-btn" data-i18n="voting_runoff_btn">Desempate</button>
             <button type="button" class="small" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
             <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>

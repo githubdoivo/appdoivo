@@ -695,6 +695,67 @@ test('reset-all clears votes AND contestants, back to a never-started night', as
   assert.equal(night.started, false, 'reset-all should return the night to its never-started state');
 });
 
+test('a tie for first place can be broken with a runoff scoped to just the tied contestants', async () => {
+  await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff A', night: NIGHT } });
+  const b = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff B', night: NIGHT } });
+  const c = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff C', night: NIGHT } });
+
+  await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
+
+  const voters = [];
+  for (let i = 0; i < 5; i++) {
+    voters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Runoff Voter ${i}` } })).data.token);
+  }
+  // A and B tied at 2 votes each, C behind at 1.
+  await api('POST', '/votes', { token: voters[0], body: { contestantId: a.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[1], body: { contestantId: a.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[2], body: { contestantId: b.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[3], body: { contestantId: b.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[4], body: { contestantId: c.data.id, night: NIGHT } });
+
+  const beforeClose = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(beforeClose.status, 409);
+  assert.equal(beforeClose.data.error, 'err_voting_not_closed', 'a tie can only be judged once voting is closed');
+
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+
+  const noTieYet = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(noTieYet.data.results[0].votes, noTieYet.data.results[1].votes, 'test setup: A and B should be tied at the top');
+
+  const runoff = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(runoff.status, 200);
+  assert.equal(runoff.data.votingStatus, 'open');
+  assert.deepEqual(new Set(runoff.data.contestantIds), new Set([a.data.id, b.data.id]));
+
+  const again = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(again.status, 409);
+  assert.equal(again.data.error, 'err_voting_not_closed', 'a runoff itself has to be voting-open, not still closed, to start another one');
+
+  // C lost the first round - no longer votable, even though voting reopened.
+  const status = await api('GET', `/votes/status?night=${NIGHT}`, { token: voters[0] });
+  assert.equal(status.data.runoffActive, true);
+  assert.deepEqual(new Set(status.data.contestants.map((x) => x.id)), new Set([a.data.id, b.data.id]));
+
+  const rejectedC = await api('POST', '/votes', { token: voters[4], body: { contestantId: c.data.id, night: NIGHT } });
+  assert.equal(rejectedC.status, 400);
+  assert.equal(rejectedC.data.error, 'err_not_in_runoff');
+
+  const okA = await api('POST', '/votes', { token: voters[4], body: { contestantId: a.data.id, night: NIGHT } });
+  assert.equal(okA.status, 201, 'voting for a tied contestant during the runoff should still work');
+
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+  const runoffResults = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(runoffResults.data.results.length, 2, 'runoff results should only include the tied contestants, not C');
+
+  const resetAgain = await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  assert.equal(resetAgain.status, 200);
+  assert.equal(resetAgain.data.votingStatus, 'closed', 'reset-all already leaves the night closed - no need to close it again');
+  const noTieResult = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(noTieResult.status, 409);
+  assert.equal(noTieResult.data.error, 'err_no_tie', 'reset-all should have cleared the runoff, and there are no contestants left to tie');
+});
+
 test('a solo contestant cannot vote for their own entry', async () => {
   const night = 'swamp'; // wiped clean by the reset-all test above
   const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Solo Voter' } });

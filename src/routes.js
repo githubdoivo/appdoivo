@@ -42,6 +42,9 @@ import {
   resetResultsPhase,
   advanceResultsPhase,
   getResultsPhase,
+  isRunoffActive,
+  clearRunoff,
+  startRunoff,
 } from './votes.js';
 import {
   getPublicKey,
@@ -309,6 +312,9 @@ router.get('/votes/status', (req, res) => {
     myContestant: myContestantForNight(req.user.id, night),
     results,
     resultsPhase: phase,
+    // So the voting screen can say "it's a tie - vote again" instead of
+    // just silently showing a shorter contestant list with no context.
+    runoffActive: isRunoffActive(night),
   });
 });
 
@@ -943,6 +949,11 @@ router.get('/admin/voting', (req, res) => {
       // enforces it, since plenty of real nights close with some guests
       // never getting around to voting and that's fine.
       notVoted: usersWithoutVoteCount(night),
+      // Lets the admin panel show "tie-breaker round in progress" - whether
+      // there IS a tie worth breaking is for the panel to work out from the
+      // results it already fetches via GET /admin/votes (rank 1 and 2
+      // sharing a vote count), not duplicated here.
+      runoffActive: isRunoffActive(night),
     })),
   });
 });
@@ -961,6 +972,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  clearRunoff(night);
   setSetting(`voting_status_${night}`, 'registration');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -1052,6 +1064,7 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  clearRunoff(night);
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -1065,10 +1078,32 @@ router.post('/admin/voting/:night/reset-all', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM contestants WHERE night = ?').run(night);
+  clearRunoff(night);
   setSetting(`voting_status_${night}`, 'closed');
   setSetting(`voting_started_${night}`, '0');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
+});
+
+// Tie-breaker: a fresh round of voting scoped to just the contestants tied
+// for 1st place - see startRunoff() in votes.js for the actual rule (needs
+// voting closed, needs a real tie). Broadcasts the same way opening voting
+// normally does, so guests know to come back and vote again.
+router.post('/admin/voting/:night/runoff', async (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  const result = startRunoff(night);
+  if (result.error) return res.status(409).json({ error: result.error });
+  res.json({ ok: true, night, votingStatus: 'open', contestantIds: result.contestantIds });
+  await broadcast({
+    title: { pt: 'Snatch', en: 'Snatch' },
+    body: {
+      pt: `há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
+      en: `it's a tie - runoff vote for ${NIGHT_LABEL[night]} night, vote again!`,
+    },
+    tag: 'outfit-voting',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
 });
 
 /* ------------------------------- Admin: Memo ------------------------------ */

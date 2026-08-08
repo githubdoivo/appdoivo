@@ -7,6 +7,23 @@ import { isNight } from './nights.js';
 // awards countdown, at their own pace during the event.
 const REVEAL_PHASES = ['hidden', 'third', 'second', 'first', 'all'];
 
+/** Contestant IDs currently in a tie-breaker runoff for a night, or null if
+ * none is active - see startRunoff() below. */
+function getRunoffIds(night) {
+  const raw = getSetting(`runoff_ids_${night}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function isRunoffActive(night) {
+  return getRunoffIds(night) !== null;
+}
+
+/** Ends whatever runoff scope was active - a fresh registration/reset(-all)
+ * starts a genuinely new round, not a continuation of an old tie. */
+export function clearRunoff(night) {
+  setSetting(`runoff_ids_${night}`, '');
+}
+
 /** Current results-reveal phase for a night. */
 export function getResultsPhase(night) {
   return getSetting(`results_phase_${night}`, 'hidden');
@@ -33,7 +50,7 @@ export function advanceResultsPhase(night) {
  * real entry, so it's left out of the voting list entirely (see
  * registerContestant()/confirmContestant()). */
 export function contestantsForNight(night) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
@@ -41,6 +58,10 @@ export function contestantsForNight(night) {
     WHERE c.night = ? AND c.confirmed_at IS NOT NULL
     ORDER BY c.name COLLATE NOCASE
   `).all(night);
+  // A runoff narrows who's actually votable to just the tied group (see
+  // startRunoff()) - everyone else already lost the first round.
+  const runoff = getRunoffIds(night);
+  return runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
 }
 
 /** The OTHER user_id sharing this user's contestant entry for a night
@@ -338,6 +359,13 @@ export function castVote(userId, contestantId, night) {
     return { error: 'err_contestant_invalid_for_night' };
   }
 
+  // Mid-runoff, only the tied group is actually votable - everyone else
+  // already lost the first round (see startRunoff()).
+  const runoff = getRunoffIds(night);
+  if (runoff && !runoff.includes(contestantId)) {
+    return { error: 'err_not_in_runoff' };
+  }
+
   // Solo or as part of a duo, a contestant can't vote for their own entry -
   // left open, everyone would just vote for themselves, and a duo's shared
   // entry would get an "extra" vote nobody else's entry could get.
@@ -454,7 +482,12 @@ export function resultsForNight(night) {
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
   `).all(night);
-  return rows.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
+  // Once a runoff is active, the standings that matter are just the tied
+  // group revoting among themselves - everyone else's (now stale) tally
+  // from the first round would just be confusing clutter here.
+  const runoff = getRunoffIds(night);
+  const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
+  return scoped.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
 }
 
 /** Results a regular user may see right now, filtered by the reveal phase. */
@@ -468,4 +501,30 @@ export function visibleResultsForNight(night) {
   else if (phase === 'first') results = all.filter((r) => r.rank <= 3);
   else results = all; // 'all'
   return { phase, results };
+}
+
+/**
+ * Starts a tie-breaker runoff: a fresh vote scoped to only the contestants
+ * tied for 1st place, like a real election runoff, instead of leaving an
+ * actual tie standing. Requires voting to already be closed (a tie can
+ * only be judged once nobody can vote anymore) and at least two
+ * contestants sharing the top spot. Wipes the previous votes - they
+ * already served their purpose, identifying the tie - and reopens voting
+ * scoped to just the tied group; see contestantsForNight()/castVote()/
+ * resultsForNight() above for where that scope is enforced.
+ */
+export function startRunoff(night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'closed') return { error: 'err_voting_not_closed' };
+
+  const results = resultsForNight(night);
+  const topVotes = results[0]?.votes ?? 0;
+  const tied = results.filter((r) => r.votes === topVotes);
+  if (tied.length < 2) return { error: 'err_no_tie' };
+
+  setSetting(`runoff_ids_${night}`, JSON.stringify(tied.map((r) => r.id)));
+  db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  resetResultsPhase(night);
+  setSetting(`voting_status_${night}`, 'open');
+  return { ok: true, contestantIds: tied.map((r) => r.id) };
 }
