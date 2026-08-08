@@ -1535,7 +1535,7 @@ html.mode-light body.theme-memo .card {
   cursor: pointer;
   color: var(--ink-soft);
 }
-.memo-reaction svg { width: 16px; height: 16px; flex-shrink: 0; }
+.memo-reaction svg { width: 19px; height: 19px; flex-shrink: 0; }
 .memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
 .memo-reaction.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 

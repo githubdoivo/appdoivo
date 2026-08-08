@@ -548,22 +548,23 @@ function renderMemoDots() {
 
 const MEMO_REACTION_EMOJI = ['❤️', '👎', '💧', '🍆'];
 
-// Hand-drawn-style line icons instead of the OS's own emoji glyphs - a
+// Hand-drawn-style FILLED icons instead of the OS's own emoji glyphs - a
 // native emoji renders as whatever the platform's font happens to look
 // like (very "iPhone"), which clashes with the app's own drawn-icon
-// language used everywhere else (sun/moon toggle, eye/eye-off, bell -
-// see index.html). Same 24x24/currentColor/round-cap convention, so these
-// tint correctly with each theme's accent instead of being fixed-color
-// pictures.
+// language used elsewhere (sun/moon toggle, eye/eye-off, bell - see
+// index.html), themselves stroke-only. These are filled instead of
+// stroked specifically so they stay visible at the small size a reaction
+// button needs - a thin outline nearly disappears there. currentColor
+// still ties them to each theme's accent.
 const MEMO_REACTION_ICON = {
   '❤️': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
   '👎': '<path d="M17 14.5v-9h2.5v9H17Zm-2.5.7-3.4 5.5a1.8 1.8 0 0 1-3.2-1.5L9 14.5H6a2 2 0 0 1-2-2.3l1-6.2a2.5 2.5 0 0 1 2.5-2H14a1.5 1.5 0 0 1 1.5 1.5v8Z"/>',
   '💧': '<path d="M12 3s6 7.2 6 11.5a6 6 0 0 1-12 0C6 10.2 12 3 12 3Z"/>',
-  '🍆': '<path d="M9 21c-2.5 0-4.5-2.4-4.5-6 0-4.3 3.4-8.4 6.5-9.5" /><ellipse cx="10.3" cy="13.5" rx="4.3" ry="6.8" transform="rotate(-25 10.3 13.5)"/><path d="M13.5 6c.5-1 1.7-2 3-2M15 3.5c.8.2 1.6.3 2 0"/>',
+  '🍆': '<ellipse cx="10.3" cy="13.5" rx="4.3" ry="6.8" transform="rotate(-25 10.3 13.5)"/><path d="M13 7c.4-1.2 1.7-2.3 3.2-2.4.4 1.4-.6 2.8-2 3.4Z"/>',
 };
 
 function memoReactionIcon(emoji) {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
+  return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
 }
 
 // Today's shared feed - every guest's uploads so far, like BeReal's own
