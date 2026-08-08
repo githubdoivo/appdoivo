@@ -116,11 +116,13 @@ device). Each notification opens the app straight to the relevant tab. See
 
 - `PORT` - server port (default 3000; this project uses 3001 locally).
 - `NODE_ENV` - set to `production` only in the real deployment (fly.toml). Gates
-  two dev/test-only conveniences: `ADMIN_TOKEN` below, and a `mossy` quick-login
-  that always logs in as the owner regardless of their real key (see
-  `/auth/login` in `src/routes.js`) - neither works when this is `production`.
+  `ADMIN_TOKEN` below (`mossy` has its own switch, see `ENABLE_DEV_LOGIN`).
 - `ADMIN_TOKEN` - pins the owner's access key outside production. If empty (or
   in production), one is generated the same way any user's key is.
+- `ENABLE_DEV_LOGIN` - lets a `mossy` login always resolve to the owner
+  regardless of their real key (see `findUserByToken` in `src/auth.js`). Dev/QA
+  only - deliberately never set in `fly.toml`, so the safe default (off) holds
+  even if some other env var fails to propagate correctly.
 - `ADMIN_NAME` - the owner's display name.
 - `TOKEN_SECRET` - secret used to encrypt and index user tokens. Keep it out of
   the database and never share it. If you change it, nobody can log in.

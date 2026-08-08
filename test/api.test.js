@@ -16,6 +16,12 @@ process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 process.env.ENABLE_MEMO = 'true';
+// Explicit, not just "not set" - dotenv (loaded by app.js) never overrides
+// an already-set var, but without this a developer's own local .env
+// (which needs ENABLE_DEV_LOGIN=true for their own "mossy" convenience)
+// would leak into the test run and make the off-by-default test below a
+// false pass instead of a real one.
+process.env.ENABLE_DEV_LOGIN = 'false';
 
 const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
@@ -142,6 +148,28 @@ test('login accepts the admin', async () => {
   const r = await api('POST', '/auth/login', { body: { token: ADMIN } });
   assert.equal(r.status, 200);
   assert.equal(r.data.isAdmin, true);
+});
+
+// Regression: the "mossy" dev-only quick-login used to be gated by
+// NODE_ENV!=='production' alone - confirmed live on prod on 2026-08-08
+// despite fly.toml setting NODE_ENV=production there, letting anyone who
+// read this repo's own docs log in as the real owner. Now gated by an
+// explicit ENABLE_DEV_LOGIN=true (see auth.js) that fly.toml never sets -
+// this locks in "off by default", not just "off when something else is
+// configured correctly".
+test('the "mossy" dev-login shortcut only works when ENABLE_DEV_LOGIN is explicitly true, never by default', async () => {
+  assert.notEqual(process.env.ENABLE_DEV_LOGIN, 'true', 'sanity check: this test file must not itself enable it');
+  const byDefault = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+  assert.equal(byDefault.status, 401, '"mossy" must not authenticate when ENABLE_DEV_LOGIN is unset');
+
+  process.env.ENABLE_DEV_LOGIN = 'true';
+  try {
+    const enabled = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+    assert.equal(enabled.status, 200);
+    assert.equal(enabled.data.isAdmin, true, '"mossy" should resolve to the owner once explicitly enabled');
+  } finally {
+    delete process.env.ENABLE_DEV_LOGIN;
+  }
 });
 
 /* ----------------------------- Permissions ------------------------------- */
