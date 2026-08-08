@@ -210,6 +210,12 @@ function reloadAll() {
   loadContestants();
   loadVotes();
   loadConsequences();
+  // Both build their rows' text (button labels, column headers) via t()
+  // at render time rather than data-i18n attributes applyI18n() can walk,
+  // so a language switch left them stuck in whichever language was active
+  // the last time they were fetched until this call was added.
+  if (isOwner) loadWallPseudonyms();
+  if (isAdmin) loadPlazaPosts();
 }
 
 /* -------------------------------- Idioma --------------------------------- */

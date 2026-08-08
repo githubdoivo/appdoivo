@@ -156,15 +156,15 @@
               <img class="entry-photo-preview" alt="" />
               <span class="photo-attached-label" data-i18n="outfit_photo_attached">foto anexada</span>
             </div>
-            <div style="text-align:right;margin-top:10px">
+            <div class="inline" style="justify-content:flex-end;margin-top:10px">
+              <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
               <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
             </div>
-            <span id="admin-register-msg" class="muted"></span>
+            <div style="text-align:right">
+              <span id="admin-register-msg" class="muted"></span>
+              <span id="download-photos-msg" class="muted"></span>
+            </div>
           </form>
-          <div style="text-align:right;margin-top:16px">
-            <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
-            <span id="download-photos-msg" class="muted"></span>
-          </div>
           <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:10px" />
           <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
