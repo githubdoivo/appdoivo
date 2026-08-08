@@ -1166,6 +1166,12 @@ body.theme-swamp {
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
 body.theme-furnished .hero-line,
+/* Furnished never got its own hero-line accent (unlike swamp/rata/mural/
+   plaza/memo below), so it fell back to the deliberately muted default
+   (.hero-line's own color:var(--ink-soft)) - read as much less bold than
+   every other theme's hero-line, since bold text.at low contrast still
+   looks thin. */
+body.theme-furnished .hero-line { color: var(--ot-2); }
 body.theme-swamp .hero-line { color: var(--ot-2); }
 body.theme-furnished .card,
 body.theme-swamp .card {
