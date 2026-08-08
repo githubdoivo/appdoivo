@@ -91,7 +91,8 @@ export function myVoteForNight(userId, night) {
  * registration form. */
 export function myContestantForNight(userId, night) {
   const row = db.prepare(`
-    SELECT c.id, c.name, c.user_id, c.confirmed_at, u1.name AS registrant_name, u2.name AS partner_name
+    SELECT c.id, c.name, c.user_id, c.confirmed_at, c.photo IS NOT NULL AS hasPhoto,
+           u1.name AS registrant_name, u2.name AS partner_name
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
@@ -107,7 +108,38 @@ export function myContestantForNight(userId, night) {
     // two of them see different things until then - hence who registered it.
     confirmed: !!row.confirmed_at,
     registeredByMe: row.user_id === userId,
+    hasPhoto: !!row.hasPhoto,
   };
+}
+
+// Generous ceiling over what an 800px-JPEG-then-base64 photo should ever
+// weigh (the client resizes before sending) - this is the actual
+// enforcement, since a client-side cap alone can't be trusted.
+const MAX_PHOTO_BYTES = 400 * 1024;
+
+/** Decodes+validates a photo submitted as a JPEG data URL. Only JPEG is
+ * accepted - the client always exports to JPEG before sending, so anything
+ * else is either a bug or a bypass attempt. Returns { buffer, mime } or
+ * { error }. */
+function decodePhoto(photoBase64) {
+  const prefix = 'data:image/jpeg;base64,';
+  if (typeof photoBase64 !== 'string' || !photoBase64.startsWith(prefix)) {
+    return { error: 'err_photo_invalid' };
+  }
+  let buffer;
+  try {
+    buffer = Buffer.from(photoBase64.slice(prefix.length), 'base64');
+  } catch {
+    return { error: 'err_photo_invalid' };
+  }
+  // JPEG magic bytes - catches empty/garbage payloads a spoofed prefix alone wouldn't.
+  if (buffer.length < 2 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return { error: 'err_photo_invalid' };
+  }
+  if (buffer.length > MAX_PHOTO_BYTES) {
+    return { error: 'err_photo_too_large' };
+  }
+  return { buffer, mime: 'image/jpeg' };
 }
 
 /**
@@ -122,11 +154,17 @@ export function myContestantForNight(userId, night) {
  * from the voting list). Solo entries have nobody to agree with and go
  * live immediately. autoConfirm skips the whole dance for entries an admin
  * creates on someone's behalf - that's the organiser acting deliberately,
- * and blocking them behind a guest's phone would just get in the way.
+ * and blocking them behind a guest's phone would just get in the way (it
+ * also skips requirePhoto, for the same reason).
+ *
+ * requirePhoto rejects a missing photo outright (the guest-facing route
+ * sets this; organiser-created entries don't). The photo itself belongs to
+ * the entry, not either person, so either half of a duo can swap it later
+ * via replaceContestantPhoto() - this is only where it's first attached.
  *
  * Returns { ok, id, name, pending } or { error }.
  */
-export function registerContestant(userId, night, name, partnerUserId, { autoConfirm = false } = {}) {
+export function registerContestant(userId, night, name, partnerUserId, { autoConfirm = false, photoBase64 = null, requirePhoto = false } = {}) {
   if (!isNight(night)) return { error: 'err_invalid_night' };
   if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
 
@@ -138,6 +176,14 @@ export function registerContestant(userId, night, name, partnerUserId, { autoCon
   const trimmedName = String(name || '').trim();
   if (!trimmedName) return { error: 'err_persona_name_required' };
   if (trimmedName.length > 60) return { error: 'err_max_60_chars' };
+
+  let photo = null;
+  if (photoBase64) {
+    photo = decodePhoto(photoBase64);
+    if (photo.error) return photo;
+  } else if (requirePhoto) {
+    return { error: 'err_photo_required' };
+  }
 
   let partnerId = null;
   if (partnerUserId) {
@@ -152,14 +198,65 @@ export function registerContestant(userId, night, name, partnerUserId, { autoCon
   }
 
   const info = db.prepare(
-    'INSERT INTO contestants (name, night, user_id, partner_user_id) VALUES (?, ?, ?, ?)'
-  ).run(trimmedName, night, userId, partnerId);
+    'INSERT INTO contestants (name, night, user_id, partner_user_id, photo, photo_mime) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(trimmedName, night, userId, partnerId, photo?.buffer ?? null, photo?.mime ?? null);
   // Only a self-registered duo waits on anyone.
   const pending = !!partnerId && !autoConfirm;
   if (!pending) {
     db.prepare("UPDATE contestants SET confirmed_at = datetime('now') WHERE id = ?").run(info.lastInsertRowid);
   }
   return { ok: true, id: info.lastInsertRowid, name: trimmedName, pending };
+}
+
+/**
+ * Swaps the photo on the caller's own entry - either half of a duo, not
+ * just whoever registered it, since it's a photo of the pair rather than
+ * either person's individually. Allowed any time before voting opens, same
+ * window as cancelling/confirming: opening voting locks the roster (photos
+ * included), so this would otherwise let someone dodge a bad photo choice
+ * after the fact. Returns { ok } or { error }.
+ */
+export function replaceContestantPhoto(userId, night, photoBase64) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'registration') return { error: 'err_registration_not_open' };
+
+  const row = db.prepare(
+    'SELECT id FROM contestants WHERE night = ? AND (user_id = ? OR partner_user_id = ?)'
+  ).get(night, userId, userId);
+  if (!row) return { error: 'err_no_contestant_entry' };
+
+  const photo = decodePhoto(photoBase64);
+  if (photo.error) return photo;
+
+  db.prepare('UPDATE contestants SET photo = ?, photo_mime = ? WHERE id = ?').run(photo.buffer, photo.mime, row.id);
+  return { ok: true };
+}
+
+/** Raw lookup for the photo-serving route - carries the identity/night
+ * fields it needs to decide whether the requester may see it (their own
+ * entry, an admin, or a night whose results have been revealed that far).
+ * Null if there's no photo at all (never uploaded, or an admin/seed entry
+ * with nobody behind it to upload one). */
+export function contestantPhotoRow(contestantId) {
+  return db.prepare(
+    'SELECT id, night, user_id, partner_user_id, photo, photo_mime FROM contestants WHERE id = ? AND photo IS NOT NULL'
+  ).get(contestantId) || null;
+}
+
+/** Every photo submitted for a night, for the admin/owner zip download
+ * (see GET /admin/outfit/:night/photos.zip) - includes pending (unconfirmed
+ * duo) entries too, unlike contestantsForNight(), since an admin auditing
+ * or archiving a night's submissions has reason to see everything, not
+ * just what guests could vote on. */
+export function allPhotosForNight(night) {
+  return db.prepare(`
+    SELECT c.id, c.name, c.photo, c.photo_mime, u1.name AS registeredBy, u2.name AS partnerName
+    FROM contestants c
+    LEFT JOIN users u1 ON u1.id = c.user_id
+    LEFT JOIN users u2 ON u2.id = c.partner_user_id
+    WHERE c.night = ? AND c.photo IS NOT NULL
+    ORDER BY c.name COLLATE NOCASE
+  `).all(night);
 }
 
 /**
@@ -319,14 +416,36 @@ export function pendingVoteCount(night) {
   ).get(night).n;
 }
 
+/** How many accounts have no confirmed vote for a night yet - the owner
+ * gets warned about this before closing too, separately from
+ * pendingVoteCount() above (that's specifically duo proposals already
+ * mid-flight; this is everyone who hasn't voted at all). Goes through
+ * myVoteForNight() per user rather than a raw count so a duo's non-
+ * proposing half - whose vote lives under their partner's user_id, not
+ * their own - correctly counts as having voted once confirmed. */
+export function usersWithoutVoteCount(night) {
+  // Excludes admin/owner accounts - the organiser running the show very
+  // often doesn't vote themselves, so counting them would make this fire
+  // on nearly every night regardless of how many guests actually voted.
+  const userIds = db.prepare('SELECT id FROM users WHERE is_admin = 0').all().map((r) => r.id);
+  return userIds.filter((id) => {
+    const vote = myVoteForNight(id, night);
+    return !vote || !vote.confirmed;
+  }).length;
+}
+
 /** Full ranking of contestants for a night, each with its rank (admin view).
  * Carries the same registeredBy/partnerName pair as contestantsForNight() -
  * results are just as identity-ambiguous as the vote picker otherwise.
  * Only confirmed votes are counted: a duo proposal nobody signed off on
- * isn't a vote yet (see castVote()/confirmDuoVote()). */
+ * isn't a vote yet (see castVote()/confirmDuoVote()). hasPhoto lets the
+ * frontend skip rendering an image for entries that never got one (legacy
+ * rows, organiser-created entries) instead of showing a broken-image icon -
+ * the actual bytes are only ever served by the separately-gated photo route. */
 export function resultsForNight(night) {
   const rows = db.prepare(`
-    SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName, COUNT(v.id) AS votes
+    SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName, COUNT(v.id) AS votes,
+           c.photo IS NOT NULL AS hasPhoto
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
@@ -335,7 +454,7 @@ export function resultsForNight(night) {
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
   `).all(night);
-  return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  return rows.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
 }
 
 /** Results a regular user may see right now, filtered by the reveal phase. */

@@ -116,9 +116,9 @@
           </p>
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
-            <button type="button" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
-            <button type="button" id="voting-reset-all-btn" class="danger" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
+            <button type="button" class="small" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
+            <button type="button" class="small" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
+            <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>
           <span id="voting-msg" class="muted"></span>
         </div>
@@ -145,12 +145,27 @@
               <div id="admin-register-partner-results" class="partner-results"></div>
             </div>
             <input id="admin-register-name" type="text" maxlength="60" data-i18n-ph="admin_register_name_ph" placeholder="Nome da personagem..." style="margin-top:10px" autocomplete="off" />
-            <div style="text-align:right;margin-top:10px">
+            <!-- Optional here (unlike the guest-facing form's requirePhoto) -
+                 an organiser entering someone else's entry may not have a
+                 photo of them handy at that moment, see registerContestant()
+                 server-side. Still worth having available, not just
+                 possible via "mudar foto" after the fact. -->
+            <button type="button" class="small ghost" id="admin-register-photo-btn" style="margin-top:6px" data-i18n="outfit_choose_photo_btn">escolher foto</button>
+            <input type="file" accept="image/*" id="admin-register-photo-input" class="file-input-visually-hidden" />
+            <div id="admin-register-photo-preview" class="hidden" style="margin-top:10px">
+              <img class="entry-photo-preview" alt="" />
+              <span class="photo-attached-label" data-i18n="outfit_photo_attached">foto anexada</span>
+            </div>
+            <div class="inline" style="justify-content:flex-end;margin-top:10px">
+              <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
               <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
             </div>
-            <span id="admin-register-msg" class="muted"></span>
+            <div style="text-align:right">
+              <span id="admin-register-msg" class="muted"></span>
+              <span id="download-photos-msg" class="muted"></span>
+            </div>
           </form>
-          <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:16px" />
+          <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:10px" />
           <div class="table-scroll"><table id="contestants-table"></table></div>
         </div>
 

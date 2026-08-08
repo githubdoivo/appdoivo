@@ -962,3 +962,267 @@ test('sending a chat message shows it in the list for another user', async () =>
 
   await context.close();
 });
+
+/* ------------------- Snatch: photo required at registration --------------- */
+
+// Smallest possible real PNG (1x1 transparent pixel) - resizePhotoToJpeg()
+// runs it through an actual <canvas>, so a fake/truncated buffer wouldn't
+// decode; this needs to be genuinely valid, unlike api.test.js's fake-magic-
+// bytes fixture which only has to pass the server's own check.
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
+
+/** Clicks a button that opens a file input (registerPhotoBtnSelector triggers
+ * a hidden <input type=file> via .click(), same as a real tap would) and
+ * feeds it a file through Playwright's native file-chooser interception -
+ * exercising the actual click -> OS/browser picker -> change event path,
+ * not just setInputFiles() on the underlying input directly. That
+ * distinction matters here: the input is hidden off-screen for a styled
+ * button to stand in for it (see .file-input-visually-hidden in
+ * styles.css), and a hidden-via-display:none input silently failing to
+ * open on iOS Safari when .click()'d programmatically is a real, previously
+ * unrelated failure mode setInputFiles() can't detect since it bypasses the
+ * click/open step entirely. */
+async function pickPhotoViaButton(page, buttonSelector, file) {
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.click(buttonSelector),
+  ]);
+  await chooser.setFiles(file);
+}
+
+test('Snatch registration warns on a missing name, requires a photo, previews it once attached via the real picker button, and blocks submitting without one', async () => {
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo UI Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  // No name at all - this used to fail silently (a bare `return`, no
+  // message), which reads exactly like a dead/disabled submit button.
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const nameAlertText = await page.textContent('.modal-message');
+  assert.ok(/name|nome/i.test(nameAlertText), 'submitting without a name should say one is required, not silently do nothing');
+  await page.click('.modal-actions button');
+
+  // Name filled, no photo yet - submitting should warn, not register.
+  await page.fill('#register-name', 'Ghost of Photos Past');
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const alertText = await page.textContent('.modal-message');
+  assert.ok(/photo|foto/i.test(alertText), 'submitting without a photo should say one is required, not silently fail');
+  await page.click('.modal-actions button');
+
+  // The file input starts genuinely absent from the file chooser flow until
+  // the styled "choose photo" button is clicked - it's the button, not the
+  // input, a real tap lands on.
+  await pickPhotoViaButton(page, '#register-photo-btn', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+  // The thumbnail alone is easy to miss on a small screen - a plain
+  // confirmation line has to be there too.
+  const previewText = await page.textContent('#register-photo-preview');
+  assert.ok(/photo|foto/i.test(previewText), 'attaching a photo should say so in text, not just show a thumbnail');
+
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  const entryText = await page.textContent('#register-area .highlight');
+  assert.ok(entryText.includes('Ghost of Photos Past'), 'entry should register once a photo is attached');
+
+  // The registrant can always preview their own entry's photo.
+  await page.waitForSelector('#register-area .entry-photo-preview', { timeout: WAIT_TIMEOUT });
+
+  // Either half of a duo can swap the photo later via the same
+  // button-triggers-hidden-input pattern - covered here too since it's the
+  // exact mechanism that broke. Byte-for-byte replacement is already
+  // covered server-side (api.test.js); what matters here is that the real
+  // click -> file-chooser -> PUT round trip completes without erroring.
+  await pickPhotoViaButton(page, '#change-photo-btn', { name: 'new-outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('.modal-overlay:not(.hidden)'), false, 'replacing the photo should not surface an error');
+  const status = await api('GET', `/votes/status?night=${night}`, { token: user.token });
+  assert.equal(status.myContestant.hasPhoto, true, 'the entry should still have a photo after replacing it');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('a Best Look poll tick landing while a photo is picked does not wipe the in-progress name/photo', async () => {
+  // Reproduces a real bug: Best Look polls for updates every 4s
+  // (outfitPollTimer), and picking a photo hands control to the OS
+  // camera/library picker - which blurs focus, defeating the "skip while
+  // typing" guard, and for however long the user is away. A poll landing
+  // in that gap used to fully rebuild the blank registration form,
+  // silently wiping the name field and the just-attached photo - reported
+  // on a real iPhone as "erases the name box, photo doesn't upload,
+  // nothing works". Attaching via setInputFiles() here (not the
+  // button-triggering-a-filechooser dance used above) is deliberate: this
+  // test is about surviving a poll tick mid-interaction, not about the
+  // click-opens-a-picker mechanism the other test already covers.
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Poll Race Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  await page.fill('#register-name', 'Surviving The Poll');
+  // Blurring simulates the focus loss a real native picker sheet causes -
+  // the activeElement guard alone no longer protects the form past this
+  // point, same as it wouldn't on a real device.
+  await page.evaluate(() => document.activeElement?.blur());
+  // Longer than outfitPollTimer's 4000ms interval, so at least one poll
+  // tick is guaranteed to land before checking the field survived it.
+  await page.waitForTimeout(4500);
+  assert.equal(await page.inputValue('#register-name'), 'Surviving The Poll', 'a poll tick should not wipe the name field');
+
+  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+  await page.waitForTimeout(4500);
+  assert.ok(
+    await page.isVisible('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]'),
+    'a poll tick should not clear the attached photo preview either'
+  );
+
+  await page.click('#register-form button[type="submit"]');
+  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  const entryText = await page.textContent('#register-area .highlight');
+  assert.ok(entryText.includes('Surviving The Poll'), 'the entry should register with the name/photo that survived the poll');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('once results start revealing, "you voted for X" clears instead of sitting on top of the results list', async () => {
+  const night = 'furnished';
+  const voter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reveal Vote Tester' } });
+  const contestantOwner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reveal Contestant Owner' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  // A direct API call (not going through the client's resize step - see
+  // resizePhotoToJpeg()), so this needs to already look like a real JPEG to
+  // the server's own magic-byte check, unlike PNG_1X1 above.
+  const fakeJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+  const reg = await api('POST', '/outfit/register', {
+    token: contestantOwner.token,
+    body: { name: 'Reveal Target', night, photoBase64: fakeJpeg },
+  });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', '/votes', { token: voter.token, body: { contestantId: reg.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, voter.token);
+  await page.click('[data-tab="outfit"]');
+
+  // Closed, not revealed yet - the "you voted for X" message is exactly
+  // what tells the voter their vote landed, so it stays up here.
+  await page.waitForSelector('#vote-area .highlight', { timeout: WAIT_TIMEOUT });
+  assert.ok((await page.textContent('#vote-area .highlight')).includes('Reveal Target'), 'should show who was voted for before any reveal');
+
+  // Advance through every reveal stage (hidden -> third -> second -> first
+  // -> all) regardless of how many contestants exist.
+  for (let i = 0; i < 4; i++) {
+    await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  }
+  await page.waitForSelector('#results-card:not(.hidden) .tier li', { timeout: WAIT_TIMEOUT });
+  // The results list is now showing the same information - repeating it
+  // in the vote area above is just clutter once that's true.
+  const voteAreaEmpty = await page.evaluate(() => document.getElementById('vote-area').innerHTML.trim() === '');
+  assert.ok(voteAreaEmpty, 'the "you voted for X" message should clear once results start revealing');
+  // The whole votação card (not just the vote-area within it) is redundant
+  // now too - it was still showing its "closed" status line on top of the
+  // results card until this was fixed.
+  assert.equal(await page.isVisible('#voting-card'), false, 'the votação card should hide entirely once results are revealed');
+  // With only one contestant, they're both 1st place and the only result -
+  // gold medal included.
+  const firstResultText = await page.textContent('#results-list li');
+  assert.ok(firstResultText.includes('🥇'), 'the winner should get a gold medal emoji in the reveal');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('the admin voting-advance button always confirms first - a misclick declined leaves the night untouched', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#voting-advance-btn', { timeout: WAIT_TIMEOUT });
+
+  // Declining the confirm on "open" should leave registration exactly as
+  // it was - nothing about the night should have changed underneath.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button.ghost');
+  const afterDecline = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.equal(afterDecline.nights.find((n) => n.night === night).status, 'registration', 'declining the confirm should not have opened voting');
+
+  // Confirming should actually perform it.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:not(.ghost)');
+  await page.waitForFunction(
+    () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
+    { timeout: WAIT_TIMEOUT }
+  );
+  const afterConfirm = await api('GET', '/admin/voting', { token: ADMIN });
+  assert.equal(afterConfirm.nights.find((n) => n.night === night).status, 'open', 'confirming should have opened voting');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+test('the admin download-photos button shows progress, triggers a real download, and reports errors inline', async () => {
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  // Default night is furnished - switch to the empty one first to check
+  // the error path before adding a photo to check the success path.
+  await page.click('[data-night="swamp"]');
+  await page.waitForTimeout(200);
+
+  await page.click('#download-photos-btn');
+  await page.waitForFunction(
+    () => document.getElementById('download-photos-msg')?.textContent.length > 0,
+    { timeout: WAIT_TIMEOUT }
+  );
+  const errorText = await page.textContent('#download-photos-msg');
+  assert.ok(/photo|foto/i.test(errorText), 'a night with no photos yet should report that inline, not fail silently');
+  assert.ok(await page.evaluate(() => document.getElementById('download-photos-msg').classList.contains('error')), 'the error state should be styled as an error');
+
+  // Now with an actual photo, the button should trigger a real download.
+  const owner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Download Flow Persona' } });
+  const fakeJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+  await api('POST', '/outfit/register', { token: owner.token, body: { name: 'Download Flow Target', night, photoBase64: fakeJpeg } });
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#download-photos-btn'),
+  ]);
+  assert.equal(download.suggestedFilename(), `snatch-${night}-photos.zip`);
+  // Hardcoded PT text rather than importing the client's t() into this
+  // Node context - ADMIN's account language defaults to pt, same as every
+  // other test in this file that checks rendered copy.
+  await page.waitForFunction(
+    () => document.getElementById('download-photos-msg')?.textContent === 'descarregado.',
+    { timeout: WAIT_TIMEOUT }
+  );
+  assert.equal(await page.evaluate(() => document.getElementById('download-photos-msg').classList.contains('error')), false);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});

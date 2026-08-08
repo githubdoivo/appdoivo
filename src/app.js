@@ -28,7 +28,10 @@ const app = express();
 // Fly.io terminates TLS and proxies requests, so trust its X-Forwarded-For
 // header to get each client's real IP (needed for per-IP rate limiting).
 app.set('trust proxy', 1);
-app.use(express.json());
+// Default 100kb is too small for a base64-encoded outfit photo (client
+// resizes to ~800px JPEG first, but base64 still adds ~33% overhead) - 2mb
+// leaves generous headroom while still bounding the request body.
+app.use(express.json({ limit: '2mb' }));
 
 // API.
 app.use('/api', apiRouter);
@@ -40,13 +43,45 @@ app.use('/api', apiRouter);
 // than letting the SPA fallback below swallow it into index.html.
 app.get('/security.txt', (req, res) => res.redirect(301, '/.well-known/security.txt'));
 
-// Static files (PWA).
-app.use(express.static(PUBLIC_DIR));
+// Cloudflare sits in front of qa/prod and its own "Browser Cache TTL"
+// rewrites the Cache-Control it hands to the client regardless of what the
+// origin (us) sends - confirmed directly, curling the live CSS shows
+// "max-age=14400" even though the static middleware below sets "no-cache".
+// Fixing that is a Cloudflare dashboard setting outside this repo, so
+// rather than depend on any layer actually honouring a cache header,
+// index.html/settings.html are served here (ahead of express.static) with
+// their local <link>/<script> URLs stamped with the app version as a
+// query string - a version bump (already required before every QA deploy)
+// changes the URL itself, which is a guaranteed cache miss everywhere.
+function withCacheBust(html) {
+  return html.replace(
+    /((?:href|src)=")(\/(?:css|js)\/[^"?]+)(")/g,
+    (_match, pre, path, post) => `${pre}${path}?v=${appVersion}${post}`
+  );
+}
+
+function sendVersionedHtml(res, filename) {
+  const html = readFileSync(join(PUBLIC_DIR, filename), 'utf8');
+  res.set('Cache-Control', 'no-cache').type('html').send(withCacheBust(html));
+}
+
+app.get('/settings.html', (req, res) => sendVersionedHtml(res, 'settings.html'));
+app.get('/index.html', (req, res) => sendVersionedHtml(res, 'index.html'));
+
+// Static files (PWA). "no-cache" (despite the name) still lets the browser
+// keep a local copy, but forces a conditional revalidation against the
+// server's ETag on every single load rather than trusting a max-age blindly -
+// this repo ships several small fixes per session, and a stale JS/CSS bundle
+// silently masking an already-shipped fix (mistaken for "still broken") has
+// repeatedly cost real debugging time. A 304 on an unchanged file is cheap;
+// serving five-year-old JS because a CDN/browser cached it for hours is not.
+// index:false so a bare "/" falls through to the SPA catch-all below
+// instead of express.static's own default index.html handling, which
+// would otherwise serve the raw file and skip the version-stamping above.
+app.use(express.static(PUBLIC_DIR, { index: false, setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 
 // SPA fallback: any non-API route returns the index.
-app.get('*', (req, res) => {
-  res.sendFile(join(PUBLIC_DIR, 'index.html'));
-});
+app.get('*', (req, res) => sendVersionedHtml(res, 'index.html'));
 
 // Catch-all for anything a route handler didn't handle itself (a thrown
 // error, a rejected promise in an async handler). Without this, Express's

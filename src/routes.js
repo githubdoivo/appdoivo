@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ZipFile } from 'yazl';
 import db from './db.js';
 import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
@@ -27,10 +28,14 @@ import {
   confirmContestant,
   cancelPendingContestant,
   pendingContestantCount,
+  replaceContestantPhoto,
+  contestantPhotoRow,
+  allPhotosForNight,
   castVote,
   confirmDuoVote,
   cancelPendingVote,
   pendingVoteCount,
+  usersWithoutVoteCount,
   resultsForNight,
   visibleResultsForNight,
   resetResultsPhase,
@@ -295,7 +300,13 @@ router.get('/votes/status', (req, res) => {
 // the duo-matching and vote-merging rules.
 router.post('/outfit/register', (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
-  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId);
+  // A photo is required to complete a self-registration (not to use the
+  // app at all) - see registerContestant()'s requirePhoto. Organiser-
+  // created entries below skip it, same as they skip duo confirmation.
+  const result = registerContestant(req.user.id, night, req.body?.name || '', req.body?.partnerUserId, {
+    photoBase64: req.body?.photoBase64 || null,
+    requirePhoto: true,
+  });
   if (result.error) return res.status(400).json({ error: result.error });
   // pending: a duo entry the named partner hasn't agreed to yet - not on
   // the voting list until they confirm below.
@@ -318,6 +329,40 @@ router.delete('/outfit/register/pending', (req, res) => {
   const result = cancelPendingContestant(req.user.id, night);
   if (result.error) return res.status(400).json({ error: result.error });
   res.json({ ok: true });
+});
+
+// Swaps the entry's photo - either half of a duo, any time before voting
+// opens (see replaceContestantPhoto()).
+router.put('/outfit/register/photo', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = replaceContestantPhoto(req.user.id, night, req.body?.photoBase64 || '');
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+// Serves a contestant's outfit photo. Either half of the entry and any
+// admin can always see it (their own preview, or moderation); anyone else
+// only once that contestant's rank has actually been revealed to guests
+// (see visibleResultsForNight()) - photos are a reveal-night surprise, not
+// visible during voting, so this is enforced here rather than trusted to
+// the frontend alone.
+router.get('/outfit/contestants/:id/photo', (req, res) => {
+  const row = contestantPhotoRow(Number(req.params.id));
+  if (!row) return res.status(404).end();
+  const isOwn = row.user_id === req.user.id || row.partner_user_id === req.user.id;
+  if (!isOwn && !req.user.isAdmin) {
+    const { results } = visibleResultsForNight(row.night);
+    if (!results.some((r) => r.id === row.id)) return res.status(404).end();
+  }
+  res.set('Content-Type', row.photo_mime);
+  res.set('Cache-Control', 'no-store');
+  // node:sqlite hands back a BLOB column as a plain Uint8Array, not a real
+  // Buffer - Buffer.isBuffer() is false for it, so res.send() doesn't
+  // recognize it as raw binary and instead JSON-serializes it as
+  // {"0":255,"1":216,...}, which browsers duly fail to decode as an image
+  // (silently - an <img> tag has no error UI of its own). Wrapping it in an
+  // actual Buffer is enough for Express to serve it correctly.
+  res.send(Buffer.from(row.photo));
 });
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
@@ -655,13 +700,46 @@ router.get('/admin/contestants', (req, res) => {
   const night = isNight(req.query.night) ? req.query.night : DEFAULT_NIGHT;
   const rows = db.prepare(`
     SELECT c.id, c.name, c.night, u1.name AS registered_by, u2.name AS partner_name,
-           c.confirmed_at IS NOT NULL AS confirmed
+           c.confirmed_at IS NOT NULL AS confirmed, c.photo IS NOT NULL AS hasPhoto
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
     WHERE c.night = ? ORDER BY c.name COLLATE NOCASE
   `).all(night);
   res.json({ night, contestants: rows });
+});
+
+// Bundles every submitted outfit photo for a night into a single zip -
+// an admin/owner convenience for keeping the photos after the party
+// (QA/prod's DB storage, see the migration in db.js, has no browsing UI of
+// its own). Includes pending (unconfirmed) entries too, unlike the guest-
+// facing routes above - see allPhotosForNight() in votes.js. Built
+// entirely in memory: even a generous night's worth of photos (each
+// capped at 400KB, see MAX_PHOTO_BYTES in votes.js) stays a few MB total,
+// nowhere near worth the complexity of streaming from disk.
+router.get('/admin/outfit/:night/photos.zip', (req, res) => {
+  if (!isNight(req.params.night)) return res.status(400).json({ error: 'err_invalid_night' });
+  const night = req.params.night;
+  const photos = allPhotosForNight(night);
+  if (!photos.length) return res.status(404).json({ error: 'err_no_photos' });
+
+  const zip = new ZipFile();
+  const usedNames = new Set();
+  for (const p of photos) {
+    // Contestant names are free-text and often repeated/generic ("gato",
+    // "bruxa") - two entries picking the same one would otherwise silently
+    // overwrite each other inside the zip, so collisions fall back to
+    // appending the contestant id.
+    const base = p.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    let filename = `${base}.jpg`;
+    if (usedNames.has(filename)) filename = `${base}-${p.id}.jpg`;
+    usedNames.add(filename);
+    zip.addBuffer(Buffer.from(p.photo), filename);
+  }
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="snatch-${night}-photos.zip"`);
+  zip.outputStream.pipe(res);
+  zip.end();
 });
 
 // userId optionally links this entry to a real registered user (picked
@@ -750,6 +828,11 @@ router.get('/admin/voting', (req, res) => {
       // Lets the admin panel tell "never run yet" apart from "closed after
       // running" - both report status 'closed' otherwise (see /votes/status).
       started: getSetting(`voting_started_${night}`) === '1',
+      // Advisory only (see usersWithoutVoteCount()) - the admin panel warns
+      // once before closing if this is nonzero, but nothing server-side
+      // enforces it, since plenty of real nights close with some guests
+      // never getting around to voting and that's fine.
+      notVoted: usersWithoutVoteCount(night),
     })),
   });
 });

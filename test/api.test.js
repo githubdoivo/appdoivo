@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
+import yauzl from 'yauzl';
 
 // Isolated test environment: temporary DB. The admin's real key is always
 // generated (see seed() in db.js - no more ADMIN_TOKEN pinning it, even
@@ -47,8 +48,42 @@ async function api(method, path, { token, body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   let data = null;
-  try { data = await res.json(); } catch { /* no body */ }
-  return { status: res.status, data };
+  try { data = await res.json(); } catch { /* no body, or non-JSON (e.g. a served photo) */ }
+  return { status: res.status, data, headers: res.headers };
+}
+
+/** Raw (non-JSON) request, for the zip download route - returns the body
+ * as a Buffer rather than trying (and failing) to parse it as JSON. */
+async function apiBuffer(path, { token } = {}) {
+  const res = await fetch(base + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { status: res.status, headers: res.headers, buffer };
+}
+
+/** Unpacks every entry in a zip buffer to { filename, contents } pairs. */
+function readZipEntries(buffer) {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      const entries = [];
+      zipfile.readEntry();
+      zipfile.on('entry', (entry) => {
+        zipfile.openReadStream(entry, (err, readStream) => {
+          if (err) return reject(err);
+          const chunks = [];
+          readStream.on('data', (c) => chunks.push(c));
+          readStream.on('end', () => {
+            entries.push({ filename: entry.fileName, contents: Buffer.concat(chunks) });
+            zipfile.readEntry();
+          });
+        });
+      });
+      zipfile.on('end', () => resolve(entries));
+      zipfile.on('error', reject);
+    });
+  });
 }
 
 /* -------------------------------- Version --------------------------------- */
@@ -435,6 +470,11 @@ test('only the assigned user can mark a consequence done, only once, and only th
 
 const NIGHT = 'furnished';
 
+// Minimal structurally-valid JPEG (just the SOI+EOI markers) - enough to
+// pass decodePhoto()'s magic-byte check without needing a real renderable
+// image, since these tests only exercise the server-side validation.
+const TEST_PHOTO = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`;
+
 test('a night that has never been opened reports started: false', async () => {
   const voting = await api('GET', '/admin/voting', { token: ADMIN });
   const night = voting.data.nights.find((n) => n.night === NIGHT);
@@ -468,6 +508,40 @@ test('admin opens the night and each user votes once', async () => {
   const voting = await api('GET', '/admin/voting', { token: ADMIN });
   const night = voting.data.nights.find((n) => n.night === NIGHT);
   assert.equal(night.started, true, 'once a night has been opened, it should never look "unstarted" again');
+});
+
+test('GET /admin/voting reports how many non-admin accounts have not voted, excluding admins from the count', async () => {
+  // A separate night from NIGHT/'furnished' (heavily reused by neighboring
+  // tests) - and asserting deltas off a baseline rather than an absolute
+  // number, since this file shares one DB across the whole run and earlier
+  // tests may have left their own never-voted accounts behind.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+
+  const nightsInfo = async () => {
+    const r = await api('GET', '/admin/voting', { token: ADMIN });
+    return r.data.nights.find((n) => n.night === night);
+  };
+  const baseline = (await nightsInfo()).notVoted;
+
+  // A fresh admin should never raise the count - the organiser running the
+  // show very often doesn't vote themselves.
+  const freshAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Fresh Admin For NotVoted' } });
+  await api('PATCH', `/admin/users/${freshAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  assert.equal((await nightsInfo()).notVoted, baseline, 'a new admin account should not raise the count');
+
+  // Two fresh regular accounts should raise it by exactly two.
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest A' } });
+  await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest B' } });
+  const contestant = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'NotVoted Target', night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'two fresh non-admin accounts should each raise the count by one');
+
+  // One of them voting should drop it back by one.
+  await api('POST', '/votes', { token: a.data.token, body: { contestantId: contestant.data.id, night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'voting should remove that account from the count');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });
 
 test('who-voted-for-whom is owner-only; a regular admin only gets the aggregate results', async () => {
@@ -567,7 +641,7 @@ test('a solo contestant cannot vote for their own entry', async () => {
   const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Solo Voter' } });
 
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
-  const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night } });
+  const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night, photoBase64: TEST_PHOTO } });
   assert.equal(reg.status, 201);
 
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
@@ -590,7 +664,7 @@ test('neither half of a duo can vote for their own shared entry', async () => {
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   const reg = await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Duo Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Duo Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   assert.equal(reg.status, 201);
   // A duo entry now needs its named partner to sign off before it's a
@@ -620,7 +694,7 @@ test("a duo's vote only counts once the partner confirms it", async () => {
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Pair Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Pair Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // A duo entry now needs its named partner to sign off before it's a
   // real contestant (see confirmContestant()) - these tests are about
@@ -668,7 +742,7 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Swap Persona', night, partnerUserId: b.data.id },
+    body: { name: 'Swap Persona', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // A duo entry now needs its named partner to sign off before it's a
   // real contestant (see confirmContestant()) - these tests are about
@@ -706,7 +780,7 @@ test('a duo entry is not in the running until the named partner confirms it', as
 
   const reg = await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Unconfirmed Pair', night, partnerUserId: b.data.id },
+    body: { name: 'Unconfirmed Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   assert.equal(reg.status, 201);
   assert.equal(reg.data.pending, true);
@@ -752,20 +826,20 @@ test('a refused duo entry frees both people to enter again', async () => {
 
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Doomed Pair', night, partnerUserId: b.data.id },
+    body: { name: 'Doomed Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
   // While it stands, it reserves both of them - neither can enter separately.
-  const blocked = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo Try', night } });
+  const blocked = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo Try', night, photoBase64: TEST_PHOTO } });
   assert.equal(blocked.status, 400);
 
   const refuse = await api('DELETE', '/outfit/register/pending', { token: b.data.token, body: { night } });
   assert.equal(refuse.status, 200);
 
   // Both are free again afterwards.
-  const soloB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo B', night } });
+  const soloB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Solo B', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloB.status, 201);
   assert.equal(soloB.data.pending, false, 'a solo entry needs nobody to confirm it');
-  const soloA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo A', night } });
+  const soloA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo A', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloA.status, 201);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -787,14 +861,14 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
 
   await api('POST', '/outfit/register', {
     token: a.data.token,
-    body: { name: 'Second Thoughts', night, partnerUserId: b.data.id },
+    body: { name: 'Second Thoughts', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
   });
 
   // A change of heart is the same operation as a refusal - the registrant
   // can drop their own still-pending entry, not just the named partner.
   const selfCancel = await api('DELETE', '/outfit/register/pending', { token: a.data.token, body: { night } });
   assert.equal(selfCancel.status, 200);
-  const soloAgain = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo Again', night } });
+  const soloAgain = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Solo Again', night, photoBase64: TEST_PHOTO } });
   assert.equal(soloAgain.status, 201);
 
   // Once confirmed, it's a real entry - cancel/confirm no longer apply to
@@ -803,7 +877,7 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
   const d = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cancel Four' } });
   await api('POST', '/outfit/register', {
     token: c.data.token,
-    body: { name: 'Settled Pair', night, partnerUserId: d.data.id },
+    body: { name: 'Settled Pair', night, partnerUserId: d.data.id, photoBase64: TEST_PHOTO },
   });
   await api('POST', '/outfit/register/confirm', { token: d.data.token, body: { night } });
 
@@ -833,6 +907,174 @@ test('an admin entering a pair on their behalf does not need a confirmation', as
   const listed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
   assert.ok(listed.data.contestants.find((c) => c.id === reg.data.id),
     'an organiser-created pair should be in the running immediately');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('self-registration requires a valid photo, but an organiser registering on someone\'s behalf does not', async () => {
+  const night = 'swamp';
+  const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Required' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const noPhoto = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'No Photo', night } });
+  assert.equal(noPhoto.status, 400);
+  assert.equal(noPhoto.data.error, 'err_photo_required');
+
+  const notAnImage = await api('POST', '/outfit/register', {
+    token: solo.data.token,
+    body: { name: 'Bad Photo', night, photoBase64: 'data:image/jpeg;base64,bm90IGEgamZpZg==' },
+  });
+  assert.equal(notAnImage.status, 400);
+  assert.equal(notAnImage.data.error, 'err_photo_invalid');
+
+  const wrongMime = await api('POST', '/outfit/register', {
+    token: solo.data.token,
+    body: { name: 'Wrong Mime', night, photoBase64: 'data:image/png;base64,aWJ2ZXI=' },
+  });
+  assert.equal(wrongMime.status, 400);
+  assert.equal(wrongMime.data.error, 'err_photo_invalid');
+
+  const tooBig = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(500 * 1024, 1)]).toString('base64');
+  const oversized = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Huge Photo', night, photoBase64: tooBig } });
+  assert.equal(oversized.status, 400);
+  assert.equal(oversized.data.error, 'err_photo_too_large');
+
+  const ok = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Good Photo', night, photoBase64: TEST_PHOTO } });
+  assert.equal(ok.status, 201);
+
+  // The organiser registering someone else skips the whole requirement,
+  // same as it already skips duo confirmation (autoConfirm).
+  const c = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Organiser Solo' } });
+  const organiserReg = await api('POST', '/admin/contestants/register', { token: ADMIN, body: { userId: c.data.id, name: 'No Photo Needed', night } });
+  assert.equal(organiserReg.status, 201);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('either half of a duo can replace the entry photo before voting opens, not after', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Swap One' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Swap Two' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/outfit/register', {
+    token: a.data.token,
+    body: { name: 'Swappable Pair', night, partnerUserId: b.data.id, photoBase64: TEST_PHOTO },
+  });
+  await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
+
+  // The partner didn't register it, but the photo belongs to the entry,
+  // not to whoever uploaded it first.
+  const swapByPartner = await api('PUT', '/outfit/register/photo', { token: b.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(swapByPartner.status, 200);
+  const swapByRegistrant = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(swapByRegistrant.status, 200);
+
+  // Nobody without an entry tonight can "replace" a photo that isn't theirs.
+  const stranger = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Stranger' } });
+  const noEntry = await api('PUT', '/outfit/register/photo', { token: stranger.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(noEntry.status, 400);
+  assert.equal(noEntry.data.error, 'err_no_contestant_entry');
+
+  // Opening voting locks the roster - the photo included.
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  const afterOpen = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
+  assert.equal(afterOpen.status, 400);
+  assert.equal(afterOpen.data.error, 'err_registration_not_open');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('a contestant photo is visible to its own entrants and admins any time, but to everyone else only once revealed', async () => {
+  const night = 'swamp';
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Owner' } });
+  const rival = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Photo Rival' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const reg = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Reveal Persona', night, photoBase64: TEST_PHOTO } });
+  const photoUrl = `/outfit/contestants/${reg.data.id}/photo`;
+
+  // The registrant can always see their own entry's photo.
+  const ownView = await api('GET', photoUrl, { token: a.data.token });
+  assert.equal(ownView.status, 200);
+  // An admin can always see it too, for moderation.
+  const adminView = await api('GET', photoUrl, { token: ADMIN });
+  assert.equal(adminView.status, 200);
+  // Nobody else can, before it's been revealed.
+  const earlyPeek = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(earlyPeek.status, 404);
+
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', '/votes', { token: rival.data.token, body: { contestantId: reg.data.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
+
+  // Still hidden while the reveal is staged and hasn't reached this rank.
+  const stillHidden = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(stillHidden.status, 404);
+
+  // Once the reveal actually reaches "all", it opens up to everyone -
+  // advance through every stage (hidden -> third -> second -> first -> all)
+  // regardless of how many contestants there are.
+  for (let i = 0; i < 4; i++) {
+    await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  }
+  const revealed = await api('GET', photoUrl, { token: rival.data.token });
+  assert.equal(revealed.status, 200);
+  assert.ok(revealed.headers.get('content-type').startsWith('image/jpeg'));
+
+  // A contestant with no photo at all (e.g. an organiser quick-add) 404s
+  // rather than crashing.
+  const noPhotoEntry = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Photoless', night } });
+  const missing = await api('GET', `/outfit/contestants/${noPhotoEntry.data.id}/photo`, { token: ADMIN });
+  assert.equal(missing.status, 404);
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('admin/owner can download every submitted photo for a night as a zip; nobody else can', async () => {
+  const night = 'swamp';
+  const regular = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Bystander' } });
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Persona A' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Zip Persona B' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const regA = await api('POST', '/outfit/register', { token: a.data.token, body: { name: 'Ghost', night, photoBase64: TEST_PHOTO } });
+  // Same character name on purpose - collisions inside the zip should
+  // dedupe by contestant id rather than one entry silently overwriting the
+  // other (see the filename logic in routes.js).
+  const regB = await api('POST', '/outfit/register', { token: b.data.token, body: { name: 'Ghost', night, photoBase64: TEST_PHOTO } });
+
+  // Not an admin - no access at all, regardless of the night's data.
+  const forbidden = await apiBuffer(`/admin/outfit/${night}/photos.zip`, { token: regular.data.token });
+  assert.equal(forbidden.status, 403);
+
+  const zipRes = await apiBuffer(`/admin/outfit/${night}/photos.zip`, { token: ADMIN });
+  assert.equal(zipRes.status, 200);
+  assert.equal(zipRes.headers.get('content-type'), 'application/zip');
+  assert.ok(zipRes.headers.get('content-disposition').includes(`snatch-${night}-photos.zip`));
+
+  const entries = await readZipEntries(zipRes.buffer);
+  assert.equal(entries.length, 2, 'both contestants photos should be in the zip, deduped by id');
+  // Whichever comes first keeps the clean name; the later same-named one
+  // falls back to id-suffixed rather than the two colliding outright - not
+  // asserting which specific one wins, just that dedup actually happened.
+  const filenames = entries.map((e) => e.filename);
+  assert.equal(filenames.filter((f) => f === 'Ghost.jpg').length, 1, 'exactly one entry should keep the clean name');
+  assert.equal(
+    filenames.filter((f) => f === `Ghost-${regA.data.id}.jpg` || f === `Ghost-${regB.data.id}.jpg`).length,
+    1,
+    'the colliding entry should fall back to an id-suffixed name'
+  );
+  // Bytes actually made it through intact, not just the right count/names.
+  const expectedBytes = Buffer.from(TEST_PHOTO.slice('data:image/jpeg;base64,'.length), 'base64');
+  for (const entry of entries) {
+    assert.equal(Buffer.compare(entry.contents, expectedBytes), 0, `${entry.filename} bytes should match what was uploaded`);
+  }
+
+  // A night with confirmed registration but no photos at all (furnished,
+  // untouched by this test) 404s instead of handing back an empty zip.
+  const empty = await apiBuffer('/admin/outfit/furnished/photos.zip', { token: ADMIN });
+  assert.equal(empty.status, 404);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });

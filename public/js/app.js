@@ -7,6 +7,7 @@ import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { formatHourInZone } from './time.js';
+import { resizePhotoToJpeg } from './photo.js';
 
 // An installed iOS PWA keeps its WKWebView alive in the background rather
 // than doing a real fresh load every time you reopen it - the OS restores
@@ -25,6 +26,28 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
 // Strips accents so "cesar" matches "César" - typing the plain-ASCII form
 // of a name should always find it, not just the exact accented spelling.
 const foldAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// Turns plain-text URLs in an already-escaped string into clickable links -
+// matches a scheme (https://...), a www. prefix, or a bare shortlink-style
+// domain+path (shorturl.at/xxxx, as admins actually paste them - requiring
+// the "/path" part on bare domains avoids linkifying incidental "word.tld"
+// look-alikes that aren't followed by anything). Runs on text that's
+// already gone through esc(), so it's operating on HTML-safe input; a
+// trailing sentence-punctuation character is peeled off the match so
+// "check shorturl.at/abc." doesn't swallow the period into the link.
+const URL_RE = /\b(?:https?:\/\/[^\s<]+|www\.[^\s<]+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/[^\s<]*)/gi;
+function linkify(escapedText) {
+  return escapedText.replace(URL_RE, (match) => {
+    let trail = '';
+    const trailMatch = match.match(/[.,;:!?)\]}]+$/);
+    if (trailMatch) {
+      trail = trailMatch[0];
+      match = match.slice(0, -trail.length);
+    }
+    const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>${trail}`;
+  });
+}
 
 let currentTab = 'plaza';
 // Set from /me in showApp() - lets the Rata history tell "assigned to
@@ -492,7 +515,7 @@ function renderPlazaPost(post) {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${pinnedBadge}
-        <p class="plaza-post-text">${esc(post.text)}</p>
+        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -527,7 +550,7 @@ function renderPlazaPost(post) {
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${pinnedBadge}
-      <p class="plaza-post-text">${esc(post.text)}</p>
+      <p class="plaza-post-text">${linkify(esc(post.text))}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
@@ -739,6 +762,10 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
   b.addEventListener('click', () => {
     localStorage.setItem(NIGHT_KEY, b.dataset.theme);
     applyNight();
+    // A different night has its own separate registration state - force a
+    // fresh render instead of leaving the other night's blank form up (see
+    // registerFormReady in renderRegistration()).
+    registerFormReady = false;
     loadVotes();
   });
 });
@@ -751,11 +778,63 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
 
 let registerMode = 'solo';
 let registerPartnerId = null;
+let registerPhotoDataUrl = null;
 let usersCache = null;
+
+// Best Look polls for updates every few seconds (see outfitPollTimer
+// below), which re-renders this whole area - fine while nothing's in
+// progress, destructive while it is. Picking a photo hands control to the
+// OS camera/library picker for as long as the user takes, which both
+// blurs focus (defeating the activeElement check in renderRegistration())
+// and, if a re-render lands mid-pick, would swap out the very <input> the
+// native picker is bound to - its eventual change event would then fire on
+// a detached element with no listener, silently doing nothing. Set the
+// moment a picker is opened. Cleared as soon as a file is actually chosen
+// (the input's own change event - see openPhotoPicker() below), which is
+// the one unambiguous signal available; focus/visibility firing on return
+// is a backup for the "dismissed without choosing anything" case, since
+// there's no picker-cancelled event to rely on instead. A stuck-true flag
+// would silently freeze every future poll update on this tab, so a hard
+// timeout backs both of those up regardless - worth a few seconds of
+// missed polling in the worst case, not an indefinitely frozen tab.
+let photoPickerOpen = false;
+let photoPickerOpenTimer = null;
+function openPhotoPicker(input) {
+  photoPickerOpen = true;
+  clearTimeout(photoPickerOpenTimer);
+  photoPickerOpenTimer = setTimeout(() => { photoPickerOpen = false; }, 60000);
+  input.click();
+}
+window.addEventListener('focus', () => { photoPickerOpen = false; });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') photoPickerOpen = false;
+});
+// True once the blank "you haven't registered yet" form has been built for
+// the current not-registered state - skip rebuilding it on every poll tick
+// past that point. Unlike the registered/confirmed view below, nothing
+// about this state changes from the outside while it's showing, so there's
+// no legitimate reason to redraw it - only reasons that would wipe
+// whatever the user has typed/attached so far, including the gap right
+// after returning from the photo picker but before refocusing the name
+// field, which photoPickerOpen alone doesn't cover.
+let registerFormReady = false;
 
 async function ensureUsersCache() {
   if (!usersCache) usersCache = await api('/users/basic');
   return usersCache;
+}
+
+// Resizes/re-encodes a picked photo client-side before upload - a phone
+// camera photo can easily be 5-10MB at full resolution, and the request
+// (base64, in a JSON body) needs to stay small. This is a courtesy, not
+// the enforcement - the server has its own hard cap (see decodePhoto() in
+// src/votes.js) since a client-side limit alone can't be trusted.
+// Builds an <img> src for a contestant's photo. The endpoint needs a
+// Bearer token like every other request, but an <img> tag can't send
+// custom headers - authenticate() also accepts ?token= for exactly this
+// (see auth.js, originally added for the service worker).
+function photoUrl(contestantId) {
+  return `/api/outfit/contestants/${contestantId}/photo?token=${encodeURIComponent(getToken())}`;
 }
 
 function renderRegistration(data) {
@@ -763,6 +842,7 @@ function renderRegistration(data) {
   const area = $('register-area');
   if (data.status !== 'registration') {
     card.classList.add('hidden');
+    registerFormReady = false;
     return;
   }
   card.classList.remove('hidden');
@@ -770,16 +850,25 @@ function renderRegistration(data) {
   // Now that Best Look polls for updates (see startOutfitPolling()), a
   // refresh landing mid-keystroke would otherwise wipe out whatever the
   // user is typing into the name/partner-search fields below - skip the
-  // re-render entirely while focus is inside this form, nothing about
-  // their own not-yet-submitted entry could have changed anyway.
-  if (area.contains(document.activeElement)) return;
+  // re-render entirely while focus is inside this form or a native photo
+  // picker is open (see photoPickerOpen above), nothing about their own
+  // not-yet-submitted entry could have changed anyway.
+  if (area.contains(document.activeElement) || photoPickerOpen) return;
 
   if (data.myContestant) {
+    registerFormReady = false;
     const mine = data.myContestant;
     // A duo entry isn't live until the named partner agrees to it (see
     // registerContestant() server-side), so the two of them see different
     // things until then: whoever entered it can only wait or pull it, and
     // the partner is the only one who can make it real.
+    // Either half of the pair can swap the photo any time before voting
+    // opens (see replaceContestantPhoto() server-side) - it belongs to the
+    // entry, not to whoever happened to upload it first.
+    const photoPreview = mine.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(mine.id)}" alt="" />` : '';
+    const changePhotoControls = `
+      <button type="button" class="small ghost" id="change-photo-btn">${esc(t('outfit_change_photo_btn'))}</button>
+      <input type="file" accept="image/*" id="change-photo-input" class="file-input-visually-hidden" />`;
     if (!mine.confirmed) {
       const msg = mine.registeredByMe
         ? t('outfit_entry_waiting_partner', { name: esc(mine.name), partner: esc(mine.partnerName || '') })
@@ -789,23 +878,40 @@ function renderRegistration(data) {
         : `<button type="button" class="small" id="confirm-entry-btn">${esc(t('outfit_entry_confirm_btn'))}</button>`;
       area.innerHTML = `
         <p class="highlight">${msg}</p>
+        ${photoPreview}
         <div class="inline" style="margin-top:10px">
           ${confirmBtn}
           <button type="button" class="small ghost" id="cancel-entry-btn">${esc(t('outfit_entry_cancel_btn'))}</button>
+          ${changePhotoControls}
         </div>`;
       $('confirm-entry-btn')?.addEventListener('click', confirmEntry);
       $('cancel-entry-btn').addEventListener('click', cancelEntry);
+      wireChangePhotoInput();
       return;
     }
     const msg = mine.partnerName
       ? t('outfit_registered_with', { name: esc(mine.name), partner: esc(mine.partnerName) })
       : t('outfit_registered_as', { name: esc(mine.name) });
-    area.innerHTML = `<p class="highlight">${msg}</p>`;
+    area.innerHTML = `
+      <p class="highlight">${msg}</p>
+      ${photoPreview}
+      <div class="inline" style="margin-top:10px">${changePhotoControls}</div>`;
+    wireChangePhotoInput();
     return;
   }
 
+  // Already showing the blank form and nothing external could have changed
+  // about it - skip rebuilding (see registerFormReady above). Without this,
+  // a poll landing in the gap after the user returns from the photo picker
+  // but before they've refocused a field (photoPickerOpen alone only
+  // covers while the picker is actually open) would still wipe the name
+  // they'd typed and the photo they just attached.
+  if (registerFormReady) return;
+  registerFormReady = true;
+
   registerMode = 'solo';
   registerPartnerId = null;
+  registerPhotoDataUrl = null;
   area.innerHTML = `
     <form id="register-form">
       <div class="theme-switch" id="register-mode-switch">
@@ -817,7 +923,14 @@ function renderRegistration(data) {
         <div id="register-partner-results" class="partner-results"></div>
       </div>
       <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
-      <button type="submit" style="margin-top:10px">${t('outfit_register_btn')}</button>
+      <p class="help" style="margin-top:10px">${esc(t('outfit_register_photo_help'))}</p>
+      <button type="button" class="small ghost" id="register-photo-btn" style="margin-top:6px">${esc(t('outfit_choose_photo_btn'))}</button>
+      <input type="file" accept="image/*" id="register-photo-input" class="file-input-visually-hidden" />
+      <div id="register-photo-preview" class="hidden" style="margin-top:10px">
+        <img class="entry-photo-preview" alt="" />
+        <span class="photo-attached-label">${esc(t('outfit_photo_attached'))}</span>
+      </div>
+      <button type="submit" class="small" style="margin-top:10px">${t('outfit_register_btn')}</button>
     </form>`;
 
   const modeButtons = area.querySelectorAll('#register-mode-switch button');
@@ -855,12 +968,52 @@ function renderRegistration(data) {
     });
   });
 
+  // A styled button standing in for the raw file input (hidden) - a bare
+  // <input type=file> renders as the browser's own unstyled control,
+  // clashing with the rest of the app. Deliberately no `capture` attribute:
+  // that would skip iOS's native picker sheet (photo library / take photo /
+  // browse) and jump straight into the camera, which is less useful here
+  // than the choice.
+  $('register-photo-btn').addEventListener('click', () => openPhotoPicker($('register-photo-input')));
+  $('register-photo-input').addEventListener('change', async () => {
+    photoPickerOpen = false;
+    const file = $('register-photo-input').files[0];
+    const preview = $('register-photo-preview');
+    if (!file) {
+      registerPhotoDataUrl = null;
+      preview.classList.add('hidden');
+      return;
+    }
+    try {
+      registerPhotoDataUrl = await resizePhotoToJpeg(file);
+      preview.querySelector('img').src = registerPhotoDataUrl;
+      preview.classList.remove('hidden');
+    } catch (err) {
+      registerPhotoDataUrl = null;
+      preview.classList.add('hidden');
+      await showAlert(err.message);
+    }
+  });
+
   $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('register-name').value.trim();
-    if (!name) return;
+    // Silent no-ops here read as a dead/disabled button - say what's
+    // missing instead, same wording the server itself would use for the
+    // same rule (see err_persona_name_required in votes.js).
+    if (!name) {
+      await showAlert(t('err_persona_name_required'));
+      return;
+    }
     if (registerMode === 'duo' && !registerPartnerId) {
       await showAlert(t('outfit_register_partner_required'));
+      return;
+    }
+    // A photo is required to complete an entry (see registerContestant()'s
+    // requirePhoto server-side) - checked here too so the error shows up
+    // right by the field instead of only after a round-trip.
+    if (!registerPhotoDataUrl) {
+      await showAlert(t('outfit_register_photo_required'));
       return;
     }
     // Entering as a pair puts someone else's name on it, so say plainly
@@ -872,7 +1025,12 @@ function renderRegistration(data) {
     try {
       await api('/outfit/register', {
         method: 'POST',
-        body: { name, night: getNight(), partnerUserId: registerMode === 'duo' ? registerPartnerId : null },
+        body: {
+          name,
+          night: getNight(),
+          partnerUserId: registerMode === 'duo' ? registerPartnerId : null,
+          photoBase64: registerPhotoDataUrl,
+        },
       });
       loadVotes();
     } catch (err) {
@@ -910,6 +1068,10 @@ function contestantLabel(c) {
   return `${c.name} (${who})`;
 }
 
+// Podium flourish for the results reveal - requested explicitly, unlike the
+// rest of the app which stays emoji-free by default.
+const MEDAL_EMOJI = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
@@ -933,6 +1095,7 @@ async function loadVotes() {
     // waiting on the other (see castVote()/confirmDuoVote() server-side).
     const isDuo = !!data.myContestant?.partnerName;
     const pending = data.myVote && !data.myVote.confirmed;
+    const revealing = data.status === 'closed' && data.resultsPhase && data.resultsPhase !== 'hidden';
 
     if (data.status === 'open' && !data.myVote) {
       // You can't vote for your own entry (see castVote() server-side) -
@@ -967,11 +1130,12 @@ async function loadVotes() {
         </div>`;
       $('confirm-vote-btn')?.addEventListener('click', confirmVote);
       $('change-vote-btn').addEventListener('click', changeVote);
-    } else if (data.myVote) {
+    } else if (data.myVote && !revealing) {
       // Once confirmed, a vote is final (see castVote() server-side) and
-      // this stays the vote area's content for the rest of the night -
-      // closed/pending-results no longer overwrites it with a generic
-      // status message, so "who did I vote for" stays visible throughout.
+      // this stays the vote area's content through "closed, not revealed
+      // yet" - once the results themselves start showing below, repeating
+      // "you voted for X" here is just clutter on top of them, so this
+      // clears instead (see the results-card block below).
       const chosen = data.contestants.find((c) => c.id === data.myVote.contestant_id);
       const msg = chosen ? t('outfit_voted_name', { name: esc(contestantLabel(chosen)) }) : t('outfit_voted');
       area.innerHTML = `<p class="highlight">${msg}</p>`;
@@ -979,7 +1143,11 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    const revealing = data.status === 'closed' && data.resultsPhase && data.resultsPhase !== 'hidden';
+    // The votação card above (status text + whatever's left in vote-area)
+    // is entirely redundant once results are actually showing here - both
+    // toggle on the same condition so they always agree.
+    $('voting-card').classList.toggle('hidden', revealing && results.length > 0);
+
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
       const list = $('results-list');
@@ -987,10 +1155,16 @@ async function loadVotes() {
       // actual rank (not the tier list's auto-numbering, which would be
       // wrong for a partial set) - e.g. "3rd place" appearing alone first.
       list.classList.toggle('podium-reveal', data.resultsPhase !== 'all');
+      // Photos are a reveal-night surprise, not shown during voting - this
+      // is the first time they can appear at all (the server only serves
+      // a photo once its contestant is actually in this results array, see
+      // GET /outfit/contestants/:id/photo).
       list.innerHTML = results.map((r) => {
+        const medal = MEDAL_EMOJI[r.rank] ? `${MEDAL_EMOJI[r.rank]} ` : '';
         const name = esc(contestantLabel(r));
-        const label = data.resultsPhase === 'all' ? name : `${t(`rank_${r.rank}`)} · ${name}`;
-        return `<li><span class="name">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
+        const label = data.resultsPhase === 'all' ? `${medal}${name}` : `${medal}${t(`rank_${r.rank}`)} · ${name}`;
+        const photo = r.hasPhoto ? `<img class="entry-photo-preview" src="${photoUrl(r.id)}" alt="" />` : '';
+        return `<li>${photo}<span class="name" title="${name}">${label}</span><span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span></li>`;
       }).join('');
     } else {
       $('results-card').classList.add('hidden');
@@ -1022,6 +1196,27 @@ async function cancelEntry() {
   } catch (err) {
     await showAlert(err.message);
   }
+}
+
+// Wires the "change photo" button next to an existing entry (pending or
+// confirmed) - either half of a duo can use it (see replaceContestantPhoto()
+// server-side). Re-rendered every time renderRegistration() redraws the
+// card, so this re-wires the fresh elements each call.
+function wireChangePhotoInput() {
+  const input = $('change-photo-input');
+  input.addEventListener('change', async () => {
+    photoPickerOpen = false;
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const photoBase64 = await resizePhotoToJpeg(file);
+      await api('/outfit/register/photo', { method: 'PUT', body: { night: getNight(), photoBase64 } });
+      loadVotes();
+    } catch (err) {
+      await showAlert(err.message);
+    }
+  });
+  $('change-photo-btn').addEventListener('click', () => openPhotoPicker(input));
 }
 
 async function vote(contestantId, name, isDuo) {

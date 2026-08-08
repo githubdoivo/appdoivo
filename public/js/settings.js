@@ -18,6 +18,23 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
+// Same linkify() as app.js - kept here rather than a shared import since
+// this file already keeps its own local esc() the same way. See app.js
+// for why the regex requires "/path" on a bare domain.
+const URL_RE = /\b(?:https?:\/\/[^\s<]+|www\.[^\s<]+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/[^\s<]*)/gi;
+function linkify(escapedText) {
+  return escapedText.replace(URL_RE, (match) => {
+    let trail = '';
+    const trailMatch = match.match(/[.,;:!?)\]}]+$/);
+    if (trailMatch) {
+      trail = trailMatch[0];
+      match = match.slice(0, -trail.length);
+    }
+    const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>${trail}`;
+  });
+}
+
 /** Copies text to the clipboard and gives brief feedback on the button. */
 async function copyToClipboard(text, btn) {
   try {
@@ -210,6 +227,12 @@ function reloadAll() {
   loadContestants();
   loadVotes();
   loadConsequences();
+  // Both build their rows' text (button labels, column headers) via t()
+  // at render time rather than data-i18n attributes applyI18n() can walk,
+  // so a language switch left them stuck in whichever language was active
+  // the last time they were fetched until this call was added.
+  if (isOwner) loadWallPseudonyms();
+  if (isAdmin) loadPlazaPosts();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -242,9 +265,30 @@ function currentNight() {
   return $('admin-night-switch')?.querySelector('.active')?.dataset.night || 'furnished';
 }
 
+// Mirrors applyNight() in app.js so the admin page's action buttons/accents
+// pick up the same per-section colour as their guest-facing counterpart
+// (see the shared button-tint rules in styles.css) instead of everything
+// staying on the default ink/paper palette regardless of which admin tab
+// is open. Theme classes follow the DISPLAYED feature, not the internal
+// tab id - see index.html's tab nav comment for the plaza/wall naming swap.
+function applyAdminTheme(tab) {
+  const night = currentNight();
+  document.body.classList.toggle('theme-furnished', tab === 'outfit' && night === 'furnished');
+  document.body.classList.toggle('theme-swamp', tab === 'outfit' && night === 'swamp');
+  document.body.classList.toggle('theme-rata', tab === 'rata');
+  document.body.classList.toggle('theme-mural', tab === 'plaza');
+  document.body.classList.toggle('theme-plaza', tab === 'wall');
+}
+
+// Latest /admin/voting response per night, keyed by night - lets the close
+// warning below (see the voting-advance-btn handler) reuse what
+// loadVotingState() already fetched instead of a redundant request.
+let votingStateCache = {};
+
 $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
     $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+    applyAdminTheme('outfit');
     loadVotingState();
     loadContestants();
     loadVotes();
@@ -272,6 +316,7 @@ const VOTING_STATE_LABEL = {
 // NEXT thing a click will do; a separate reset button is the only way back.
 async function loadVotingState() {
   const { nights } = await api('/admin/voting');
+  nights.forEach((n) => { votingStateCache[n.night] = n; });
   const night = currentNight();
   const info = nights.find((n) => n.night === night) || {};
   const status = info.status || 'closed';
@@ -304,10 +349,39 @@ async function loadVotingState() {
   }
 }
 
+// Every stage transition here is either hard to undo (reveal-next: no way
+// back once a rank is shown) or disruptive mid-event (open/close/registration
+// affect everyone's screen at once) - one stray tap on a phone during a
+// party is enough to trigger any of them, so all four get a plain
+// "are you sure" first, on top of (not instead of) the more specific
+// warnings below for the cases that have one.
+const GENERIC_CONFIRM = {
+  registration: 'confirm_voting_registration',
+  open: 'confirm_voting_open',
+  close: 'confirm_voting_close',
+  'reveal-next': 'confirm_voting_reveal_next',
+};
+
 $('voting-advance-btn').addEventListener('click', async () => {
   const action = $('voting-advance-btn').dataset.action;
   if (!action) return;
   $('voting-msg').textContent = '';
+  const genericKey = GENERIC_CONFIRM[action];
+  if (genericKey && !(await showConfirm(t(genericKey)))) return;
+  // Closing while some accounts never voted at all leaves them out with no
+  // way back - unlike the two 409 cases below (which the server itself
+  // refuses so a stray API call can't skip them either), this is purely
+  // advisory: the organiser very often doesn't vote themselves, so it can't
+  // be a hard requirement, just a heads-up before the number of people who
+  // could still vote goes to zero. Checked client-side against data
+  // loadVotingState() already fetched, rather than gating /close itself.
+  if (action === 'close') {
+    const notVoted = votingStateCache[currentNight()]?.notVoted ?? 0;
+    if (notVoted > 0) {
+      const ok = await showConfirm(t(notVoted === 1 ? 'confirm_close_not_voted_one' : 'confirm_close_not_voted_other', { n: notVoted }));
+      if (!ok) return;
+    }
+  }
   try {
     await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
   } catch (err) {
@@ -642,13 +716,50 @@ async function loadContestants() {
   renderContestants();
 }
 
+// A real fetch()+blob download rather than a plain <a href> - the latter
+// (tried first) had no way to show progress/errors, and target="_blank"
+// pointed at a URL requiring auth meant a bare failure (e.g. no photos
+// yet) just landed the new tab on the app's own default route instead of
+// showing anything - indistinguishable from the button doing nothing at
+// all. This can show real status throughout, and use a normal Bearer
+// header instead of a token in the URL.
+$('download-photos-btn').addEventListener('click', async () => {
+  const night = currentNight();
+  const msg = $('download-photos-msg');
+  msg.classList.remove('error');
+  msg.textContent = t('download_photos_in_progress');
+  try {
+    const res = await fetch(`/api/admin/outfit/${encodeURIComponent(night)}/photos.zip`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snatch-${night}-photos.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msg.textContent = t('download_photos_done');
+    setTimeout(() => { if (msg.textContent === t('download_photos_done')) msg.textContent = ''; }, 3000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
 function renderContestants() {
   const term = foldAccents($('contestant-search').value.trim().toLowerCase());
   const contestants = term
     ? allContestants.filter((c) => foldAccents(c.name.toLowerCase()).includes(term))
     : allContestants;
   $('contestants-table').innerHTML = contestants.length
-    ? `<tr><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
+    ? `<tr><th></th><th>${t('col_name')}</th><th>${t('col_registered_by')}</th><th></th></tr>` + contestants.map((c) => {
         const who = c.partner_name
           ? `${esc(c.registered_by)} &amp; ${esc(c.partner_name)}`
           : c.registered_by ? esc(c.registered_by) : '-';
@@ -657,8 +768,15 @@ function renderContestants() {
         // shows entries the partner hasn't confirmed - they're exactly
         // what the owner needs to chase before opening the voting.
         const pending = c.confirmed ? '' : ` <span class="badge">${esc(t('contestant_pending_label'))}</span>`;
+        // Admins can see any entry's photo any time (moderation), unlike
+        // guests who only get it once results are revealed - see GET
+        // /outfit/contestants/:id/photo.
+        const photo = c.hasPhoto
+          ? `<img class="entry-photo-preview" src="/api/outfit/contestants/${c.id}/photo?token=${encodeURIComponent(getToken())}" alt="" />`
+          : '';
         return `
         <tr class="contestant-${isSolo ? 'solo' : 'duo'}">
+          <td>${photo}</td>
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span>${pending}</td>
           <td class="muted">${who}</td>
           <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
@@ -1102,7 +1220,7 @@ async function loadPlazaPosts() {
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        <p style="margin:8px 0 0">${esc(p.text)}</p>
+        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0">${linkify(esc(p.text))}</p>
         ${p.type === 'poll' ? `
         <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
           ${p.options.map((o) => {
@@ -1173,6 +1291,7 @@ function selectAdminTab(tab) {
   ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
+  applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
 }

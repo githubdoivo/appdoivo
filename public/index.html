@@ -20,7 +20,10 @@
   <!-- Ecra de login -->
   <section id="login" class="view hidden">
     <div class="cover">
-      <p class="tagline" data-i18n="tagline">Bem-vindo. Introduz a tua chave de acesso.</p>
+      <div class="greeting">
+        <p class="hello" data-i18n="tagline_hello">Bem-vinde</p>
+        <p class="instruction" data-i18n="tagline_instruction">Introduz a tua chave de acesso</p>
+      </div>
       <form id="login-form">
         <div class="password-field">
           <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
@@ -145,7 +148,7 @@
         <div id="register-area" style="margin-top:12px"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="voting-card">
         <h2 data-i18n="outfit_voting">Votação</h2>
         <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
         <div id="vote-area"></div>

@@ -41,6 +41,26 @@
   --serif:  'Cormorant Garamond', Georgia, serif;
   --body:   'EB Garamond', Georgia, serif;
   --script: 'Italianno', cursive;
+
+  /* Light-mode values, duplicated here as the real defaults (not just
+     stale placeholder fallbacks) - every var(--role-*/--type-*/--status-*)
+     use below used to lean on a hardcoded fallback argument instead, and
+     those fallbacks quietly went stale (still the old blue/green/purple
+     assignments) the last time this palette changed, since nothing forces
+     a fallback constant to track a var() redefinition elsewhere. Defining
+     them in :root means there's exactly one light-mode source of truth,
+     and it's also what renders during the brief window before JS applies
+     html.mode-light/mode-dark on first paint (see theme.js). */
+  --brand: #a96b4b;
+  --role-owner: #6b4c8a;
+  --role-admin: #a3402f;
+  --role-user:  #2a6ca6;
+  --type-announcement: #5c3a1f;
+  --type-poll: #a35a1a;
+  --status-pending: #8a6a1f;
+  --status-done: #2f7d32;
+  --status-fila: #5b6472;
+  --status-atribuir: #a3406b;
 }
 
 /* ==================== Dark / light mode (UI chrome) ======================
@@ -74,15 +94,8 @@ html.mode-light {
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
   --brand:    #6b3420;
-  --role-owner: #8a4630;
-  --role-admin: #3f7d1f;
-  --role-user:  #1f6d78;
-  --type-announcement: #8a6a1f;
-  --type-poll: #6b4c8a;
-  --status-pending: #2a6ca6;
-  --status-done: #2f7d32;
-  --status-fila: #5b6472;
-  --status-atribuir: #a3406b;
+  /* role-*/type-*/status-* stay at their :root (light-mode) values here -
+     only mode-dark below needs to redefine them. */
 }
 
 html.mode-dark {
@@ -101,13 +114,16 @@ html.mode-dark {
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
   --brand:    #e2a878;
-  --role-owner: #a96b4b;
-  --role-admin: #8fd167;
-  --role-user:  #6fd6e0;
-  --type-announcement: #d4b04a;
-  --type-poll: #b294d6;
-  --status-pending: #6badde;
-  --status-done: #7ed181;
+  --role-owner: #b294d6;
+  --role-admin: #d9695a;
+  --role-user:  #6badde;
+  --type-announcement: #c9a07a;
+  --type-poll: #e08a4a;
+  --status-pending: #d4b04a;
+  /* Was #7ed181 - a bright mint/lime that clashed with the app's muted,
+     earthy palette everywhere it showed up. Deeper, less saturated sage
+     green instead - still clearly reads as "done" without looking neon. */
+  --status-done: #6aaf6c;
   --status-fila: #9aa4b5;
   --status-atribuir: #e08fb0;
 }
@@ -137,6 +153,24 @@ body {
 }
 
 .hidden { display: none !important; }
+
+/* For a file input standing in behind a styled button (see photoUrl()'s
+   callers in app.js): `display: none` is unreliable on iOS Safari - a
+   `.click()` fired at a hidden input from a JS handler often silently
+   fails to open the picker at all, worst inside an installed PWA. Kept
+   in the layout (zero-size, clipped, off the visual flow) instead, which
+   iOS treats as a valid click target. */
+.file-input-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Tiny reference number, not a UI feature - lets QA vs prod be compared at
    a glance when reporting a bug (see version.js / GET /api/version). Sits
@@ -222,21 +256,28 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   --line: rgba(236, 229, 213, 0.35);
   --paper-3: #241d17;
 }
-/* Zoom controlado (a partir do topo) em vez de recortar o ficheiro de
-   origem - mantem a letra "twenty-nine divine" sempre visivel. */
+/* Plain "cover" - no extra transform:scale() on top of it. Cover already
+   guarantees the illustration fills the entire screen with no gaps at its
+   largest non-distorted size; an added scale() only ever throws away more
+   of the artwork (cropping the "twenty-nine divine" lettering at the
+   sides, showing less of the cottage) without filling any more of the
+   page than cover already does on its own. background-position keeps the
+   crop anchored to the top, so the lettering stays whole and the bottom
+   of the illustration (the cottage) is what gets trimmed on tall/narrow
+   screens. The gradient is lighter up top so the artwork and its own
+   lettering stay the focus, darkening only toward the bottom where the
+   form actually needs the contrast. */
 #login::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 0;
   background-image:
-    linear-gradient(180deg, rgba(12, 16, 8, 0.30) 0%, rgba(12, 16, 8, 0.12) 38%, rgba(8, 11, 6, 0.62) 100%),
+    linear-gradient(180deg, rgba(10, 16, 8, 0.10) 0%, rgba(10, 14, 8, 0.04) 34%, rgba(8, 12, 6, 0.80) 80%),
     url('/images/login-bg.png');
   background-size: cover;
   background-position: top center;
   background-repeat: no-repeat;
-  transform: scale(1.22);
-  transform-origin: top center;
 }
 
 #login .cover {
@@ -251,9 +292,28 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   justify-content: flex-end;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: 20px;
 }
-.cover .tagline { font-family: var(--serif); font-size: 1.35rem; font-style: italic; color: var(--ink-soft); margin-bottom: 26px; }
+/* Two beats instead of one run-on sentence - "bem-vinde" is the warm,
+   personal welcome (the illustration's own hand-lettering is the real
+   headline of this screen, so this stays modest rather than competing for
+   header-level weight); "mostra-me a tua chave" is the quieter functional
+   instruction underneath. */
+.greeting { display: flex; flex-direction: column; gap: 5px; }
+.greeting .hello {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.3rem;
+  color: var(--ink);
+  text-shadow: 0 2px 14px rgba(4, 6, 2, 0.55);
+}
+.greeting .instruction {
+  font-family: var(--body);
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 10px rgba(4, 6, 2, 0.5);
+}
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
 
@@ -277,6 +337,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  /* Only ever sits on the login screen's photo background - a plain
+     underline alone can get lost against a busy patch of the image. */
+  text-shadow: 0 1px 8px rgba(4, 6, 2, 0.5);
 }
 /* Explicit background:none here too, not just on the base rule above -
    "button:hover, .btn:hover" (higher specificity than plain .link-btn,
@@ -325,7 +388,12 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 input[type="password"] { text-transform: none; }
-::placeholder { text-transform: lowercase; font-weight: 600; }
+/* Without an explicit color, WebKit's own placeholder default is a
+   neutral cool grey - fine on the app's own neutral paper, but it reads
+   as distinctly blue-tinted by contrast against every warm theme (mural's
+   terracotta, rata's pink, furnished's clay). --ink-soft already tracks
+   each active theme, so this stays in-palette everywhere instead. */
+::placeholder { text-transform: lowercase; font-weight: 600; color: var(--ink-soft); opacity: 1; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
@@ -441,15 +509,24 @@ button.ghost:hover, a.ghost:hover {
 /* Size modifier: small buttons, just padding/font size, inherit color scheme. */
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 
-/* Destructive: Red danger button (delete, wipe, reset). */
+/* Destructive: Red danger button (delete, wipe, reset). Filled by default,
+   not just outlined - an outline-only "wipe everything" control read as too
+   quiet/easy to miss next to the app's other plain-outline (ghost) buttons,
+   undercutting exactly the action that most needs to read as a warning.
+   Tinted into --paper-2 with --ink text (same recipe as the per-tab CTA
+   tint elsewhere in this file) rather than a flat --danger fill with
+   --paper-3 text - checked, that combination fails contrast badly in
+   several theme/mode pairs (as low as 1.4:1 in mural light), while this
+   stays 5.2-8.4:1 everywhere at 50%/60% (was 35%/55% - still read as too
+   subtle/not clearly "filled" against some themes' own paper-2). */
 button.danger {
   border: 1px solid var(--danger);
-  background: transparent;
-  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 50%, var(--paper-2));
+  color: var(--ink);
 }
 button.danger:hover {
-  background: var(--danger);
-  color: var(--paper-3);
+  background: color-mix(in srgb, var(--danger) 60%, var(--paper-2));
+  color: var(--ink);
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -498,7 +575,7 @@ button.danger:hover {
   font-size: clamp(1.9rem, 8.5vw, 2.6rem);
   line-height: 0.8;
   white-space: nowrap;
-  color: var(--brand, #a96b4b);
+  color: var(--brand);
 }
 .brand .badge,
 .user-row-name .badge {
@@ -521,9 +598,9 @@ button.danger:hover {
    (--role-*), same as --role-owner already had. admin/user used to be a
    single hardcoded dark shade each, which read fine in light mode but was
    nearly illegible against the dark-mode background. */
-.badge.role-owner { border-color: var(--role-owner, #a96b4b); color: var(--role-owner, #a96b4b); }
-.badge.role-admin { border-color: var(--role-admin, #3f7d1f); color: var(--role-admin, #3f7d1f); }
-.badge.role-user { border-color: var(--role-user, #1f6d78); color: var(--role-user, #1f6d78); }
+.badge.role-owner { border-color: var(--role-owner); color: var(--role-owner); }
+.badge.role-admin { border-color: var(--role-admin); color: var(--role-admin); }
+.badge.role-user { border-color: var(--role-user); color: var(--role-user); }
 
 /* Publication-type badges (Regular/Poll on the Wall admin list) - own
    colors, deliberately outside the role palette above so a post type is
@@ -533,8 +610,8 @@ button.danger:hover {
    badge's own text out of alignment with the plain text (byline,
    question, options) below it in the same list. */
 .badge.type-announcement, .badge.type-poll { margin-left: -9px; }
-.badge.type-announcement { border-color: var(--type-announcement, #8a6a1f); color: var(--type-announcement, #8a6a1f); }
-.badge.type-poll { border-color: var(--type-poll, #6b4c8a); color: var(--type-poll, #6b4c8a); }
+.badge.type-announcement { border-color: var(--type-announcement); color: var(--type-announcement); }
+.badge.type-poll { border-color: var(--type-poll); color: var(--type-poll); }
 
 /* Rata history: each revealed consequence, who was assigned, and its
    completion status - a standalone pill (not .badge, which is scoped to
@@ -569,10 +646,10 @@ button.danger:hover {
 /* Four distinct colors, one per state, reading roughly as a progression:
    fila (grey, nothing to do yet) -> atribuir (rose, needs the owner to
    pick someone) -> pendente (blue, in progress) -> feita (green, done). */
-.rata-badge.rata-status-fila { border-color: var(--status-fila, #5b6472); color: var(--status-fila, #5b6472); }
-.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir, #a3406b); color: var(--status-atribuir, #a3406b); }
-.rata-badge.rata-status-pendente { border-color: var(--status-pending, #2a6ca6); color: var(--status-pending, #2a6ca6); }
-.rata-badge.rata-status-feita { border-color: var(--status-done, #2f7d32); color: var(--status-done, #2f7d32); }
+.rata-badge.rata-status-fila { border-color: var(--status-fila); color: var(--status-fila); }
+.rata-badge.rata-status-atribuir { border-color: var(--status-atribuir); color: var(--status-atribuir); }
+.rata-badge.rata-status-pendente { border-color: var(--status-pending); color: var(--status-pending); }
+.rata-badge.rata-status-feita { border-color: var(--status-done); color: var(--status-done); }
 
 /* Users tab role filter - same pill shape as the role badges, but
    clickable toggles. Active state fills solid in that role's own color
@@ -586,8 +663,12 @@ button.danger:hover {
   font-size: var(--text-xs);
   font-weight: 700;
   background: none;
-  border: 1.5px solid var(--line);
-  color: var(--ink-soft);
+  /* --line-2/--ink (not --line/--ink-soft) - an unselected filter pill is
+     still a clickable control, not disabled text, and at 1.5px + --line
+     its outline dropped under 2:1 contrast in several themes' dark mode
+     (read as barely-there/invisible - easy to miss it's a toggle at all). */
+  border: 1.5px solid var(--line-2);
+  color: var(--ink);
   padding: 5px 12px;
   border-radius: 999px;
   cursor: pointer;
@@ -606,10 +687,10 @@ button.danger:hover {
 /* Rata status filter - same colors as the rata-badge each state renders
    with in the list below, so the filter pill you toggled and what it's
    showing read as the same thing. */
-.role-pill[data-status="fila"].active { background: var(--status-fila, #5b6472); border-color: var(--status-fila, #5b6472); }
-.role-pill[data-status="atribuir"].active { background: var(--status-atribuir, #a3406b); border-color: var(--status-atribuir, #a3406b); }
-.role-pill[data-status="pendente"].active { background: var(--status-pending, #2a6ca6); border-color: var(--status-pending, #2a6ca6); }
-.role-pill[data-status="feita"].active { background: var(--status-done, #2f7d32); border-color: var(--status-done, #2f7d32); }
+.role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); }
+.role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); }
+.role-pill[data-status="pendente"].active { background: var(--status-pending); border-color: var(--status-pending); }
+.role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
@@ -729,17 +810,11 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 .card {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 22px;
   margin-bottom: 18px;
 }
-/* In light mode, --line-2 is pale enough to blend into the card's own
-   --paper-2 background. In dark mode it reads as a bright, hard outline -
-   most visible at the rounded corners, where a small radius zoomed in
-   looks like a stray bracket rather than a subtle edge. Blend it toward
-   the card's own background, same treatment as the tab-row border. */
-html.mode-dark .card { border-color: color-mix(in srgb, var(--line-2) 22%, var(--paper-2)); }
 .card h2 { font-size: 1.15rem; margin-bottom: 6px; }
 
 .hero-line {
@@ -770,6 +845,38 @@ html.mode-light .hero-line { color: var(--ink); }
   font-size: 1.5rem;
   line-height: 1.35;
   color: var(--ink);
+}
+/* The current-consequence box is the one moment "A Rata" gets playful
+   rather than just informative - swaps the plain flat accent bar for a
+   zigzag "snapped spring" shape plus a small pivot pin, evoking a mouse
+   trap's bent wire instead of a generic sidebar rule. */
+#tab-rata .highlight {
+  position: relative;
+  border-left: none;
+  padding-left: 34px;
+}
+#tab-rata .highlight::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  bottom: 10px;
+  width: 9px;
+  background: var(--rata);
+  clip-path: polygon(
+    50% 0%, 100% 9%, 0% 18%, 100% 27%, 0% 36%,
+    100% 45%, 0% 54%, 100% 63%, 0% 72%, 100% 81%, 0% 90%, 50% 100%
+  );
+}
+#tab-rata .highlight::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rata);
 }
 #tab-outfit .highlight {
   border-left-color: var(--outfit);
@@ -817,7 +924,20 @@ html.mode-light .hero-line { color: var(--ink); }
   color: var(--clay);
   min-width: 40px;
 }
-.tier .name { flex: 1; font-family: var(--serif); font-size: 1.35rem; }
+.tier .name {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  line-height: 1.25;
+  /* Duo entries append both real names in parens (see contestantLabel() in
+     app.js) - that can run long, so clamp to 2 lines with an ellipsis
+     rather than letting one row balloon to 4+ lines; the title attribute
+     on the element carries the full text for anyone who needs it. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 .tier .votes { font-family: var(--body); font-size: var(--text-sm); text-transform: lowercase; letter-spacing: 0.16em; color: var(--ink-soft); }
 .tier li:nth-child(-n+3) .name { font-weight: 600; }
 
@@ -827,6 +947,24 @@ html.mode-light .hero-line { color: var(--ink); }
 .tier.podium-reveal li::before { content: none; }
 .tier.podium-reveal .name { font-weight: 600; }
 .tier li:first-child::before { color: var(--outfit); }
+
+/* Outfit photo thumbnail - shown on a guest's own entry (registration/
+   confirmation cards) and, once revealed, in the results tier above. Never
+   shown to other guests during voting - see photoUrl() in app.js. */
+.entry-photo-preview {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.tier .entry-photo-preview { width: 44px; height: 44px; flex-shrink: 0; }
+#contestants-table .entry-photo-preview { width: 32px; height: 32px; }
+/* Confirms a photo actually made it in before submitting - the thumbnail
+   alone is easy to miss at a glance on a small screen. */
+#register-photo-preview { display: flex; align-items: center; gap: 10px; }
+.photo-attached-label { color: var(--ink-soft); font-size: var(--text-sm); }
 
 /* --------------------------------- Admin --------------------------------- */
 
@@ -880,7 +1018,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
    taller input renders at the input's full height regardless of its own
    (much smaller) padding. Affects every .inline form: chat, admin's
    create-user, admin's add-contestant. */
-.inline { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+/* flex-wrap: a row of 3+ buttons (e.g. confirm/cancel/change-photo on a
+   pending duo entry) has no reason to force itself into one line - nowrap
+   was pushing the last one off the edge of the screen on narrower phones
+   instead of just dropping it to a second row. */
+.inline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 
@@ -938,7 +1080,10 @@ body.theme-furnished {
   --paper-3:  #ebefe9;
   --ink:      #22302b;
   --ink-soft: #566a62;
-  --line:     #a9bab2;
+  /* Was #a9bab2 (~1.6:1 against --paper-2) - card/post borders read as
+     missing on this theme, same family of bug fixed on rata/mural
+     elsewhere. Darkened within the same sage family to ~2.4:1. */
+  --line:     #849c91;
   --line-2:   #c0cec6;
   --clay:     #305049;
   --clay-2:   #43655c;
@@ -960,7 +1105,9 @@ body.theme-swamp {
   --paper-3:  #e0e4cd;
   --ink:      #242a17;
   --ink-soft: #55613a;
-  --line:     #aab291;
+  /* Was #aab291 (~1.6:1 against --paper-2) - same weak-border issue as
+     furnished light, fixed the same way (darkened within the family). */
+  --line:     #869165;
   --line-2:   #bfc7a4;
   --clay:     #55632c;
   --clay-2:   #6c7b3c;
@@ -995,11 +1142,19 @@ body.theme-rata {
   --paper-3:  #2e2529;
   --ink:      #e8dfe1;
   --ink-soft: #9c8b8e;
-  --line:     #3d3237;
-  --line-2:   #4b3e43;
-  --clay:     #a8452f;
-  --clay-2:   #c25a3f;
-  --rata:     #a8452f;
+  /* Was #3d3237/#4b3e43 - too close to --paper-2 (#271f22) for the card
+     border to read at all, the dark-mode counterpart of the light-mode fix
+     above. Lightened within the same dusty-mauve family. */
+  --line:     #665261;
+  --line-2:   #7a6070;
+  /* Was orange (#a86c2f/#c2803f), before that brick-red - orange ended up
+     stepping on Wall/mural's own brown-orange territory instead of reading
+     as Rata's own color. Pink keeps Rata in its own established dusty
+     pink-grey family (see --paper/--ink above) instead of borrowing a warm
+     hue that's already spoken for elsewhere. */
+  --clay:     #a82f57;
+  --clay-2:   #cb5c81;
+  --rata:     #a82f57;
   background-color: #190f13;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1016,7 +1171,9 @@ html.mode-dark body.theme-furnished {
   --paper-3:  #253630;
   --ink:      #dce8e2;
   --ink-soft: #8fa89d;
-  --line:     #35493f;
+  /* Was #35493f (~1.5:1 against --paper-2) - lightened within the same
+     family so boxed cards/posts get a visible border in dark mode too. */
+  --line:     #4d6a5b;
   --line-2:   #43594d;
   --clay:     #4a8f76;
   --clay-2:   #5fae91;
@@ -1035,7 +1192,9 @@ html.mode-dark body.theme-swamp {
   --paper-3:  #283114;
   --ink:      #e2e6d0;
   --ink-soft: #9aa580;
-  --line:     #3a4420;
+  /* Was #3a4420 (~1.5:1 against --paper-2) - lightened within the same
+     family, same fix as furnished dark above. */
+  --line:     #55632f;
   --line-2:   #47542a;
   --clay:     #8a9c52;
   --clay-2:   #a3b768;
@@ -1061,11 +1220,17 @@ html.mode-light body.theme-rata {
   --paper-3:  #f6f0f0;
   --ink:      #302629;
   --ink-soft: #6d5c60;
-  --line:     #dcc9cc;
-  --line-2:   #e6d6d8;
-  --clay:     #8a3f2c;
-  --clay-2:   #6e3122;
-  --rata:     #8a3f2c;
+  /* Was #dcc9cc/#e6d6d8 - barely distinguishable from --paper-2 (#f1e9ea),
+     so card borders read as missing entirely on this tab specifically,
+     unlike every other night theme. Darkened within the same dusty-pink
+     family so the border stays visible without losing the muted mood. */
+  --line:     #b8969b;
+  --line-2:   #c7a8ac;
+  /* Same pink hue-shift as the dark variant above - was #8a5b2c/#6e4822
+     (orange), before that #8a3f2c/#6e3122 (brick-red). */
+  --clay:     #8a2c4b;
+  --clay-2:   #6e223b;
+  --rata:     #8a2c4b;
   background-color: #efe6e7;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0e8e9'/%3E%3Cg fill='%23978387' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23978387' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1124,7 +1289,10 @@ html.mode-dark body.theme-mural {
   --paper-3:  #38241d;
   --ink:      #e8d3c4;
   --ink-soft: #a8836e;
-  --line:     #4a2e22;
+  /* Was #4a2e22 (~1.3:1 against --paper-2, the weakest of all the themes -
+     this is the one that reads as a missing border in the wild). Lightened
+     within the same family to ~2.4:1. */
+  --line:     #7e4f3a;
   --line-2:   #5c3b2a;
   --clay:     #c2603f;
   --clay-2:   #d97a52;
@@ -1151,19 +1319,27 @@ body.theme-plaza {
   --paper-3:  #f3ddac;
   --ink:      #2e2411;
   --ink-soft: #6e5a2c;
-  --line:     #c7a659;
+  /* Was #c7a659 (~1.6:1 against --paper-2) - darkened within the same
+     mustard family, same fix applied to every other theme's weak line. */
+  --line:     #a68538;
   --line-2:   #d4b876;
-  /* Was brown-gold (#8a5c00/#a67815) - a monochrome newsprint mood.
-     Blue accent against the yellow paper instead, for a livelier
-     newsstand/masthead contrast rather than one tone throughout. */
-  --clay:     #2a4a7a;
-  --clay-2:   #3f679c;
-  --clay-active: #2a4a7a;
-  --rata:     #2a4a7a;
+  /* Was a blue accent (#2a4a7a/#3f679c) for newsstand/masthead contrast -
+     read as out of place next to every other theme's warm, single-hue
+     accent. Back to a monochrome newsprint mood: a darker, more saturated
+     yellow/mustard than the paper itself, not a different hue. */
+  --clay:     #7a5200;
+  --clay-2:   #9c6e15;
+  --clay-active: #7a5200;
+  --rata:     #7a5200;
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
+/* Every other night theme tints its own .hero-line with its accent
+   (furnished/swamp -> --ot-2, rata/mural -> --clay-2) - plaza was missing
+   this override, so it fell through to the generic --ink and read as
+   noticeably bolder/heavier than the same line on every other tab. */
+body.theme-plaza .hero-line { color: var(--clay-2); }
 html.mode-dark body.theme-plaza {
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
@@ -1172,13 +1348,15 @@ html.mode-dark body.theme-plaza {
   --paper-3:  #3e300c;
   --ink:      #f0e0ac;
   --ink-soft: #b8a06a;
-  --line:     #4a3d1f;
+  /* Was #4a3d1f (~1.4:1 against --paper-2) - lightened within the same
+     mustard-gold family, same fix applied to every other theme's line. */
+  --line:     #725e30;
   --line-2:   #5c4c28;
-  /* Same yellow+blue pairing as the light variant above - bright blue
-     against the dark gold, instead of a monochrome gold-on-gold. */
-  --clay:     #4a7fc4;
-  --clay-2:   #6a9bd8;
-  --rata:     #4a7fc4;
+  /* Same monochrome mustard-on-gold pairing as the light variant above,
+     lightened to read against the dark paper instead of darkened against it. */
+  --clay:     #d9a536;
+  --clay-2:   #e8bb5c;
+  --rata:     #d9a536;
   background-color: #2b2107;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1201,7 +1379,12 @@ html.mode-dark body.theme-plaza {
    so it reads as prominent rather than blending into the column. */
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
-.plaza-post:first-child { border-top: none; padding-top: 0; }
+/* Excludes the boxed types below (announcement/poll): they carry their own
+   full border/padding on all four sides, so the plain divider this zeroes
+   doesn't apply to them - without the :not()s, this still won, its
+   :first-child pseudo-class outranking their plain-class border/padding
+   overrides, leaving whichever post landed first missing its top edge. */
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll) { border-top: none; padding-top: 0; }
 .plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
@@ -1210,12 +1393,22 @@ html.mode-dark body.theme-plaza {
   padding-left: 14px;
   border-left: 3px solid var(--clay);
   text-wrap: balance;
+  /* A <p> collapses line breaks by default - an admin's multi-line post
+     (one item per line) was rendering as a single run-on paragraph.
+     pre-line keeps each \n as a real break while still collapsing any
+     repeated spaces and wrapping long lines normally. */
+  white-space: pre-line;
+}
+.plaza-post-text a {
+  color: var(--clay);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
 .plaza-post-announcement {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
@@ -1241,7 +1434,7 @@ html.mode-dark body.theme-plaza {
 
 .plaza-post-poll {
   background: var(--paper-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
@@ -1288,7 +1481,7 @@ html.mode-dark body.theme-plaza {
 /* Banner com motivo tematico + interruptor de tema */
 .outfit-banner {
   position: relative;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 18px;
@@ -1341,6 +1534,53 @@ html.mode-dark body.theme-plaza {
 #tab-outfit .vote-option:hover { border-color: var(--ot); }
 #tab-outfit .tier li:first-child::before { color: var(--ot); }
 #tab-outfit input:focus, #tab-outfit textarea:focus { border-color: var(--ot); }
+
+/* Primary CTA buttons take on whichever tab/night they belong to (--clay
+   resolves per active body.theme-* already, furnished/swamp/rata/mural/
+   plaza each set it - see applyNight() in app.js) instead of the generic
+   ink/paper fill every other button uses. A flat fill of the raw accent
+   hex fails contrast in some theme/mode combinations (checked: several
+   dark-mode accents land under 3:1 against either light or dark text) -
+   tinting it into --paper-2 instead and keeping --ink for the label reuses
+   the same ink/paper contrast pairing already verified everywhere else in
+   the app, so it's accessible by construction rather than per-theme luck.
+   Explicit whitelist rather than a blanket "every button in this tab" rule -
+   the furnished/swamp toggle and other already-styled buttons live in the
+   same containers and would otherwise get wrongly reskinned too. */
+#register-form button[type="submit"],
+#confirm-entry-btn,
+#confirm-vote-btn,
+#suggest-form button[type="submit"],
+[data-mark-done],
+.plaza-poll-submit,
+#chat-form button[type="submit"],
+#plaza-post-form button[type="submit"],
+#admin-register-form button[type="submit"],
+#voting-advance-btn,
+[data-reveal-next] {
+  /* Was 22% (and 35% before that, deemed too vivid/heavy in light mode) -
+     30% strikes a middle ground: some of these (revelar, criar, iniciar)
+     are the one clear primary action on their card and read as too washed-
+     out/easy to miss at 22%. Contrast stays 6-9:1 regardless of percentage
+     here (the ink/paper pairing dominates it). */
+  background: color-mix(in srgb, var(--clay) 30%, var(--paper-2));
+  border-color: var(--clay);
+  color: var(--ink);
+}
+#register-form button[type="submit"]:hover,
+#confirm-entry-btn:hover,
+#confirm-vote-btn:hover,
+#suggest-form button[type="submit"]:hover,
+[data-mark-done]:hover,
+.plaza-poll-submit:hover,
+#chat-form button[type="submit"]:hover,
+#plaza-post-form button[type="submit"]:hover,
+#admin-register-form button[type="submit"]:hover,
+#voting-advance-btn:hover,
+[data-reveal-next]:hover {
+  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
+  color: var(--ink);
+}
 
 /* ----------------------------- Tutorial overlay --------------------------- */
 
