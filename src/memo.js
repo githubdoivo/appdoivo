@@ -57,10 +57,10 @@ function toDbTimestamp(date) {
   return date.toISOString().replace('T', ' ').replace('Z', '');
 }
 
-/** Generates this user's 5 random slots for today, if they don't exist yet. */
-export function ensureTodaysSlots(userId) {
+/** Generates today's 5 shared random slots (same for every guest), if they don't exist yet. */
+export function ensureTodaysSlots() {
   const day = today();
-  const existing = db.prepare('SELECT COUNT(*) AS n FROM memo_slots WHERE user_id = ? AND day = ?').get(userId, day);
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM memo_slots WHERE day = ?').get(day);
   if (existing.n > 0) return;
 
   const tz = getTimezone();
@@ -78,19 +78,19 @@ export function ensureTodaysSlots(userId) {
   const offsets = Array.from({ length: MEMO_SLOTS_PER_DAY }, () => Math.random() * slackMs).sort((a, b) => a - b);
 
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO memo_slots (user_id, day, slot_index, scheduled_at)
-    VALUES (?, ?, ?, ?)
+    INSERT OR IGNORE INTO memo_slots (day, slot_index, scheduled_at)
+    VALUES (?, ?, ?)
   `);
   for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
     const at = new Date(windowStart.getTime() + offsets[i] + i * gapMs);
-    insert.run(userId, day, i, toDbTimestamp(at));
+    insert.run(day, i, toDbTimestamp(at));
   }
 }
 
 /** Slots due to fire right now (scheduled, not yet notified) - polled by the scheduler. */
 export function getDueSlots() {
   return db.prepare(`
-    SELECT id, user_id, day, slot_index FROM memo_slots
+    SELECT id, day, slot_index FROM memo_slots
     WHERE notified_at IS NULL AND scheduled_at <= strftime('%Y-%m-%d %H:%M:%f', 'now')
   `).all();
 }
@@ -110,11 +110,11 @@ function deriveStatus(slot, upload) {
   return { status: 'open', secondsLeft: Math.round(remainingMs / 1000) };
 }
 
-/** Today's 5 slots for a user, each with its derived status - the checklist payload. */
+/** Today's 5 shared slots, each with this user's own derived status - the checklist payload. */
 export function getTodayForUser(userId) {
-  ensureTodaysSlots(userId);
+  ensureTodaysSlots();
   const day = today();
-  const slots = db.prepare('SELECT * FROM memo_slots WHERE user_id = ? AND day = ? ORDER BY slot_index').all(userId, day);
+  const slots = db.prepare('SELECT * FROM memo_slots WHERE day = ? ORDER BY slot_index').all(day);
   const uploads = db.prepare('SELECT * FROM memo_uploads WHERE user_id = ? AND day = ?').all(userId, day);
   const uploadBySlot = new Map(uploads.map((u) => [u.slot_id, u]));
   return slots.map((s) => ({ id: s.id, slotIndex: s.slot_index, ...deriveStatus(s, uploadBySlot.get(s.id)) }));
@@ -129,15 +129,15 @@ export function extForMime(mime) {
   return EXT_BY_MIME[mime] || extname(mime).slice(0, 10) || '';
 }
 
-/** Validates ownership/window/kind and records an already-saved-to-disk upload. */
+/** Validates the shared slot is open and this user hasn't already used it, then records the upload. */
 export function recordUpload(slotId, userId, { mimeType, filePath, fileSize }) {
   const slot = db.prepare('SELECT * FROM memo_slots WHERE id = ?').get(slotId);
-  if (!slot || slot.user_id !== userId) {
-    const err = new Error('err_memo_not_your_slot');
-    err.status = 403;
+  if (!slot) {
+    const err = new Error('err_memo_slot_not_found');
+    err.status = 404;
     throw err;
   }
-  const derived = deriveStatus(slot, db.prepare('SELECT * FROM memo_uploads WHERE slot_id = ?').get(slotId));
+  const derived = deriveStatus(slot, db.prepare('SELECT * FROM memo_uploads WHERE slot_id = ? AND user_id = ?').get(slotId, userId));
   if (derived.status !== 'open') {
     const err = new Error(derived.status === 'uploaded' ? 'err_memo_already_uploaded' : 'err_memo_slot_not_open');
     err.status = 409;
@@ -155,16 +155,17 @@ export function getUpload(uploadId) {
   return db.prepare('SELECT * FROM memo_uploads WHERE id = ?').get(uploadId);
 }
 
-/** Per-day summary for the admin history view. */
+/** Per-day summary for the admin history view. Slots are shared, but uploads
+ * are per-guest, so uploadedCount is the total number of files that came in
+ * that day (can exceed totalSlots once more than one guest uses a moment). */
 export function listDays() {
   return db.prepare(`
     SELECT
       memo_slots.day AS day,
-      COUNT(*) AS totalSlots,
-      SUM(CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END) AS uploadedCount,
+      (SELECT COUNT(*) FROM memo_slots s2 WHERE s2.day = memo_slots.day) AS totalSlots,
+      (SELECT COUNT(*) FROM memo_uploads u2 WHERE u2.day = memo_slots.day) AS uploadedCount,
       (SELECT COUNT(*) FROM memo_recaps r WHERE r.day = memo_slots.day) AS hasRecap
     FROM memo_slots
-    LEFT JOIN memo_uploads u ON u.slot_id = memo_slots.id
     WHERE memo_slots.notified_at IS NOT NULL
     GROUP BY memo_slots.day
     ORDER BY memo_slots.day DESC

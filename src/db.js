@@ -377,34 +377,45 @@ function tokenBase(name) {
  * suffix (e.g. "rito8749"), easier to type/remember than an opaque string.
  * Retries on the rare collision (checked via the token's lookup hash).
  */
-// Memo: 5x/day, at a random independent time per user, a push notification
-// asks them to upload a photo/video within a 15-minute window ("slot"). The
-// actual file lives on disk (see MEMO_DIR in memo.js), not as a BLOB here -
-// at original-size photos/video across every guest, that's an entirely
-// different scale than the small resized-JPEG BLOBs the outfit-entry photos
-// use, so only metadata (path, size, mime, timestamps) is stored in SQLite.
+// Memo: 5x/day, at the same random moments for every guest (like BeReal), a
+// push notification asks everyone to upload a photo/video within a 15-minute
+// window ("slot"). The actual file lives on disk (see MEMO_DIR in memo.js),
+// not as a BLOB here - at original-size photos/video across every guest,
+// that's an entirely different scale than the small resized-JPEG BLOBs the
+// outfit-entry photos use, so only metadata (path, size, mime, timestamps)
+// is stored in SQLite.
+//
+// Pre-launch schema change: slots used to be per-user independent
+// (UNIQUE(user_id, day, slot_index)) - switched to one shared schedule per
+// day (UNIQUE(day, slot_index)) instead, so every guest is notified
+// together, same as the real thing. Memo has never shipped to prod and QA's
+// DB is ephemeral by design, so old per-user rows are simply dropped rather
+// than migrated - nothing real to preserve yet.
+if (columnExists('memo_slots', 'user_id')) {
+  db.exec('DROP TABLE IF EXISTS memo_uploads; DROP TABLE IF EXISTS memo_slots;');
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS memo_slots (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     day          TEXT NOT NULL,
     slot_index   INTEGER NOT NULL,
     scheduled_at TEXT NOT NULL,
     notified_at  TEXT,
     created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
-    UNIQUE(user_id, day, slot_index)
+    UNIQUE(day, slot_index)
   );
 
   CREATE TABLE IF NOT EXISTS memo_uploads (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    slot_id     INTEGER NOT NULL UNIQUE REFERENCES memo_slots(id) ON DELETE CASCADE,
+    slot_id     INTEGER NOT NULL REFERENCES memo_slots(id) ON DELETE CASCADE,
     user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     day         TEXT NOT NULL,
     kind        TEXT NOT NULL,
     mime_type   TEXT NOT NULL,
     file_path   TEXT NOT NULL,
     file_size   INTEGER NOT NULL,
-    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    UNIQUE(slot_id, user_id)
   );
 
   CREATE TABLE IF NOT EXISTS memo_recaps (

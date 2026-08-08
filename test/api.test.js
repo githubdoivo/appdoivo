@@ -1539,20 +1539,28 @@ test('uploading to a slot that has not been notified yet is rejected', async () 
   assert.equal(res.data.error, 'err_memo_slot_not_open');
 });
 
-test('a slot within its 15-minute window accepts one upload, rejects a second, and only the owner can upload to it', async () => {
+test('a slot within its 15-minute window is shared - every guest can upload to it once, but not twice each', async () => {
   const { data } = await api('GET', '/memo/today', { token: userToken });
   const slot = data.slots[2];
   markSlotNotified(slot.id);
 
   const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Bystander' } });
-  const wrongOwner = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+  const alsoOk = await apiUpload(`/memo/slots/${slot.id}/upload`, {
     token: bystander.data.token,
     buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
     filename: 'photo.jpg',
     mimeType: 'image/jpeg',
   });
-  assert.equal(wrongOwner.status, 403);
-  assert.equal(wrongOwner.data.error, 'err_memo_not_your_slot');
+  assert.equal(alsoOk.status, 201, 'a shared slot accepts uploads from any guest, not just one');
+
+  const bystanderAgain = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo2.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(bystanderAgain.status, 409, 'but not twice for the same guest');
+  assert.equal(bystanderAgain.data.error, 'err_memo_already_uploaded');
 
   const badType = await apiUpload(`/memo/slots/${slot.id}/upload`, {
     token: userToken,
