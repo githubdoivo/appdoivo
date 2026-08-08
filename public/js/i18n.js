@@ -69,7 +69,7 @@ export const translations = {
     // Mural (now "Plaza" - open group sharing space, messages disappear
     // on their own)
     chat_hero: 'fala à vontade - some sozinho.',
-    chat_title: 'mensagens',
+    chat_title: 'partilha um momento',
     chat_help: 'só os mais recentes sobrevivem. o resto vira pó.',
     chat_ph: 'escreve uma mensagem...',
     chat_send: 'partilhar',
@@ -456,7 +456,7 @@ export const translations = {
     time_ago_day: '1 day ago',
     time_ago_days: '{n} days ago',
     chat_hero: 'speak freely - it vanishes.',
-    chat_title: 'messages',
+    chat_title: 'share a moment',
     chat_help: 'only the freshest survive. the rest turns to dust.',
     chat_ph: 'write a message...',
     chat_send: 'share',
