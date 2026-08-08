@@ -846,6 +846,14 @@ html.mode-light { --clay-active: #b5624a; }
   margin-bottom: 18px;
 }
 .card h2 { font-size: 1.15rem; margin-bottom: 6px; }
+/* Every theme's --ink is tuned within its own hue (see each body.theme-X
+   block) - some read distinctly "whiter" than others at similar lightness
+   (a cool cyan vs. a warm cream/gold), which made card titles look
+   inconsistently bold from one page to the next. Literal white in dark
+   mode everywhere, for the same visual weight regardless of theme. Light
+   mode keeps each theme's own --ink (already dark, tuned to read against
+   its own light paper - literal white there would be invisible). */
+html.mode-dark .card h2 { color: #fff; }
 
 .hero-line {
   font-family: var(--serif);
@@ -1400,12 +1408,6 @@ body.theme-plaza {
    this override, so it fell through to the generic --ink and read as
    noticeably bolder/heavier than the same line on every other tab. */
 body.theme-plaza .hero-line { color: var(--clay-2); }
-/* Plaza's --ink is a deliberate warm cream/gold (matching its mustard
-   "newsprint" palette elsewhere), which never reads as truly white next to
-   a cooler theme's --ink (e.g. Memo's icy cyan) even though both use the
-   same variable - by explicit request, this card title is neutral white
-   instead of tracking the theme's own tint. */
-html.mode-dark body.theme-plaza #tab-chat h2 { color: #fff; }
 html.mode-dark body.theme-plaza {
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
