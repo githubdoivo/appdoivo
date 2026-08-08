@@ -36,6 +36,13 @@ app.use(express.json({ limit: '2mb' }));
 // API.
 app.use('/api', apiRouter);
 
+// RFC 9116 places security.txt at /.well-known/security.txt (see
+// public/.well-known/security.txt) - that's the canonical location and
+// already resolves on its own. Some older scanners only ever check the
+// legacy bare /security.txt path though, so redirect that one too rather
+// than letting the SPA fallback below swallow it into index.html.
+app.get('/security.txt', (req, res) => res.redirect(301, '/.well-known/security.txt'));
+
 // Cloudflare sits in front of qa/prod and its own "Browser Cache TTL"
 // rewrites the Cache-Control it hands to the client regardless of what the
 // origin (us) sends - confirmed directly, curling the live CSS shows

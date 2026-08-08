@@ -95,6 +95,18 @@ test('GET /version is public and reports env: null when APP_ENV is unset (prod d
   assert.equal(r.data.env, null);
 });
 
+/* ------------------------------- security.txt ------------------------------ */
+// RFC 9116's canonical /.well-known/security.txt is a static file (see
+// public/.well-known/security.txt), served automatically by express.static
+// - nothing to test there. This covers the legacy bare-path redirect only.
+
+test('GET /security.txt redirects to the canonical .well-known location', async () => {
+  const appRoot = base.replace(/\/api$/, '');
+  const res = await fetch(`${appRoot}/security.txt`, { redirect: 'manual' });
+  assert.equal(res.status, 301);
+  assert.equal(res.headers.get('location'), '/.well-known/security.txt');
+});
+
 /* --------------------------------- Auth ---------------------------------- */
 
 test('login rejects an invalid token', async () => {
