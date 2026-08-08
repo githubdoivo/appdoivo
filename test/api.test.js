@@ -498,6 +498,40 @@ test('admin opens the night and each user votes once', async () => {
   assert.equal(night.started, true, 'once a night has been opened, it should never look "unstarted" again');
 });
 
+test('GET /admin/voting reports how many non-admin accounts have not voted, excluding admins from the count', async () => {
+  // A separate night from NIGHT/'furnished' (heavily reused by neighboring
+  // tests) - and asserting deltas off a baseline rather than an absolute
+  // number, since this file shares one DB across the whole run and earlier
+  // tests may have left their own never-voted accounts behind.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+
+  const nightsInfo = async () => {
+    const r = await api('GET', '/admin/voting', { token: ADMIN });
+    return r.data.nights.find((n) => n.night === night);
+  };
+  const baseline = (await nightsInfo()).notVoted;
+
+  // A fresh admin should never raise the count - the organiser running the
+  // show very often doesn't vote themselves.
+  const freshAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Fresh Admin For NotVoted' } });
+  await api('PATCH', `/admin/users/${freshAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  assert.equal((await nightsInfo()).notVoted, baseline, 'a new admin account should not raise the count');
+
+  // Two fresh regular accounts should raise it by exactly two.
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest A' } });
+  await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest B' } });
+  const contestant = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'NotVoted Target', night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'two fresh non-admin accounts should each raise the count by one');
+
+  // One of them voting should drop it back by one.
+  await api('POST', '/votes', { token: a.data.token, body: { contestantId: contestant.data.id, night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'voting should remove that account from the count');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
 test('who-voted-for-whom is owner-only; a regular admin only gets the aggregate results', async () => {
   const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Non Owner Admin' } });
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });

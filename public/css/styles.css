@@ -910,7 +910,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
    taller input renders at the input's full height regardless of its own
    (much smaller) padding. Affects every .inline form: chat, admin's
    create-user, admin's add-contestant. */
-.inline { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+/* flex-wrap: a row of 3+ buttons (e.g. confirm/cancel/change-photo on a
+   pending duo entry) has no reason to force itself into one line - nowrap
+   was pushing the last one off the edge of the screen on narrower phones
+   instead of just dropping it to a second row. */
+.inline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
 

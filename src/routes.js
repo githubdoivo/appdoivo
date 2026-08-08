@@ -35,6 +35,7 @@ import {
   confirmDuoVote,
   cancelPendingVote,
   pendingVoteCount,
+  usersWithoutVoteCount,
   resultsForNight,
   visibleResultsForNight,
   resetResultsPhase,
@@ -827,6 +828,11 @@ router.get('/admin/voting', (req, res) => {
       // Lets the admin panel tell "never run yet" apart from "closed after
       // running" - both report status 'closed' otherwise (see /votes/status).
       started: getSetting(`voting_started_${night}`) === '1',
+      // Advisory only (see usersWithoutVoteCount()) - the admin panel warns
+      // once before closing if this is nonzero, but nothing server-side
+      // enforces it, since plenty of real nights close with some guests
+      // never getting around to voting and that's fine.
+      notVoted: usersWithoutVoteCount(night),
     })),
   });
 });

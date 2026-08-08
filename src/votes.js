@@ -416,6 +416,24 @@ export function pendingVoteCount(night) {
   ).get(night).n;
 }
 
+/** How many accounts have no confirmed vote for a night yet - the owner
+ * gets warned about this before closing too, separately from
+ * pendingVoteCount() above (that's specifically duo proposals already
+ * mid-flight; this is everyone who hasn't voted at all). Goes through
+ * myVoteForNight() per user rather than a raw count so a duo's non-
+ * proposing half - whose vote lives under their partner's user_id, not
+ * their own - correctly counts as having voted once confirmed. */
+export function usersWithoutVoteCount(night) {
+  // Excludes admin/owner accounts - the organiser running the show very
+  // often doesn't vote themselves, so counting them would make this fire
+  // on nearly every night regardless of how many guests actually voted.
+  const userIds = db.prepare('SELECT id FROM users WHERE is_admin = 0').all().map((r) => r.id);
+  return userIds.filter((id) => {
+    const vote = myVoteForNight(id, night);
+    return !vote || !vote.confirmed;
+  }).length;
+}
+
 /** Full ranking of contestants for a night, each with its rank (admin view).
  * Carries the same registeredBy/partnerName pair as contestantsForNight() -
  * results are just as identity-ambiguous as the vote picker otherwise.

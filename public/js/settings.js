@@ -242,6 +242,11 @@ function currentNight() {
   return $('admin-night-switch')?.querySelector('.active')?.dataset.night || 'furnished';
 }
 
+// Latest /admin/voting response per night, keyed by night - lets the close
+// warning below (see the voting-advance-btn handler) reuse what
+// loadVotingState() already fetched instead of a redundant request.
+let votingStateCache = {};
+
 $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
     $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
@@ -272,6 +277,7 @@ const VOTING_STATE_LABEL = {
 // NEXT thing a click will do; a separate reset button is the only way back.
 async function loadVotingState() {
   const { nights } = await api('/admin/voting');
+  nights.forEach((n) => { votingStateCache[n.night] = n; });
   const night = currentNight();
   const info = nights.find((n) => n.night === night) || {};
   const status = info.status || 'closed';
@@ -308,6 +314,20 @@ $('voting-advance-btn').addEventListener('click', async () => {
   const action = $('voting-advance-btn').dataset.action;
   if (!action) return;
   $('voting-msg').textContent = '';
+  // Closing while some accounts never voted at all leaves them out with no
+  // way back - unlike the two 409 cases below (which the server itself
+  // refuses so a stray API call can't skip them either), this is purely
+  // advisory: the organiser very often doesn't vote themselves, so it can't
+  // be a hard requirement, just a heads-up before the number of people who
+  // could still vote goes to zero. Checked client-side against data
+  // loadVotingState() already fetched, rather than gating /close itself.
+  if (action === 'close') {
+    const notVoted = votingStateCache[currentNight()]?.notVoted ?? 0;
+    if (notVoted > 0) {
+      const ok = await showConfirm(t(notVoted === 1 ? 'confirm_close_not_voted_one' : 'confirm_close_not_voted_other', { n: notVoted }));
+      if (!ok) return;
+    }
+  }
   try {
     await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST' });
   } catch (err) {
