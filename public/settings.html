@@ -50,7 +50,9 @@
         <button class="tab" data-atab="plaza" data-i18n="tab_plaza">Plaza</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
-        <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
+        <!-- No longer a normal tab bar entry - see the star trigger at the
+             end of atab-memo instead (#wall-secret-btn in settings.js). -->
+        <button class="tab hidden" data-atab="wall" data-i18n="tab_chat">Wall</button>
         <button class="tab" data-atab="memo" data-i18n="tab_memo">Memo</button>
       </nav>
 
@@ -295,6 +297,12 @@
           <button id="memo-wipe-btn" type="button" class="danger" data-i18n="memo_wipe_btn">Apagar tudo do Memo</button>
           <span id="memo-wipe-msg" class="muted wipe-msg"></span>
         </div>
+
+        <!-- Owner-only secret entry point to the Plaza admin tab (internal
+             id "wall" - see the tab button above, permanently hidden now).
+             Deliberately near-invisible, not a labeled button - see
+             wall-secret-btn in settings.js/styles.css. -->
+        <button type="button" id="wall-secret-btn" class="wall-secret-btn hidden" title="✦" aria-label="✦">✦</button>
       </div>
 
       <!-- Tab: Settings (every user, including the owner) -->

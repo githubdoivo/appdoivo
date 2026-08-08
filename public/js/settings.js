@@ -162,12 +162,13 @@ async function boot() {
     // further down) - that's just a read-only duplicate of the account
     // card already at the top of this page, not a useful section.
     $('users-management').classList.toggle('hidden', !isOwner);
+    // The Plaza admin tab (pseudonym mapping, internal id "wall") is
+    // owner-only and no longer a normal tab bar entry at all (see the
+    // permanently-hidden button in settings.html) - the only way in is the
+    // near-invisible star at the end of atab-memo, itself only shown to
+    // the owner.
+    $('wall-secret-btn').classList.toggle('hidden', !isOwner);
     if (!isOwner) {
-      // The Wall tab (pseudonym mapping + its timezone card) was opened up to
-      // regular admins temporarily so testers could see it existed - that's
-      // done now, so it's owner-only again, whole tab hidden rather than just
-      // the sensitive card within it.
-      document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
       // Per-feature kill switches (see POST /admin/consequences/wipe etc.)
@@ -1440,6 +1441,10 @@ function selectAdminTab(tab) {
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
+
+// The star's whole point is being easy to miss - clicking straight into
+// the tab it unlocks rather than first unhiding the nav button it replaced.
+$('wall-secret-btn').addEventListener('click', () => selectAdminTab('wall'));
 
 // The top-left logo used to do nothing here - now it's "go home", same as
 // clicking a site's logo anywhere else: back to the landing admin tab from

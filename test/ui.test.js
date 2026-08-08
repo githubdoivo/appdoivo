@@ -589,10 +589,13 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(usersManagementHidden, 'non-owner admin should not see Manage Users at all - it would just duplicate the account card');
 
   // The Plaza (pseudonym-unmasking) admin tab - internal id "wall", see
-  // tab_chat in i18n.js - was opened up to admins temporarily for testing;
-  // it's owner-only again now, whole tab hidden.
+  // tab_chat in i18n.js - isn't a normal tab bar entry for anyone anymore,
+  // owner included (see the star trigger below); a non-owner admin
+  // shouldn't even get the star that unlocks it.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(wallTabHidden, 'non-owner admin should no longer see the Plaza admin tab');
+  assert.ok(wallTabHidden, 'the Plaza admin tab is never a normal nav entry');
+  const secretBtnHiddenForAdmin = await page.$eval('#wall-secret-btn', (el) => el.classList.contains('hidden'));
+  assert.ok(secretBtnHiddenForAdmin, 'a non-owner admin should not see the star that unlocks the Plaza admin tab');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
   assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');
@@ -616,6 +619,21 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   await context.close();
   await api('PATCH', `/admin/users/${promoted.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
   await api('DELETE', `/admin/users/${promoted.id}`, { token: ADMIN });
+});
+
+test('the owner sees the near-invisible star on the Memo admin tab, and it opens the Plaza admin tab', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  await page.click('[data-atab="memo"]');
+  await page.waitForSelector('#wall-secret-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#wall-secret-btn');
+  await page.waitForSelector('#atab-wall:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const wallTabStillHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
+  assert.ok(wallTabStillHidden, 'the nav button stays hidden even once the panel it opens is showing - the star is the only way in');
+
+  await context.close();
 });
 
 test('a plain (non-admin) user only sees the Settings tab on /settings.html', async () => {

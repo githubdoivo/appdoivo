@@ -366,6 +366,25 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
    tens a tua chave?" for attention. Smaller and dimmer than the base
    .link-btn, same underline treatment so it still reads as tappable. */
 .login-lang-toggle { font-size: 0.68rem; opacity: 0.6; margin-top: 14px; letter-spacing: 0.06em; }
+/* Deliberately almost invisible - this is the only way into the Plaza
+   admin tab now (see wall-secret-btn in settings.js), meant to be found by
+   someone who already knows it's there, not stumbled onto. No underline,
+   no hover fill (unlike .link-btn above) - just a faint mark that gets
+   slightly more visible on tap/hover so it doesn't feel entirely broken. */
+.wall-secret-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: none;
+  display: block;
+  margin: 28px auto 0;
+  padding: 10px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  opacity: 0.18;
+  cursor: pointer;
+}
+.wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.5; }
 .login-lang-toggle:hover { opacity: 0.9; }
 
 #find-key-results {
