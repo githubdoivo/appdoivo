@@ -23,6 +23,11 @@ export const MEMO_MAX_FILE_BYTES = 100 * 1024 * 1024;
 const WINDOW_START_HOUR = 11;
 const WINDOW_END_HOUR = 1;
 
+// Minimum spacing enforced between any two of today's 5 slots for the same
+// user - well above MEMO_WINDOW_OPEN_MINUTES so two windows can never
+// overlap.
+export const MEMO_MIN_GAP_MINUTES = 90;
+
 function addDays(dateStr, n) {
   const d = new Date(`${dateStr}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -59,14 +64,23 @@ export function ensureTodaysSlots(userId) {
   const tz = getTimezone();
   const windowStart = zonedTimeToUtc(day, WINDOW_START_HOUR, 0, tz);
   const windowEnd = zonedTimeToUtc(addDays(day, 1), WINDOW_END_HOUR, 0, tz);
-  const bucketMs = (windowEnd.getTime() - windowStart.getTime()) / MEMO_SLOTS_PER_DAY;
+  const gapMs = MEMO_MIN_GAP_MINUTES * 60 * 1000;
+  const slackMs = (windowEnd.getTime() - windowStart.getTime()) - gapMs * (MEMO_SLOTS_PER_DAY - 1);
+
+  // n random offsets into the leftover "slack" time, sorted ascending, then
+  // spread apart by the fixed minimum gap. Because the offsets are sorted,
+  // consecutive slots are always at least gapMs apart (the sorted gap
+  // between offsets is >= 0, plus the fixed gapMs) - unlike picking a random
+  // point independently within each of 5 fixed-width buckets, which lets
+  // two picks land right next to each other across a bucket boundary.
+  const offsets = Array.from({ length: MEMO_SLOTS_PER_DAY }, () => Math.random() * slackMs).sort((a, b) => a - b);
 
   const insert = db.prepare(`
     INSERT OR IGNORE INTO memo_slots (user_id, day, slot_index, scheduled_at)
     VALUES (?, ?, ?, ?)
   `);
   for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
-    const at = new Date(windowStart.getTime() + i * bucketMs + Math.random() * bucketMs);
+    const at = new Date(windowStart.getTime() + offsets[i] + i * gapMs);
     insert.run(userId, day, i, toDbTimestamp(at));
   }
 }

@@ -25,7 +25,7 @@ process.env.ENABLE_DEV_LOGIN = 'false';
 
 const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
-const { MEMO_DIR } = await import('../src/memo.js');
+const { MEMO_DIR, MEMO_MIN_GAP_MINUTES } = await import('../src/memo.js');
 const { today } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
@@ -1515,6 +1515,15 @@ test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () =
 
   const second = await api('GET', '/memo/today', { token: userToken });
   assert.deepEqual(second.data.slots.map((s) => s.id), first.data.slots.map((s) => s.id), 'a second call must not generate new slots for the same day');
+});
+
+test('the 5 daily slots never land close together - each is at least MEMO_MIN_GAP_MINUTES from the next', async () => {
+  const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
+  const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY scheduled_at`).all(...ids);
+  for (let i = 1; i < rows.length; i++) {
+    const gapMinutes = (new Date(`${rows[i].scheduled_at.replace(' ', 'T')}Z`) - new Date(`${rows[i - 1].scheduled_at.replace(' ', 'T')}Z`)) / 60000;
+    assert.ok(gapMinutes >= MEMO_MIN_GAP_MINUTES, `expected at least ${MEMO_MIN_GAP_MINUTES}min between consecutive slots, got ${gapMinutes}`);
+  }
 });
 
 test('uploading to a slot that has not been notified yet is rejected', async () => {
