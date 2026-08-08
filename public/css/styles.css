@@ -393,7 +393,7 @@ input[type="password"] { text-transform: none; }
    as distinctly blue-tinted by contrast against every warm theme (mural's
    terracotta, rata's pink, furnished's clay). --ink-soft already tracks
    each active theme, so this stays in-palette everywhere instead. */
-::placeholder { text-transform: lowercase; font-weight: 600; color: var(--ink-soft); opacity: 1; }
+::placeholder { text-transform: lowercase; font-weight: 400; color: var(--ink-soft); opacity: 1; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
@@ -1406,6 +1406,24 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
+/* Admin's own post-history preview (loadPlazaPosts() in settings.js) - the
+   byline (meta), question (content) and poll tally (data) used to all
+   render at the same weight/color, making a poll entry read as one
+   undifferentiated block. The vote count is now the one bold element per
+   row (it's the actual data being scanned for), the option label stays
+   plain body text, and voter names stay muted - a top divider plus
+   indent separates the tally visually from the question above it. */
+.admin-post-options {
+  margin: 10px 0 0;
+  padding: 10px 0 0 4px;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  font-family: var(--body);
+  font-size: 0.92rem;
+}
+.admin-post-options li { padding: 3px 0; }
+.admin-post-options strong { font-weight: 700; margin-left: 4px; }
+
 .plaza-post-announcement {
   background: var(--paper-2);
   border: 1px solid var(--line);
@@ -1558,12 +1576,12 @@ html.mode-dark body.theme-plaza {
 #admin-register-form button[type="submit"],
 #voting-advance-btn,
 [data-reveal-next] {
-  /* Was 22% (and 35% before that, deemed too vivid/heavy in light mode) -
-     30% strikes a middle ground: some of these (revelar, criar, iniciar)
-     are the one clear primary action on their card and read as too washed-
-     out/easy to miss at 22%. Contrast stays 6-9:1 regardless of percentage
-     here (the ink/paper pairing dominates it). */
-  background: color-mix(in srgb, var(--clay) 30%, var(--paper-2));
+  /* Was 22%, then 30% - still read as too pale/washed-out next to a plain
+     solid button sitting right beside it (e.g. "iniciar" vs "reiniciar
+     votação" in the voting-controls row). 35% is the highest that still
+     clears 4.5:1 in every theme/mode checked (mural light is the tightest
+     at 4.67:1). */
+  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
   border-color: var(--clay);
   color: var(--ink);
 }
@@ -1578,7 +1596,7 @@ html.mode-dark body.theme-plaza {
 #admin-register-form button[type="submit"]:hover,
 #voting-advance-btn:hover,
 [data-reveal-next]:hover {
-  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
+  background: color-mix(in srgb, var(--clay) 40%, var(--paper-2));
   color: var(--ink);
 }
 
