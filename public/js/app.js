@@ -725,10 +725,15 @@ function timeAgo(dbTimestamp) {
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
+  // Same "poll"/"announcement" labels the admin's own type picker already
+  // uses, just surfaced here too - at a glance in a mixed feed, nothing
+  // else says which kind of post this is before you start reading it.
+  const typeLabel = `<span class="plaza-post-type">${esc(t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement'))}</span>`;
 
   if (post.type !== 'poll') {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
         ${pinnedBadge}
         <p class="plaza-post-text">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -764,6 +769,7 @@ function renderPlazaPost(post) {
 
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
+      ${typeLabel}
       ${pinnedBadge}
       <p class="plaza-post-text">${linkify(esc(post.text))}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
