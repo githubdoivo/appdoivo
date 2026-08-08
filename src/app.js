@@ -33,6 +33,13 @@ app.use(express.json());
 // API.
 app.use('/api', apiRouter);
 
+// RFC 9116 places security.txt at /.well-known/security.txt (see
+// public/.well-known/security.txt) - that's the canonical location and
+// already resolves on its own. Some older scanners only ever check the
+// legacy bare /security.txt path though, so redirect that one too rather
+// than letting the SPA fallback below swallow it into index.html.
+app.get('/security.txt', (req, res) => res.redirect(301, '/.well-known/security.txt'));
+
 // Static files (PWA).
 app.use(express.static(PUBLIC_DIR));
 
