@@ -1228,12 +1228,12 @@ async function loadPlazaPosts() {
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0">${linkify(esc(p.text))}</p>
+        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>
         ${p.type === 'poll' ? `
-        <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
+        <ul class="admin-post-options">
           ${p.options.map((o) => {
             const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
-            return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
+            return `<li><span>${esc(o.label)}</span> <strong>${o.votes}</strong>${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
