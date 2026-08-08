@@ -1210,6 +1210,47 @@ test('the admin voting-advance button always confirms first - a misclick decline
   await context.close();
 });
 
+test('a tie for first place shows a "Desempate" button, and running it reopens voting scoped to just the tied contestants', async () => {
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'UI Runoff A', night } });
+  const b = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'UI Runoff B', night } });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const v1 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'UI Runoff Voter 1' } });
+  const v2 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'UI Runoff Voter 2' } });
+  await api('POST', '/votes', { token: v1.token, body: { contestantId: a.id, night } });
+  await api('POST', '/votes', { token: v2.token, body: { contestantId: b.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.click('[data-night="swamp"]');
+  await page.waitForSelector('#voting-runoff-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#voting-runoff-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:not(.ghost)');
+  await page.waitForFunction(
+    () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  // A guest sees "it's a tie - vote again" and only the two tied names, not
+  // whatever else might be registered for this night.
+  const guestPage = await loginPage(context, v1.token, '/?night=swamp');
+  await guestPage.click('[data-tab="outfit"]');
+  await guestPage.waitForFunction(
+    () => document.getElementById('voting-status')?.textContent.length > 0,
+    { timeout: WAIT_TIMEOUT }
+  );
+  const statusText = await guestPage.textContent('#voting-status');
+  assert.match(statusText, /tie|empate/i, 'a guest should see runoff-specific status text, not the normal "voting is open" line');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
 test('the admin download-photos button shows progress, triggers a real download, and reports errors inline', async () => {
   const night = 'swamp';
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });

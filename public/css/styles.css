@@ -1005,7 +1005,6 @@ html.mode-light .hero-line { color: var(--ink); }
 
 /* --------------------------------- Admin --------------------------------- */
 
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
@@ -1549,16 +1548,6 @@ html.mode-light body.theme-memo .card {
 .memo-reaction svg { width: 19px; height: 19px; flex-shrink: 0; }
 .memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
 .memo-reaction.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
-
-.plaza-eyebrow {
-  display: block;
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: var(--text-xs);
-  letter-spacing: 0.14em;
-  text-transform: lowercase;
-  color: var(--clay);
-}
 
 /* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
    glance tells an announcement from a poll - a plain torn front-page column
