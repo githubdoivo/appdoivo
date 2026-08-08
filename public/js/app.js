@@ -527,9 +527,19 @@ function tickMemoCountdowns() {
   if (changed) renderMemoSlots();
 }
 
+const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+// Resolved slots (done or missed - nothing left to act on) sink to the
+// bottom, so whatever's actually waiting or open next is always the first
+// thing seen instead of getting buried after an earlier one already dealt
+// with. Sorts a copy - memoSlotsCache itself stays in slot_index order,
+// which other lookups (by id) don't care about anyway.
+const MEMO_STATUS_RANK = { open: 0, waiting: 1, uploaded: 2, missed: 2 };
+
 function renderMemoSlots() {
-  $('memo-slots').innerHTML = memoSlotsCache.map((s) => {
-    const label = t('memo_slot_label', { n: s.slotIndex + 1 });
+  const ordered = [...memoSlotsCache].sort((a, b) => MEMO_STATUS_RANK[a.status] - MEMO_STATUS_RANK[b.status]);
+  $('memo-slots').innerHTML = ordered.map((s) => {
+    const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] || s.slotIndex + 1 });
     if (s.status === 'waiting') {
       return `
         <div class="memo-slot memo-slot-waiting">
@@ -563,7 +573,11 @@ function renderMemoSlots() {
           </div>
         </div>`;
     }
-    // open
+    // open - unlike the Snatch photo picker (see register-photo-input),
+    // this one DOES use `capture`: the whole point of a moment is catching
+    // whatever's happening right now, not browsing the gallery for
+    // something already taken, so jumping straight into the camera is the
+    // right default here instead of a downside.
     const mins = String(Math.floor(Math.max(0, s.secondsLeft) / 60)).padStart(2, '0');
     const secs = String(Math.max(0, s.secondsLeft) % 60).padStart(2, '0');
     return `
@@ -574,7 +588,7 @@ function renderMemoSlots() {
           <span class="memo-slot-meta">${mins}:${secs}</span>
         </div>
         <button type="button" class="small" data-memo-upload-btn="${s.id}">${esc(t('memo_choose_btn'))}</button>
-        <input type="file" accept="image/*,video/*" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />
+        <input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />
       </div>`;
   }).join('');
 }
@@ -582,14 +596,18 @@ function renderMemoSlots() {
 async function loadMemoRecaps() {
   try {
     const { days } = await api('/memo/recaps');
-    $('memo-recaps').innerHTML = days.length
-      ? days.map((day) => `
+    // Nothing to watch yet is the common case for most of the party - the
+    // empty-state message was just dead weight sitting on the page, not
+    // useful information. Hidden entirely until the owner posts a first one.
+    $('memo-recap-card').classList.toggle('hidden', days.length === 0);
+    if (days.length) {
+      $('memo-recaps').innerHTML = days.map((day) => `
         <div class="memo-recap-row">
           <span class="memo-recap-day">${esc(formatEuDate(day))}</span>
           <video class="memo-recap-video" controls preload="none" src="${memoRecapUrl(day)}"></video>
           <a class="small ghost" href="${memoRecapUrl(day)}" download>${esc(t('memo_recap_download'))}</a>
-        </div>`).join('')
-      : `<p class="muted">${esc(t('memo_recap_empty'))}</p>`;
+        </div>`).join('');
+    }
   } catch { /* transient network hiccup - the next poll retries */ }
 }
 
@@ -825,8 +843,12 @@ let rataPollTimer = null;
 async function loadRataHistory() {
   try {
     const { consequences } = await api('/consequences/revealed');
-    $('rata-history').innerHTML = consequences.length
-      ? consequences.map((c) => {
+    // Nothing revealed yet (very start of the party) is the one time this
+    // would show - hidden entirely instead of an empty-state message, same
+    // as Memo's recap card.
+    $('rata-history-card').classList.toggle('hidden', consequences.length === 0);
+    if (consequences.length) {
+      $('rata-history').innerHTML = consequences.map((c) => {
         // No status tags/assign jargon here (that's admin-only, see
         // renderConsequenceCard() in settings.js) - just plain "done by X"
         // / "pending by X", or bare "pending" if nobody's confirmed
@@ -848,8 +870,8 @@ async function loadRataHistory() {
           </div>
           ${canMarkDone ? `<button type="button" class="small" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
-      }).join('')
-      : `<p class="muted">${t('rata_history_empty')}</p>`;
+      }).join('');
+    }
   } catch { /* transient - leaves whatever was last shown */ }
 }
 
