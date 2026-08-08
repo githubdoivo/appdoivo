@@ -25,8 +25,10 @@ const WINDOW_END_HOUR = 1;
 
 // Minimum spacing enforced between any two of today's 5 slots for the same
 // user - well above MEMO_WINDOW_OPEN_MINUTES so two windows can never
-// overlap.
-export const MEMO_MIN_GAP_MINUTES = 90;
+// overlap, but kept low enough that slots can still land close together
+// sometimes (or far apart other times) rather than falling into an evenly-
+// spaced, predictable rhythm - the whole point is not seeing it coming.
+export const MEMO_MIN_GAP_MINUTES = 45;
 
 function addDays(dateStr, n) {
   const d = new Date(`${dateStr}T12:00:00Z`);
