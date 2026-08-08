@@ -1371,8 +1371,13 @@ body.theme-plaza {
   /* Was a blue accent (#2a4a7a/#3f679c) for newsstand/masthead contrast -
      read as out of place next to every other theme's warm, single-hue
      accent. Back to a monochrome newsprint mood: a darker, more saturated
-     yellow/mustard than the paper itself, not a different hue. */
-  --clay:     #7a5200;
+     yellow/mustard than the paper itself, not a different hue. Was
+     #7a5200 (hue 40, orange-leaning) - rotated to hue 48 at the same
+     lightness/saturation to read more "yellow", less brown, without the
+     contrast hit a straight lightening would cause (this color doubles as
+     both a text color on pale paper and a badge/button background under
+     light text, so it can't just get brighter). */
+  --clay:     #7a6200;
   --clay-2:   #9c6e15;
   --clay-active: #7a5200;
   --rata:     #7a5200;
