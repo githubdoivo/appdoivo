@@ -45,7 +45,14 @@ primary_region = "cdg"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  # Temporarily 1 instead of the usual 0 (see header) while Memo is being
+  # tested: scaling to zero between requests means the per-minute cron that
+  # fires Memo's random slots can't run while asleep, so every slot that
+  # came due during a nap fires all at once on the next wake-up - looks
+  # like several "moments" opening simultaneously, when really they're just
+  # queued. Same fix fly.toml already uses for Rata's 3h reveal in prod.
+  # Revert to 0 once Memo testing wraps up.
+  min_machines_running = 1
 
 [[vm]]
   size = "shared-cpu-1x"

@@ -6,7 +6,7 @@ import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
-import { formatHourInZone } from './time.js';
+import { formatHourInZone, formatEuDate } from './time.js';
 import { resizePhotoToJpeg } from './photo.js';
 
 // An installed iOS PWA keeps its WKWebView alive in the background rather
@@ -532,7 +532,7 @@ function renderMemoSlots() {
     if (s.status === 'missed') {
       return `
         <div class="memo-slot memo-slot-missed">
-          <span class="memo-slot-icon">×</span>
+          <span class="memo-slot-icon">ï¿½</span>
           <div class="memo-slot-txt">
             <span class="memo-slot-label">${esc(label)}</span>
             <span class="memo-slot-meta">${esc(t('memo_slot_missed'))}</span>
@@ -574,7 +574,7 @@ async function loadMemoRecaps() {
     $('memo-recaps').innerHTML = days.length
       ? days.map((day) => `
         <div class="memo-recap-row">
-          <span class="memo-recap-day">${esc(day)}</span>
+          <span class="memo-recap-day">${esc(formatEuDate(day))}</span>
           <video class="memo-recap-video" controls preload="none" src="${memoRecapUrl(day)}"></video>
           <a class="small ghost" href="${memoRecapUrl(day)}" download>${esc(t('memo_recap_download'))}</a>
         </div>`).join('')

@@ -1301,7 +1301,7 @@ async function loadMemoDays() {
       ? days.map((d) => `
         <div class="user-row">
           <div class="user-row-top">
-            <div class="user-row-name">${esc(d.day)}</div>
+            <div class="user-row-name">${esc(formatEuDate(d.day))}</div>
           </div>
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
