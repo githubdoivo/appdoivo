@@ -951,7 +951,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // WHOLE page and shows that night's vote. Nights this edition: furnished | swamp.
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
-const TABS = ['plaza', 'rata', 'outfit', 'chat', 'memo'];
+const TABS = ['plaza', 'chat', 'memo', 'rata', 'outfit'];
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);

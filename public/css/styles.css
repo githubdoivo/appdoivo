@@ -1420,21 +1420,23 @@ body.theme-memo .card {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
 }
 html.mode-light body.theme-memo {
-  /* Was #e2eff3/#d5e6ec/#c8dde4 - read as glaring/too bright next to every
-     other (warmer, deeper) theme's light mode. Deepened within the same
-     cyan family; --line darkened alongside to hold its border contrast
-     against the now-darker paper. */
-  --paper:    #d3e6ec;
-  --paper-2:  #c7dce3;
-  --paper-3:  #bad0d8;
+  /* Was #e2eff3/#d5e6ec/#c8dde4 (L~85-88%) - noticeably lighter/more
+     saturated than every other theme's light-mode paper (all sit around
+     L65-77%), reading as glaringly bright/washed out by comparison even
+     after a first darkening pass wasn't enough. Now in that same L~60-70%
+     range within the same cyan family. ink-soft/line/clay-2 all darkened
+     alongside to hold their contrast against the now-noticeably-darker
+     paper (a color only tuned against the old, much lighter background
+     loses contrast when the background gets this much deeper). */
+  --paper:    #94c3d1;
+  --paper-2:  #82b9c9;
+  --paper-3:  #70afc2;
   --ink:      #152c37;
-  --ink-soft: #477285;
-  --line:     #4f8ba0;
+  --ink-soft: #2f4c59;
+  --line:     #2d6478;
   --line-2:   #7bb0c2;
-  /* Was much lighter (#0e90aa scaled up) - darkened so it holds up as
-     .hero-line text against the pale paper here (~4.6:1). */
   --clay:     #0e90aa;
-  --clay-2:   #187486;
+  --clay-2:   #0a5464;
   --rata:     #0e90aa;
   background-color: #e2eff3;
   background-image:

@@ -11,6 +11,13 @@ import yauzl from 'yauzl';
 // outside production), so ADMIN below reads the actual generated value
 // off seedResult rather than assuming a fixed string.
 const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
+// Memo's slots are a shared/global schedule now, not per-user - whichever
+// test in this file happens to be the first to call /memo/today is the one
+// that actually triggers generation, not necessarily the "5 daily slots"
+// test itself. Anchoring the no-past-scheduling check to this run's start
+// (not a timestamp captured locally inside that one test) is what the
+// invariant actually means regardless of test order.
+const TEST_RUN_STARTED_AT = Date.now();
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
@@ -1518,7 +1525,6 @@ test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () =
 });
 
 test('the 5 daily slots never land close together - each is at least MEMO_MIN_GAP_MINUTES from the next', async () => {
-  const beforeGeneration = Date.now();
   const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
   const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY scheduled_at`).all(...ids);
   for (let i = 1; i < rows.length; i++) {
@@ -1530,10 +1536,14 @@ test('the 5 daily slots never land close together - each is at least MEMO_MIN_GA
   // first that day), anchoring purely to 11:00 would place several slots
   // in the past already, so they'd all fire at once on the next scheduler
   // tick instead of being spread out. None should ever be scheduled before
-  // the moment generation actually happened.
+  // this run could possibly have generated them - can't check against a
+  // timestamp taken locally above, since slots are a shared/global
+  // schedule now: whichever test in this file happens to call /memo/today
+  // first is the one that actually triggers generation, not necessarily
+  // this test.
   for (const row of rows) {
     const scheduledMs = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`).getTime();
-    assert.ok(scheduledMs >= beforeGeneration, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
+    assert.ok(scheduledMs >= TEST_RUN_STARTED_AT, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
   }
 });
 

@@ -69,15 +69,15 @@ export const translations = {
     time_ago_days: 'há {n} dias',
     // Mural (now "Plaza" - open group sharing space, messages disappear
     // on their own)
-    chat_hero: 'fala à vontade - some sozinho.',
-    chat_title: 'partilha os teus pensamentos',
+    chat_hero: 'fala à vontade',
+    chat_title: 'partilha de pensamentos',
     chat_help: 'só os mais recentes sobrevivem. o resto vira pó.',
     chat_ph: 'escreve uma mensagem...',
     chat_send: 'partilhar',
     chat_empty: 'ainda não há mensagens. sê a primeira pessoa a partilhar uma.',
     // Memo - notificações aleatórias, 5x por dia, para captar um momento
     tab_memo: 'memo',
-    memo_hero: 'o momento de hoje.',
+    memo_hero: 'o momento de hoje',
     memo_checklist_title: 'os teus momentos',
     memo_checklist_help: 'sem aviso, 5 vezes por dia - tens 15 minutos para captar cada momento.',
     memo_feed_title: 'o dia de hoje',
@@ -453,7 +453,7 @@ export const translations = {
     time_ago_day: '1 day ago',
     time_ago_days: '{n} days ago',
     chat_hero: 'speak freely - it vanishes.',
-    chat_title: 'share some thoughts',
+    chat_title: 'thought sharing',
     chat_help: 'only the freshest survive. the rest turns to dust.',
     chat_ph: 'write a message...',
     chat_send: 'share',
