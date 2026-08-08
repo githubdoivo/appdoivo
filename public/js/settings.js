@@ -62,6 +62,7 @@ let adminPromotionEnabled = false;
 let isOwner = false;
 let isAdmin = false;
 let plazaEnabled = false;
+let memoEnabled = false;
 let myUserId = null;
 let myName = '';
 
@@ -120,6 +121,7 @@ async function boot() {
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
     plazaEnabled = !!me.plazaEnabled;
+    memoEnabled = !!me.memoEnabled;
     myUserId = me.id;
     myName = me.name;
     wireLogoEasterEgg(me.name, me.logo_customized);
@@ -136,13 +138,17 @@ async function boot() {
   if (!plazaEnabled) {
     document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
+  // Same QA-only gating shape as Plaza above, see ENABLE_MEMO.
+  if (!memoEnabled) {
+    document.querySelector('#admin-tabs [data-atab="memo"]').classList.add('hidden');
+  }
 
   // This page is now open to every logged-in user, not just admins - a
   // plain user only gets the "Settings" tab (change their own key, no
   // user-management section); the rest of this scoping matches the main
   // admin panel's existing rules.
   if (!isAdmin) {
-    ['plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['plaza', 'outfit', 'rata', 'wall', 'memo'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
     $('users-management').classList.add('hidden');
@@ -166,7 +172,7 @@ async function boot() {
       // are owner-only, same golden rule as everything else destructive.
       // chat-wipe-card doesn't need listing here - it lives inside the
       // wall tab, already hidden above.
-      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card'].forEach((id) => {
+      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card', 'memo-wipe-card'].forEach((id) => {
         $(id).classList.add('hidden');
       });
       // Contestant creation/removal is owner-only too (see requireOwner on
@@ -233,6 +239,7 @@ function reloadAll() {
   // the last time they were fetched until this call was added.
   if (isOwner) loadWallPseudonyms();
   if (isAdmin) loadPlazaPosts();
+  if (isAdmin && memoEnabled) loadMemoDays();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -278,6 +285,7 @@ function applyAdminTheme(tab) {
   document.body.classList.toggle('theme-rata', tab === 'rata');
   document.body.classList.toggle('theme-mural', tab === 'plaza');
   document.body.classList.toggle('theme-plaza', tab === 'wall');
+  document.body.classList.toggle('theme-memo', tab === 'memo');
 }
 
 // Latest /admin/voting response per night, keyed by night - lets the close
@@ -1284,16 +1292,112 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------------------------------- Memo ---------------------------------- */
+
+async function loadMemoDays() {
+  try {
+    const { days } = await api('/admin/memo/days');
+    $('memo-days-list').innerHTML = days.length
+      ? days.map((d) => `
+        <div class="user-row">
+          <div class="user-row-top">
+            <div class="user-row-name">${esc(d.day)}</div>
+          </div>
+          <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
+          <div class="row-actions">
+            <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
+            <button type="button" class="small ghost" data-memo-recap-btn="${esc(d.day)}">${esc(t('memo_admin_recap_btn'))}</button>
+            <input type="file" accept="video/*" class="file-input-visually-hidden" data-memo-recap-input="${esc(d.day)}" />
+          </div>
+          <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
+        </div>`).join('')
+      : `<p class="muted">${t('memo_admin_no_days')}</p>`;
+  } catch { /* transient network hiccup */ }
+}
+
+// Delegated (days list is fully rebuilt on every load) - same
+// fetch-blob-and-download pattern as download-photos-btn above, and the
+// same hidden-file-input-behind-a-button pattern as the guest checklist
+// in app.js, just per-day instead of per-slot.
+$('memo-days-list').addEventListener('click', async (e) => {
+  const dlBtn = e.target.closest('[data-memo-download-day]');
+  if (dlBtn) {
+    const day = dlBtn.dataset.memoDownloadDay;
+    const msg = $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+    msg.classList.remove('error');
+    msg.textContent = t('download_photos_in_progress');
+    try {
+      const res = await fetch(`/api/admin/memo/${encodeURIComponent(day)}/uploads.zip`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `memo-${day}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      msg.textContent = t('download_photos_done');
+      setTimeout(() => { if (msg.textContent === t('download_photos_done')) msg.textContent = ''; }, 3000);
+    } catch (err) {
+      msg.classList.add('error');
+      msg.textContent = err.message;
+    }
+    return;
+  }
+  const recapBtn = e.target.closest('[data-memo-recap-btn]');
+  if (recapBtn) {
+    $('memo-days-list').querySelector(`[data-memo-recap-input="${recapBtn.dataset.memoRecapBtn}"]`)?.click();
+  }
+});
+
+$('memo-days-list').addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-memo-recap-input]');
+  const file = input?.files?.[0];
+  if (!file) return;
+  const day = input.dataset.memoRecapInput;
+  const msg = $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+  msg.classList.remove('error');
+  msg.textContent = t('memo_uploading');
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`/api/admin/memo/${encodeURIComponent(day)}/recap`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    msg.textContent = t('memo_upload_done');
+    loadMemoDays();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
+wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
+
 /* --------------------------------- Tabs ---------------------------------- */
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['plaza', 'outfit', 'rata', 'wall', 'memo', 'settings'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
+  if (tab === 'memo' && isAdmin) loadMemoDays();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {

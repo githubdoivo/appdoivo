@@ -59,6 +59,11 @@ let myUserId = null;
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
 // before /me resolves; showApp() corrects it immediately after.
 let plazaEnabled = true;
+// Set from /me in showApp() - Memo is QA-only until tested (see
+// ENABLE_MEMO in src/routes.js/fly.qa.toml). Defaults false (unlike
+// plazaEnabled above) since it's a brand-new feature, not a temporarily-
+// hidden existing one - nothing should assume it's on before /me resolves.
+let memoEnabled = false;
 // Set from /me in showApp() - gates the tutorial's skip button (see
 // startTutorial()): only admin/owner accounts can skip, everyone else
 // has to read through it.
@@ -105,7 +110,9 @@ function showApp(me) {
   isAdmin = !!me.isAdmin;
   isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
+  memoEnabled = !!me.memoEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
+  document.querySelector('[data-tab="memo"]').classList.toggle('hidden', !memoEnabled);
   // Always opens on Wall (the landing tab - see currentTab above), the way
   // an app opens on its home tab, rather than resuming wherever it was
   // last left. The tab someone was on is deliberately NOT remembered: on
@@ -239,6 +246,10 @@ $('tutorial-next').addEventListener('click', () => {
 
 function updateLangUI() {
   $('lang-toggle').textContent = getLang();
+  // Also present (discreetly) on the login screen, pre-auth - see
+  // login-lang-toggle in index.html/styles.css. getLang()/setLang() are
+  // pure localStorage, no login required.
+  $('login-lang-toggle').textContent = getLang();
 }
 
 $('lang-toggle').addEventListener('click', () => {
@@ -249,6 +260,12 @@ $('lang-toggle').addEventListener('click', () => {
   refreshNotifButton();
   loadConsequences();
   loadVotes();
+});
+
+$('login-lang-toggle').addEventListener('click', () => {
+  setLang(getLang() === 'pt' ? 'en' : 'pt');
+  applyI18n();
+  updateLangUI();
 });
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
@@ -365,11 +382,13 @@ function selectTab(tab) {
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
+  $('tab-memo').classList.toggle('hidden', currentTab !== 'memo');
   applyNight();
   if (currentTab === 'plaza') startPlazaPolling(); else stopPlazaPolling();
   if (currentTab === 'rata') startRataPolling(); else stopRataPolling();
   if (currentTab === 'outfit') startOutfitPolling(); else stopOutfitPolling();
   if (currentTab === 'chat') startChatPolling(); else stopChatPolling();
+  if (currentTab === 'memo') startMemoPolling(); else stopMemoPolling();
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {
@@ -437,6 +456,170 @@ $('chat-form').addEventListener('submit', async (e) => {
     $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
   } catch (err) {
     await showAlert(err.message);
+  }
+});
+
+/* --------------------------------- Memo ----------------------------------- */
+// 5x/day, at a random moment (different for every guest), a push
+// notification asks for a photo/video within 15 minutes ("slot"). Polled
+// every 15s for the server's own state (a new slot notified, an upload
+// landing from elsewhere) plus a 1s local ticker that just counts an open
+// slot's remaining time down without hitting the server every second.
+
+let memoPollTimer = null;
+let memoTickTimer = null;
+let memoSlotsCache = [];
+// Set while a slot's upload request is in flight - both the poll and the
+// ticker skip re-rendering while this is set, so neither one clobbers the
+// "a enviar..." button state a fetch already in progress put up.
+let memoUploadingSlotId = null;
+
+function startMemoPolling() {
+  loadMemo();
+  if (!memoPollTimer) memoPollTimer = setInterval(loadMemo, 15000);
+  if (!memoTickTimer) memoTickTimer = setInterval(tickMemoCountdowns, 1000);
+}
+
+function stopMemoPolling() {
+  if (memoPollTimer) { clearInterval(memoPollTimer); memoPollTimer = null; }
+  if (memoTickTimer) { clearInterval(memoTickTimer); memoTickTimer = null; }
+}
+
+function memoUploadUrl(uploadId) {
+  return `/api/memo/uploads/${uploadId}?token=${encodeURIComponent(getToken())}`;
+}
+
+function memoRecapUrl(day) {
+  return `/api/memo/recaps/${encodeURIComponent(day)}?token=${encodeURIComponent(getToken())}`;
+}
+
+async function loadMemo() {
+  if (memoUploadingSlotId) return;
+  try {
+    const { slots } = await api('/memo/today');
+    memoSlotsCache = slots;
+    renderMemoSlots();
+  } catch { /* transient network hiccup - the next poll retries */ }
+  loadMemoRecaps();
+}
+
+function tickMemoCountdowns() {
+  if (memoUploadingSlotId) return;
+  let changed = false;
+  memoSlotsCache.forEach((s) => {
+    if (s.status === 'open') {
+      s.secondsLeft -= 1;
+      if (s.secondsLeft <= 0) { s.status = 'missed'; changed = true; }
+      else changed = true;
+    }
+  });
+  if (changed) renderMemoSlots();
+}
+
+function renderMemoSlots() {
+  $('memo-slots').innerHTML = memoSlotsCache.map((s) => {
+    const label = t('memo_slot_label', { n: s.slotIndex + 1 });
+    if (s.status === 'waiting') {
+      return `
+        <div class="memo-slot memo-slot-waiting">
+          <span class="memo-slot-icon">?</span>
+          <div class="memo-slot-txt">
+            <span class="memo-slot-label">${esc(label)}</span>
+            <span class="memo-slot-meta">${esc(t('memo_slot_waiting'))}</span>
+          </div>
+        </div>`;
+    }
+    if (s.status === 'missed') {
+      return `
+        <div class="memo-slot memo-slot-missed">
+          <span class="memo-slot-icon">�</span>
+          <div class="memo-slot-txt">
+            <span class="memo-slot-label">${esc(label)}</span>
+            <span class="memo-slot-meta">${esc(t('memo_slot_missed'))}</span>
+          </div>
+        </div>`;
+    }
+    if (s.status === 'uploaded') {
+      const preview = s.kind === 'video'
+        ? `<video class="memo-slot-thumb" src="${memoUploadUrl(s.uploadId)}" muted></video>`
+        : `<img class="memo-slot-thumb" src="${memoUploadUrl(s.uploadId)}" alt="" />`;
+      return `
+        <div class="memo-slot memo-slot-uploaded">
+          ${preview}
+          <div class="memo-slot-txt">
+            <span class="memo-slot-label">${esc(label)}</span>
+            <span class="memo-slot-meta">✓ ${esc(t('memo_slot_uploaded'))}</span>
+          </div>
+        </div>`;
+    }
+    // open
+    const mins = String(Math.floor(Math.max(0, s.secondsLeft) / 60)).padStart(2, '0');
+    const secs = String(Math.max(0, s.secondsLeft) % 60).padStart(2, '0');
+    return `
+      <div class="memo-slot memo-slot-open">
+        <span class="memo-slot-icon">!</span>
+        <div class="memo-slot-txt">
+          <span class="memo-slot-label">${esc(label)} - ${esc(t('memo_slot_open'))}</span>
+          <span class="memo-slot-meta">${mins}:${secs}</span>
+        </div>
+        <button type="button" class="small" data-memo-upload-btn="${s.id}">${esc(t('memo_choose_btn'))}</button>
+        <input type="file" accept="image/*,video/*" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />
+      </div>`;
+  }).join('');
+}
+
+async function loadMemoRecaps() {
+  try {
+    const { days } = await api('/memo/recaps');
+    $('memo-recaps').innerHTML = days.length
+      ? days.map((day) => `
+        <div class="memo-recap-row">
+          <span class="memo-recap-day">${esc(day)}</span>
+          <video class="memo-recap-video" controls preload="none" src="${memoRecapUrl(day)}"></video>
+          <a class="small ghost" href="${memoRecapUrl(day)}" download>${esc(t('memo_recap_download'))}</a>
+        </div>`).join('')
+      : `<p class="muted">${esc(t('memo_recap_empty'))}</p>`;
+  } catch { /* transient network hiccup - the next poll retries */ }
+}
+
+// Delegated (not one listener per slot) since the whole list is rebuilt on
+// every render - a button click just forwards to its own hidden file input,
+// same pattern as the outfit registration photo picker (see
+// #register-photo-btn in settings.js) but scoped to this container.
+$('memo-slots').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-memo-upload-btn]');
+  if (!btn) return;
+  $('memo-slots').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
+});
+
+$('memo-slots').addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-memo-file-input]');
+  const file = input?.files?.[0];
+  if (!file) return;
+  const slotId = input.dataset.memoFileInput;
+  const slotEl = input.closest('.memo-slot');
+  const btn = slotEl.querySelector('[data-memo-upload-btn]');
+  memoUploadingSlotId = slotId;
+  btn.disabled = true;
+  btn.textContent = t('memo_uploading');
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`/api/memo/slots/${slotId}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    btn.textContent = t('memo_upload_done');
+  } catch (err) {
+    await showAlert(err.message);
+  } finally {
+    memoUploadingSlotId = null;
+    loadMemo();
   }
 });
 
@@ -728,7 +911,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // WHOLE page and shows that night's vote. Nights this edition: furnished | swamp.
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
-const TABS = ['plaza', 'rata', 'outfit', 'chat'];
+const TABS = ['plaza', 'rata', 'outfit', 'chat', 'memo'];
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);
@@ -751,6 +934,7 @@ function applyNight() {
   // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
   document.body.classList.toggle('theme-mural', currentTab === 'plaza');
   document.body.classList.toggle('theme-plaza', currentTab === 'chat');
+  document.body.classList.toggle('theme-memo', currentTab === 'memo');
   // The switch's own highlighted half already names the night, so there's
   // no separate "noite · swamp" line to keep in sync any more.
   document.querySelectorAll('#theme-switch button').forEach((b) => {

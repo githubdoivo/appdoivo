@@ -51,6 +51,7 @@
         <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
         <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
+        <button class="tab" data-atab="memo" data-i18n="tab_memo">Memo</button>
       </nav>
 
       <!-- Separador: Plaza (qualquer admin pode publicar - feed visivel a
@@ -250,6 +251,28 @@
           <p class="help" data-i18n="chat_wipe_help">Explicação</p>
           <button id="chat-wipe-btn" type="button" class="danger" data-i18n="chat_wipe_btn">Apagar tudo da Plaza</button>
           <span id="chat-wipe-msg" class="muted wipe-msg"></span>
+        </div>
+      </div>
+
+      <!-- Separador: Memo (QA-only until tested, see memoEnabled/boot() -
+           hidden entirely when the flag is off, same shape as Plaza). -->
+      <div id="atab-memo" class="tab-panel hidden">
+        <div class="card">
+          <h2 data-i18n="memo_admin_days_title">Dias</h2>
+          <p class="help" data-i18n="memo_admin_days_help">Explicação</p>
+          <div id="memo-days-list" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/memo/wipe) - hidden for a regular admin in
+             boot() in settings.js. Unlike every other feature's wipe,
+             this one also deletes the actual files on disk, not just DB
+             rows (see wipeAll() in memo.js). -->
+        <div class="card" id="memo-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="memo_wipe_help">Explicação</p>
+          <button id="memo-wipe-btn" type="button" class="danger" data-i18n="memo_wipe_btn">Apagar tudo do Memo</button>
+          <span id="memo-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
 

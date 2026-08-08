@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { rmSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import yauzl from 'yauzl';
 
 // Isolated test environment: temporary DB. The admin's real key is always
@@ -15,8 +15,12 @@ process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
+process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
+const { default: db } = await import('../src/db.js');
+const { MEMO_DIR } = await import('../src/memo.js');
+const { today } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
 let server;
@@ -36,6 +40,9 @@ after(() => {
   for (const ext of ['', '-wal', '-shm']) {
     try { rmSync(DB + ext); } catch { /* ignore */ }
   }
+  // MEMO_DIR sits next to DB_FILE (see memo.js) - same temp-file lifecycle,
+  // cleaned up the same way.
+  try { rmSync(MEMO_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 async function api(method, path, { token, body } = {}) {
@@ -60,6 +67,23 @@ async function apiBuffer(path, { token } = {}) {
   });
   const buffer = Buffer.from(await res.arrayBuffer());
   return { status: res.status, headers: res.headers, buffer };
+}
+
+/** Multipart/form-data upload (Memo) - the outfit-photo tests above all go
+ * through base64-in-JSON instead, but that's a 2mb request-body cap (see
+ * express.json() in app.js), nowhere near enough for Memo's original-size
+ * uploads, so this is a real multipart request instead. */
+async function apiUpload(path, { token, buffer, filename, mimeType, method = 'POST' } = {}) {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: mimeType }), filename);
+  const res = await fetch(base + path, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* no body */ }
+  return { status: res.status, data, headers: res.headers };
 }
 
 /** Unpacks every entry in a zip buffer to { filename, contents } pairs. */
@@ -1094,7 +1118,7 @@ test('a non-owner admin can read and change the day-rollover-hour setting', asyn
 
 test('a non-owner admin cannot use any feature wipe switch', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  for (const path of ['/admin/consequences/wipe', '/admin/contestants/wipe', '/admin/plaza-posts/wipe', '/admin/chat/wipe']) {
+  for (const path of ['/admin/consequences/wipe', '/admin/contestants/wipe', '/admin/plaza-posts/wipe', '/admin/chat/wipe', '/admin/memo/wipe']) {
     const r = await api('POST', path, { token: userToken });
     assert.equal(r.status, 403, `${path} should be owner-only`);
   }
@@ -1439,6 +1463,200 @@ test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', 
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }
+});
+
+/* ---------------------------------- Memo ---------------------------------- */
+// 5x/day, at a random independent time per user, upload a photo/video
+// within 15 minutes of being notified. The scheduler (scheduler.js) is
+// what actually flips a slot from "waiting" to "open" in real use - it's
+// never started in this test file (only app.js's routes are under test,
+// not server.js's cron job), so every slot stays "waiting" until a test
+// deliberately marks it notified via a direct DB write, the same way this
+// suite handles other time-dependent state.
+
+function markSlotNotified(slotId, when = new Date()) {
+  const ts = when.toISOString().replace('T', ' ').replace('Z', '');
+  db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
+}
+
+test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () => {
+  const first = await api('GET', '/memo/today', { token: userToken });
+  assert.equal(first.status, 200);
+  assert.equal(first.data.slots.length, 5);
+  assert.ok(first.data.slots.every((s) => s.status === 'waiting'), 'nothing has been notified yet');
+
+  const second = await api('GET', '/memo/today', { token: userToken });
+  assert.deepEqual(second.data.slots.map((s) => s.id), first.data.slots.map((s) => s.id), 'a second call must not generate new slots for the same day');
+});
+
+test('uploading to a slot that has not been notified yet is rejected', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[1];
+  const res = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.error, 'err_memo_slot_not_open');
+});
+
+test('a slot within its 15-minute window accepts one upload, rejects a second, and only the owner can upload to it', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[2];
+  markSlotNotified(slot.id);
+
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Bystander' } });
+  const wrongOwner = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(wrongOwner.status, 403);
+  assert.equal(wrongOwner.data.error, 'err_memo_not_your_slot');
+
+  const badType = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from('not a photo'),
+    filename: 'notes.txt',
+    mimeType: 'text/plain',
+  });
+  assert.equal(badType.status, 400);
+  assert.equal(badType.data.error, 'err_memo_invalid_type');
+
+  const ok = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.data.kind, 'photo');
+  const uploadId = ok.data.id;
+
+  const again = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo2.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(again.status, 409);
+  assert.equal(again.data.error, 'err_memo_already_uploaded');
+
+  const refreshed = await api('GET', '/memo/today', { token: userToken });
+  const uploadedSlot = refreshed.data.slots.find((s) => s.id === slot.id);
+  assert.equal(uploadedSlot.status, 'uploaded');
+  assert.equal(uploadedSlot.uploadId, uploadId);
+
+  const own = await apiBuffer(`/memo/uploads/${uploadId}`, { token: userToken });
+  assert.equal(own.status, 200);
+  assert.deepEqual([...own.buffer], [0xff, 0xd8, 0xff, 0xd9]);
+
+  const notOwner = await apiBuffer(`/memo/uploads/${uploadId}`, { token: bystander.data.token });
+  assert.equal(notOwner.status, 403);
+
+  const asAdmin = await apiBuffer(`/memo/uploads/${uploadId}`, { token: ADMIN });
+  assert.equal(asAdmin.status, 200, 'an admin can view anyone\'s upload');
+});
+
+test('a slot missed past its 15-minute window is reported as missed, not open', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[3];
+  markSlotNotified(slot.id, new Date(Date.now() - 20 * 60 * 1000));
+
+  const refreshed = await api('GET', '/memo/today', { token: userToken });
+  const missedSlot = refreshed.data.slots.find((s) => s.id === slot.id);
+  assert.equal(missedSlot.status, 'missed');
+
+  const res = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'late.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.error, 'err_memo_slot_not_open');
+});
+
+test('admin/owner can see per-day upload counts, download everything as a zip, and upload/view a recap video', async () => {
+  await api('GET', '/memo/today', { token: userToken });
+  const day = today();
+
+  const days = await api('GET', '/admin/memo/days', { token: ADMIN });
+  assert.equal(days.status, 200);
+  const todayRow = days.data.days.find((d) => d.day === day);
+  assert.ok(todayRow, 'today should show up once at least one slot has been notified');
+  assert.ok(todayRow.uploadedCount >= 1);
+  assert.equal(todayRow.hasRecap, false);
+
+  const zip = await apiBuffer(`/admin/memo/${day}/uploads.zip`, { token: ADMIN });
+  assert.equal(zip.status, 200);
+  assert.equal(zip.headers.get('content-type'), 'application/zip');
+  const entries = await readZipEntries(zip.buffer);
+  assert.ok(entries.length >= 1, 'the zip should contain at least the one uploaded photo');
+
+  // Recap: video-only, any admin can upload it, any logged-in user can watch/download it.
+  const badRecapType = await apiUpload(`/admin/memo/${day}/recap`, {
+    token: ADMIN,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'not-a-video.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(badRecapType.status, 400);
+  assert.equal(badRecapType.data.error, 'err_memo_invalid_type');
+
+  const recapBytes = Buffer.from('fake mp4 bytes');
+  const recapUpload = await apiUpload(`/admin/memo/${day}/recap`, {
+    token: ADMIN,
+    buffer: recapBytes,
+    filename: 'recap.mp4',
+    mimeType: 'video/mp4',
+  });
+  assert.equal(recapUpload.status, 201);
+
+  const recapDays = await api('GET', '/memo/recaps', { token: userToken });
+  assert.ok(recapDays.data.days.includes(day));
+
+  const recapFetch = await apiBuffer(`/memo/recaps/${day}`, { token: userToken });
+  assert.equal(recapFetch.status, 200);
+  assert.deepEqual([...recapFetch.buffer], [...recapBytes]);
+
+  const daysAfterRecap = await api('GET', '/admin/memo/days', { token: ADMIN });
+  assert.equal(daysAfterRecap.data.days.find((d) => d.day === day).hasRecap, true);
+});
+
+test('Memo is gated behind ENABLE_MEMO - disabled means every endpoint 404s', async () => {
+  process.env.ENABLE_MEMO = 'false';
+  try {
+    assert.equal((await api('GET', '/memo/today', { token: userToken })).status, 404);
+    assert.equal((await api('GET', '/memo/recaps', { token: userToken })).status, 404);
+    assert.equal((await api('GET', '/admin/memo/days', { token: ADMIN })).status, 404);
+    assert.equal((await apiUpload('/memo/slots/1/upload', { token: userToken, buffer: Buffer.from('x'), filename: 'x.jpg', mimeType: 'image/jpeg' })).status, 404);
+  } finally {
+    process.env.ENABLE_MEMO = 'true';
+  }
+});
+
+test('owner wipe clears every Memo table AND deletes the actual files from disk', async () => {
+  // Owner-only permission itself is covered by "a non-owner admin cannot
+  // use any feature wipe switch" above - this just checks what the wipe
+  // actually does. ADMIN is the seeded owner (see seedResult).
+  const before = await api('GET', '/memo/today', { token: userToken });
+  const slot = before.data.slots[2]; // already uploaded to in the earlier "accepts one upload" test
+  const uploadRow = db.prepare('SELECT file_path FROM memo_uploads WHERE slot_id = ?').get(slot.id);
+  assert.ok(uploadRow, 'setup: this slot should already have an upload from an earlier test');
+  const absPath = join(MEMO_DIR, uploadRow.file_path);
+  assert.ok(existsSync(absPath), 'setup: the file should exist on disk before wiping');
+
+  const asOwner = await api('POST', '/admin/memo/wipe', { token: ADMIN });
+  assert.equal(asOwner.status, 200);
+
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_slots').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_uploads').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_recaps').get().n, 0);
+  assert.ok(!existsSync(absPath), 'the uploaded file itself should be deleted, not just its DB row');
 });
 
 /* --------------------------- Feature wipe switches --------------------------- */

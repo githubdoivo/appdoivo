@@ -43,6 +43,7 @@
       <p id="login-error" class="error"></p>
       <div id="find-key-results"></div>
       <button type="button" id="find-key-link" class="link-btn" data-i18n="find_key_link">Ainda não tens a tua chave?</button>
+      <button type="button" id="login-lang-toggle" class="link-btn login-lang-toggle" title="Language">pt</button>
     </div>
   </section>
 
@@ -89,6 +90,7 @@
       <button class="tab" data-tab="rata" data-i18n="tab_rata">Rata</button>
       <button class="tab" data-tab="outfit" data-i18n="tab_outfit">Snatch</button>
       <button class="tab" data-tab="chat" data-i18n="tab_chat">Plaza</button>
+      <button class="tab hidden" data-tab="memo" data-i18n="tab_memo">Memo</button>
     </nav>
 
     <!-- Plaza: owner/admin-authored posts (announcements + polls), most-
@@ -169,6 +171,23 @@
           <input id="chat-text" type="text" maxlength="300" data-i18n-ph="chat_ph" placeholder="Escreve uma mensagem..." autocomplete="off" />
           <button type="submit" class="small" data-i18n="chat_send">Partilhar</button>
         </form>
+      </div>
+    </div>
+
+    <!-- Memo: 5x/day, at a random moment, upload a photo/video within 15
+         minutes - see loadMemo() in app.js. QA-only until tested (see
+         memoEnabled from /me), same gating shape as Plaza above. -->
+    <div id="tab-memo" class="tab-panel hidden">
+      <p class="hero-line" data-i18n="memo_hero">O momento de hoje.</p>
+      <div class="card">
+        <h2 data-i18n="memo_checklist_title">Os teus momentos</h2>
+        <p class="help" data-i18n="memo_checklist_help">Explicação</p>
+        <div id="memo-slots" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="memo_recap_title">Resumos</h2>
+        <p class="help" data-i18n="memo_recap_help">Explicação</p>
+        <div id="memo-recaps" style="margin-top:12px"></div>
       </div>
     </div>
   </section>

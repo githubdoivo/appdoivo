@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { ZipFile } from 'yazl';
+import multer from 'multer';
 import db from './db.js';
 import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
@@ -52,6 +53,20 @@ import {
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost } from './plaza.js';
+import {
+  MEMO_DIR,
+  MEMO_MAX_FILE_BYTES,
+  extForMime,
+  getTodayForUser,
+  recordUpload,
+  getUpload,
+  listDays,
+  listUploadsForDay,
+  saveRecap,
+  getRecap,
+  listRecapDays,
+  wipeAll as wipeAllMemo,
+} from './memo.js';
 
 const router = Router();
 
@@ -111,6 +126,7 @@ router.get('/me', (req, res) => {
     ...req.user,
     adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
     plazaEnabled: process.env.ENABLE_PLAZA === 'true',
+    memoEnabled: process.env.ENABLE_MEMO === 'true',
   });
 });
 
@@ -442,6 +458,79 @@ router.post('/push/unsubscribe', (req, res) => {
   const endpoint = req.body?.endpoint;
   if (endpoint) removeSubscription(endpoint);
   res.json({ ok: true });
+});
+
+/* ---------------------------------- Memo --------------------------------- */
+// 5x/day, at a random independent time per guest, a push notification asks
+// them to upload a photo/video within a 15-minute window. QA-only until
+// tested (see ENABLE_MEMO) - same gating shape as ENABLE_PLAZA above.
+// Uploads are original-size photos/video, not the small resized-JPEG BLOBs
+// outfit entries use, so they're multipart/form-data straight to disk
+// (MEMO_DIR, see memo.js) rather than base64-in-JSON.
+
+const memoUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = join(MEMO_DIR, today());
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `${req.user.id}-slot${req.params.id}${extForMime(file.mimetype)}`),
+});
+const memoUpload = multer({
+  storage: memoUploadStorage,
+  limits: { fileSize: MEMO_MAX_FILE_BYTES },
+  fileFilter: (req, file, cb) => cb(null, /^(image|video)\//.test(file.mimetype)),
+});
+
+router.get('/memo/today', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ slots: getTodayForUser(req.user.id) });
+});
+
+router.post('/memo/slots/:id/upload', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  memoUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const code = err.code === 'LIMIT_FILE_SIZE' ? 'err_memo_file_too_large' : 'err_memo_upload_failed';
+      return res.status(400).json({ error: code });
+    }
+    if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
+    try {
+      const upload = recordUpload(Number(req.params.id), req.user.id, {
+        mimeType: req.file.mimetype,
+        filePath: relative(MEMO_DIR, req.file.path),
+        fileSize: req.file.size,
+      });
+      res.status(201).json({ id: upload.id, kind: upload.kind });
+    } catch (e) {
+      res.status(e.status || 400).json({ error: e.message });
+    }
+  });
+});
+
+// Serves a guest's own upload (or any admin's, for moderation/download) -
+// same ?token= query-param auth as the outfit contestant photo route
+// above, needed because <img>/<video> tags can't send an Authorization
+// header. res.sendFile() (not a manual read+send) handles Range requests
+// on its own, which video scrubbing needs.
+router.get('/memo/uploads/:id', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const upload = getUpload(Number(req.params.id));
+  if (!upload) return res.status(404).end();
+  if (upload.user_id !== req.user.id && !req.user.isAdmin) return res.status(403).end();
+  res.sendFile(join(MEMO_DIR, upload.file_path));
+});
+
+router.get('/memo/recaps', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ days: listRecapDays() });
+});
+
+router.get('/memo/recaps/:day', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const recap = getRecap(req.params.day);
+  if (!recap) return res.status(404).end();
+  res.sendFile(join(MEMO_DIR, recap.file_path));
 });
 
 /* --------------------------------- Admin --------------------------------- */
@@ -959,6 +1048,79 @@ router.post('/admin/voting/:night/reset-all', (req, res) => {
   setSetting(`voting_started_${night}`, '0');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
+});
+
+/* ------------------------------- Admin: Memo ------------------------------ */
+
+const memoRecapStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = join(MEMO_DIR, req.params.day);
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `recap${extForMime(file.mimetype)}`),
+});
+// Video-only - the recap is explicitly a video for everyone to watch/
+// download, unlike the guest slots which accept either photo or video.
+const memoRecapUpload = multer({
+  storage: memoRecapStorage,
+  limits: { fileSize: MEMO_MAX_FILE_BYTES },
+  fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('video/')),
+});
+
+router.get('/admin/memo/days', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ days: listDays() });
+});
+
+// Lighter than the outfit photos.zip route above: yazl's addFile() streams
+// straight from disk instead of having to pull every BLOB into memory
+// first, since these files already live on disk rather than in SQLite.
+router.get('/admin/memo/:day/uploads.zip', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const uploads = listUploadsForDay(req.params.day);
+  if (!uploads.length) return res.status(404).json({ error: 'err_memo_no_uploads' });
+  const zip = new ZipFile();
+  const usedNames = new Set();
+  for (const u of uploads) {
+    const abs = join(MEMO_DIR, u.file_path);
+    if (!existsSync(abs)) continue;
+    const ext = extForMime(u.mime_type);
+    const base = u.user_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    let filename = `${base}-momento${u.slot_id}${ext}`;
+    if (usedNames.has(filename)) filename = `${base}-momento${u.slot_id}-${u.id}${ext}`;
+    usedNames.add(filename);
+    zip.addFile(abs, filename);
+  }
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="memo-${req.params.day}.zip"`);
+  zip.outputStream.pipe(res);
+  zip.end();
+});
+
+router.post('/admin/memo/:day/recap', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  memoRecapUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const code = err.code === 'LIMIT_FILE_SIZE' ? 'err_memo_file_too_large' : 'err_memo_upload_failed';
+      return res.status(400).json({ error: code });
+    }
+    if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
+    saveRecap(req.params.day, req.user.id, {
+      mimeType: req.file.mimetype,
+      filePath: relative(MEMO_DIR, req.file.path),
+      fileSize: req.file.size,
+    });
+    res.status(201).json({ ok: true });
+  });
+});
+
+// Owner-only, same golden rule as every other feature's wipe switch - but
+// this one also has to unlink the actual files (see wipeAll() in memo.js),
+// unlike the DB-BLOB-based wipes above where deleting the row is enough.
+router.post('/admin/memo/wipe', requireOwner, (req, res) => {
+  wipeAllMemo();
+  res.json({ ok: true });
 });
 
 export default router;

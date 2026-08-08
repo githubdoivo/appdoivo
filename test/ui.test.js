@@ -17,8 +17,11 @@ process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
+process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
+const { default: db } = await import('../src/db.js');
+const { MEMO_DIR } = await import('../src/memo.js');
 
 // The admin's real key is always generated (see seed() in db.js - no more
 // ADMIN_TOKEN pinning it, even outside production), so this reads the
@@ -56,6 +59,7 @@ after(async () => {
   for (const ext of ['', '-wal', '-shm']) {
     try { rmSync(DB + ext); } catch { /* ignore */ }
   }
+  try { rmSync(MEMO_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 async function api(method, path, { token, body } = {}) {
@@ -108,7 +112,7 @@ for (const deviceName of IOS_DEVICES) {
     await context.close();
   });
 
-  test(`main app (plaza + rata + best look + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
+  test(`main app (plaza + rata + best look + chat + memo tabs) has no horizontal overflow on ${deviceName}`, async () => {
     const context = await iphoneContext(deviceName);
     const page = await loginPage(context, ADMIN, '/');
     const plazaOverflow = await horizontalOverflow(page);
@@ -128,6 +132,11 @@ for (const deviceName of IOS_DEVICES) {
     await page.waitForTimeout(150);
     const chatOverflow = await horizontalOverflow(page);
     assert.ok(chatOverflow <= 1, `"chat" tab overflows by ${chatOverflow}px on ${deviceName}`);
+
+    await page.click('[data-tab="memo"]');
+    await page.waitForTimeout(150);
+    const memoOverflow = await horizontalOverflow(page);
+    assert.ok(memoOverflow <= 1, `"memo" tab overflows by ${memoOverflow}px on ${deviceName}`);
     await context.close();
   });
 
@@ -1225,4 +1234,95 @@ test('the admin download-photos button shows progress, triggers a real download,
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();
+});
+
+/* ---------------------------------- Memo ----------------------------------- */
+// 5x/day, at a random independent time per user, a slot opens for 15
+// minutes to upload a photo/video. The scheduler cron isn't running in
+// this test process (only app.js, not server.js) - slots are forced open
+// the same way api.test.js does, with a direct DB write.
+
+function markMemoSlotNotified(slotId, when = new Date()) {
+  const ts = when.toISOString().replace('T', ' ').replace('Z', '');
+  db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
+}
+
+test('Memo: a guest can upload to an open slot, and the admin sees it, downloads it, and posts a recap everyone can watch', async () => {
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Tester' } });
+  const today = await api('GET', '/memo/today', { token: user.token });
+  const slot = today.slots[0];
+  markMemoSlotNotified(slot.id);
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="memo"]');
+  await page.waitForSelector('#memo-slots', { timeout: WAIT_TIMEOUT });
+
+  await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+  assert.ok(
+    (await page.textContent(`[data-memo-upload-btn="${slot.id}"]`)).length > 0,
+    'the open slot should show an upload button'
+  );
+
+  await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  // The upload button disappears once the slot moves to "uploaded" (see
+  // renderMemoSlots() in app.js) - waiting for that beats a fixed sleep.
+  await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { state: 'detached', timeout: WAIT_TIMEOUT });
+  assert.ok(
+    (await page.textContent('#memo-slots')).includes('enviado'),
+    'the checklist should show the slot as sent'
+  );
+
+  const adminPage = await loginPage(context, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="memo"]');
+  await adminPage.waitForSelector('#memo-days-list', { timeout: WAIT_TIMEOUT });
+  await adminPage.waitForFunction(
+    () => /\d\/\d/.test(document.getElementById('memo-days-list')?.textContent || ''),
+    { timeout: WAIT_TIMEOUT }
+  );
+  const daysText = await adminPage.textContent('#memo-days-list');
+  assert.ok(daysText.includes('sem resumo'), 'no recap uploaded yet');
+
+  const [download] = await Promise.all([
+    adminPage.waitForEvent('download'),
+    adminPage.click('[data-memo-download-day]'),
+  ]);
+  assert.ok(download.suggestedFilename().endsWith('.zip'));
+
+  await adminPage.click('[data-memo-recap-btn]');
+  const recapDay = await adminPage.locator('[data-memo-recap-btn]').first().getAttribute('data-memo-recap-btn');
+  await adminPage.setInputFiles(`[data-memo-recap-input="${recapDay}"]`, {
+    name: 'recap.mp4',
+    mimeType: 'video/mp4',
+    buffer: Buffer.from('fake mp4 bytes'),
+  });
+  await adminPage.waitForFunction(
+    () => document.getElementById('memo-days-list')?.textContent.includes('com resumo'),
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  // Any logged-in guest (not just the uploader/admin) can watch/download the recap.
+  await page.click('[data-tab="rata"]');
+  await page.click('[data-tab="memo"]');
+  await page.waitForFunction(
+    () => document.getElementById('memo-recaps')?.querySelector('video'),
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  await api('POST', '/admin/memo/wipe', { token: ADMIN });
+  await context.close();
+});
+
+test('Memo is gated behind ENABLE_MEMO - hidden from the tab bar and the admin panel when disabled', async () => {
+  process.env.ENABLE_MEMO = 'false';
+  try {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/');
+    assert.equal(await page.isVisible('[data-tab="memo"]'), false);
+    const adminPage = await loginPage(context, ADMIN, '/settings.html');
+    assert.equal(await adminPage.isVisible('[data-atab="memo"]'), false);
+    await context.close();
+  } finally {
+    process.env.ENABLE_MEMO = 'true';
+  }
 });

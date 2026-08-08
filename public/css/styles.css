@@ -256,6 +256,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   --line: rgba(236, 229, 213, 0.35);
   --paper-3: #241d17;
 }
+/* #login's own background-color above only fills its own box - on iOS
+   Safari's overscroll/rubber-band bounce past the top or bottom of the
+   page, it's actually body's background showing through underneath
+   everything, which still carries whatever mode/theme was last active
+   (dark mode's own --paper is a dark purple) - jarring against the login
+   photo. Matches it to the same brown while the login screen is showing,
+   regardless of mode. */
+body:has(#login:not(.hidden)) { background-color: #241d17; }
 /* Plain "cover" - no extra transform:scale() on top of it. Cover already
    guarantees the illustration fills the entire screen with no gaps at its
    largest non-distorted size; an added scale() only ever throws away more
@@ -349,6 +357,12 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
    transitions to solid --ink and stays that way, permanently, after a
    single tap. */
 .link-btn:hover { background: none; color: var(--ink); }
+/* Discreet on purpose - a language switch is a nice-to-have on the login
+   screen, not a decision that deserves competing with "entrar"/"ainda não
+   tens a tua chave?" for attention. Smaller and dimmer than the base
+   .link-btn, same underline treatment so it still reads as tappable. */
+.login-lang-toggle { font-size: 0.68rem; opacity: 0.6; margin-top: 14px; letter-spacing: 0.06em; }
+.login-lang-toggle:hover { opacity: 0.9; }
 
 #find-key-results {
   width: 100%;
@@ -1361,6 +1375,116 @@ html.mode-dark body.theme-plaza {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
+
+/* ================= Memo: flash de câmara, ao acaso ao longo do dia ======= */
+/* Aplicado a <body> apenas quando o separador Memo esta ativo (ver
+   applyNight() em app.js), mesmo mecanismo dos outros temas noturnos. The
+   one cool accent among five warm ones (teal/olive/mauve/terracotta/gold) -
+   deliberate, see the design exploration this was picked from. Motif is a
+   scatter of small sparks/dust catching a flash, not an illustrated scene
+   like the other themes' paw-prints/bricks/skyline, since this theme's own
+   idea is "a camera flash," not a place. */
+body.theme-memo {
+  --paper:    #11232c;
+  --paper-2:  #182e39;
+  --paper-3:  #1f3946;
+  --ink:      #dff5fa;
+  --ink-soft: #7fb8c9;
+  /* Was #2c5261 (~1.7:1 against --paper-2) - same weak-border issue fixed
+     on every other theme tonight, lightened to ~2.4:1. */
+  --line:     #396a7d;
+  --line-2:   #4a7f94;
+  --clay:     #2bcdee;
+  --clay-2:   #6fe0f5;
+  --rata:     #2bcdee;
+  background-color: #0c1a20;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160'%3E%3Cg fill='%232bcdee' fill-opacity='0.22'%3E%3Ccircle cx='18' cy='24' r='2.2'/%3E%3Ccircle cx='60' cy='12' r='1.4'/%3E%3Ccircle cx='96' cy='40' r='1.8'/%3E%3Ccircle cx='150' cy='20' r='1.4'/%3E%3Ccircle cx='180' cy='58' r='2.2'/%3E%3Ccircle cx='34' cy='78' r='1.4'/%3E%3Ccircle cx='120' cy='84' r='2.2'/%3E%3Ccircle cx='8' cy='120' r='1.8'/%3E%3Ccircle cx='70' cy='128' r='1.4'/%3E%3Ccircle cx='108' cy='150' r='1.8'/%3E%3Ccircle cx='160' cy='118' r='1.4'/%3E%3Ccircle cx='190' cy='140' r='2.2'/%3E%3C/g%3E%3C/svg%3E");
+}
+body.theme-memo .hero-line { color: var(--clay-2); }
+body.theme-memo .card {
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+html.mode-light body.theme-memo {
+  --paper:    #e2eff3;
+  --paper-2:  #d5e6ec;
+  --paper-3:  #c8dde4;
+  --ink:      #152c37;
+  --ink-soft: #477285;
+  --line:     #5d9db1;
+  --line-2:   #7bb0c2;
+  /* Was much lighter (#0e90aa scaled up) - darkened so it holds up as
+     .hero-line text against the pale paper here (~4.6:1). */
+  --clay:     #0e90aa;
+  --clay-2:   #187486;
+  --rata:     #0e90aa;
+  background-color: #e2eff3;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160'%3E%3Cg fill='%230e90aa' fill-opacity='0.16'%3E%3Ccircle cx='18' cy='24' r='2.2'/%3E%3Ccircle cx='60' cy='12' r='1.4'/%3E%3Ccircle cx='96' cy='40' r='1.8'/%3E%3Ccircle cx='150' cy='20' r='1.4'/%3E%3Ccircle cx='180' cy='58' r='2.2'/%3E%3Ccircle cx='34' cy='78' r='1.4'/%3E%3Ccircle cx='120' cy='84' r='2.2'/%3E%3Ccircle cx='8' cy='120' r='1.8'/%3E%3Ccircle cx='70' cy='128' r='1.4'/%3E%3Ccircle cx='108' cy='150' r='1.8'/%3E%3Ccircle cx='160' cy='118' r='1.4'/%3E%3Ccircle cx='190' cy='140' r='2.2'/%3E%3C/g%3E%3C/svg%3E");
+}
+html.mode-light body.theme-memo .card {
+  box-shadow: 0 12px 34px rgba(21, 44, 55, 0.14);
+}
+
+/* ------------------------------- Memo (UI) -------------------------------- */
+
+.memo-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  margin-bottom: 10px;
+}
+.memo-slot:last-child { margin-bottom: 0; }
+.memo-slot-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  background: var(--paper-3);
+  color: var(--ink-soft);
+}
+.memo-slot-open .memo-slot-icon { background: var(--clay); color: var(--paper); }
+.memo-slot-open {
+  border-color: var(--clay);
+  background: color-mix(in srgb, var(--clay) 12%, var(--paper-2));
+}
+.memo-slot-waiting, .memo-slot-missed { opacity: 0.6; }
+.memo-slot-txt { flex: 1; min-width: 0; }
+.memo-slot-label {
+  display: block;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+.memo-slot-meta { display: block; font-size: var(--text-sm); color: var(--ink-soft); margin-top: 2px; }
+.memo-slot-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.memo-recap-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.memo-recap-row:last-child { border-bottom: none; padding-bottom: 0; }
+.memo-recap-day { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); }
+.memo-recap-video { width: 100%; border-radius: var(--radius); background: #000; }
 
 .plaza-eyebrow {
   display: block;

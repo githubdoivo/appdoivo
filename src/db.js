@@ -377,6 +377,46 @@ function tokenBase(name) {
  * suffix (e.g. "rito8749"), easier to type/remember than an opaque string.
  * Retries on the rare collision (checked via the token's lookup hash).
  */
+// Memo: 5x/day, at a random independent time per user, a push notification
+// asks them to upload a photo/video within a 15-minute window ("slot"). The
+// actual file lives on disk (see MEMO_DIR in memo.js), not as a BLOB here -
+// at original-size photos/video across every guest, that's an entirely
+// different scale than the small resized-JPEG BLOBs the outfit-entry photos
+// use, so only metadata (path, size, mime, timestamps) is stored in SQLite.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS memo_slots (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day          TEXT NOT NULL,
+    slot_index   INTEGER NOT NULL,
+    scheduled_at TEXT NOT NULL,
+    notified_at  TEXT,
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    UNIQUE(user_id, day, slot_index)
+  );
+
+  CREATE TABLE IF NOT EXISTS memo_uploads (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot_id     INTEGER NOT NULL UNIQUE REFERENCES memo_slots(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day         TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    mime_type   TEXT NOT NULL,
+    file_path   TEXT NOT NULL,
+    file_size   INTEGER NOT NULL,
+    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS memo_recaps (
+    day         TEXT PRIMARY KEY,
+    file_path   TEXT NOT NULL,
+    mime_type   TEXT NOT NULL,
+    file_size   INTEGER NOT NULL,
+    uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+`);
+
 export function generateUserToken(name) {
   const base = tokenBase(name);
 

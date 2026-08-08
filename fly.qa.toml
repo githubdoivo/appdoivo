@@ -27,6 +27,13 @@ primary_region = "cdg"
   # fly.toml). Kept here for parity so QA never drifts from what prod
   # actually runs. See routes.js's Plaza section.
   ENABLE_PLAZA = "true"
+  # QA-only until tested end-to-end on a real phone and approved (see the
+  # Memo feature plan) - not set in fly.toml, so prod stays unaffected.
+  # QA has no persistent volume (see header above), so uploaded photos/
+  # videos live in the same ephemeral container filesystem as the DB and
+  # reset on every deploy - exactly like QA's DB already does, no extra
+  # volume needed for QA testing.
+  ENABLE_MEMO = "true"
 
 [http_service]
   internal_port = 3000
