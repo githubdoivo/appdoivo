@@ -1240,11 +1240,16 @@ body.theme-swamp #tab-outfit .highlight::before {
 
 /* --------------------------------- Admin --------------------------------- */
 
-.row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
-/* ...unless it holds the publish action, which wraps onto its own full-width
-   line for the same reason as .publish-wide above. */
-.row-actions { flex-wrap: wrap; }
-.row-actions .publish-wide { flex: 1 0 100%; }
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* Publish used to break onto its own full-width line here. On a day row it
+   sits beside download, which is the action it pairs with - two halves of
+   "get this day out" - and a full-width bar under a short button read as
+   two unrelated controls. */
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }

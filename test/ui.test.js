@@ -515,15 +515,20 @@ test('Manage Users row keeps the access key visible with no overflow, once expan
 
   // Rows are collapsed to just name+role by default (see renderUsersList()
   // in settings.js) - the key only renders once its row is expanded.
-  await page.click('#users-list [data-row-toggle]');
-  // Waited for, not sampled: expanding lays the row out again, and reading
-  // the width in the same tick as the click catches it at zero on a loaded
-  // run. This was the suite's most frequent intermittent failure.
+  // A locator, re-resolved on each attempt, rather than a one-shot click:
+  // the list re-renders while it loads, so under load the click could land
+  // on a node that was replaced a moment later and simply be lost. Reading
+  // the width in the same tick as the click had the same problem from the
+  // other end. Between them, this was the suite's most frequent
+  // intermittent failure - and never a fault in the app.
+  const firstRow = page.locator('#users-list [data-row-toggle]').first();
+  await firstRow.click();
   await page.waitForFunction(
     () => {
       const el = document.querySelector('.user-row-token');
       return !!el && el.getBoundingClientRect().width > 0;
     },
+    null,
     { timeout: WAIT_TIMEOUT },
   );
 

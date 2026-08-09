@@ -1697,7 +1697,7 @@ async function loadMemoDays() {
           <div class="row-actions">
             <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
-            <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
+            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
           </div>` : ''}
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')

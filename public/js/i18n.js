@@ -130,7 +130,7 @@ export const translations = {
     rata_mark_done_btn: 'marcar como feito',
     rata_mark_done_confirm: 'confirmas que já cumpriste esta consequência? a organização ainda tem de aprovar antes de aparecer como feita para todos',
     // Best Look
-    outfit_wait_title: 'aguarda',
+    outfit_wait_title: 'respira flor',
     outfit_nothing_open: 'ainda não há nada a votar. guarda energia para depois.',
     outfit_hero: 'quem arrasou mais?',
     outfit_voting: 'votação',
@@ -564,7 +564,7 @@ export const translations = {
     rata_public_pending_unassigned: 'pending',
     rata_mark_done_btn: 'mark as done',
     rata_mark_done_confirm: 'confirm you have done this consequence? the organisers still have to approve it before it shows as done to everyone',
-    outfit_wait_title: 'just wait',
+    outfit_wait_title: 'breathe, love',
     outfit_nothing_open: 'nothing to vote on yet. save your energy.',
     outfit_hero: 'who served the hardest?',
     outfit_voting: 'voting',
