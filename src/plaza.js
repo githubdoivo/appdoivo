@@ -185,3 +185,28 @@ export function createPodiumPost(authorId, { night, podium, congeniality }) {
   ).run(authorId, payload);
   return { ok: true, id: info.lastInsertRowid };
 }
+
+/**
+ * Publishes a Memo day's video as a real Wall post, so it lives in the feed
+ * with everything else and the owner can pin or delete it from the admin
+ * history like any other post. It used to render in a card of its own, which
+ * meant the one thing people most want pinned was the one thing that could
+ * not be.
+ *
+ * `text` is just the day; the file itself stays in memo_recaps and is served
+ * by GET /memo/recaps/:day, so deleting the post throws away the post, not
+ * the video - republishing brings it back.
+ *
+ * Re-publishing the same day replaces its post rather than stacking a second
+ * one, and keeps the pin if it had one.
+ */
+export function createVideoPost(authorId, day) {
+  const existing = db.prepare("SELECT id, pinned_at FROM plaza_posts WHERE type = 'video' AND text = ?").get(day);
+  if (existing) {
+    db.prepare("UPDATE plaza_posts SET author_id = ?, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+      .run(authorId, existing.id);
+    return { ok: true, id: existing.id, replaced: true };
+  }
+  const info = db.prepare("INSERT INTO plaza_posts (type, author_id, text) VALUES ('video', ?, ?)").run(authorId, day);
+  return { ok: true, id: info.lastInsertRowid };
+}

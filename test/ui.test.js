@@ -1450,13 +1450,22 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   ]);
   assert.ok(videoDownload.suggestedFilename().endsWith('.mp4'));
 
-  // Any logged-in guest (not just the uploader/admin) sees it on the Wall.
+  // Any logged-in guest (not just the uploader/admin) sees it on the Wall -
+  // as a real post now, which is what lets the owner pin or delete it from
+  // the admin history like anything else (see createVideoPost() in plaza.js).
   await page.click('[data-tab="plaza"]');
-  await page.waitForFunction(
-    () => !document.getElementById('wall-video-card')?.classList.contains('hidden')
-      && document.getElementById('wall-video-list')?.querySelector('video'),
+  await page.waitForSelector('.plaza-post-video video', { timeout: WAIT_TIMEOUT });
+
+  // And it shows up in the Wall admin history with working pin/remove.
+  await adminPage.click('[data-atab="plaza"]');
+  await adminPage.waitForFunction(
+    () => [...document.querySelectorAll('#plaza-posts-list .badge')]
+      .some((b) => b.classList.contains('type-podium')),
     { timeout: WAIT_TIMEOUT }
   );
+  const videoRow = adminPage.locator('#plaza-posts-list .user-row').first();
+  await videoRow.locator('[data-pin-post]').click();
+  await adminPage.waitForSelector('#plaza-posts-list .plaza-pinned-badge', { timeout: WAIT_TIMEOUT });
 
   await api('POST', '/admin/memo/wipe', { token: ADMIN });
   await context.close();

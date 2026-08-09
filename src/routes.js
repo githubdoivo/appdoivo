@@ -65,7 +65,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
   MEMO_DIR,
   MEMO_MAX_FILE_BYTES,
@@ -1260,9 +1260,10 @@ router.get('/admin/memo/:day/uploads.zip', (req, res) => {
     const abs = join(MEMO_DIR, u.file_path);
     if (!existsSync(abs)) continue;
     const ext = extForMime(u.mime_type);
-    const base = u.user_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
-    let filename = `${base}-momento${u.slot_id}${ext}`;
-    if (usedNames.has(filename)) filename = `${base}-momento${u.slot_id}-${u.id}${ext}`;
+    // Lowercased for the same reason as the Snatch zip above.
+    const base = u.user_name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    let filename = `${base}-momento${u.slot_id}${ext.toLowerCase()}`;
+    if (usedNames.has(filename)) filename = `${base}-momento${u.slot_id}-${u.id}${ext.toLowerCase()}`;
     usedNames.add(filename);
     zip.addFile(abs, filename);
   }
@@ -1300,6 +1301,9 @@ router.post('/admin/memo/:day/recap/generate', async (req, res) => {
     const built = await buildDayRecapVideo(req.params.day);
     if (built.error) return res.status(400).json({ error: built.error });
     saveRecap(req.params.day, req.user.id, built);
+    // Publishing means it shows up on the Wall as a post, so it can be
+    // pinned or removed there like anything else.
+    createVideoPost(req.user.id, req.params.day);
     res.status(201).json({ ok: true, photoCount: built.photoCount });
   } catch (e) {
     res.status(500).json({ error: e.message || 'err_memo_recap_failed' });

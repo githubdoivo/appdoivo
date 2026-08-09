@@ -1279,12 +1279,16 @@ function renderConsequences() {
   // is the running history, and a consequence that was just revealed is the
   // most recently touched thing there is - leaving it out made a fresh reveal
   // look like nothing had happened.
+  // Grouped in the same order the filter chips are in - what needs doing
+  // (atribuir) first, then the queue, then what is already settled. Recency
+  // only breaks ties inside a group; sorting purely by timestamp buried the
+  // unassigned ones among older finished rows.
+  const STATE_ORDER = ['atribuir', 'fila', 'pendente', 'feita'];
+  const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
   const historyRows = rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state)).sort((a, b) => {
-    // Most recent timestamp (approved, then done, then revealed) sorts first.
-    const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
-    const aTime = getLatestTime(a);
-    const bTime = getLatestTime(b);
-    return bTime.localeCompare(aTime);
+    const byState = STATE_ORDER.indexOf(rataStatus(a).state) - STATE_ORDER.indexOf(rataStatus(b).state);
+    if (byState !== 0) return byState;
+    return getLatestTime(b).localeCompare(getLatestTime(a));
   });
   $('consequences-table').innerHTML = historyRows.length
     ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')
@@ -1399,11 +1403,13 @@ const PLAZA_ADMIN_LABEL = {
   poll: 'plaza_type_poll',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
+  video: 'plaza_type_video',
 };
 const PLAZA_ADMIN_BADGE = {
   poll: ' type-poll',
   announcement: ' type-announcement',
   podium: ' type-podium',
+  video: ' type-podium',
 };
 
 // A published result's text is a JSON snapshot (see createPodiumPost() in
@@ -1435,7 +1441,8 @@ async function loadPlazaPosts() {
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        ${p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
+        ${p.type === 'video' ? `<p class="muted" style="margin:8px 0 0">${esc(formatEuDate(p.text))}</p>`
+          : p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
         ${p.type === 'poll' ? `
         <ul class="admin-post-options">
           ${p.options.map((o) => {
@@ -1513,8 +1520,8 @@ async function loadMemoDays() {
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
             <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
-            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
+            <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
           </div>
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
@@ -1575,8 +1582,8 @@ $('memo-days-list').addEventListener('click', async (e) => {
   }
 
   // Generating the video and publishing it are the same action - the Wall
-  // player reads whatever is stored as that day's recap (see loadWallVideo()
-  // in app.js), so there's nothing to "publish" separately afterwards.
+  // it also lands on the Wall as a post (see createVideoPost() in plaza.js),
+  // so there's nothing to "publish" separately afterwards.
   const pubBtn = e.target.closest('[data-memo-publish-day]');
   if (pubBtn) {
     const day = pubBtn.dataset.memoPublishDay;

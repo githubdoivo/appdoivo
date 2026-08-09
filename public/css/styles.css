@@ -781,11 +781,7 @@ button.danger:hover {
    pick someone) -> pendente (blue, in progress) -> feita (green, done). */
 .rata-badge.rata-status-fila { border-color: var(--status-fila); color: var(--status-fila); }
 .rata-badge.rata-status-atribuir { border-color: var(--status-atribuir); color: var(--status-atribuir); }
-.rata-badge.rata-status-pendente {
-  border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
-  background: var(--status-pending-fill);
-  color: var(--status-pending-ink);
-}
+.rata-badge.rata-status-pendente { border-color: var(--status-pending); color: var(--status-pending); }
 .rata-badge.rata-status-feita { border-color: var(--status-done); color: var(--status-done); }
 
 /* Users tab role filter - same pill shape as the role badges, but
@@ -1736,7 +1732,23 @@ html.mode-light body.theme-memo .card {
 }
 .wall-video-row:last-child { border-bottom: none; padding-bottom: 0; }
 .wall-video-day { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); }
-.wall-video-player { width: 100%; border-radius: var(--radius); background: #000; }
+/* The ratio is declared rather than discovered. preload="none" is
+   deliberate (these are the heaviest thing the Wall serves, and most people
+   scroll past), but it means the browser never reads the file's dimensions
+   and falls back to its default 300x150 box - a portrait video sitting in a
+   landscape frame until you press play. Generated recaps are always 720x1280
+   (see buildDayRecapVideo), so 9:16 is a fact we already know. Capped by
+   width so a full-bleed portrait video doesn't swallow the whole feed. */
+.wall-video-player {
+  display: block;
+  width: 100%;
+  max-width: min(100%, calc(68vh * 9 / 16));
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+  border-radius: var(--radius);
+  background: #000;
+}
 
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }

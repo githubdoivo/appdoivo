@@ -730,6 +730,7 @@ const PLAZA_TYPE_LABEL = {
   poll: 'plaza_type_poll',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
+  video: 'plaza_type_video',
 };
 
 function renderPlazaPost(post) {
@@ -767,6 +768,19 @@ function renderPlazaPost(post) {
         <p class="podium-night">${esc(t(`theme_${snap.night}`))}</p>
         <ol class="podium-list">${rows}</ol>
         ${cong}
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
+
+  // The Memo day video. Its text is just the day; the file is served by
+  // GET /memo/recaps/:day (see createVideoPost() in plaza.js).
+  if (post.type === 'video') {
+    return `
+      <article class="plaza-post plaza-post-video${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
+        ${pinnedBadge}
+        <p class="podium-night">${esc(formatEuDate(post.text))}</p>
+        <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(post.text)}"></video>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -883,28 +897,10 @@ async function loadPlaza() {
     const { posts } = await api('/plaza-posts');
     renderPlazaFeed(posts);
   } catch { /* transient - leaves whatever was last shown */ }
-  if (memoEnabled) loadWallVideo();
 }
 
 function memoRecapUrl(day) {
   return `/api/memo/recaps/${encodeURIComponent(day)}?token=${encodeURIComponent(getToken())}`;
-}
-
-// Memo's daily recap, published to everyone here by the owner (see the
-// Wall admin tab) rather than staying inside Memo itself - hidden entirely
-// until at least one day has a video.
-async function loadWallVideo() {
-  try {
-    const { days } = await api('/memo/recaps');
-    $('wall-video-card').classList.toggle('hidden', days.length === 0);
-    if (days.length) {
-      $('wall-video-list').innerHTML = days.map((day) => `
-        <div class="wall-video-row">
-          <span class="wall-video-day">${esc(formatEuDate(day))}</span>
-          <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(day)}"></video>
-        </div>`).join('');
-    }
-  } catch { /* transient network hiccup - the next poll retries */ }
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
