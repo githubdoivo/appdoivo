@@ -616,3 +616,10 @@ export function resetCongeniality(night) {
   db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
   setSetting(`congeniality_status_${night}`, 'closed');
 }
+
+/** Clears the votes but leaves the round open - the "start over without
+ *  shutting everyone out" case, mirroring the outfit vote's own reset. */
+export function resetCongenialityVotes(night) {
+  db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
+  setSetting(`congeniality_status_${night}`, 'open');
+}

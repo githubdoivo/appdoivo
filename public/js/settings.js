@@ -166,6 +166,7 @@ async function boot() {
     // near-invisible star at the end of atab-memo, itself only shown to
     // the owner.
     $('wall-secret-btn').classList.toggle('hidden', !isOwner);
+    $('votelog-secret-btn').classList.toggle('hidden', !isOwner);
     // Owner-only, and only when Memo is on at all - it fires a push to
     // every guest (see POST /admin/memo/trigger-next).
     $('memo-trigger-card').classList.toggle('hidden', !(isOwner && memoEnabled));
@@ -284,8 +285,9 @@ function currentNight() {
 // tab id - see index.html's tab nav comment for the plaza/wall naming swap.
 function applyAdminTheme(tab) {
   const night = currentNight();
-  document.body.classList.toggle('theme-furnished', tab === 'outfit' && night === 'furnished');
-  document.body.classList.toggle('theme-swamp', tab === 'outfit' && night === 'swamp');
+  const outfitLike = tab === 'outfit' || tab === 'votelog';
+  document.body.classList.toggle('theme-furnished', outfitLike && night === 'furnished');
+  document.body.classList.toggle('theme-swamp', outfitLike && night === 'swamp');
   document.body.classList.toggle('theme-rata', tab === 'rata');
   document.body.classList.toggle('theme-mural', tab === 'plaza');
   document.body.classList.toggle('theme-plaza', tab === 'wall');
@@ -1091,6 +1093,23 @@ $('congeniality-advance-btn').addEventListener('click', async () => {
   }
 });
 
+// Clears the votes but leaves the round open - the same "reiniciar votação"
+// the outfit vote has. The danger button below is the full reset.
+$('congeniality-reset-votes-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_congeniality_reset_votes')))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality/reset-votes`, { method: 'POST' });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
 $('congeniality-reset-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_congeniality_reset')))) return;
   const msg = $('congeniality-msg');
@@ -1479,7 +1498,7 @@ async function loadMemoDays() {
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
             <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
-            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
+            <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small ghost" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
           </div>
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
@@ -1594,13 +1613,14 @@ $('memo-trigger-btn').addEventListener('click', async () => {
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['settings', 'plaza', 'wall', 'memo', 'rata', 'outfit'].forEach((name) => {
+  ['settings', 'plaza', 'wall', 'memo', 'rata', 'outfit', 'votelog'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
   if (tab === 'memo' && isAdmin) loadMemoDays();
+  if (tab === 'votelog' && isOwner) loadVotes();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
@@ -1610,6 +1630,8 @@ document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
 // The star's whole point is being easy to miss - clicking straight into
 // the tab it unlocks rather than first unhiding the nav button it replaced.
 $('wall-secret-btn').addEventListener('click', () => selectAdminTab('wall'));
+// Same idea for the voting logs - the diamond at the end of the Snatch tab.
+$('votelog-secret-btn').addEventListener('click', () => selectAdminTab('votelog'));
 
 // The top-left logo used to do nothing here - now it's "go home", same as
 // clicking a site's logo anywhere else: back to the landing admin tab from

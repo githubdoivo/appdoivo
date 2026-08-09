@@ -53,6 +53,7 @@ import {
   congenialityResults,
   congenialityWinner,
   resetCongeniality,
+  resetCongenialityVotes,
 } from './votes.js';
 import {
   getPublicKey,
@@ -1057,6 +1058,15 @@ router.post('/admin/voting/:night/congeniality/reset', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   resetCongeniality(night);
   res.json({ ok: true, night });
+});
+
+// Wipes the votes but leaves the round open, same shape as the outfit vote's
+// own /reset above - "everyone vote again" rather than "shut it all down".
+router.post('/admin/voting/:night/congeniality/reset-votes', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  resetCongenialityVotes(night);
+  res.json({ ok: true, night, congenialityStatus: 'open' });
 });
 
 // Opens registration: contestants can self-enter (see POST /outfit/register).

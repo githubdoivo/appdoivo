@@ -642,6 +642,49 @@ test('the owner sees the near-invisible star on the Memo admin tab, and it opens
   await context.close();
 });
 
+// Same hidden-entry-point treatment as the star above, for the voter log -
+// the one place that shows who voted for whom. Owner-only twice over: the
+// diamond only renders for the owner, and the data behind it is owner-gated
+// server-side (see GET /admin/votes).
+test('the voting logs live behind a diamond on the Snatch tab, owner-only', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#votelog-secret-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  // Not reachable from the tab bar - the diamond is the only way in.
+  const navHidden = await page.$eval('[data-atab="votelog"]', (el) => el.classList.contains('hidden'));
+  assert.ok(navHidden, 'the votelog nav button must stay hidden');
+
+  await page.click('#votelog-secret-btn');
+  await page.waitForSelector('#atab-votelog:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#voter-log-card', { timeout: WAIT_TIMEOUT });
+  const stillHidden = await page.$eval('[data-atab="votelog"]', (el) => el.classList.contains('hidden'));
+  assert.ok(stillHidden, 'opening the panel must not reveal the nav button');
+
+  await context.close();
+});
+
+// A promoted admin is not the owner: neither hidden entry point may appear.
+test('a non-owner admin never sees the star or the diamond', async () => {
+  const other = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'diamondadmin' } });
+  await api('PATCH', `/admin/users/${other.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, other.token, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForTimeout(400);
+
+  for (const id of ['wall-secret-btn', 'votelog-secret-btn']) {
+    const hidden = await page.$eval(`#${id}`, (el) => el.classList.contains('hidden'));
+    assert.ok(hidden, `#${id} must stay hidden for a non-owner admin`);
+  }
+
+  await context.close();
+  await api('DELETE', `/admin/users/${other.id}`, { token: ADMIN });
+});
+
 test('a plain (non-admin) user only sees the Settings tab on /settings.html', async () => {
   const plain = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'plainsettingsuser' } });
 

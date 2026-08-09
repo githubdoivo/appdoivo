@@ -62,6 +62,9 @@
         <!-- No longer a normal tab bar entry - see the star trigger at the
              end of atab-memo instead (#wall-secret-btn in settings.js). -->
         <button class="tab hidden" data-atab="wall" data-i18n="tab_chat">Wall</button>
+        <!-- Also not a normal entry - reached only through the diamond at the
+             end of the Snatch tab (#votelog-secret-btn). -->
+        <button class="tab hidden" data-atab="votelog" data-i18n="voter_log_title">Registos da votação</button>
         <button class="tab" data-atab="memo" data-i18n="tab_memo">Memo</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
@@ -115,7 +118,10 @@
              isso fica solta no topo, fora de qualquer card. Mesmo
              componente "switch" da Best Look principal (theme-switch),
              não um <select>. -->
-        <div style="text-align:right">
+        <!-- Labelled like every other component on the page: on its own it
+             was two unexplained buttons floating above the cards. -->
+        <div class="night-switch-row">
+          <span class="night-switch-label" data-i18n="night_switch_label">Noite</span>
           <div class="theme-switch night-switch" id="admin-night-switch">
             <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
             <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
@@ -124,7 +130,11 @@
 
         <div class="card">
           <h2 data-i18n="voting_control_title">Controlo da votação</h2>
-          <p style="margin-top:12px">
+          <!-- Named the same way Miss Congeniality is below it: this card runs
+               two separate rounds for the night, so each needs its own label
+               rather than one being the unnamed default. -->
+          <h3 data-i18n="best_outfit_title">Best Outfit</h3>
+          <p style="margin-top:8px">
             <span data-i18n="voting_state">Estado atual</span>:
             <strong id="voting-state-label" class="voting-state">--</strong>
           </p>
@@ -156,7 +166,8 @@
           <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" class="small" id="congeniality-advance-btn" data-i18n="congeniality_start_btn">Iniciar</button>
-            <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar</button>
+            <button type="button" class="small" id="congeniality-reset-votes-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
+            <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar tudo</button>
           </div>
           <table id="congeniality-table" class="table" style="margin-top:12px"></table>
 
@@ -164,7 +175,7 @@
                with photos and medals, plus the congeniality winner. -->
           <hr class="voting-divider" />
           <div class="voting-controls">
-            <button type="button" class="small" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
+            <button type="button" class="small publish-wide" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
           </div>
           <span id="congeniality-msg" class="muted"></span>
         </div>
@@ -196,38 +207,35 @@
                  photo of them handy at that moment, see registerContestant()
                  server-side. Still worth having available, not just
                  possible via "mudar foto" after the fact. -->
-            <button type="button" class="small ghost" id="admin-register-photo-btn" style="margin-top:6px" data-i18n="outfit_choose_photo_btn">escolher foto</button>
             <input type="file" accept="image/*" id="admin-register-photo-input" class="file-input-visually-hidden" />
             <div id="admin-register-photo-preview" class="hidden" style="margin-top:10px">
               <img class="entry-photo-preview" alt="" />
               <span class="photo-attached-label" data-i18n="outfit_photo_attached">foto anexada</span>
             </div>
-            <div class="inline" style="justify-content:flex-end;margin-top:10px">
-              <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
+            <!-- The two halves of finishing an entry, side by side. -->
+            <div class="form-actions">
+              <button type="button" class="small ghost" id="admin-register-photo-btn" data-i18n="outfit_choose_photo_btn">escolher foto</button>
               <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
             </div>
             <div style="text-align:right">
               <span id="admin-register-msg" class="muted"></span>
-              <span id="download-photos-msg" class="muted"></span>
             </div>
           </form>
           <input id="contestant-search" type="text" data-i18n-ph="contestant_search_ph" placeholder="Procurar concorrente..." autocomplete="off" style="margin-top:10px" />
           <div class="table-scroll"><table id="contestants-table"></table></div>
+          <!-- Downloading every photo acts on the list above, not on the
+               registration form, so it sits after it rather than beside the
+               "Criar" button where it used to be. -->
+          <hr class="voting-divider" />
+          <div class="inline" style="justify-content:flex-end;margin-bottom:0">
+            <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
+          </div>
+          <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
 
         <div class="card">
           <h2 data-i18n="votes_title">Resultados da votação</h2>
           <div class="table-scroll"><table id="results-table"></table></div>
-        </div>
-
-        <!-- Owner-only: same golden rule as the Wall's real-name mapping - a
-             regular admin never sees who voted for whom, only the aggregate
-             results above. Kept last on the page since it's the most
-             sensitive, least-needed-day-to-day thing here. -->
-        <div class="card" id="voter-log-card">
-          <h2 data-i18n="voter_log_title">Registos da votação</h2>
-          <p class="help" data-i18n="voter_log_help">Explicação</p>
-          <div class="table-scroll"><table id="voter-log-table"></table></div>
         </div>
 
         <!-- Owner-only kill switch, scoped to just this feature (see
@@ -240,6 +248,11 @@
           <button id="outfit-wipe-btn" type="button" class="danger" data-i18n="outfit_wipe_btn">Apagar tudo do Snatch</button>
           <span id="outfit-wipe-msg" class="muted wipe-msg"></span>
         </div>
+        <!-- Owner-only secret entry point to the voting logs, same treatment
+             as the star that opens the Plaza admin tab: near-invisible, no
+             title attribute (that produces a hover tooltip on desktop and
+             gives it away), just a faint mark for someone who knows. -->
+        <button type="button" id="votelog-secret-btn" class="wall-secret-btn hidden" aria-label="◆">◆</button>
       </div>
 
       <!-- Separador: A Rata -->
@@ -335,6 +348,17 @@
              Deliberately near-invisible, not a labeled button - see
              wall-secret-btn in settings.js/styles.css. -->
         <button type="button" id="wall-secret-btn" class="wall-secret-btn hidden" aria-label="✦">✦</button>
+      </div>
+
+      <!-- Reached only via the diamond at the end of the Snatch tab. Owner-
+           only: a regular admin never sees who voted for whom, just the
+           aggregate results. -->
+      <div id="atab-votelog" class="tab-panel hidden">
+        <div class="card" id="voter-log-card">
+          <h2 data-i18n="voter_log_title">Registos da votação</h2>
+          <p class="help" data-i18n="voter_log_help">Explicação</p>
+          <div class="table-scroll"><table id="voter-log-table"></table></div>
+        </div>
       </div>
 
       <!-- Tab: Settings (every user, including the owner) -->

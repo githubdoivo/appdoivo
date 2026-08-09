@@ -58,11 +58,15 @@
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
   --type-podium: #6b4a8a;
-  /* Was #8a6a1f, which carried enough red/blue to read as olive-mustard
-     rather than yellow. Same hue family with the blue taken out entirely -
-     a proper amber-yellow at identical contrast (3.9:1 on rata's light
-     paper), so nothing gets harder to read for the sake of the hue. */
+  /* "Pending" is the one chip that has to look yellow rather than olive. As
+     an outline it can't: any yellow dark enough to pass as text on pale
+     paper reads as mustard, and every brighter option measured 2.4-3.8:1,
+     all failing AA. So it's a filled pill instead - a genuinely bright
+     yellow ground with dark ink on top, 8.1:1, and unmistakably yellow.
+     --status-pending stays for anything using it as a plain colour. */
   --status-pending: #8a6a00;
+  --status-pending-fill: #f2c811;
+  --status-pending-ink:  #3d2f00;
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
@@ -81,16 +85,22 @@
    photo, set directly on #login itself, same protection). */
 
 html.mode-light {
-  --paper:    #f5eef1;
-  --paper-2:  #faf5f7;
-  --paper-3:  #fdfafc;
-  --ink:      #4a3f4d;
+  /* Lilac, not the pale pink this used to be (#f5eef1 family). These are the
+     unthemed base tokens - what Settings and the admin chrome actually run
+     on - and dark mode's own base is plainly purple (#17131f/#261f35), so
+     light mode reading as pink made the same page look like two unrelated
+     designs. Contrast went up rather than down: ink 9.1-10.5:1, ink-soft
+     4.7-5.4:1 across the three papers. */
+  --paper:    #eae3f4;
+  --paper-2:  #f2ecf9;
+  --paper-3:  #f8f4fd;
+  --ink:      #3f3550;
   /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
      muted text (.muted, .help, table cells) this drives all over
      Settings and the admin panel. Darkened to ~5:1. */
-  --ink-soft: #756980;
-  --line:     #e3d4e0;
-  --line-2:   #ecdfe8;
+  --ink-soft: #6b5f83;
+  --line:     #dbd0ec;
+  --line-2:   #e8e1f4;
   --rata:     #8fbfae;
   --rata-2:   #aad4c5;
   --outfit:   #a7abdb;
@@ -138,6 +148,8 @@ html.mode-dark {
   --type-poll: #e08a4a;
   --type-podium: #b294d6;
   --status-pending: #d4b04a;
+  --status-pending-fill: #f2c811;
+  --status-pending-ink:  #3d2f00;
   /* Was #7ed181 - a bright mint/lime that clashed with the app's muted,
      earthy palette everywhere it showed up. Deeper, less saturated sage
      green instead - still clearly reads as "done" without looking neon. */
@@ -763,7 +775,11 @@ button.danger:hover {
    pick someone) -> pendente (blue, in progress) -> feita (green, done). */
 .rata-badge.rata-status-fila { border-color: var(--status-fila); color: var(--status-fila); }
 .rata-badge.rata-status-atribuir { border-color: var(--status-atribuir); color: var(--status-atribuir); }
-.rata-badge.rata-status-pendente { border-color: var(--status-pending); color: var(--status-pending); }
+.rata-badge.rata-status-pendente {
+  border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
+  background: var(--status-pending-fill);
+  color: var(--status-pending-ink);
+}
 .rata-badge.rata-status-feita { border-color: var(--status-done); color: var(--status-done); }
 
 /* Users tab role filter - same pill shape as the role badges, but
@@ -1083,6 +1099,10 @@ html.mode-light .hero-line { color: var(--ink); }
 /* --------------------------------- Admin --------------------------------- */
 
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+/* ...unless it holds the publish action, which wraps onto its own full-width
+   line for the same reason as .publish-wide above. */
+.row-actions { flex-wrap: wrap; }
+.row-actions .publish-wide { flex: 1 0 100%; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
 th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -1196,6 +1216,10 @@ body { transition: background-color 0.45s ease; }
 
 .voting-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .voting-controls button { width: 100%; }
+/* Publishing the night to the Wall is the one action here that leaves the
+   admin panel and shows up in front of everyone, so it gets the full width
+   rather than sharing a row with the phase controls. */
+.publish-wide { grid-column: 1 / -1; width: 100%; }
 .voting-state { font-family: var(--serif); font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
@@ -2023,7 +2047,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .chat-msg-author { font-family: var(--body); font-size: var(--text-xs); text-transform: lowercase; letter-spacing: 0.14em; font-weight: 600; color: var(--clay); }
 .chat-msg-time { font-family: var(--body); font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
-.chat-empty { color: var(--ink-soft); font-weight: 600; font-size: 0.92rem; }
+.chat-empty { color: var(--ink-soft); font-weight: 400; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }
 
 /* ------------------- Miss Congeniality + published podium ----------------- */
@@ -2065,3 +2089,32 @@ html.mode-light .chat-empty { color: var(--ink); }
    congeniality -> publish) without splitting them into separate cards -
    they're the same night being run, in order. */
 .voting-divider { border: none; border-top: 1px solid var(--line); margin: 20px 0 16px; }
+
+/* The night switch governs contestants, votes and the voter log below it,
+   not just the voting card - so it sits loose above them all. Given a label
+   because two bare buttons floating over the cards read as decoration. */
+.night-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.night-switch-label {
+  font-family: var(--body);
+  font-size: var(--text-xs);
+  letter-spacing: 0.16em;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* Two equal halves - "escolher foto" and "criar" are the two things that
+   finish an entry, so they share a line rather than one hanging under the
+   other. Stacks on very narrow screens. */
+.form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.form-actions button { width: 100%; }
+@media (max-width: 360px) { .form-actions { grid-template-columns: 1fr; } }
