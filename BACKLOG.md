@@ -1,31 +1,37 @@
 # Backlog
 
-Work that has been agreed but not scheduled: features not started yet,
-and things waiting on something outside the code. This is deliberately
-**not** a list of blockers - nothing here holds up a release. If a build
-is ready, it ships, and whatever is still on this page stays on this page.
+Work that has been agreed but not scheduled. This is deliberately **not**
+a list of blockers - nothing here holds up a release. If a build is
+ready, it ships, and whatever is still on this page stays on this page.
 
 Anything actively in progress belongs in a branch and a PR, not here.
 Process lives in [CONTRIBUTING.md](CONTRIBUTING.md); this is only the
-list of what is still owed.
+list of what is still owed, and by whom.
 
-## Features not started
+## Ready to build - nothing needed from Ivo
 
 ### Plaza: private birthday messages, with a PDF at the end
 
 Guests write a message to the birthday person from a dedicated box on
 Plaza. Nobody else can read them - not other guests, and not other
-admins either, since the whole point is that they are private until
+admins either, since the whole point is that they stay private until
 opened. A card on the Plaza admin page lets the owner read the
-collection and download it as a nicely formatted PDF, which is meant to
-be done once, at the end of the party.
+collection and download it as a nicely formatted PDF, meant to be done
+once, at the end of the party.
+
+**The guests populate it.** Ivo writes nothing and supplies nothing; the
+only thing he does is press download. This is pure development work and
+can start whenever.
 
 Needs: its own table, the guest-facing form, an owner-only read route
 and PDF export, pt/en copy, and test coverage across the branch (see the
 testing rules in CLAUDE.md - a passing suite is not the same as a
 covered feature).
 
-## Waiting on an asset
+## Waiting on Ivo
+
+These cannot start until he hands something over. Listing them is not a
+nudge; they sit here until they don't.
 
 ### High-resolution vectorised login background
 
@@ -35,30 +41,26 @@ artwork. Once it lands, both the login image **and** every app icon size
 need regenerating from it - the current icons were cropped from the
 cottage in the placeholder, so they inherit its resolution.
 
-### Copy rewrite pass
+### Copy rewrite
 
 Every user-facing string is laid out for review, pt and en side by side,
-in the strings artifact and the matching spreadsheet. Ivo is doing the
-rewrite himself; blank entries mean "leave this one alone". Nothing to
-do here until those come back.
+in the strings artifact and the matching spreadsheet. Ivo is rewriting
+them himself; a blank entry means "leave this one alone". Unrelated to
+the PDF feature above - this is the app's own wording, not anything
+guests write.
 
-## Verification owed
+## Settled
 
-### Does `security@appdoivo.com` actually receive mail?
+### `security@appdoivo.com` receives mail — confirmed 2026-08-09
 
 `security.txt` is served at the edge by Cloudflare's Security Center and
-names this address, and DNS is set up for it - Cloudflare MX records,
-SPF, and a DMARC record whose `rua` reports also go there. What is *not*
-confirmed is that a routing rule exists for the address and that its
-destination has been verified. If it has not, a researcher's report
-bounces and the DMARC reports are lost too, which defeats the point of
-publishing the file at all.
-
-Check under Cloudflare -> appdoivo.com -> Email -> Email Routing: either
-a rule for `security@` or a catch-all, pointing at a **Verified**
-destination. The conclusive test is simply to send it an email and see
-whether it arrives - it cannot be probed remotely, since Cloudflare's MX
-rejects senders without reverse DNS.
+names this address. DNS was already correct (Cloudflare MX, SPF, and a
+DMARC record whose `rua` reports also go there), but mail was being
+dropped because the routing destination had never been verified. Once
+verified, a test message arrived. Worth knowing if it ever breaks again:
+the symptom is silence rather than a bounce, and it cannot be probed
+remotely, since Cloudflare's MX rejects senders without reverse DNS - so
+the only real test is to send it an email.
 
 ## Elsewhere
 
