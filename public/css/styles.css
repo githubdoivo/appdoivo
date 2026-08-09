@@ -1194,6 +1194,12 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .inline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
+/* Chat: the message field takes the room and "partilhar" sits on its end,
+   rather than the input claiming the full width (inputs default to 100%)
+   and pushing the button onto a line of its own. */
+#chat-form { flex-wrap: nowrap; }
+#chat-form input { flex: 1 1 auto; min-width: 0; }
+#chat-form button { flex: 0 0 auto; }
 /* The search-or-create user input otherwise wraps its "criar" button onto
    its own line (inputs are width:100% by default) - here the button is a
    short, immediate action tied to what's typed, so it reads better sitting
@@ -2161,3 +2167,14 @@ button[id$="-wipe-btn"] { display: block; width: 100%; }
 /* The voting-logs diamond, stretched vertically - the glyph on its own is
    nearly square, which reads as a bullet rather than a lozenge at this size. */
 #votelog-secret-btn { transform: scaleY(1.45); font-size: 0.95rem; }
+
+/* Stand-in for a tab with nothing in it yet - centred and quiet, so an empty
+   Snatch reads as "not started" rather than as a page that failed to load. */
+.idle-note {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: 34px 0;
+}

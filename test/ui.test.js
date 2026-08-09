@@ -334,15 +334,19 @@ test('Wall admin can publish a poll from Settings, and a user can vote on it fro
   const questionText = await page.$eval('.plaza-post-poll .plaza-post-text', (el) => el.textContent);
   assert.equal(questionText, 'Where for dinner?');
 
-  // Picking an option only stages it - the submit button starts disabled
-  // and stays disabled until something is picked, nothing is voted yet.
-  const submitBtn = page.locator('.plaza-poll-submit');
-  assert.ok(await submitBtn.isDisabled(), 'submit should start disabled - nothing picked yet');
-  await page.click('.plaza-poll-option:has-text("Pizza")');
-  assert.ok(!(await submitBtn.isDisabled()), 'submit should enable once an option is picked');
-  assert.equal(await page.locator('.plaza-poll-option.voted').count(), 0, 'picking an option should not vote by itself');
+  // There is no separate "votar" button any more: tapping an option asks for
+  // confirmation, and declining must leave the poll untouched.
+  assert.equal(await page.locator('.plaza-poll-submit').count(), 0, 'the separate vote button should be gone');
 
-  await submitBtn.click();
+  await page.click('.plaza-poll-option:has-text("Pizza")');
+  await page.waitForSelector('.modal-actions', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button.ghost');
+  await page.waitForSelector('.modal-actions', { state: 'hidden', timeout: WAIT_TIMEOUT });
+  assert.equal(await page.locator('.plaza-poll-option.voted').count(), 0, 'declining the confirm must not cast a vote');
+
+  await page.click('.plaza-poll-option:has-text("Pizza")');
+  await page.waitForSelector('.modal-actions', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:not(.ghost)');
   await page.waitForFunction(() => document.querySelector('.plaza-poll-option.voted')?.textContent.includes('Pizza'));
   const pizzaPct = await page.$eval('.plaza-poll-option.voted .plaza-poll-option-pct', (el) => el.textContent);
   assert.equal(pizzaPct, '100%');

@@ -797,10 +797,10 @@ function renderPlazaPost(post) {
 
   const totalVotes = post.options.reduce((sum, o) => sum + o.votes, 0);
   const alreadyVoted = post.myOptionId != null;
-  // A vote is final the instant it's submitted (see castPlazaVote() server-
-  // side) - picking an option here only stages it locally in
-  // pendingPollSelections; nothing reaches the server until "votar" below
-  // is pressed, so a misclick before then costs nothing.
+  // A vote is final the instant it lands (see castPlazaVote() server-side),
+  // so tapping an option asks first rather than staging it behind a separate
+  // "votar" button - one tap plus a yes/no, instead of two taps with no
+  // safety net at the end of them.
   const pendingOptionId = pendingPollSelections.get(post.id);
   const optionsHtml = post.options.map((o) => {
     const pct = totalVotes ? Math.round((o.votes / totalVotes) * 100) : 0;
@@ -819,8 +819,7 @@ function renderPlazaPost(post) {
       : `<button type="button" class="${classes}" data-select-post="${post.id}" data-select-option="${o.id}">${body}</button>`;
   }).join('');
 
-  const submitHtml = alreadyVoted ? '' : `
-      <button type="button" class="small plaza-poll-submit" data-vote-submit="${post.id}" data-vote-option="${pendingOptionId ?? ''}"${pendingOptionId == null ? ' disabled' : ''}>${esc(t('plaza_vote_btn'))}</button>`;
+  const submitHtml = '';
 
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
@@ -846,16 +845,14 @@ function renderPlazaFeed(posts) {
   $('plaza-feed-empty').classList.toggle('hidden', posts.length > 0);
 
   $('plaza-feed').querySelectorAll('[data-select-post]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      pendingPollSelections.set(Number(btn.dataset.selectPost), Number(btn.dataset.selectOption));
-      renderPlazaFeed(lastPlazaPosts);
-    });
-  });
-
-  $('plaza-feed').querySelectorAll('[data-vote-submit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const postId = Number(btn.dataset.voteSubmit);
-      const optionId = Number(btn.dataset.voteOption);
+      const postId = Number(btn.dataset.selectPost);
+      const optionId = Number(btn.dataset.selectOption);
+      const label = btn.querySelector('.plaza-poll-option-label')?.textContent ?? '';
+      // The confirm is the whole safety net now - a poll vote cannot be
+      // changed once cast, so name the option being chosen rather than
+      // asking a generic "are you sure".
+      if (!(await showConfirm(t('plaza_confirm_vote', { option: label })))) return;
       try {
         const { posts: updated } = await api(`/plaza-posts/${postId}/vote`, {
           method: 'POST',
@@ -1460,6 +1457,14 @@ async function loadVotes() {
     }
 
     renderCongeniality(data.congeniality);
+
+    // With both rounds hidden the tab is a hero line over empty space, which
+    // reads as broken rather than "nothing yet" - say so instead.
+    const nothingOpen = $('voting-card').classList.contains('hidden')
+      && $('results-card').classList.contains('hidden')
+      && $('congeniality-card').classList.contains('hidden')
+      && $('register-card').classList.contains('hidden');
+    $('outfit-idle').classList.toggle('hidden', !nothingOpen);
   } catch (err) {
     $('voting-status').textContent = err.message;
   }
