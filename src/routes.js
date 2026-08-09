@@ -922,7 +922,9 @@ router.post('/admin/contestants', (req, res) => {
 // duplicating its rules (duplicate-entry checks, partner validation, the
 // night having to actually be in "registration"), so an admin follows the
 // exact same constraints a self-registering guest would.
-router.post('/admin/contestants/register', requireOwner, (req, res) => {
+// Any admin, not just the owner: fixing the roster is exactly the sort of
+// thing a helper does on the night. Removing an entry stays owner-only.
+router.post('/admin/contestants/register', (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   const userId = Number(req.body?.userId);
   if (!userId) return res.status(400).json({ error: 'err_choose_user' });
@@ -1337,7 +1339,10 @@ router.post('/admin/memo/:day/recap/generate', async (req, res) => {
 // in scheduler.js). Owner-only rather than admin because it pushes to real
 // phones - not something to leave a stray tap away for anyone with an admin
 // key.
-router.post('/admin/memo/trigger-next', requireOwner, async (req, res) => {
+// Any admin, for the same reason they can already reveal a rata
+// consequence: both fire a push to everyone and both are the kind of nudge
+// a helper gives while the party is running.
+router.post('/admin/memo/trigger-next', async (req, res) => {
   if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = triggerNextSlot();
   if (result.error) return res.status(400).json(result);

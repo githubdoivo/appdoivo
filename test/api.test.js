@@ -1405,27 +1405,32 @@ test('a non-owner admin cannot use any feature wipe switch', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
 });
 
-test('a non-owner admin cannot register or remove Best Look contestants - owner-only', async () => {
+test('a non-owner admin can add a Best Look contestant but not remove one', async () => {
+  // Adding is the sort of thing a helper does on the night - someone turns
+  // up, someone puts them on the list. Removing is not: it throws away an
+  // entry and any votes attached to it, so it stays with the owner.
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  await api('POST', `/admin/voting/${NIGHT}/registration`, { token: ADMIN });
+  try {
+    await api('POST', `/admin/voting/${NIGHT}/registration`, { token: ADMIN });
 
-  const register = await api('POST', '/admin/contestants/register', {
-    token: userToken,
-    body: { userId, name: 'Should Not Register', night: NIGHT },
-  });
-  assert.equal(register.status, 403);
+    const byAdmin = await api('POST', '/admin/contestants/register', {
+      token: userToken,
+      body: { userId, name: 'Admin Registered', night: NIGHT },
+    });
+    assert.equal(byAdmin.status, 201, 'an admin should be able to put someone on the list');
 
-  const owned = await api('POST', '/admin/contestants/register', {
-    token: ADMIN,
-    body: { userId, name: 'Owner Registered', night: NIGHT },
-  });
-  assert.equal(owned.status, 201);
+    const remove = await api('DELETE', `/admin/contestants/${byAdmin.data.id}`, { token: userToken });
+    assert.equal(remove.status, 403, 'but not take anyone off it');
 
-  const remove = await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: userToken });
-  assert.equal(remove.status, 403);
-
-  await api('DELETE', `/admin/contestants/${owned.data.id}`, { token: ADMIN });
-  await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+    await api('DELETE', `/admin/contestants/${byAdmin.data.id}`, { token: ADMIN });
+  } finally {
+    // Always demoted, even if an assertion above throws: this is the shared
+    // user, and leaving it an admin quietly breaks every later test that
+    // expects a plain account. That is exactly what happened when these
+    // rules changed - one failure here, one apparently unrelated failure
+    // in Plaza.
+    await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  }
 });
 
 /* ----------------------------------- Chat ---------------------------------- */

@@ -235,7 +235,10 @@
           <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
 
-        <div class="card">
+        <!-- Owner-only: an admin runs the night but does not get to watch the
+             standings while it is running (see boot() in settings.js and
+             requireOwner on the routes behind it). -->
+        <div class="card" id="voting-results-card">
           <h2 data-i18n="votes_title">Resultados da votação</h2>
           <!-- Both rounds of the night, each under its own name - they are
                two separate votes and their standings mean different things. -->

@@ -1371,7 +1371,12 @@ body { transition: background-color 0.45s ease; }
 .voting-state { font-family: var(--serif); font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
-.voting-state.is-closed { color: var(--danger); }
+/* --danger is tuned as a fill, and as text on a light card it sits around
+   1.9-2.2:1 - the state you most need to read at a glance was the hardest
+   one to read. Darkened to clear 4.5 on every light theme paper; dark mode
+   keeps --danger, which is already legible there. */
+.voting-state.is-closed { color: #9c3f2d; }
+html.mode-dark .voting-state.is-closed { color: var(--danger); }
 
 /* ============ Best Outfit: switchable theme (furnished / swamp) ========= */
 /* The theme is applied to <body> (the WHOLE page) only while Best Outfit is
@@ -1815,11 +1820,15 @@ html.mode-light body.theme-memo .card {
 .memo-dot-waiting { background: #8fd6e8; border-color: #8fd6e8; opacity: 0.55; }
 .memo-dot-uploaded { background: #0b5f77; border-color: #0b5f77; }
 .memo-dot-missed { background: #fff; border-color: #fff; opacity: 0.85; }
-/* Same light blue as waiting - it's still "to be done" - but at full
-   strength and pulsing, so the one you can actually act on stands out. */
+/* Deeper than waiting, not just the same blue at full strength: side by
+   side on a light background the only difference was opacity, and the one
+   moment you can actually act on read as one more "still to do". Sits
+   between waiting and uploaded so the three stay tellable apart - 2.4
+   against waiting, 1.8 against uploaded, both of which they need since
+   they line up in a row. */
 .memo-dot-open {
-  background: #8fd6e8;
-  border-color: #8fd6e8;
+  background: #1f8ca8;
+  border-color: #1f8ca8;
   animation: memo-dot-pulse 1.6s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {

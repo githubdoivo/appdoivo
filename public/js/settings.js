@@ -173,9 +173,10 @@ async function boot() {
     // the owner.
     $('wall-secret-btn').classList.toggle('hidden', !isOwner);
     $('votelog-secret-btn').classList.toggle('hidden', !isOwner);
-    // Owner-only, and only when Memo is on at all - it fires a push to
-    // every guest (see POST /admin/memo/trigger-next).
-    $('memo-trigger-card').classList.toggle('hidden', !(isOwner && memoEnabled));
+    // Any admin, and only when Memo is on at all - it fires a push to
+    // every guest (see POST /admin/memo/trigger-next), the same as
+    // revealing a consequence, which admins have always been able to do.
+    $('memo-trigger-card').classList.toggle('hidden', !memoEnabled);
     if (!isOwner) {
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
@@ -186,11 +187,14 @@ async function boot() {
       ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card', 'memo-wipe-card'].forEach((id) => {
         $(id).classList.add('hidden');
       });
-      // Contestant creation/removal is owner-only too (see requireOwner on
-      // POST /admin/contestants/register and DELETE /admin/contestants/:id)
-      // - a regular admin still sees the contestants list itself (search +
-      // table), just not the form or the remove button on each row.
-      $('admin-register-form').classList.add('hidden');
+      // Registering a contestant is open to any admin - they are the ones
+      // fixing the roster on the night - but removing one stays owner-only
+      // (the per-row remove button is already gated in renderContestants()).
+      //
+      // The standings are not. An admin opens and closes the vote without
+      // watching it unfold, which keeps the result a surprise to everyone
+      // running the night except the one person publishing it.
+      $('voting-results-card').classList.add('hidden');
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -1074,6 +1078,11 @@ $('admin-register-form').addEventListener('submit', async (e) => {
     $('admin-register-msg').textContent = t('outfit_register_partner_required');
     return;
   }
+  // A photoless entry is allowed here on purpose - an organiser fixing the
+  // roster may not have a photo of that person to hand - but it is worth
+  // saying out loud, because the entry looks unfinished on the reveal night
+  // and nothing else warns you until then.
+  if (!adminRegisterPhotoDataUrl && !(await showConfirm(t('admin_register_no_photo_confirm')))) return;
   try {
     await api('/admin/contestants/register', {
       method: 'POST',
