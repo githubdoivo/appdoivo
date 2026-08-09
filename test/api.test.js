@@ -1729,6 +1729,45 @@ test('the 5 daily slots never land close together - each is at least MEMO_MIN_GA
   }
 });
 
+// The five dots are read left to right as a progress bar, so the states
+// have to stay monotonic: everything before the open one is settled
+// (done or missed) and everything after it is still waiting. A later slot
+// firing while an earlier one is untouched would be nonsense on screen -
+// "you missed the third but the second hasn't happened yet".
+test("today's slots fire strictly in order, so a later moment can never open before an earlier one", async () => {
+  const { default: db } = await import('../src/db.js');
+  const { ensureTodaysSlots, triggerNextSlot, MEMO_SLOTS_PER_DAY } = await import('../src/memo.js');
+  const { today } = await import('../src/time.js');
+
+  db.prepare('DELETE FROM memo_uploads').run();
+  db.prepare('DELETE FROM memo_slots').run();
+  ensureTodaysSlots();
+
+  const slots = db.prepare('SELECT slot_index, scheduled_at FROM memo_slots WHERE day = ? ORDER BY slot_index').all(today());
+  assert.equal(slots.length, MEMO_SLOTS_PER_DAY);
+  for (let i = 1; i < slots.length; i++) {
+    assert.ok(
+      slots[i].scheduled_at > slots[i - 1].scheduled_at,
+      `slot ${i} is scheduled at or before slot ${i - 1} - the dots would fire out of order`
+    );
+  }
+
+  // The owner's manual trigger must respect the same order, not skip ahead.
+  for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
+    assert.equal(triggerNextSlot().slotIndex, i, 'trigger-next should always open the earliest unfired slot');
+  }
+  assert.equal(triggerNextSlot().error, 'err_memo_no_slots_left');
+
+  // And the notified timestamps came out in slot order too.
+  const fired = db.prepare('SELECT slot_index, notified_at FROM memo_slots WHERE day = ? ORDER BY notified_at').all(today());
+  assert.deepEqual(fired.map((f) => f.slot_index), [0, 1, 2, 3, 4]);
+
+  // This test deliberately fires every slot, which would leave the later
+  // tests with nothing un-notified to work against - clear them so the next
+  // ensureTodaysSlots() call regenerates a fresh, untouched day.
+  db.prepare('DELETE FROM memo_slots').run();
+});
+
 test('uploading to a slot that has not been notified yet is rejected', async () => {
   const { data } = await api('GET', '/memo/today', { token: userToken });
   const slot = data.slots[1];
@@ -1853,6 +1892,20 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
   assert.equal(entryToggledOff.myReaction, null);
   assert.equal(entryToggledOff.reactions['💦'] || 0, 0);
+});
+
+// The client keeps its own copy of the reaction list (app.js renders the
+// buttons from it; the server validates against its own). They drifted once
+// - the client still listed four after the server was cut to two, so two
+// buttons rendered blank and any tap on them was rejected by the API.
+test('the reaction list the client renders matches the one the server accepts', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { MEMO_REACTION_EMOJI } = await import('../src/memo.js');
+  const source = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  const literal = source.match(/const MEMO_REACTION_EMOJI = \[(.*?)\];/s);
+  assert.ok(literal, 'app.js should still declare MEMO_REACTION_EMOJI as an array literal');
+  const clientList = [...literal[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(clientList, MEMO_REACTION_EMOJI);
 });
 
 test('a slot missed past its 15-minute window is reported as missed, not open', async () => {

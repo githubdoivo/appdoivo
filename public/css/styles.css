@@ -103,9 +103,11 @@ html.mode-light {
      opposite - a strong ground with light text on top. */
   --danger-fill: #b04a36;
   --danger-ink:  #fdf6f0;
-  /* Was #6b3420 (warm brown) - shifted to a dark plum at the same
-     saturation/lightness, by request. */
-  --brand:    #602456;
+  /* Was #6b3420 (warm brown), then #602456 (plum). Now a dark lilac - the
+     plum still leaned magenta; this rotates the hue toward violet while
+     holding essentially the same contrast on every theme's paper
+     (8.1:1 rata, 5.7:1 memo, 4.5:1 mural). */
+  --brand:    #4a2f70;
   /* role-*/type-*/status-* stay at their :root (light-mode) values here -
      only mode-dark below needs to redefine them. */
 }
@@ -326,7 +328,7 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 1;
   max-width: 620px;
   margin: 0 auto;
-  padding: 22px 20px calc(40px + env(safe-area-inset-bottom));
+  padding: 22px 20px calc(28px + env(safe-area-inset-bottom));
   /* Was 88vh, then 94vh, then 99vh - the whole greeting-through-login block
      sat too high up near the top of the illustration; taller here
      (bottom-anchored, see justify-content below) leaves more of the artwork
@@ -357,12 +359,16 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   color: var(--ink);
   text-shadow: 0 2px 14px rgba(4, 6, 2, 0.55);
 }
-.greeting .instruction {
+.instruction {
   font-family: var(--body);
   font-size: 0.84rem;
   letter-spacing: 0.02em;
   color: var(--ink-soft);
-  text-shadow: 0 1px 10px rgba(4, 6, 2, 0.5);
+  /* Two shadows, not one: this line now sits lower on the illustration,
+     right over the brightest part of the cottage roof, where a single soft
+     glow left it barely legible. A tight opaque halo carries the letter
+     edges, the wider one keeps it off the busy texture behind. */
+  text-shadow: 0 1px 2px rgba(4, 6, 2, 0.95), 0 2px 12px rgba(4, 6, 2, 0.8);
 }
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
@@ -410,18 +416,33 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
    screen, not a decision that deserves competing with "entrar"/"ainda não
    tens a tua chave?" for attention. Smaller and dimmer than the base
    .link-btn, same underline treatment so it still reads as tappable. */
-/* Sits above the key field, right-aligned to its edge - which keeps the
-   space directly under "entrar" free for the error banner to appear where
-   the eye already is after submitting. */
-.login-lang-toggle {
-  align-self: center;
+/* Instruction on the left, language toggle on the right, sharing the row
+   directly above the key field - which also keeps the space under "entrar"
+   free for the error banner to appear where the eye already is. */
+/* The tagline stays optically centred on the key field while the language
+   toggle sits out at the right edge. Absolute positioning for the toggle
+   rather than a flex row: in a row the toggle's own width would shove the
+   tagline off-centre, and it has to line up with the input below it. */
+.login-meta {
+  position: relative;
   width: 100%;
   max-width: 320px;
-  text-align: right;
+  /* Cancels most of .cover's own 20px gap so the line sits tight on the
+     field it describes. */
+  margin-bottom: -16px;
+}
+.login-meta .instruction { text-align: center; }
+.login-meta .login-lang-toggle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+.login-lang-toggle {
+  flex: none;
   font-size: 0.68rem;
   opacity: 0.6;
-  margin-bottom: -12px;
   letter-spacing: 0.06em;
+  padding: 0;
 }
 /* Deliberately almost invisible - this is the only way into the Plaza
    admin tab now (see wall-secret-btn in settings.js), meant to be found by
@@ -1278,9 +1299,10 @@ body.theme-rata {
      as Rata's own color. Pink keeps Rata in its own established dusty
      pink-grey family (see --paper/--ink above) instead of borrowing a warm
      hue that's already spoken for elsewhere. */
-  --clay:     #a82f57;
-  --clay-2:   #cb5c81;
-  --rata:     #a82f57;
+  /* Same off-red-toward-mauve shift as the light variant below. */
+  --clay:     #b8438a;
+  --clay-2:   #d678ad;
+  --rata:     #b8438a;
   background-color: #190f13;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1358,9 +1380,13 @@ html.mode-light body.theme-rata {
   --line-2:   #c7a8ac;
   /* Same pink hue-shift as the dark variant above - was #8a5b2c/#6e4822
      (orange), before that #8a3f2c/#6e3122 (brick-red). */
-  --clay:     #8a2c4b;
-  --clay-2:   #6e223b;
-  --rata:     #8a2c4b;
+  /* Shifted off red toward mauve-pink, by request: these were #8a2c4b /
+     #6e223b, which read as maroon against the (now properly pink) paper
+     rather than as part of it. Same lightness, hue rotated toward magenta -
+     the hero line still clears 7:1 and the accents 5:1 on --paper. */
+  --clay:     #9c3374;
+  --clay-2:   #7a2860;
+  --rata:     #9c3374;
   /* Missing here despite the html.mode-light fallback's own comment
      claiming every regular-page theme sets one - fell through to that
      stray global default (#b5624a, meant only for admin's theme-less
@@ -1596,25 +1622,27 @@ html.mode-light body.theme-memo .card {
   padding: 0;
   cursor: default;
 }
-/* Four states, each a different fill: empty (still to come), solid white
-   (captured), shaded (missed), and the theme's cyan (open right now). White
-   rather than --ink-soft for "done" so a finished moment reads as brightly
-   ticked off against Memo's cyan paper in either mode, instead of blending
-   into the same muted tone the missed ones use. */
-.memo-dot-waiting { opacity: 0.7; }
-.memo-dot-uploaded { background: #fff; border-color: #fff; }
-.memo-dot-missed { background: var(--line); border-color: var(--line); opacity: 0.5; }
+/* Read as a temperature scale rather than four unrelated colours: the two
+   still-to-do states are light blue, done is the deep blue they resolve
+   into, and a missed one drains to plain white - the odd one out, which is
+   the point. Fixed hex rather than theme tokens: Memo owns the blue, and
+   these have to mean the same thing in both light and dark mode. */
+.memo-dot-waiting { background: #8fd6e8; border-color: #8fd6e8; opacity: 0.55; }
+.memo-dot-uploaded { background: #0b5f77; border-color: #0b5f77; }
+.memo-dot-missed { background: #fff; border-color: #fff; opacity: 0.85; }
+/* Same light blue as waiting - it's still "to be done" - but at full
+   strength and pulsing, so the one you can actually act on stands out. */
 .memo-dot-open {
-  background: var(--rata);
-  border-color: var(--rata);
+  background: #8fd6e8;
+  border-color: #8fd6e8;
   animation: memo-dot-pulse 1.6s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .memo-dot-open { animation: none; }
 }
 @keyframes memo-dot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rata) 45%, transparent); }
-  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--rata) 0%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(143, 214, 232, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(143, 214, 232, 0); }
 }
 
 .memo-feed-item { margin-bottom: 18px; }
@@ -1878,14 +1906,16 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #admin-register-form button[type="submit"],
 #voting-advance-btn,
 [data-reveal-next] {
-  /* Was 22%, then 30% - still read as too pale/washed-out next to a plain
-     solid button sitting right beside it (e.g. "iniciar" vs "reiniciar
-     votação" in the voting-controls row). 35% is the highest that still
-     clears 4.5:1 in every theme/mode checked (mural light is the tightest
-     at 4.67:1). */
-  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
-  border-color: var(--clay);
-  color: var(--ink);
+  /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
+     --ink text. Even at 35% it read as a washed-out, half-transparent
+     "fake" button rather than a real one. Solid now: --clay darkened
+     against black so a single white text colour clears AA on every theme's
+     accent (worst case 4.9:1, Memo's cyan; most sit 8-13:1). Darkening is
+     what makes one text colour possible at all - several --clay values are
+     light enough (#e2a798, #2bcdee) that white on the raw accent fails. */
+  background: color-mix(in srgb, var(--clay) 60%, #000);
+  border-color: color-mix(in srgb, var(--clay) 60%, #000);
+  color: #fff;
 }
 #register-form button[type="submit"]:hover,
 #confirm-entry-btn:hover,
@@ -1898,8 +1928,9 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #admin-register-form button[type="submit"]:hover,
 #voting-advance-btn:hover,
 [data-reveal-next]:hover {
-  background: color-mix(in srgb, var(--clay) 40%, var(--paper-2));
-  color: var(--ink);
+  background: color-mix(in srgb, var(--clay) 52%, #000);
+  border-color: color-mix(in srgb, var(--clay) 52%, #000);
+  color: #fff;
 }
 /* The generic button:disabled { opacity: 0.45 } fades this button's own
    tinted background AND its var(--ink) text toward the same card

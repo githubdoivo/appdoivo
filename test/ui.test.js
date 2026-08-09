@@ -1314,6 +1314,7 @@ function markMemoSlotNotified(slotId, when = new Date()) {
 }
 
 test('Memo: a guest can shoot an open moment, it shows in the shared feed, another guest can react, and the owner publishes its video to the Wall', async () => {
+  const { MEMO_REACTION_EMOJI } = await import('../src/memo.js');
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Tester' } });
   const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Bystander' } });
   const today = await api('GET', '/memo/today', { token: user.token });
@@ -1335,6 +1336,21 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   // It shows up in today's shared feed for everyone, not just the uploader.
   await page.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
   const uploadId = await page.getAttribute('[data-memo-react]', 'data-memo-react');
+
+  // Regression: the reaction row rendered one button per entry in the
+  // client's own emoji list, and that list was left at four after the
+  // server's was cut to two - so two buttons shipped completely blank, and
+  // tapping either was rejected by the API. Asserting the count alone
+  // wouldn't have caught a *renamed* emoji, so this also checks every
+  // button actually drew an icon.
+  const reactionButtons = await page.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
+    els.map((el) => ({ emoji: el.dataset.emoji, svgPaths: el.querySelectorAll('svg path').length }))
+  );
+  assert.equal(reactionButtons.length, MEMO_REACTION_EMOJI.length, 'one button per server-accepted reaction, no more');
+  assert.deepEqual(reactionButtons.map((b) => b.emoji), MEMO_REACTION_EMOJI);
+  for (const b of reactionButtons) {
+    assert.ok(b.svgPaths > 0, `the "${b.emoji}" reaction button rendered without an icon`);
+  }
 
   const bystanderPage = await loginPage(context, bystander.token);
   await bystanderPage.click('[data-tab="memo"]');

@@ -549,7 +549,10 @@ function renderMemoDots() {
   $('memo-shoot').classList.toggle('hidden', !open);
 }
 
-const MEMO_REACTION_EMOJI = ['❤️', '👎', '💦', '🍆'];
+// Must stay in step with MEMO_REACTION_EMOJI in src/memo.js, which is what
+// the server validates against - a value listed only here renders a button
+// the API then rejects, and one listed only there can never be sent.
+const MEMO_REACTION_EMOJI = ['❤️', '💦'];
 
 // Hand-drawn-style FILLED icons instead of the OS's own emoji glyphs - a
 // native emoji renders as whatever the platform's font happens to look
