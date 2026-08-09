@@ -118,10 +118,7 @@
              isso fica solta no topo, fora de qualquer card. Mesmo
              componente "switch" da Best Look principal (theme-switch),
              não um <select>. -->
-        <!-- Labelled like every other component on the page: on its own it
-             was two unexplained buttons floating above the cards. -->
-        <div class="night-switch-row">
-          <span class="night-switch-label" data-i18n="night_switch_label">Noite</span>
+        <div style="text-align:right">
           <div class="theme-switch night-switch" id="admin-night-switch">
             <button type="button" data-night="furnished" class="active" data-i18n="theme_furnished">Furnished</button>
             <button type="button" data-night="swamp" data-i18n="theme_swamp">Swamp</button>
@@ -214,7 +211,7 @@
             </div>
             <!-- The two halves of finishing an entry, side by side. -->
             <div class="form-actions">
-              <button type="button" class="small ghost" id="admin-register-photo-btn" data-i18n="outfit_choose_photo_btn">escolher foto</button>
+              <button type="button" class="small" id="admin-register-photo-btn" data-i18n="outfit_choose_photo_btn">escolher foto</button>
               <button type="submit" class="small" data-i18n="admin_register_btn">Criar</button>
             </div>
             <div style="text-align:right">
@@ -228,7 +225,7 @@
                "Criar" button where it used to be. -->
           <hr class="voting-divider" />
           <div class="inline" style="justify-content:flex-end;margin-bottom:0">
-            <button type="button" id="download-photos-btn" class="small ghost" data-i18n="download_photos_btn">descarregar fotos</button>
+            <button type="button" id="download-photos-btn" class="small" data-i18n="download_photos_btn">descarregar fotos</button>
           </div>
           <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
@@ -274,6 +271,7 @@
         <div class="card">
           <h2 data-i18n="rata_admin_history_title">Histórico</h2>
           <div class="role-pills" id="rata-status-filter" style="margin-top:8px">
+            <button type="button" class="role-pill active" data-status="atribuir" data-i18n="rata_status_atribuir">atribuir</button>
             <button type="button" class="role-pill active" data-status="fila" data-i18n="rata_status_fila">fila</button>
             <button type="button" class="role-pill active" data-status="pendente" data-i18n="rata_status_pendente">pendente</button>
             <button type="button" class="role-pill active" data-status="feita" data-i18n="rata_status_feita">feita</button>
@@ -321,8 +319,10 @@
         <div class="card hidden" id="memo-trigger-card">
           <h2 data-i18n="memo_trigger_title">Momento agora</h2>
           <p class="help" data-i18n="memo_trigger_help">Explicação</p>
-          <button type="button" class="small" id="memo-trigger-btn" data-i18n="memo_trigger_btn">Abrir o próximo momento</button>
-          <span id="memo-trigger-msg" class="muted" style="display:block;margin-top:8px"></span>
+          <div class="actions-right">
+            <button type="button" class="small" id="memo-trigger-btn" data-i18n="memo_trigger_btn">Abrir agora</button>
+          </div>
+          <span id="memo-trigger-msg" class="muted" style="display:block;margin-top:8px;text-align:right"></span>
         </div>
 
         <div class="card">
@@ -414,7 +414,9 @@
                 </svg>
               </button>
             </div>
-            <button type="submit" class="small" style="margin-top:12px" data-i18n="save">Guardar</button>
+            <div class="actions-right">
+              <button type="submit" class="small" data-i18n="save">Guardar</button>
+            </div>
           </form>
           <span id="change-key-msg" class="muted"></span>
         </div>

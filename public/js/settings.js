@@ -665,11 +665,20 @@ function roleOf(u) {
 // Owner/admin/user are independent, cumulative (OR) toggles - picking more
 // than one widens the view rather than narrowing it to users matching all
 // of them at once (which for mutually-exclusive roles would always be
-// empty). An empty set (none picked) already means "show everyone" -
-// no separate "all roles" button needed for that.
-const roleFilter = new Set();
+// empty). All three start lit, because the list starts showing everyone:
+// three unlit pills above a full list read as "no filter applied" when the
+// honest description is "all three are included". Turning them all off
+// would mean an empty list, so that case snaps back to all-on instead.
+const ALL_ROLES = ['owner', 'admin', 'user'];
+const roleFilter = new Set(ALL_ROLES);
 function byRole(users) {
-  return roleFilter.size === 0 ? users : users.filter((u) => roleFilter.has(roleOf(u)));
+  return roleFilter.size === ALL_ROLES.length ? users : users.filter((u) => roleFilter.has(roleOf(u)));
+}
+
+function syncRolePills() {
+  $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => {
+    b.classList.toggle('active', roleFilter.has(b.dataset.role));
+  });
 }
 
 function applyUserSearch() {
@@ -697,6 +706,7 @@ async function loadUsers() {
   applyUserSearch();
 }
 
+syncRolePills();
 $('user-name-input').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
@@ -706,9 +716,10 @@ $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
     } else {
       roleFilter.add(btn.dataset.role);
     }
-    $('user-role-filter').querySelectorAll('.role-pill').forEach((b) => {
-      b.classList.toggle('active', roleFilter.has(b.dataset.role));
-    });
+    // Nothing selected would show nothing at all - treat it as "show
+    // everyone" and light them all again.
+    if (roleFilter.size === 0) ALL_ROLES.forEach((r) => roleFilter.add(r));
+    syncRolePills();
     applyUserSearch();
   });
 });
@@ -1178,7 +1189,7 @@ function rataStatus(c) {
 // three start selected (matches the pills' own default "active" state in
 // the HTML) - deselecting one hides it, rather than starting from
 // "nothing picked means show everything".
-const rataStatusFilter = new Set(['fila', 'pendente', 'feita']);
+const rataStatusFilter = new Set(['atribuir', 'fila', 'pendente', 'feita']);
 let rataRows = [];
 let rataAssignableUsers = [];
 
@@ -1261,10 +1272,11 @@ function renderConsequences() {
     ? assignRows.map((c) => renderConsequenceCard(c, revealed)).join('')
     : `<p class="muted">${t('rata_admin_assign_empty')}</p>`;
 
-  const historyRows = rataRows.filter((c) => {
-    const state = rataStatus(c).state;
-    return state !== 'atribuir' && rataStatusFilter.has(state);
-  }).sort((a, b) => {
+  // 'atribuir' rows show here too, not only in the assign box above: the list
+  // is the running history, and a consequence that was just revealed is the
+  // most recently touched thing there is - leaving it out made a fresh reveal
+  // look like nothing had happened.
+  const historyRows = rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state)).sort((a, b) => {
     // Most recent timestamp (approved, then done, then revealed) sorts first.
     const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
     const aTime = getLatestTime(a);
@@ -1429,7 +1441,7 @@ async function loadPlazaPosts() {
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
-          ${isOwner ? `<button class="small ghost" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
+          ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
         </div>
       </div>`).join('')
@@ -1497,9 +1509,9 @@ async function loadMemoDays() {
           </div>
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
-            <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
-            <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
-            ${d.hasRecap ? `<button type="button" class="small ghost" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
+            <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
+            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
+            ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
           </div>
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')

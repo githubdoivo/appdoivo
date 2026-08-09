@@ -90,17 +90,17 @@ html.mode-light {
      on - and dark mode's own base is plainly purple (#17131f/#261f35), so
      light mode reading as pink made the same page look like two unrelated
      designs. Contrast went up rather than down: ink 9.1-10.5:1, ink-soft
-     4.7-5.4:1 across the three papers. */
-  --paper:    #eae3f4;
-  --paper-2:  #f2ecf9;
-  --paper-3:  #f8f4fd;
+     4.6-5.6:1 across the three papers. */
+  --paper:    #e2d8f2;
+  --paper-2:  #ece4f8;
+  --paper-3:  #f4eefc;
   --ink:      #3f3550;
   /* Was #8d7f92 (~3.6:1 against --paper-3) - failed WCAG AA for the
      muted text (.muted, .help, table cells) this drives all over
      Settings and the admin panel. Darkened to ~5:1. */
-  --ink-soft: #6b5f83;
-  --line:     #dbd0ec;
-  --line-2:   #e8e1f4;
+  --ink-soft: #655a7c;
+  --line:     #cfc0e6;
+  --line-2:   #ded2f0;
   --rata:     #8fbfae;
   --rata-2:   #aad4c5;
   --outfit:   #a7abdb;
@@ -698,10 +698,16 @@ button.danger:hover {
      never exceeds the available space, while the min/max bounds keep it
      from ever reading as too small on a narrow phone or comically large on
      a wide one. */
-  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
+  font-size: clamp(2.05rem, 9.1vw, 2.85rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand);
+  /* The script face only ships 400/700, so anything heavier than 700 has to
+     come from a hairline stroke - asking for 800 would silently synthesise.
+     Kept well under a pixel: past ~0.5 the cursive's thin joins fill in and
+     it turns to mush at small sizes. */
+  -webkit-text-stroke: 0.35px currentColor;
+  paint-order: stroke fill;
 }
 .brand .badge,
 .user-row-name .badge {
@@ -820,7 +826,14 @@ button.danger:hover {
    showing read as the same thing. */
 .role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); }
 .role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); }
-.role-pill[data-status="pendente"].active { background: var(--status-pending); border-color: var(--status-pending); }
+/* Matches the filled chip the list renders for this state, ink included -
+   the filter and the thing it filters have to be the same yellow, and this
+   is the one that had to become a filled pill to read as yellow at all. */
+.role-pill[data-status="pendente"].active {
+  background: var(--status-pending-fill);
+  border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
+  color: var(--status-pending-ink);
+}
 .role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
@@ -926,7 +939,10 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    wins whenever one of those is active, restoring each tab's own color.
    Dark mode's warmer clays already have enough contrast as-is, no
    equivalent override needed there. */
-html.mode-light { --clay-active: #b5624a; }
+/* The unthemed pages (Settings, and the admin chrome) now run on a lilac
+   base, so the active-tab underline is purple rather than the leftover
+   terracotta - 5.6:1 on that paper. */
+html.mode-light { --clay-active: #66409a; }
 
 /* --------------------------------- Cards --------------------------------- */
 
@@ -1208,7 +1224,7 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 /* ===================== Transicao suave ao trocar de tema ================ */
 
 body { transition: background-color 0.45s ease; }
-.card, .vote-option, .highlight, .outfit-banner, .topbar, .tabs {
+.card, .vote-option, .highlight, .topbar, .tabs {
   transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease;
 }
 
@@ -1626,7 +1642,10 @@ html.mode-light body.theme-memo .card {
    waiting is a hollow ring, open pulses solid to invite a tap, done is a
    plain filled dot, missed is filled but dim. No numbers/times on the dots
    themselves (see the aria-label for the roman-numeral name instead). */
-.memo-dots { display: flex; gap: 14px; }
+/* The five dots span the full width of the card, evenly spaced - a fixed
+   gap left them huddled at the left edge with dead space after them, which
+   read as four dots and a gap rather than a five-step progress bar. */
+.memo-dots { display: flex; justify-content: space-between; gap: 8px; }
 .memo-shoot { margin-top: 16px; }
 .memo-shoot button { width: 100%; }
 /* A plain indicator, not a control - see renderMemoDots() in app.js. */
@@ -1838,38 +1857,9 @@ html.mode-dark .plaza-post-type { color: #fff; }
    read as four shouting CTAs. */
 .plaza-poll-option-label { font-weight: 400; }
 .plaza-poll-option-pct { font-variant-numeric: tabular-nums; }
-.plaza-poll-submit { margin-top: 12px; }
+/* Right-aligned like every other form's action on the page. */
+.plaza-poll-submit { margin-top: 12px; display: block; margin-left: auto; }
 
-/* Banner com motivo tematico + interruptor de tema */
-.outfit-banner {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-bottom: 18px;
-  background: var(--ot-tint);
-}
-/* Was 84px - the largest stretch of pure decoration-with-no-content
-   anywhere in the app, sitting between the hero-line and the actual
-   night switch/contestant list. Still reads as the same motif at a
-   third less height. */
-.theme-motif {
-  height: 56px;
-  background-image: var(--ot-motif);
-  background-repeat: repeat;
-  border-bottom: 1px solid var(--line-2);
-}
-/* Right-aligned: the night switch is the only thing left in here now that
-   the "noite · swamp" label is gone (it just repeated the switch's own
-   highlighted half). */
-.outfit-banner-body {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-}
 .theme-switch {
   display: inline-flex;
   border: 1px solid var(--line);
@@ -1922,7 +1912,6 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #chat-form button[type="submit"],
 #plaza-post-form button[type="submit"],
 #admin-register-form button[type="submit"],
-#voting-advance-btn,
 [data-reveal-next] {
   /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
      --ink text. Even at 35% it read as a washed-out, half-transparent
@@ -1944,7 +1933,6 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #chat-form button[type="submit"]:hover,
 #plaza-post-form button[type="submit"]:hover,
 #admin-register-form button[type="submit"]:hover,
-#voting-advance-btn:hover,
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 52%, #000);
   border-color: color-mix(in srgb, var(--clay) 52%, #000);
@@ -2090,22 +2078,6 @@ html.mode-light .chat-empty { color: var(--ink); }
    they're the same night being run, in order. */
 .voting-divider { border: none; border-top: 1px solid var(--line); margin: 20px 0 16px; }
 
-/* The night switch governs contestants, votes and the voter log below it,
-   not just the voting card - so it sits loose above them all. Given a label
-   because two bare buttons floating over the cards read as decoration. */
-.night-switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-.night-switch-label {
-  font-family: var(--body);
-  font-size: var(--text-xs);
-  letter-spacing: 0.16em;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
 
 /* Two equal halves - "escolher foto" and "criar" are the two things that
    finish an entry, so they share a line rather than one hanging under the
@@ -2118,3 +2090,33 @@ html.mode-light .chat-empty { color: var(--ink); }
 }
 .form-actions button { width: 100%; }
 @media (max-width: 360px) { .form-actions { grid-template-columns: 1fr; } }
+
+/* A single action that belongs to the card above it, pushed to the right
+   edge like the other per-card actions rather than hanging off the left. */
+.actions-right { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+/* The guest Snatch night switch, loose in the page rather than inside the
+   bordered banner it used to live in - see index.html. Same right-aligned
+   placement, none of the frame. */
+.night-switch-loose { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+
+/* The phase button ("iniciar", "fechar votação", "revelar") in both rounds
+   of the Snatch card. Deliberately a lighter green than every other filled
+   button on the page: it is the step you take over and over through the
+   night, while "reiniciar" beside it is the one that throws work away - so
+   the destructive-adjacent neighbour should be the one that looks heavier,
+   not this. 8.9:1 with its own ink. */
+#voting-advance-btn,
+#congeniality-advance-btn {
+  background: #a8cf94;
+  border-color: #8fbf7a;
+  color: #16280f;
+}
+#voting-advance-btn:hover,
+#congeniality-advance-btn:hover {
+  background: #9cc686;
+  border-color: #86b672;
+  color: #16280f;
+}
+#voting-advance-btn:disabled,
+#congeniality-advance-btn:disabled { opacity: 0.55; }

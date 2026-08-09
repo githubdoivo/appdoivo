@@ -1433,10 +1433,13 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    // The votação card above (status text + whatever's left in vote-area)
-    // is entirely redundant once results are actually showing here - both
-    // toggle on the same condition so they always agree.
-    $('voting-card').classList.toggle('hidden', revealing && results.length > 0);
+    // The Best Outfit card hides in two cases, both of them "there is nothing
+    // to show here": the round never started (no point announcing a vote the
+    // organiser has not opened, especially with Miss Congeniality stacked
+    // below it), and the results are already showing below, which makes the
+    // status text and leftover vote area redundant.
+    const roundStarted = !!data.started;
+    $('voting-card').classList.toggle('hidden', !roundStarted || (revealing && results.length > 0));
 
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');

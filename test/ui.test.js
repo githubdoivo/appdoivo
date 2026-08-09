@@ -456,12 +456,19 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.click('#user-role-filter [data-role="owner"]');
+  // All three start lit, matching the full list shown underneath them.
+  const startAllLit = await page.$$eval('#user-role-filter .role-pill',
+    (els) => els.every((e) => e.classList.contains('active')));
+  assert.ok(startAllLit, 'every pill should start selected, since the list starts unfiltered');
+
+  // Turning two off leaves just the owner - deselecting narrows.
+  await page.click('#user-role-filter [data-role="admin"]');
+  await page.click('#user-role-filter [data-role="user"]');
   await page.waitForTimeout(200);
   const owners = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
-  assert.deepEqual(owners, ['owner'], 'filtering to "owner" should show only the owner row');
+  assert.deepEqual(owners, ['owner'], 'leaving only "owner" lit should show only the owner row');
 
-  // Adding "user" on top of "owner" should widen the view (OR), not
+  // Adding "user" back on top of "owner" should widen the view (OR), not
   // replace it - both pills stay active, and both roles show up.
   await page.click('#user-role-filter [data-role="user"]');
   await page.waitForTimeout(200);
@@ -474,14 +481,22 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
   const badgesOwnerUser = await page.$$eval('#users-list .badge', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(!badgesOwnerUser.includes('admin'), 'owner+user filter should exclude admins');
 
-  // All three selected should show everyone - same as no filter at all, not
-  // an empty/narrow result from ANDing three mutually-exclusive roles
-  // together.
+  // All three selected shows everyone - not an empty/narrow result from
+  // ANDing three mutually-exclusive roles together.
   await page.click('#user-role-filter [data-role="admin"]');
   await page.waitForTimeout(200);
   const allThreeRows = await page.$$('#users-list .user-row');
   const unfiltered = await api('GET', '/admin/users', { token: ADMIN });
   assert.equal(allThreeRows.length, unfiltered.length, 'owner+admin+user selected together should match the unfiltered count');
+
+  // Turning every pill off would leave nothing to show, so it snaps back to
+  // all-on rather than an empty list.
+  for (const r of ['owner', 'admin', 'user']) await page.click(`#user-role-filter [data-role="${r}"]`);
+  await page.waitForTimeout(200);
+  const backToAll = await page.$$eval('#user-role-filter .role-pill',
+    (els) => els.every((e) => e.classList.contains('active')));
+  assert.ok(backToAll, 'deselecting the last pill should relight them all');
+  assert.equal((await page.$$('#users-list .user-row')).length, unfiltered.length, 'and show everyone again');
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });

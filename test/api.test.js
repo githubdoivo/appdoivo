@@ -1300,9 +1300,13 @@ test('admin/owner can download every submitted photo for a night as a zip; nobod
   // falls back to id-suffixed rather than the two colliding outright - not
   // asserting which specific one wins, just that dedup actually happened.
   const filenames = entries.map((e) => e.filename);
-  assert.equal(filenames.filter((f) => f === 'Ghost.jpg').length, 1, 'exactly one entry should keep the clean name');
+  // Lowercased on the way in: the app is lowercase throughout, and a
+  // case-insensitive filesystem would collide "Ghost.jpg" with "ghost.jpg"
+  // on extraction anyway.
+  assert.ok(filenames.every((f) => f === f.toLowerCase()), 'entry names should be lowercase');
+  assert.equal(filenames.filter((f) => f === 'ghost.jpg').length, 1, 'exactly one entry should keep the clean name');
   assert.equal(
-    filenames.filter((f) => f === `Ghost-${regA.data.id}.jpg` || f === `Ghost-${regB.data.id}.jpg`).length,
+    filenames.filter((f) => f === `ghost-${regA.data.id}.jpg` || f === `ghost-${regB.data.id}.jpg`).length,
     1,
     'the colliding entry should fall back to an id-suffixed name'
   );

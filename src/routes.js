@@ -877,7 +877,10 @@ router.get('/admin/outfit/:night/photos.zip', (req, res) => {
     // "bruxa") - two entries picking the same one would otherwise silently
     // overwrite each other inside the zip, so collisions fall back to
     // appending the contestant id.
-    const base = p.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    // Lowercased like everything else the app writes - a zip full of
+    // "Gato.jpg" next to "bruxa.jpg" reads as inconsistent, and on a
+    // case-insensitive filesystem the two spellings collide anyway.
+    const base = p.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
     let filename = `${base}.jpg`;
     if (usedNames.has(filename)) filename = `${base}-${p.id}.jpg`;
     usedNames.add(filename);

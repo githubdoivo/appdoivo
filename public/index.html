@@ -132,11 +132,13 @@
 
       <div class="card">
         <h2 data-i18n="rata_suggest">Sugere a tua consequência</h2>
-        <p class="help"><span data-i18n="rata_suggest_help">Explicação</span><br><span data-i18n="rata_suggest_example">Exemplo</span></p>
+        <p class="help" data-i18n="rata_suggest_help">Explicação</p>
         <div id="suggest-area" style="margin-top:12px">
           <form id="suggest-form">
             <textarea id="suggest-text" maxlength="200" rows="3" data-i18n-ph="rata_suggest_ph" placeholder="Escreve a tua consequência de hoje..."></textarea>
-            <button type="submit" class="small" style="margin-top:10px" data-i18n="send">Enviar</button>
+            <div class="actions-right">
+              <button type="submit" class="small" data-i18n="send">Enviar</button>
+            </div>
           </form>
         </div>
         <p id="suggest-msg" class="muted" style="margin-top:10px"></p>
@@ -153,13 +155,13 @@
     <div id="tab-outfit" class="tab-panel hidden">
       <p class="hero-line" data-i18n="outfit_hero">Quem tem o melhor visual da noite?</p>
 
-      <div class="outfit-banner">
-        <div class="theme-motif" aria-hidden="true"></div>
-        <div class="outfit-banner-body">
-          <div class="theme-switch" id="theme-switch">
-            <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
-            <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
-          </div>
+      <!-- Just the switch, top right - it used to sit inside a bordered
+           banner with a decorative motif, which was a whole component built
+           around two buttons. -->
+      <div class="night-switch-loose">
+        <div class="theme-switch" id="theme-switch">
+          <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
+          <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
         </div>
       </div>
 
@@ -170,7 +172,10 @@
       </div>
 
       <div class="card" id="voting-card">
-        <h2 data-i18n="outfit_voting">Votação</h2>
+        <!-- Named, because Miss Congeniality sits right below it with its own
+             name - one round labelled and the other not read as if the second
+             were a subsection of the first. -->
+        <h2 data-i18n="best_outfit_title">Best Outfit</h2>
         <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
         <div id="vote-area"></div>
       </div>

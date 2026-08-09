@@ -148,12 +148,24 @@ export function seedDemo() {
     // in votes.js) - without confirmed_at set, they'd sit as permanently
     // unconfirmed, invisible on the voting list and blocking the admin from
     // ever opening voting on QA without hitting the force override.
+    // Linked to the demo user of the same name, exactly like a real
+    // self-registration. Unlinked entries are technically possible via the
+    // API but never happen in practice, and they made Miss Congeniality look
+    // broken on QA: it derives its candidates from the *people* behind each
+    // entry (a duo splits into two), so entries attached to nobody produced
+    // an empty candidate list under a full contestant list.
     const insContestant = db.prepare(
-      "INSERT INTO contestants (name, night, confirmed_at, photo, photo_mime) VALUES (?, ?, datetime('now'), ?, 'image/png')"
+      "INSERT INTO contestants (name, night, user_id, confirmed_at, photo, photo_mime) VALUES (?, ?, ?, datetime('now'), ?, 'image/png')"
+    );
+    const userIdByName = new Map(
+      db.prepare('SELECT id, name FROM users').all().map((u) => [u.name, u.id])
     );
     NIGHTS.forEach((night, i) => {
       NAMES.slice(i * 5, i * 5 + 5).forEach((name, j) => {
-        insContestant.run(name, night, solidPhoto(DEMO_PHOTO_COLORS[(i * 5 + j) % DEMO_PHOTO_COLORS.length]));
+        insContestant.run(
+          name, night, userIdByName.get(name) ?? null,
+          solidPhoto(DEMO_PHOTO_COLORS[(i * 5 + j) % DEMO_PHOTO_COLORS.length])
+        );
       });
     });
     console.log(`[seed-demo] Registered 5 contestants for each night (${NIGHTS.join(', ')}).`);

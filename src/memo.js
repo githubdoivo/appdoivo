@@ -340,12 +340,14 @@ export function getRecap(day) {
 // Seconds each photo is held on screen in the generated day video.
 export const MEMO_RECAP_SECONDS_PER_PHOTO = 1;
 
-// Portrait 1080x1920 - these are phone photos, and the recap is watched on
-// a phone in the Wall feed. Anything that doesn't fit gets letterboxed
-// rather than cropped, so nobody's moment loses its subject to a centre
-// crop.
-const RECAP_WIDTH = 1080;
-const RECAP_HEIGHT = 1920;
+// Portrait, and deliberately 720p rather than 1080p: both Fly machines run
+// on 256MB, and libx264 encoding 1080x1920 was overrunning that and getting
+// OOM-killed mid-encode (confirmed on QA - the process died right after
+// "frame= 1"). 720x1280 is plenty for something watched on a phone in the
+// Wall feed, and leaves real headroom. Anything that doesn't fit is
+// letterboxed rather than cropped, so nobody's moment loses its subject.
+const RECAP_WIDTH = 720;
+const RECAP_HEIGHT = 1280;
 
 /**
  * Stitches every photo uploaded on `day` into a single mp4, one second per
@@ -390,6 +392,12 @@ export async function buildDayRecapVideo(day) {
       '-r', '30',
       '-c:v', 'libx264',
       '-preset', 'veryfast',
+      // Single-threaded with a short lookahead and no B-frames: libx264's
+      // memory scales with threads and lookahead depth, and on a 256MB box
+      // the defaults are what tipped it over. Slower, but a day's photos is
+      // a few seconds of video either way.
+      '-threads', '1',
+      '-x264-params', 'rc-lookahead=10:ref=1:bframes=0:sliced-threads=0',
       // Baseline-friendly output so it plays inline in iOS Safari.
       '-profile:v', 'high', '-level', '4.0',
       '-movflags', '+faststart',
@@ -410,12 +418,19 @@ function runFfmpeg(args) {
     proc.on('error', (e) => reject(
       e.code === 'ENOENT' ? new Error('err_memo_ffmpeg_missing') : e
     ));
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
       if (code === 0) return resolve();
-      // ffmpeg is verbose even on success - only the tail is useful, and
-      // only in the server log, never surfaced to the client.
-      console.error('[memo] ffmpeg failed:', stderr.split('\n').slice(-8).join('\n'));
-      reject(new Error('err_memo_recap_failed'));
+      // ffmpeg is verbose even on success, and its own banner is the least
+      // useful part - pull out the lines that actually say what went wrong.
+      // The signal matters too: a SIGKILL here means the kernel OOM-killer
+      // took it, which looks nothing like a normal ffmpeg error in the log.
+      const lines = stderr.split('\n').filter(Boolean);
+      const blame = lines.filter((l) => /error|invalid|unable|no such|denied|killed/i.test(l));
+      console.error(
+        `[memo] ffmpeg exited code=${code} signal=${signal || 'none'}`,
+        (blame.length ? blame : lines.slice(-4)).join(' | ')
+      );
+      reject(new Error(signal === 'SIGKILL' ? 'err_memo_recap_oom' : 'err_memo_recap_failed'));
     });
   });
 }
