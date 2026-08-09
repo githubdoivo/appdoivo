@@ -1,6 +1,6 @@
 import { api, getToken, setToken, clearToken } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
-import { applyMode, toggleMode } from './theme.js';
+import { applyMode, toggleMode, syncThemeColor } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
@@ -293,6 +293,9 @@ function applyAdminTheme(tab) {
   document.body.classList.toggle('theme-mural', tab === 'plaza');
   document.body.classList.toggle('theme-plaza', tab === 'wall');
   document.body.classList.toggle('theme-memo', tab === 'memo');
+  // Each admin tab carries its section's colour, so the status bar follows
+  // it here the same way it does in the main app.
+  syncThemeColor();
 }
 
 // Latest /admin/voting response per night, keyed by night - lets the close

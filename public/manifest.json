@@ -4,8 +4,8 @@
   "description": "Wall, rata, snatch and plaza - everything for the party.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#e7e3d6",
-  "theme_color": "#e7e3d6",
+  "background_color": "#e2d8f2",
+  "theme_color": "#e2d8f2",
   "icons": [
     {
       "src": "/icons/icon-192.png",

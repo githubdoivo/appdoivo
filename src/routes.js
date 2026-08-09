@@ -227,10 +227,10 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   res.json(result);
   const isPoll = req.body?.type === 'poll';
   await broadcast({
-    title: { pt: 'Wall', en: 'Wall' },
+    title: { pt: 'wall', en: 'wall' },
     body: isPoll
-      ? { pt: 'nova sondagem na Wall - vem votar.', en: 'new poll on the Wall - come vote.' }
-      : { pt: 'o anfitrião deixou um novo anúncio na Wall.', en: 'your host left a new announcement on the Wall.' },
+      ? { pt: 'nova sondagem na wall - vem votar.', en: 'new poll on the wall - come vote.' }
+      : { pt: 'o anfitrião deixou um novo anúncio na wall.', en: 'your host left a new announcement on the wall.' },
     tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
@@ -473,7 +473,7 @@ router.post('/chat/messages', async (req, res) => {
   // Plaza, nobody but the owner learns who's behind a post. Skip the
   // poster's own device, they don't need telling about their own message.
   await broadcast({
-    title: { pt: 'Plaza', en: 'Plaza' },
+    title: { pt: 'plaza', en: 'plaza' },
     body: { pt: `${result.pseudonym} acabou de partilhar algo novo na plaza.`, en: `${result.pseudonym} just shared something new in the plaza.` },
     tag: 'plaza-share',
     url: '/?tab=chat',
@@ -1003,7 +1003,10 @@ router.get('/admin/voting', (req, res) => {
   });
 });
 
-const NIGHT_LABEL = { furnished: 'Furnished', swamp: 'Swamp' };
+// Lowercase like every other piece of copy - these get interpolated
+// into push bodies, which iOS renders itself, well outside the reach
+// of the app's own body { text-transform: lowercase }.
+const NIGHT_LABEL = { furnished: 'furnished', swamp: 'swamp' };
 
 const CONGENIALITY_NOTIFY = {
   open: {
@@ -1029,7 +1032,7 @@ router.post('/admin/voting/:night/congeniality', async (req, res) => {
   const notify = CONGENIALITY_NOTIFY[status];
   if (notify) {
     await broadcast({
-      title: { pt: 'Snatch', en: 'Snatch' },
+      title: { pt: 'snatch', en: 'snatch' },
       body: { pt: notify.pt(NIGHT_LABEL[night]), en: notify.en(NIGHT_LABEL[night]) },
       tag: 'congeniality',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1097,7 +1100,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'registration' });
   await broadcast({
-    title: { pt: 'Snatch', en: 'Snatch' },
+    title: { pt: 'snatch', en: 'snatch' },
     body: { pt: `candidaturas abertas - já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `entries are open - you can now register for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-registration',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1120,7 +1123,7 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'open' });
   await broadcast({
-    title: { pt: 'Snatch', en: 'Snatch' },
+    title: { pt: 'snatch', en: 'snatch' },
     body: { pt: `votação aberta - já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `voting is open - you can now vote for ${NIGHT_LABEL[night]} night!` },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1145,7 +1148,7 @@ router.post('/admin/voting/:night/close', async (req, res) => {
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
   await broadcast({
-    title: { pt: 'Snatch', en: 'Snatch' },
+    title: { pt: 'snatch', en: 'snatch' },
     body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
     tag: 'outfit-closed',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1156,7 +1159,7 @@ const REVEAL_NOTIFY = {
   third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
   second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
   first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
-  all: { pt: 'já podes ver quem venceu o Snatch!', en: 'you can now see who won Snatch!' },
+  all: { pt: 'já podes ver quem venceu o snatch!', en: 'you can now see who won snatch!' },
 };
 
 // Advances the results reveal one stage: hidden -> third -> second -> first
@@ -1169,7 +1172,7 @@ router.post('/admin/voting/:night/reveal-next', async (req, res) => {
   res.json({ ok: true, night, resultsPhase: phase });
   if (REVEAL_NOTIFY[phase]) {
     await broadcast({
-      title: { pt: 'Snatch', en: 'Snatch' },
+      title: { pt: 'snatch', en: 'snatch' },
       body: REVEAL_NOTIFY[phase],
       tag: 'results',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1220,7 +1223,7 @@ router.post('/admin/voting/:night/runoff', async (req, res) => {
   if (result.error) return res.status(409).json({ error: result.error });
   res.json({ ok: true, night, votingStatus: 'open', contestantIds: result.contestantIds });
   await broadcast({
-    title: { pt: 'Snatch', en: 'Snatch' },
+    title: { pt: 'snatch', en: 'snatch' },
     body: {
       pt: `há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
       en: `it's a tie - runoff vote for ${NIGHT_LABEL[night]} night, vote again!`,

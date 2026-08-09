@@ -1,7 +1,7 @@
 import { api, getToken, setToken, clearToken } from './api.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
-import { applyMode, toggleMode } from './theme.js';
+import { applyMode, toggleMode, syncThemeColor } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
@@ -1074,6 +1074,8 @@ function applyNight() {
   document.querySelectorAll('#theme-switch button').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === night);
   });
+  // Every tab re-skins the whole page, so the status bar has to follow.
+  syncThemeColor();
 }
 
 document.querySelectorAll('#theme-switch button').forEach((b) => {

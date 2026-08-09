@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#e7e3d6" />
+  <!-- The lilac light base (html.mode-light --paper). JS retunes this per
+       theme as soon as it runs (see syncThemeColor() in theme.js); this
+       static pair only has to cover the first paint, which is why it also
+       carries a dark variant instead of flashing a light bar at someone in
+       dark mode. Was #e7e3d6, a cream from a palette that no longer exists. -->
+  <meta name="theme-color" content="#e2d8f2" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#17131f" media="(prefers-color-scheme: dark)" />
   <!-- SVG first: it carries both light/dark tunings and swaps them itself
        (see favicon.svg). The PNGs below are the fallback for anything that
        doesn't take an SVG favicon; .ico is the last resort. -->

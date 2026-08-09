@@ -1608,3 +1608,42 @@ test('the settings user search is not something iOS password autofill will grab'
   assert.equal(fields.next, 'new-password');
   await context.close();
 });
+
+test('the status bar colour follows whichever theme is on screen', async () => {
+  // <meta name="theme-color"> is what iOS tints the status bar with. It was
+  // pinned to #e7e3d6 - a cream from a palette that no longer exists - so
+  // the bar sat on one dead colour through every theme. It now reads the
+  // page's own background back, which also means it cannot drift when a
+  // theme is retuned.
+  //
+  // The subtle half: body animates its background over 0.45s, so a read
+  // taken the instant a theme class flips returns the colour being animated
+  // away from and the bar ends up a whole theme behind. Waiting past the
+  // transition here is the point of the test, not incidental.
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Status Bar Watcher' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+
+  const themeColor = () => page.$eval('meta[name="theme-color"]', (m) => m.content);
+  const pageBackground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+  const seen = new Set();
+  for (const tab of ['plaza', 'chat', 'rata', 'outfit']) {
+    await page.click(`[data-tab="${tab}"]`);
+    await page.waitForTimeout(700);
+    const [meta, bg] = [await themeColor(), await pageBackground()];
+    assert.equal(meta, bg, `on ${tab} the status bar should match the page, not the theme before it`);
+    seen.add(meta);
+  }
+  assert.ok(seen.size > 1, 'different tabs should not all report the same colour');
+
+  // And it has to track light/dark too, not just the section.
+  const before = await themeColor();
+  await page.click('#theme-toggle');
+  await page.waitForTimeout(700);
+  assert.notEqual(await themeColor(), before, 'switching mode should repaint the status bar');
+  assert.equal(await themeColor(), await pageBackground());
+
+  await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});

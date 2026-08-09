@@ -2190,3 +2190,39 @@ test('guessing tokens against a non-login endpoint is rate-limited too, not just
   }
   assert.equal(lastStatus, 429, 'repeated invalid-token attempts against a non-login endpoint should eventually be rate-limited');
 });
+
+test('no push notification copy carries a capital letter - the golden rule survives outside the CSS', async () => {
+  // Every other string in the app is lowercased by body { text-transform:
+  // lowercase } in styles.css. Push notifications are the one place that
+  // rule cannot reach: iOS draws them itself, so a capital in the source
+  // ships straight to the lock screen. That is exactly what had happened -
+  // "Rata", "Wall", "Snatch", "Plaza", "Atualização" and the Furnished/
+  // Swamp night labels were all capitalised while their message bodies
+  // were not, so the titles were the only uppercase text in the whole app.
+  const { readFileSync } = await import('node:fs');
+  const offenders = [];
+  for (const file of ['consequences.js', 'routes.js', 'push.js', 'scheduler.js', 'memo.js']) {
+    const src = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
+    src.split('\n').forEach((line, i) => {
+      if (!/\b(pt|en)\s*:/.test(line)) return;
+      for (const [, single, tpl] of line.matchAll(/'([^']*)'|`([^`]*)`/g)) {
+        const text = single ?? tpl;
+        // ${...} holds names and other data, not copy - judge only the
+        // literal words around it.
+        if (text && /[A-ZÀ-Ý]/.test(text.replace(/\$\{[^}]*\}/g, ''))) {
+          offenders.push(`${file}:${i + 1} ${text}`);
+        }
+      }
+    });
+  }
+  assert.deepEqual(offenders, [], `notification copy must be lowercase:\n${offenders.join('\n')}`);
+
+  // The night labels reach the lock screen through interpolation, so they
+  // are copy too even though they never appear as a pt/en literal.
+  const routes = readFileSync(new URL('../src/routes.js', import.meta.url), 'utf8');
+  const labels = [...routes
+    .match(/const NIGHT_LABEL = \{[^}]*\}/)[0]
+    .matchAll(/'([^']*)'/g)].map(([, v]) => v);
+  assert.ok(labels.length, 'the night labels should still be found');
+  assert.deepEqual(labels.filter((l) => /[A-ZÀ-Ý]/.test(l)), [], 'night labels reach push bodies and must be lowercase');
+});
