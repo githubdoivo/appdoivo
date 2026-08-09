@@ -796,7 +796,7 @@ router.get('/admin/consequences', (req, res) => {
   // (revealed_at, once set, is always more recent than created_at).
   const rows = db.prepare(`
     SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author,
-           c.assigned_user_id, a.name AS assignedName,
+           c.assigned_user_id, a.name AS assignedName, c.assigned_at,
            c.done_at, c.approved_at
     FROM consequences c
     JOIN users u ON u.id = c.user_id
@@ -929,7 +929,13 @@ router.post('/admin/contestants/register', requireOwner, (req, res) => {
   // autoConfirm: the organiser entering a pair themselves is a deliberate
   // act on both their behalfs - making them chase a guest's confirmation
   // would just block the person fixing the roster.
-  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId, { autoConfirm: true });
+  // photoBase64 is optional here, unlike the guest-facing route: an
+  // organiser fixing the roster may not have a photo of that person to
+  // hand, and one can be attached afterwards via "mudar foto".
+  const result = registerContestant(userId, night, req.body?.name || '', req.body?.partnerUserId, {
+    autoConfirm: true,
+    photoBase64: req.body?.photoBase64 || null,
+  });
   if (result.error) return res.status(400).json({ error: result.error });
   res.status(201).json(result);
 });

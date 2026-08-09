@@ -372,6 +372,16 @@ if (!columnExists('consequences', 'approved_at')) {
   db.exec('ALTER TABLE consequences ADD COLUMN approved_at TEXT');
 }
 
+// Migration: when the assignment last changed. assigned_user_id alone
+// records who, never when, so the admin history - which sorts by the most
+// recent of these timestamps - had no way to see that a row had just been
+// assigned, and a fresh assignment stayed wherever it already was.
+// Deliberately not backfilled: there is no honest value for assignments
+// made before this column existed, and revealed_at already stands in.
+if (!columnExists('consequences', 'assigned_at')) {
+  db.exec('ALTER TABLE consequences ADD COLUMN assigned_at TEXT');
+}
+
 // Migration: persist the customized logo state (triple-click "appdoivo" to
 // swap to "appde<firstname>") across app close/reopen. Defaults to false
 // (the vanilla "appdoivo" logo).

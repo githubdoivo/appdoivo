@@ -71,7 +71,16 @@ export function revealedConsequences() {
 export async function assignConsequenceUser(consequenceId, userId) {
   const consequence = db.prepare(`SELECT id, text FROM consequences WHERE id = ? AND status = 'used'`).get(consequenceId);
   if (!consequence) return null;
-  db.prepare('UPDATE consequences SET assigned_user_id = ? WHERE id = ?').run(userId, consequenceId);
+  // assigned_at drives the admin history's "most recently touched first"
+  // sort. Cleared alongside the user when unassigning, so an emptied row
+  // falls back to its reveal time rather than claiming a bogus recency.
+  db.prepare(`
+    UPDATE consequences
+    SET assigned_user_id = ?,
+        assigned_at = CASE WHEN ? IS NULL THEN NULL
+                           ELSE strftime('%Y-%m-%d %H:%M:%f', 'now') END
+    WHERE id = ?
+  `).run(userId, userId, consequenceId);
 
   if (userId) {
     await notifyUser(userId, {

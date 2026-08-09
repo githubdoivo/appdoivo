@@ -27,13 +27,54 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// Where a deep link waits when there's no page to hand it to yet.
+// On iOS, tapping a notification for an installed PWA that isn't already
+// running launches it at the manifest's start_url ("/") and throws the
+// notification's own URL away, so ?tab=... never reaches the page and the
+// app just opens on its landing tab. Parking the destination here lets the
+// page ask for it once it boots (see consumePendingDeepLink() in app.js).
+// Cache Storage rather than a variable because the service worker can be
+// killed and restarted between the tap and the page loading.
+const DEEP_LINK_CACHE = 'deep-link';
+const DEEP_LINK_KEY = '/__pending-deep-link';
+
+async function setPendingDeepLink(url) {
+  const cache = await caches.open(DEEP_LINK_CACHE);
+  await cache.put(new Request(DEEP_LINK_KEY), new Response(url));
+}
+
+async function takePendingDeepLink() {
+  const cache = await caches.open(DEEP_LINK_CACHE);
+  const hit = await cache.match(new Request(DEEP_LINK_KEY));
+  if (!hit) return null;
+  await cache.delete(new Request(DEEP_LINK_KEY));
+  return hit.text();
+}
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'take-pending-deep-link') return;
+  const port = event.ports?.[0];
+  if (!port) return;
+  event.waitUntil(
+    takePendingDeepLink()
+      .then((url) => port.postMessage({ url }))
+      .catch(() => port.postMessage({ url: null }))
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
       const client = clients[0];
-      if (!client) return self.clients.openWindow(url);
+      if (!client) {
+        // Stored before opening, not after: openWindow may never carry the
+        // query string through on iOS, and the new page needs to find the
+        // destination already waiting for it.
+        await setPendingDeepLink(url);
+        return self.clients.openWindow(url);
+      }
       // Take the user straight to the result being announced, not just
       // whatever page the app happened to be left open on. navigate() is
       // the "real" way to do this, but iOS Safari often silently refuses

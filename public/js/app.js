@@ -147,6 +147,7 @@ function showApp(me) {
   // notification's own ?tab= (handled right after) is the only thing
   // allowed to land somewhere else.
   applyDeepLinkParams();
+  consumePendingDeepLink();
   if (!me.tutorialSeen) startTutorial();
   startSessionWatcher();
 }
@@ -682,6 +683,28 @@ function applyDeepLinkParams() {
   history.replaceState({}, '', location.pathname);
 }
 
+// The other half of the iOS cold-start case described in sw.js: the query
+// string never survived the launch, so ask the service worker whether a
+// notification tap left a destination waiting. Only ever returns something
+// straight after a tap - a normal app open finds nothing and this is a
+// no-op. Times out rather than hanging if the worker is slow to wake.
+async function consumePendingDeepLink() {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg?.active) return;
+    const url = await new Promise((resolve) => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (event) => resolve(event.data?.url || null);
+      reg.active.postMessage({ type: 'take-pending-deep-link' }, [channel.port2]);
+      setTimeout(() => resolve(null), 1500);
+    });
+    if (url) applyTabAndNight(new URL(url, location.origin).searchParams);
+  } catch {
+    // Nothing to recover here - the app is already on its landing tab,
+    // which is exactly where it would have been without this.
+  }
+}
+
 // iOS Safari's service worker Client.navigate() often silently fails when
 // the PWA is already open in the foreground (falls back to just focusing
 // the existing window - see sw.js) - a real, documented WebKit limitation,
@@ -987,6 +1010,17 @@ async function loadConsequences() {
   }
 }
 
+const SUGGEST_MAX = Number($('suggest-text').getAttribute('maxlength'));
+function updateSuggestCount() {
+  const used = $('suggest-text').value.length;
+  $('suggest-count').textContent = `${used}/${SUGGEST_MAX}`;
+  // Only call it out once it actually matters - a permanently coloured
+  // counter reads as an error state on an empty field.
+  $('suggest-count').classList.toggle('at-limit', used >= SUGGEST_MAX);
+}
+$('suggest-text').addEventListener('input', updateSuggestCount);
+updateSuggestCount();
+
 $('suggest-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('suggest-text').value.trim();
@@ -996,6 +1030,8 @@ $('suggest-form').addEventListener('submit', async (e) => {
   if (!(await showConfirm(t('rata_suggest_confirm')))) return;
   try {
     await api('/consequences', { method: 'POST', body: { text } });
+    $('suggest-text').value = '';
+    updateSuggestCount();
     loadConsequences();
   } catch (err) {
     $('suggest-msg').textContent = err.message;
@@ -1426,13 +1462,18 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    // The Best Outfit card hides in two cases, both of them "there is nothing
-    // to show here": the round never started (no point announcing a vote the
-    // organiser has not opened, especially with Miss Congeniality stacked
-    // below it), and the results are already showing below, which makes the
-    // status text and leftover vote area redundant.
+    // The Best Outfit card hides whenever it has nothing of its own to say:
+    // the round never started (no point announcing a vote the organiser has
+    // not opened, especially with Miss Congeniality stacked below it); the
+    // results are already showing below, which makes the status text and
+    // leftover vote area redundant; and during registration, where its only
+    // content is "entries are open, put yours in" directly underneath the
+    // entry card that already says so and takes the entry.
     const roundStarted = !!data.started;
-    $('voting-card').classList.toggle('hidden', !roundStarted || (revealing && results.length > 0));
+    $('voting-card').classList.toggle(
+      'hidden',
+      !roundStarted || data.status === 'registration' || (revealing && results.length > 0),
+    );
 
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');

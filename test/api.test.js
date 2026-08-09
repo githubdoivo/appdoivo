@@ -479,6 +479,38 @@ test('assigning a consequence notifies nobody but works even without push config
   await api('DELETE', `/admin/users/${holder.data.id}`, { token: ADMIN });
 });
 
+test('assigning stamps assigned_at, so the admin history can sort a fresh assignment to the top', async () => {
+  // Regression guard: assignment used to record only who, never when. The
+  // admin history sorts on the most recent of these timestamps, so with no
+  // assigned_at a just-assigned row could not move - it sat wherever it
+  // already was, which read as the assign having failed.
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Stamp Poster' } });
+  const holder = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Stamp Holder' } });
+  await api('POST', '/consequences', { token: poster.data.token, body: { text: 'Stamped consequence' } });
+  const revealed = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  const id = revealed.data.revealed.id;
+
+  const before = (await api('GET', '/admin/consequences', { token: ADMIN })).data.find((c) => c.id === id);
+  assert.equal(before.assigned_at, null, 'nothing is assigned yet');
+
+  await api('PATCH', `/admin/consequences/${id}/assign`, { token: ADMIN, body: { userId: holder.data.id } });
+
+  const rows = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
+  const after = rows.find((c) => c.id === id);
+  assert.ok(after.assigned_at, 'assigning records when it happened, not just who');
+  const latest = (c) => c.approved_at || c.done_at || c.assigned_at || c.revealed_at || '';
+  const top = [...rows].sort((a, b) => latest(b).localeCompare(latest(a)))[0];
+  assert.equal(top.id, id, 'the freshly assigned one is now the most recently touched of all');
+
+  // Clearing the assignment must not leave a stale recency behind.
+  await api('PATCH', `/admin/consequences/${id}/assign`, { token: ADMIN, body: { userId: null } });
+  const cleared = (await api('GET', '/admin/consequences', { token: ADMIN })).data.find((c) => c.id === id);
+  assert.equal(cleared.assigned_at, null, 'unassigning clears the timestamp too');
+
+  await api('DELETE', `/admin/users/${poster.data.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${holder.data.id}`, { token: ADMIN });
+});
+
 test('a non-owner admin can assign a consequence, but only the owner can approve it', async () => {
   const nonOwnerAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Non Owner Assign Test' } });
   await api('PATCH', `/admin/users/${nonOwnerAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
@@ -1190,6 +1222,33 @@ test('self-registration requires a valid photo, but an organiser registering on 
   assert.equal(organiserReg.status, 201);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('an organiser registering someone else can attach a photo at the same time', async () => {
+  // The admin form has always had a photo picker, but nothing was wired to
+  // it and the route dropped photoBase64 on the floor, so an organiser
+  // adding an entry could never attach a photo at that moment - only after
+  // the fact via "mudar foto".
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Organiser Photo Guest' } });
+
+  const reg = await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId: guest.data.id, name: 'With A Photo', night, photoBase64: TEST_PHOTO },
+  });
+  assert.equal(reg.status, 201);
+
+  const listed = (await api('GET', `/admin/contestants?night=${night}`, { token: ADMIN }))
+    .data.contestants.find((c) => c.id === reg.data.id);
+  assert.equal(!!listed.hasPhoto, true, 'the attached photo is actually stored, not silently discarded');
+
+  const photo = await api('GET', `/outfit/contestants/${reg.data.id}/photo`, { token: ADMIN });
+  assert.equal(photo.status, 200, 'and it can be fetched back');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${guest.data.id}`, { token: ADMIN });
 });
 
 test('either half of a duo can replace the entry photo before voting opens, not after', async () => {

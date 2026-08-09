@@ -132,7 +132,12 @@
         <div id="suggest-area" style="margin-top:12px">
           <form id="suggest-form">
             <textarea id="suggest-text" maxlength="200" rows="3" data-i18n-ph="rata_suggest_ph" placeholder="Escreve a tua consequência de hoje..."></textarea>
+            <!-- The 200-char cap was already enforced (maxlength here, and
+                 again server-side), but silently - typing just stopped with
+                 no reason given. .actions-right pushes the first .muted to
+                 the left, so the count sits opposite the button. -->
             <div class="actions-right">
+              <span id="suggest-count" class="muted char-count">0/200</span>
               <button type="submit" class="small" data-i18n="send">Enviar</button>
             </div>
           </form>

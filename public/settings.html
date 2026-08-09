@@ -354,7 +354,7 @@
              id "wall" - see the tab button above, permanently hidden now).
              Deliberately near-invisible, not a labeled button - see
              wall-secret-btn in settings.js/styles.css. -->
-        <button type="button" id="wall-secret-btn" class="wall-secret-btn hidden" aria-label="✦">✦</button>
+        <button type="button" id="wall-secret-btn" class="wall-secret-btn hidden" aria-label="●">●</button>
       </div>
 
       <!-- Reached only via the diamond at the end of the Snatch tab. Owner-
@@ -396,7 +396,12 @@
           <p class="help" data-i18n="change_key_help">Explicação</p>
           <form id="change-key-form">
             <div class="password-field">
-              <input id="current-key-input" type="password" data-i18n-ph="current_key_ph" placeholder="Chave atual" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+              <!-- Explicit current-password/new-password (rather than the
+                   autocomplete="off" these had, which Safari ignores) so the
+                   password manager reads this as the self-contained change-
+                   password form it is, instead of guessing at the structure
+                   and reaching for an unrelated field elsewhere on the page. -->
+              <input id="current-key-input" type="password" data-i18n-ph="current_key_ph" placeholder="Chave atual" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required />
               <button type="button" id="current-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -409,7 +414,7 @@
               </button>
             </div>
             <div class="password-field" style="margin-top:10px">
-              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" minlength="7" />
+              <input id="new-key-input" type="password" data-i18n-ph="new_key_ph" placeholder="Nova chave" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required pattern="[A-Za-z0-9]+" minlength="7" />
               <button type="button" id="new-key-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
                 <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
@@ -437,7 +442,14 @@
             <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
             <div id="user-search-card" style="margin-top:12px">
               <form id="user-form" class="inline">
-                <input id="user-name-input" type="text" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
+                <!-- type=search, not text: this page also has the change-key
+                     password fields, and Safari's password manager hunts the
+                     page for a nearby text input to treat as the username -
+                     it would pop its Face ID "sign in" sheet on this field
+                     the moment settings opened. autocomplete="off" does not
+                     stop that (iOS ignores it for autofill); excluding the
+                     field from the heuristic does. -->
+                <input id="user-name-input" type="search" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
                 <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
               </form>
               <div class="role-pills" id="user-role-filter" style="margin-top:8px">

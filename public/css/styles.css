@@ -70,6 +70,15 @@
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
+
+  /* Side motifs for the .highlight box, one per section (see the
+     .highlight rules further down). Used as masks, never as images, so
+     every shape here is drawn in flat black and takes its real colour
+     from the theme accent painted behind it - which is why these live at
+     :root rather than inside each body.theme-* block. A 16x40 tile that
+     repeats vertically: the box grows with its text, so the motif has to
+     be a band, not a fixed drawing. */
+  --rata-trail: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cpath d='M8 0 C-4 10 20 30 8 40' fill='none' stroke='%23000' stroke-opacity='0.45' stroke-width='1.6' stroke-linecap='round'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='12' cy='7' r='1.1'/%3E%3Ccircle cx='13.6' cy='9.6' r='0.85'/%3E%3Ccircle cx='4' cy='27' r='1.1'/%3E%3Ccircle cx='2.4' cy='29.6' r='0.85'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ==================== Dark / light mode (UI chrome) ======================
@@ -296,6 +305,12 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
 /* ------------------------------- Typography ------------------------------ */
 
 h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em; margin: 0; }
+/* h3 had no size of its own, so it fell through to the UA default of
+   1.17em - larger than .card h2's 1.15rem, which left every "best outfit"
+   / "miss congeniality" subtitle outranking the card header above it.
+   Every h3 in the app is one of those category subtitles, so sizing the
+   element itself is enough. */
+h3 { font-size: 0.95rem; margin: 14px 0 6px; }
 
 /* --------------------------------- Login --------------------------------- */
 /* Fundo provisorio ate termos a arte final em alta resolucao. */
@@ -532,6 +547,17 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 input[type="password"] { text-transform: none; }
+/* Character counter beside a capped field. Tabular figures so the number
+   does not jitter sideways as it counts up. */
+.char-count { font-variant-numeric: tabular-nums; }
+.char-count.at-limit { color: var(--danger); font-weight: 600; }
+/* #user-name-input is type=search purely to keep Safari's password autofill
+   off it (see the comment on the field in settings.html) - it should still
+   look like every other input, so undo WebKit's native search styling and
+   its clear button, neither of which any other field here has. */
+input[type="search"] { -webkit-appearance: none; appearance: none; }
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
 /* Without an explicit color, WebKit's own placeholder default is a
    neutral cool grey - fine on the app's own neutral paper, but it reads
    as distinctly blue-tinted by contrast against every warm theme (mural's
@@ -1015,10 +1041,17 @@ html.mode-light .hero-line { color: var(--ink); }
   line-height: 1.35;
   color: var(--ink);
 }
-/* The current-consequence box is the one moment "A Rata" gets playful
-   rather than just informative - swaps the plain flat accent bar for a
-   zigzag "snapped spring" shape plus a small pivot pin, evoking a mouse
-   trap's bent wire instead of a generic sidebar rule. */
+/* The .highlight box is the one place each section gets to be playful
+   rather than just informative, so instead of a flat accent bar it carries
+   a motif drawn from that section's own world. These are masks, not
+   coloured images: the shape is painted in the theme's accent via
+   background, so a single SVG tracks --rata/--ot across every theme and
+   both light and dark, which a fill baked into the data URI could not. */
+/* Rata: a tail dragging down the edge with paw marks either side of it -
+   an animal that passed through. Replaces an earlier zigzag "snapped
+   mousetrap spring", which read as a graphic device rather than as
+   anything alive. The 40px tile's curve leaves and re-enters on the same
+   tangent, so it repeats as one continuous line at any box height. */
 #tab-rata .highlight {
   position: relative;
   border-left: none;
@@ -1027,29 +1060,50 @@ html.mode-light .hero-line { color: var(--ink); }
 #tab-rata .highlight::before {
   content: '';
   position: absolute;
-  left: 8px;
-  top: 10px;
-  bottom: 10px;
-  width: 9px;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 16px;
   background: var(--rata);
-  clip-path: polygon(
-    50% 0%, 100% 9%, 0% 18%, 100% 27%, 0% 36%,
-    100% 45%, 0% 54%, 100% 63%, 0% 72%, 100% 81%, 0% 90%, 50% 100%
-  );
-}
-#tab-rata .highlight::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--rata);
+  -webkit-mask-repeat: repeat-y;
+  mask-repeat: repeat-y;
+  -webkit-mask-position: center top;
+  mask-position: center top;
+  -webkit-mask-size: 16px 40px;
+  mask-size: 16px 40px;
+  -webkit-mask-image: var(--rata-trail);
+  mask-image: var(--rata-trail);
 }
 #tab-outfit .highlight {
   border-left-color: var(--outfit);
   background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
+}
+/* Scoped to the two night themes rather than to #tab-outfit alone: only
+   Furnished and Swamp define --highlight-motif, and an undefined mask
+   would leave the ::before painting as a solid 16px block. */
+body.theme-furnished #tab-outfit .highlight,
+body.theme-swamp #tab-outfit .highlight {
+  position: relative;
+  border-left: none;
+  padding-left: 34px;
+}
+body.theme-furnished #tab-outfit .highlight::before,
+body.theme-swamp #tab-outfit .highlight::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 16px;
+  background: var(--ot);
+  -webkit-mask-repeat: repeat-y;
+  mask-repeat: repeat-y;
+  -webkit-mask-position: center top;
+  mask-position: center top;
+  -webkit-mask-size: 16px 40px;
+  mask-size: 16px 40px;
+  -webkit-mask-image: var(--highlight-motif);
+  mask-image: var(--highlight-motif);
 }
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
@@ -1276,30 +1330,41 @@ body { transition: background-color 0.45s ease; }
 
 /* --- FURNISHED: cozy interior, teal velvet, warm wallpaper --- */
 body.theme-furnished {
-  /* Was #d6ded7/#e2e8e1/#ebefe9 (~11% saturation) - read as plain grey
-     rather than green next to Swamp's own ~28%. Boosted saturation at the
-     same lightness so it reads as sage green instead of grey-green. */
-  --paper:    #d0e4d3;
-  --paper-2:  #e0ebde;
-  --paper-3:  #eaf1e7;
-  --ink:      #22302b;
-  --ink-soft: #566a62;
-  /* Was #a9bab2 (~1.6:1 against --paper-2) - card/post borders read as
-     missing on this theme, same family of bug fixed on rata/mural
-     elsewhere. Darkened within the same sage family to ~2.4:1. */
-  --line:     #849c91;
-  --line-2:   #c0cec6;
-  --clay:     #305049;
-  --clay-2:   #43655c;
-  --clay-active: #305049;
-  --rata:     #305049;
-  --ot:       #305049;
-  --ot-2:     #43655c;
-  --ot-tint:  #e2e8e1;
-  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23e2e8e1'/%3E%3Cg fill='none' stroke='%23305049' stroke-opacity='0.30'%3E%3Cpath d='M15 0V60M45 0V60'/%3E%3C/g%3E%3Cg fill='%23305049' fill-opacity='0.22'%3E%3Cpath d='M30 10 L38 22 L30 34 L22 22 Z'/%3E%3Ccircle cx='0' cy='45' r='3'/%3E%3Ccircle cx='60' cy='45' r='3'/%3E%3C/g%3E%3C/svg%3E");
-  background-color: #c7d2ca;
+  /* Whole theme rebuilt on a single leaf-green hue (~112 degrees). It used
+     to drift across the spectrum - papers around 102-136 but accents at
+     152-167, which is sea green - and since the accents are what the eye
+     picks up (buttons, borders, hero line), the page read as blue-green
+     rather than green. 112 is far enough from Swamp's olive (~75) that the
+     two nights still look nothing alike, and far enough from teal that
+     nothing here reads as blue. Contrast was re-checked on every pair that
+     matters after the shift; the earlier saturation and border-visibility
+     fixes below are preserved, just restated in the new hue. */
+  --paper:    #d2e5cf;
+  --paper-2:  #e0ecde;
+  --paper-3:  #e9f2e7;
+  --ink:      #1f2d1d;     /* 12.6:1 on --paper-3 */
+  --ink-soft: #546a50;     /* 5.2:1  on --paper-3 */
+  /* Card/post borders have to stay visible without turning into a hard
+     rule - this sits at ~2.3:1 against --paper-2, same target as the
+     value it replaces. */
+  --line:     #84a17f;
+  --line-2:   #bfcfbc;
+  --clay:     #32502d;     /* 7.9:1 on --paper-3 */
+  --clay-2:   #456840;
+  --clay-active: #32502d;
+  --rata:     #32502d;
+  --ot:       #32502d;
+  --ot-2:     #456840;
+  --ot-tint:  #e0ebdf;
+  /* Panelling bead: a run of diamonds threaded on a vertical line, the
+     same figure the Furnished background is patterned with, narrowed to a
+     16px band. Alternating outlined and solid so the repeat reads as a
+     designed border rather than one shape stamped over and over. */
+  --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cpath d='M8 0V40' fill='none' stroke='%23000' stroke-opacity='0.3' stroke-width='1.1'/%3E%3Cpath fill='%23000' fill-rule='evenodd' d='M8 3 L14 10 L8 17 L2 10 Z M8 6.5 L11 10 L8 13.5 L5 10 Z'/%3E%3Cpath fill='%23000' fill-opacity='0.75' d='M8 25 L11.5 30 L8 35 L4.5 30 Z'/%3E%3C/svg%3E");
+  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23e0ebdf'/%3E%3Cg fill='none' stroke='%2332502d' stroke-opacity='0.30'%3E%3Cpath d='M15 0V60M45 0V60'/%3E%3C/g%3E%3Cg fill='%2332502d' fill-opacity='0.22'%3E%3Cpath d='M30 10 L38 22 L30 34 L22 22 Z'/%3E%3Ccircle cx='0' cy='45' r='3'/%3E%3Ccircle cx='60' cy='45' r='3'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #c6d4c4;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23cdd8d0'/%3E%3Cg stroke='%23305049' stroke-opacity='0.16' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%23305049' fill-opacity='0.13'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23cdd8d0'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23ccd9c9'/%3E%3Cg stroke='%2332502d' stroke-opacity='0.16' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%2332502d' fill-opacity='0.13'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23ccd9c9'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* --- SWAMP: bog, moss/olive, still water, reeds and water lilies --- */
@@ -1320,6 +1385,11 @@ body.theme-swamp {
   --ot:       #55632c;
   --ot-2:     #6c7b3c;
   --ot-tint:  #d7dcc0;
+  /* Reeds standing in water: two stems of different heights, one topped
+     with a cattail, rising through a pair of ripple lines. Each tile is a
+     small clump, so repeating it reads as a stretch of bank rather than a
+     repeated icon. */
+  --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round'%3E%3Cpath d='M6 40 C6 30 4.5 22 5.5 15' stroke-opacity='0.9' stroke-width='1.5'/%3E%3Cpath d='M11.5 40 C11.5 33 12.5 28 11.5 23' stroke-opacity='0.5' stroke-width='1.2'/%3E%3Cpath d='M11.5 27 C9 25 8 22.5 8.2 20.5' stroke-opacity='0.45' stroke-width='1.1'/%3E%3Cpath d='M0.5 34 Q8 31 15.5 34' stroke-opacity='0.5' stroke-width='1.1'/%3E%3Cpath d='M0.5 38.5 Q8 35.5 15.5 38.5' stroke-opacity='0.32' stroke-width='1'/%3E%3C/g%3E%3Crect x='3.4' y='4' width='4.2' height='11' rx='2.1' fill='%23000' fill-opacity='0.85'/%3E%3Cpath d='M5.5 4 V0.5' stroke='%23000' stroke-opacity='0.6' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E");
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #bfc8a3;
   background-image:
@@ -1377,25 +1447,25 @@ body.theme-rata .card {
 
 /* --- Dark/light variants per night: each theme gets its own pair --- */
 html.mode-dark body.theme-furnished {
-  --paper:    #182420;
-  --paper-2:  #1f2e29;
-  --paper-3:  #253630;
-  --ink:      #dce8e2;
-  --ink-soft: #8fa89d;
+  --paper:    #172015;
+  --paper-2:  #202c1e;
+  --paper-3:  #283725;
+  --ink:      #dde8db;
+  --ink-soft: #8ead8a;
   /* Was #35493f (~1.5:1 against --paper-2) - lightened within the same
      family so boxed cards/posts get a visible border in dark mode too. */
-  --line:     #4d6a5b;
-  --line-2:   #43594d;
-  --clay:     #4a8f76;
-  --clay-2:   #5fae91;
-  --rata:     #4a8f76;
-  --ot:       #4a8f76;
-  --ot-2:     #5fae91;
-  --ot-tint:  #1f2e29;
-  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%231f2e29'/%3E%3Cg fill='none' stroke='%234a8f76' stroke-opacity='0.30'%3E%3Cpath d='M15 0V60M45 0V60'/%3E%3C/g%3E%3Cg fill='%234a8f76' fill-opacity='0.24'%3E%3Cpath d='M30 10 L38 22 L30 34 L22 22 Z'/%3E%3Ccircle cx='0' cy='45' r='3'/%3E%3Ccircle cx='60' cy='45' r='3'/%3E%3C/g%3E%3C/svg%3E");
-  background-color: #121c18;
+  --line:     #4f6b4a;
+  --line-2:   #435a3f;
+  --clay:     #66ae5b;
+  --clay-2:   #7dc072;
+  --rata:     #66ae5b;
+  --ot:       #66ae5b;
+  --ot-2:     #7dc072;
+  --ot-tint:  #202c1e;
+  --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23202c1e'/%3E%3Cg fill='none' stroke='%2366ae5b' stroke-opacity='0.30'%3E%3Cpath d='M15 0V60M45 0V60'/%3E%3C/g%3E%3Cg fill='%2366ae5b' fill-opacity='0.24'%3E%3Cpath d='M30 10 L38 22 L30 34 L22 22 Z'/%3E%3Ccircle cx='0' cy='45' r='3'/%3E%3Ccircle cx='60' cy='45' r='3'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #10170f;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23172420'/%3E%3Cg stroke='%234a8f76' stroke-opacity='0.20' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%234a8f76' fill-opacity='0.16'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23172420'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23161f14'/%3E%3Cg stroke='%2366ae5b' stroke-opacity='0.20' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%2366ae5b' fill-opacity='0.16'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23161f14'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-swamp {
   --paper:    #1a2010;
@@ -2186,8 +2256,10 @@ button[id$="-wipe-btn"] { display: block; width: 100%; }
 
 /* Plain round dot, no stretching: the Furnished and Swamp backgrounds are
    both patterned with diamonds, so a diamond here read as a deliberate mark
-   while a dot disappears into them. */
-#votelog-secret-btn { font-size: 0.8rem; }
+   while a dot disappears into them. The extra pixel drops it onto the same
+   baseline as the background's own dots - sitting just above them is what
+   gave it away. */
+#votelog-secret-btn { margin-top: 29px; }
 
 /* Stand-in for a tab with nothing in it yet - centred and quiet, so an empty
    Snatch reads as "not started" rather than as a page that failed to load. */

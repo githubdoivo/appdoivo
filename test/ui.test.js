@@ -1488,3 +1488,123 @@ test('Memo is gated behind ENABLE_MEMO - hidden from the tab bar and the admin p
     process.env.ENABLE_MEMO = 'true';
   }
 });
+
+/* ------------------ Regressions from the 1.8.45 bug sweep ---------------- */
+
+test('the admin contestant form can actually attach a photo - its picker button was never wired', async () => {
+  // The button, the hidden input and the preview box had all been in
+  // settings.html from the start, but nothing in settings.js listened to
+  // the button and the submit never sent a photo, so "escolher foto" was
+  // dead on the admin side while the identical guest-side control worked.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Admin Picker Guest' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#admin-register-form', { timeout: WAIT_TIMEOUT });
+
+  await pickPhotoViaButton(page, '#admin-register-photo-btn', {
+    name: 'admin-entry.png', mimeType: 'image/png', buffer: PNG_1X1,
+  });
+  await page.waitForSelector('#admin-register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+
+  await context.close();
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
+test('the Best Outfit card stays out of the way while entries are still open', async () => {
+  // During registration its whole content was "entries are open, put yours
+  // in", sitting directly under the entry card that says the same thing and
+  // actually takes the entry.
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reg Phase Viewer' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  assert.equal(await page.isVisible('#voting-card'), false, 'the Best Outfit card should be hidden while entries are open');
+  assert.equal(await page.isVisible('#outfit-idle'), false, 'and the "nothing open" note must not appear either - the entry card is right there');
+
+  // Once voting actually opens it has something to say again.
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await page.waitForSelector('#voting-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await context.close();
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
+
+test('the consequence box shows how much room is left and stops at the cap', async () => {
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Counter Watcher' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="rata"]');
+  await page.waitForSelector('#suggest-text', { timeout: WAIT_TIMEOUT });
+
+  assert.equal((await page.textContent('#suggest-count')).trim(), '0/200', 'an untouched box reads as empty, not blank');
+
+  await page.fill('#suggest-text', 'x'.repeat(30));
+  assert.equal((await page.textContent('#suggest-count')).trim(), '30/200');
+  assert.equal(await page.evaluate(() => document.getElementById('suggest-count').classList.contains('at-limit')), false);
+
+  // The cap was always enforced, just silently - typing simply stopped.
+  await page.fill('#suggest-text', 'y'.repeat(260));
+  const value = await page.inputValue('#suggest-text');
+  assert.equal(value.length, 200, 'the field itself still refuses more than the cap');
+  assert.equal((await page.textContent('#suggest-count')).trim(), '200/200');
+  assert.equal(
+    await page.evaluate(() => document.getElementById('suggest-count').classList.contains('at-limit')),
+    true,
+    'and it says so instead of just going quiet',
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
+
+test('a results category subtitle never outranks the card header above it', async () => {
+  // h3 had no size of its own and fell through to the UA default of
+  // 1.17em, which is bigger than .card h2 - so "best outfit" and "miss
+  // congeniality" both rendered larger than "resultados da votação".
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#results-table', { timeout: WAIT_TIMEOUT });
+
+  const sizes = await page.evaluate(() => {
+    const card = document.getElementById('results-table').closest('.card');
+    const px = (el) => parseFloat(getComputedStyle(el).fontSize);
+    return { h2: px(card.querySelector('h2')), h3s: [...card.querySelectorAll('h3')].map(px) };
+  });
+  assert.ok(sizes.h3s.length >= 2, 'both rounds should be labelled');
+  for (const h3 of sizes.h3s) {
+    assert.ok(h3 < sizes.h2, `a category subtitle (${h3}px) must be smaller than the card header (${sizes.h2}px)`);
+  }
+  await context.close();
+});
+
+test('the settings user search is not something iOS password autofill will grab', async () => {
+  // Settings also carries the change-key password fields, and Safari hunts
+  // the page for a nearby text input to treat as the username - it popped
+  // its Face ID sheet on this field every time settings opened.
+  // autocomplete="off" does not stop that; not being a text field does.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  const fields = await page.evaluate(() => ({
+    search: document.getElementById('user-name-input').type,
+    current: document.getElementById('current-key-input').getAttribute('autocomplete'),
+    next: document.getElementById('new-key-input').getAttribute('autocomplete'),
+  }));
+  assert.equal(fields.search, 'search', 'the user search must not be a plain text field');
+  assert.equal(fields.current, 'current-password', 'the key fields must describe themselves, so Safari stops guessing');
+  assert.equal(fields.next, 'new-password');
+  await context.close();
+});

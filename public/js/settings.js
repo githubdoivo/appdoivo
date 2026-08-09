@@ -6,6 +6,7 @@ import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
+import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
@@ -940,6 +941,39 @@ function wireAdminUserSearch(inputEl, resultsEl, onPick) {
 let adminRegisterMode = 'solo';
 let adminRegisterParticipantId = null;
 let adminRegisterPartnerId = null;
+let adminRegisterPhotoDataUrl = null;
+
+// Same styled-button-over-hidden-input pattern as the guest form in app.js,
+// and deliberately no `capture` attribute for the same reason: iOS should
+// offer its picker sheet rather than jump straight to the camera. Unlike
+// the guest form the photo stays optional here - an organiser fixing the
+// roster may not have a photo of that person to hand, and can add one
+// later via "mudar foto" (see the admin route's requirePhoto, left off).
+$('admin-register-photo-btn').addEventListener('click', () => $('admin-register-photo-input').click());
+$('admin-register-photo-input').addEventListener('change', async () => {
+  const file = $('admin-register-photo-input').files[0];
+  const preview = $('admin-register-photo-preview');
+  if (!file) {
+    adminRegisterPhotoDataUrl = null;
+    preview.classList.add('hidden');
+    return;
+  }
+  try {
+    adminRegisterPhotoDataUrl = await resizePhotoToJpeg(file);
+    preview.querySelector('img').src = adminRegisterPhotoDataUrl;
+    preview.classList.remove('hidden');
+  } catch (err) {
+    adminRegisterPhotoDataUrl = null;
+    preview.classList.add('hidden');
+    await showAlert(err.message);
+  }
+});
+
+function resetAdminRegisterPhoto() {
+  adminRegisterPhotoDataUrl = null;
+  $('admin-register-photo-input').value = '';
+  $('admin-register-photo-preview').classList.add('hidden');
+}
 
 wireAdminUserSearch(
   $('admin-register-participant-search'),
@@ -987,6 +1021,7 @@ $('admin-register-form').addEventListener('submit', async (e) => {
         partnerUserId: adminRegisterMode === 'duo' ? adminRegisterPartnerId : null,
         name,
         night: currentNight(),
+        photoBase64: adminRegisterPhotoDataUrl,
       },
     });
   } catch (err) {
@@ -998,6 +1033,7 @@ $('admin-register-form').addEventListener('submit', async (e) => {
   $('admin-register-partner-search').value = '';
   adminRegisterParticipantId = null;
   adminRegisterPartnerId = null;
+  resetAdminRegisterPhoto();
   loadContestants();
 });
 
@@ -1279,17 +1315,18 @@ function renderConsequences() {
   // is the running history, and a consequence that was just revealed is the
   // most recently touched thing there is - leaving it out made a fresh reveal
   // look like nothing had happened.
-  // Grouped in the same order the filter chips are in - what needs doing
-  // (atribuir) first, then the queue, then what is already settled. Recency
-  // only breaks ties inside a group; sorting purely by timestamp buried the
-  // unassigned ones among older finished rows.
-  const STATE_ORDER = ['atribuir', 'fila', 'pendente', 'feita'];
-  const getLatestTime = (c) => c.approved_at || c.done_at || c.revealed_at || '';
-  const historyRows = rataRows.filter((c) => rataStatusFilter.has(rataStatus(c).state)).sort((a, b) => {
-    const byState = STATE_ORDER.indexOf(rataStatus(a).state) - STATE_ORDER.indexOf(rataStatus(b).state);
-    if (byState !== 0) return byState;
-    return getLatestTime(b).localeCompare(getLatestTime(a));
-  });
+  // Purely most-recently-touched first. This was briefly grouped by state
+  // instead, because sorting on time alone buried freshly revealed rows
+  // among older finished ones - but that was a missing timestamp, not a
+  // sorting problem: assignments recorded no time at all until
+  // consequences.assigned_at existed. Now that every transition stamps
+  // something, recency puts whatever just happened on top on its own, and
+  // grouping only got in the way (a newly assigned row became 'pendente'
+  // and sank below the entire queue).
+  const getLatestTime = (c) => c.approved_at || c.done_at || c.assigned_at || c.revealed_at || '';
+  const historyRows = rataRows
+    .filter((c) => rataStatusFilter.has(rataStatus(c).state))
+    .sort((a, b) => getLatestTime(b).localeCompare(getLatestTime(a)));
   $('consequences-table').innerHTML = historyRows.length
     ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')
     : `<p class="muted">${t('no_consequences')}</p>`;
