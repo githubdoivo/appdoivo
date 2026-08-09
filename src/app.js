@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,6 +67,30 @@ function sendVersionedHtml(res, filename) {
 
 app.get('/settings.html', (req, res) => sendVersionedHtml(res, 'settings.html'));
 app.get('/index.html', (req, res) => sendVersionedHtml(res, 'index.html'));
+
+// Same problem as withCacheBust above, one level deeper: stamping app.js's
+// own <script src> only forces a fresh fetch of app.js itself - every ES
+// module it (transitively) imports via a plain relative path (e.g. "./
+// i18n.js") is still requested with no version in the URL at all, so
+// Cloudflare's edge can keep serving a stale one for hours after a deploy
+// even though app.js itself updated - exactly what happened with a new
+// i18n.js key showing up as literally "chat_title" instead of its real
+// translation. Every /js/*.js file is served here (ahead of express.static)
+// with its own relative imports stamped the same way, so the fix cascades
+// through the whole module graph, not just the entry point.
+function withJsCacheBust(js) {
+  return js.replace(
+    /(from\s+['"])(\.\.?\/[^'"]+\.js)(['"])/g,
+    (_match, pre, path, post) => `${pre}${path}?v=${appVersion}${post}`
+  );
+}
+
+app.get('/js/:name.js', (req, res, next) => {
+  const filePath = join(PUBLIC_DIR, 'js', `${req.params.name}.js`);
+  if (!existsSync(filePath)) return next();
+  const js = readFileSync(filePath, 'utf8');
+  res.set('Cache-Control', 'no-cache').type('text/javascript').send(withJsCacheBust(js));
+});
 
 // Static files (PWA). "no-cache" (despite the name) still lets the browser
 // keep a local copy, but forces a conditional revalidation against the

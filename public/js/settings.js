@@ -62,6 +62,7 @@ let adminPromotionEnabled = false;
 let isOwner = false;
 let isAdmin = false;
 let plazaEnabled = false;
+let memoEnabled = false;
 let myUserId = null;
 let myName = '';
 
@@ -120,6 +121,7 @@ async function boot() {
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
     plazaEnabled = !!me.plazaEnabled;
+    memoEnabled = !!me.memoEnabled;
     myUserId = me.id;
     myName = me.name;
     wireLogoEasterEgg(me.name, me.logo_customized);
@@ -136,13 +138,17 @@ async function boot() {
   if (!plazaEnabled) {
     document.querySelector('#admin-tabs [data-atab="plaza"]').classList.add('hidden');
   }
+  // Same QA-only gating shape as Plaza above, see ENABLE_MEMO.
+  if (!memoEnabled) {
+    document.querySelector('#admin-tabs [data-atab="memo"]').classList.add('hidden');
+  }
 
   // This page is now open to every logged-in user, not just admins - a
   // plain user only gets the "Settings" tab (change their own key, no
   // user-management section); the rest of this scoping matches the main
   // admin panel's existing rules.
   if (!isAdmin) {
-    ['plaza', 'outfit', 'rata', 'wall'].forEach((tab) => {
+    ['plaza', 'outfit', 'rata', 'wall', 'memo'].forEach((tab) => {
       document.querySelector(`#admin-tabs [data-atab="${tab}"]`).classList.add('hidden');
     });
     $('users-management').classList.add('hidden');
@@ -154,19 +160,23 @@ async function boot() {
     // further down) - that's just a read-only duplicate of the account
     // card already at the top of this page, not a useful section.
     $('users-management').classList.toggle('hidden', !isOwner);
+    // The Plaza admin tab (pseudonym mapping, internal id "wall") is
+    // owner-only and no longer a normal tab bar entry at all (see the
+    // permanently-hidden button in settings.html) - the only way in is the
+    // near-invisible star at the end of atab-memo, itself only shown to
+    // the owner.
+    $('wall-secret-btn').classList.toggle('hidden', !isOwner);
+    // Owner-only, and only when Memo is on at all - it fires a push to
+    // every guest (see POST /admin/memo/trigger-next).
+    $('memo-trigger-card').classList.toggle('hidden', !(isOwner && memoEnabled));
     if (!isOwner) {
-      // The Wall tab (pseudonym mapping + its timezone card) was opened up to
-      // regular admins temporarily so testers could see it existed - that's
-      // done now, so it's owner-only again, whole tab hidden rather than just
-      // the sensitive card within it.
-      document.querySelector('#admin-tabs [data-atab="wall"]').classList.add('hidden');
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
       // Per-feature kill switches (see POST /admin/consequences/wipe etc.)
       // are owner-only, same golden rule as everything else destructive.
       // chat-wipe-card doesn't need listing here - it lives inside the
       // wall tab, already hidden above.
-      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card'].forEach((id) => {
+      ['rata-wipe-card', 'outfit-wipe-card', 'plaza-wipe-card', 'memo-wipe-card'].forEach((id) => {
         $(id).classList.add('hidden');
       });
       // Contestant creation/removal is owner-only too (see requireOwner on
@@ -233,6 +243,7 @@ function reloadAll() {
   // the last time they were fetched until this call was added.
   if (isOwner) loadWallPseudonyms();
   if (isAdmin) loadPlazaPosts();
+  if (isAdmin && memoEnabled) loadMemoDays();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -278,6 +289,7 @@ function applyAdminTheme(tab) {
   document.body.classList.toggle('theme-rata', tab === 'rata');
   document.body.classList.toggle('theme-mural', tab === 'plaza');
   document.body.classList.toggle('theme-plaza', tab === 'wall');
+  document.body.classList.toggle('theme-memo', tab === 'memo');
 }
 
 // Latest /admin/voting response per night, keyed by night - lets the close
@@ -415,6 +427,18 @@ $('voting-advance-btn').addEventListener('click', async () => {
   loadContestants();
 });
 
+$('voting-runoff-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_voting_runoff')))) return;
+  $('voting-msg').textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/runoff`, { method: 'POST' });
+    loadVotingState();
+    loadVotes();
+  } catch (err) {
+    $('voting-msg').textContent = err.message;
+  }
+});
+
 $('voting-reset-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_reset')))) return;
   $('voting-msg').textContent = '';
@@ -449,21 +473,41 @@ function renderUsersList(users) {
   $('users-list').innerHTML = users.length
     ? users.map((u) => `
       <div class="user-row">
-        <div class="user-row-top">
+        <div class="user-row-top" data-row-toggle role="button" tabindex="0" aria-expanded="false">
           <div class="user-row-name">
             <span class="user-row-name-text${isOwner ? ' name-edit' : ''}"${isOwner ? ` data-rename-user="${u.id}" data-current-name="${esc(u.name)}" role="button" tabindex="0"` : ''}>${esc(u.name)}</span>
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
-          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          <span class="user-row-chevron">›</span>
         </div>
-        ${isOwner ? `
-        <div class="row-actions">
-          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
-          <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-          ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
-        </div>` : ''}
+        <div class="user-row-details hidden">
+          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          ${isOwner ? `
+          <div class="row-actions">
+            ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
+            <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
+            ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
+          </div>` : ''}
+        </div>
       </div>`).join('')
     : `<p class="muted">${t('no_users')}</p>`;
+
+  // Collapsed to just name+role by default - with a real guest list (not
+  // 24 demo accounts), showing every key/action for every single row at
+  // once made the whole tab one very long, mostly-irrelevant scroll. Tap
+  // the row to reveal its key and actions instead of dumping everyone's
+  // open at once.
+  $('users-list').querySelectorAll('[data-row-toggle]').forEach((row) => {
+    const toggle = () => {
+      const details = row.nextElementSibling;
+      const nowOpen = details.classList.toggle('hidden') === false;
+      row.setAttribute('aria-expanded', String(nowOpen));
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
 
   // Keys are censored by default (someone glancing at a screen share
   // shouldn't see everyone's access keys) - click to reveal/hide. Every
@@ -521,10 +565,17 @@ function renderUsersList(users) {
         if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
         if (e.key === 'Escape') { settled = true; loadUsers(); }
       });
+      // Same bubbling issue as the span it replaced - typing/clicking into
+      // the input would otherwise also toggle the row shut mid-edit.
+      input.addEventListener('click', (e) => e.stopPropagation());
     };
-    b.addEventListener('click', startEdit);
+    // Both stop propagation - without it, clicking the name to rename (or
+    // just tabbing/space-ing into it) also bubbles up to the row's own
+    // expand/collapse toggle, since the name sits inside that same
+    // clickable row header.
+    b.addEventListener('click', (e) => { e.stopPropagation(); startEdit(); });
     b.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); startEdit(); }
     });
   });
 
@@ -961,6 +1012,16 @@ async function loadVotes() {
       results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
+  // The runoff button only makes sense once voting's closed, there's
+  // already a runoff going and it also closed (tie could recur), and the
+  // top spot is a genuine tie (0-0 across the board doesn't count - that's
+  // just nobody having voted yet, not a real tie to break).
+  const status = votingStateCache[currentNight()]?.status;
+  const isTie = results.length >= 2 && results[0].votes > 0 && results[0].votes === results[1].votes;
+  $('voting-runoff-btn').classList.toggle('hidden', !(status === 'closed' && isTie));
+
+  renderCongenialityAdmin();
+
   $('voter-log-card').classList.toggle('hidden', !votes);
   if (votes) {
     $('voter-log-table').innerHTML = votes.length
@@ -969,6 +1030,98 @@ async function loadVotes() {
       : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
   }
 }
+
+/* --------------------------- Miss Congeniality ---------------------------- */
+// Same control shape as the outfit vote above - one advancing button that
+// relabels itself through the phases, plus a reset - rather than three
+// separate phase buttons. Reads from the same votingStateCache, which
+// GET /admin/voting fills with this round's phase and live standings.
+
+// closed -> open -> revealed. "closed" is both the start state and the
+// mid-state (voting shut, winner not out yet), so the label depends on
+// whether any vote has actually been cast.
+function congenialityAdvance(status, hasVotes) {
+  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close' };
+  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal' };
+  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open' };
+  return null; // revealed - nowhere left to go
+}
+
+function renderCongenialityAdmin() {
+  const state = votingStateCache[currentNight()];
+  const status = state?.congenialityStatus ?? 'closed';
+  const results = state?.congenialityResults ?? [];
+  const hasVotes = results.some((r) => r.votes > 0);
+
+  const label = $('congeniality-state');
+  label.textContent = t(`congeniality_state_${status}`);
+  label.classList.toggle('is-open', status === 'open');
+  label.classList.toggle('is-closed', status !== 'open');
+
+  const btn = $('congeniality-advance-btn');
+  const next = congenialityAdvance(status, hasVotes);
+  btn.textContent = next ? t(next.label) : t('congeniality_state_revealed');
+  btn.dataset.action = next ? next.action : '';
+  btn.dataset.confirm = next ? next.confirm : '';
+  btn.disabled = !next;
+
+  $('congeniality-table').innerHTML = results.length
+    ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
+      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+}
+
+$('congeniality-advance-btn').addEventListener('click', async () => {
+  const btn = $('congeniality-advance-btn');
+  const action = btn.dataset.action;
+  if (!action) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  // Same reasoning as the outfit vote's own confirms: every one of these
+  // changes what the whole party sees at once, and revealing can't be undone.
+  if (!(await showConfirm(t(btn.dataset.confirm)))) return;
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality`, { method: 'POST', body: { status: action } });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
+$('congeniality-reset-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_congeniality_reset')))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality/reset`, { method: 'POST' });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
+// One post carrying the whole night: every revealed tier with photos and
+// medals, and the congeniality winner underneath (see createPodiumPost()).
+$('publish-podium-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_publish_podium')))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/publish-podium`, { method: 'POST' });
+    msg.textContent = t('publish_podium_done');
+    setTimeout(() => { if (msg.textContent === t('publish_podium_done')) msg.textContent = ''; }, 4000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
 
 /* ------------------------------ Rata Game -------------------------------- */
 
@@ -1208,6 +1361,34 @@ $('plaza-add-option-btn').addEventListener('click', () => {
   $('plaza-add-option-btn').before(input);
 });
 
+const PLAZA_ADMIN_LABEL = {
+  poll: 'plaza_type_poll',
+  announcement: 'plaza_type_announcement',
+  podium: 'plaza_type_podium',
+};
+const PLAZA_ADMIN_BADGE = {
+  poll: ' type-poll',
+  announcement: ' type-announcement',
+  podium: ' type-podium',
+};
+
+// A published result's text is a JSON snapshot (see createPodiumPost() in
+// plaza.js), not prose - printing it raw here dumped the whole object into
+// the history list. Rendered as the placings it actually represents.
+function adminPodiumSummary(p) {
+  let snap;
+  try { snap = JSON.parse(p.text); } catch { return ''; }
+  const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const rows = (snap.podium ?? [])
+    .map((r) => `<li><span>${medal[r.rank] ?? ''} ${esc(r.name)}</span> <strong>${r.votes}</strong></li>`)
+    .join('');
+  const cong = snap.congeniality
+    ? `<li><span>👑 ${esc(snap.congeniality.name)}</span> <strong>${snap.congeniality.votes}</strong></li>`
+    : '';
+  return `<p class="muted" style="margin:8px 0 0">${esc(t(`theme_${snap.night}`))}</p>
+    <ul class="admin-post-options">${rows}${cong}</ul>`;
+}
+
 async function loadPlazaPosts() {
   const { posts } = await api('/admin/plaza-posts');
   $('plaza-posts-list').innerHTML = posts.length
@@ -1215,17 +1396,17 @@ async function loadPlazaPosts() {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="badge${p.type === 'poll' ? ' type-poll' : ' type-announcement'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
+            <span class="badge${PLAZA_ADMIN_BADGE[p.type] ?? ' type-announcement'}">${t(PLAZA_ADMIN_LABEL[p.type] ?? 'plaza_type_announcement')}</span>
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0">${linkify(esc(p.text))}</p>
+        ${p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
         ${p.type === 'poll' ? `
-        <ul class="muted" style="margin:8px 0 0;padding-left:0;list-style:none">
+        <ul class="admin-post-options">
           ${p.options.map((o) => {
             const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
-            return `<li>${esc(o.label)} - ${o.votes}${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
+            return `<li><span>${esc(o.label)}</span> <strong>${o.votes}</strong>${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
           }).join('')}
         </ul>` : ''}
         <div class="row-actions">
@@ -1284,21 +1465,151 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------------------------------- Memo ---------------------------------- */
+
+async function loadMemoDays() {
+  try {
+    const { days } = await api('/admin/memo/days');
+    $('memo-days-list').innerHTML = days.length
+      ? days.map((d) => `
+        <div class="user-row">
+          <div class="user-row-top">
+            <div class="user-row-name">${esc(formatEuDate(d.day))}</div>
+          </div>
+          <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
+          <div class="row-actions">
+            <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
+            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
+            ${d.hasRecap ? `<button type="button" class="small ghost" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
+          </div>
+          <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
+        </div>`).join('')
+      : `<p class="muted">${t('memo_admin_no_days')}</p>`;
+  } catch { /* transient network hiccup */ }
+}
+
+// Delegated (days list is fully rebuilt on every load) - same
+// fetch-blob-and-download pattern as download-photos-btn above, and the
+// same hidden-file-input-behind-a-button pattern as the guest checklist
+// in app.js, just per-day instead of per-slot.
+async function downloadMemoFile(url, filename, msg, doneKey) {
+  msg.classList.remove('error');
+  msg.textContent = t('download_photos_in_progress');
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    const blobUrl = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+    msg.textContent = t(doneKey);
+    setTimeout(() => { if (msg.textContent === t(doneKey)) msg.textContent = ''; }, 3000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+}
+
+$('memo-days-list').addEventListener('click', async (e) => {
+  const dayMsg = (day) => $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+
+  const dlBtn = e.target.closest('[data-memo-download-day]');
+  if (dlBtn) {
+    const day = dlBtn.dataset.memoDownloadDay;
+    await downloadMemoFile(
+      `/api/admin/memo/${encodeURIComponent(day)}/uploads.zip`,
+      `memo-${day}.zip`, dayMsg(day), 'download_photos_done'
+    );
+    return;
+  }
+
+  const videoBtn = e.target.closest('[data-memo-download-video]');
+  if (videoBtn) {
+    const day = videoBtn.dataset.memoDownloadVideo;
+    await downloadMemoFile(
+      `/api/memo/recaps/${encodeURIComponent(day)}`,
+      `memo-${day}.mp4`, dayMsg(day), 'download_photos_done'
+    );
+    return;
+  }
+
+  // Generating the video and publishing it are the same action - the Wall
+  // player reads whatever is stored as that day's recap (see loadWallVideo()
+  // in app.js), so there's nothing to "publish" separately afterwards.
+  const pubBtn = e.target.closest('[data-memo-publish-day]');
+  if (pubBtn) {
+    const day = pubBtn.dataset.memoPublishDay;
+    const msg = dayMsg(day);
+    msg.classList.remove('error');
+    // Stitching a full day of photos is not instant - say so, and stop a
+    // second click from kicking off a duplicate encode.
+    msg.textContent = t('memo_admin_publishing');
+    pubBtn.disabled = true;
+    try {
+      const r = await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      // Reload first, then write the message: the reload rebuilds every row
+      // (that's what makes the download-video button appear), so setting the
+      // text before it would just be thrown away with the old element.
+      await loadMemoDays();
+      const fresh = dayMsg(day);
+      if (fresh) fresh.textContent = t('memo_admin_published', { n: r.photoCount });
+    } catch (err) {
+      msg.classList.add('error');
+      msg.textContent = err.message;
+    } finally {
+      pubBtn.disabled = false;
+    }
+  }
+});
+
+wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
+
+// Owner-only (card hidden otherwise, see boot()). Confirmed first because
+// it notifies every guest at once - the same reason the voting phase
+// buttons confirm.
+$('memo-trigger-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_memo_trigger')))) return;
+  const msg = $('memo-trigger-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api('/admin/memo/trigger-next', { method: 'POST' });
+    msg.textContent = t('memo_trigger_done');
+    loadMemoDays();
+    setTimeout(() => { if (msg.textContent === t('memo_trigger_done')) msg.textContent = ''; }, 4000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
 /* --------------------------------- Tabs ---------------------------------- */
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['plaza', 'outfit', 'rata', 'wall', 'settings'].forEach((name) => {
+  ['settings', 'plaza', 'wall', 'memo', 'rata', 'outfit'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
+  if (tab === 'memo' && isAdmin) loadMemoDays();
 }
 
 document.querySelectorAll('#admin-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => selectAdminTab(btn.dataset.atab));
 });
+
+// The star's whole point is being easy to miss - clicking straight into
+// the tab it unlocks rather than first unhiding the nav button it replaced.
+$('wall-secret-btn').addEventListener('click', () => selectAdminTab('wall'));
 
 // The top-left logo used to do nothing here - now it's "go home", same as
 // clicking a site's logo anywhere else: back to the landing admin tab from

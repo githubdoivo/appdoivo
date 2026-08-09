@@ -16,6 +16,15 @@ function foldAccents(s) {
  * auth.js, which stamps key_claimed_at on first successful auth). Below
  * 3 characters returns nothing, same floor as the admin search, so a
  * single keystroke can't fish for the whole unclaimed roster.
+ *
+ * SECURITY NOTE: the owner is included here, by request, rather than being
+ * pre-claimed as they used to be. This endpoint is public and does no
+ * identity check beyond matching a name, so until the owner's key is
+ * actually claimed, whoever claims it first gets full admin over every
+ * account and key. Claiming is one-shot and closes permanently, so the
+ * exposure is the gap between deploying a fresh database and the owner
+ * claiming - claim it immediately after any deploy that reseeds (QA does
+ * on every deploy; prod's volume persists, so it's a one-time window).
  */
 export function searchUnclaimedUsers(name) {
   const term = String(name || '').trim();

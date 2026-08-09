@@ -17,8 +17,11 @@ process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
+process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
+const { default: db } = await import('../src/db.js');
+const { MEMO_DIR } = await import('../src/memo.js');
 
 // The admin's real key is always generated (see seed() in db.js - no more
 // ADMIN_TOKEN pinning it, even outside production), so this reads the
@@ -56,6 +59,7 @@ after(async () => {
   for (const ext of ['', '-wal', '-shm']) {
     try { rmSync(DB + ext); } catch { /* ignore */ }
   }
+  try { rmSync(MEMO_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 async function api(method, path, { token, body } = {}) {
@@ -108,7 +112,7 @@ for (const deviceName of IOS_DEVICES) {
     await context.close();
   });
 
-  test(`main app (plaza + rata + best look + chat tabs) has no horizontal overflow on ${deviceName}`, async () => {
+  test(`main app (plaza + rata + best look + chat + memo tabs) has no horizontal overflow on ${deviceName}`, async () => {
     const context = await iphoneContext(deviceName);
     const page = await loginPage(context, ADMIN, '/');
     const plazaOverflow = await horizontalOverflow(page);
@@ -128,6 +132,11 @@ for (const deviceName of IOS_DEVICES) {
     await page.waitForTimeout(150);
     const chatOverflow = await horizontalOverflow(page);
     assert.ok(chatOverflow <= 1, `"chat" tab overflows by ${chatOverflow}px on ${deviceName}`);
+
+    await page.click('[data-tab="memo"]');
+    await page.waitForTimeout(150);
+    const memoOverflow = await horizontalOverflow(page);
+    assert.ok(memoOverflow <= 1, `"memo" tab overflows by ${memoOverflow}px on ${deviceName}`);
     await context.close();
   });
 
@@ -480,13 +489,16 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
 
 /* --------------- Manage Users key layout (regression) --------------- */
 
-test('Manage Users row keeps the access key visible with no overflow', async () => {
+test('Manage Users row keeps the access key visible with no overflow, once expanded', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
+  // Rows are collapsed to just name+role by default (see renderUsersList()
+  // in settings.js) - the key only renders once its row is expanded.
+  await page.click('#users-list [data-row-toggle]');
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
-  assert.ok(tokenVisible, 'access key is not visible in the user row');
+  assert.ok(tokenVisible, 'access key is not visible in the expanded user row');
 
   const overflow = await horizontalOverflow(page);
   assert.ok(overflow <= 1, `Manage Users overflows by ${overflow}px with the key inline`);
@@ -505,6 +517,9 @@ test('access keys are censored by default, reveal on click, and copy automatical
     navigator.clipboard.writeText = (text) => { window.__copied = text; return Promise.resolve(); };
   });
 
+  // Rows are collapsed to just name+role by default - expand it first, the
+  // key itself lives in the hidden details section until then.
+  await page.click('#users-list [data-row-toggle]');
   const tokenEl = await page.$('.user-row-token');
   const realToken = await tokenEl.getAttribute('data-token');
   const shownBefore = await tokenEl.textContent();
@@ -580,10 +595,13 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   assert.ok(usersManagementHidden, 'non-owner admin should not see Manage Users at all - it would just duplicate the account card');
 
   // The Plaza (pseudonym-unmasking) admin tab - internal id "wall", see
-  // tab_chat in i18n.js - was opened up to admins temporarily for testing;
-  // it's owner-only again now, whole tab hidden.
+  // tab_chat in i18n.js - isn't a normal tab bar entry for anyone anymore,
+  // owner included (see the star trigger below); a non-owner admin
+  // shouldn't even get the star that unlocks it.
   const wallTabHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
-  assert.ok(wallTabHidden, 'non-owner admin should no longer see the Plaza admin tab');
+  assert.ok(wallTabHidden, 'the Plaza admin tab is never a normal nav entry');
+  const secretBtnHiddenForAdmin = await page.$eval('#wall-secret-btn', (el) => el.classList.contains('hidden'));
+  assert.ok(secretBtnHiddenForAdmin, 'a non-owner admin should not see the star that unlocks the Plaza admin tab');
 
   const plazaTabHidden = await page.$eval('[data-atab="plaza"]', (el) => el.classList.contains('hidden'));
   assert.ok(!plazaTabHidden, 'non-owner admin can also post to the Wall now');
@@ -607,6 +625,21 @@ test('a non-owner admin gets voting control, reveal-consequence, and a self-only
   await context.close();
   await api('PATCH', `/admin/users/${promoted.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
   await api('DELETE', `/admin/users/${promoted.id}`, { token: ADMIN });
+});
+
+test('the owner sees the near-invisible star on the Memo admin tab, and it opens the Plaza admin tab', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  await page.click('[data-atab="memo"]');
+  await page.waitForSelector('#wall-secret-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#wall-secret-btn');
+  await page.waitForSelector('#atab-wall:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const wallTabStillHidden = await page.$eval('[data-atab="wall"]', (el) => el.classList.contains('hidden'));
+  assert.ok(wallTabStillHidden, 'the nav button stays hidden even once the panel it opens is showing - the star is the only way in');
+
+  await context.close();
 });
 
 test('a plain (non-admin) user only sees the Settings tab on /settings.html', async () => {
@@ -888,9 +921,10 @@ test('first-session tutorial shows once, steps through, then never shows again',
   const skipHidden = await page.$eval('#tutorial-skip', (el) => el.classList.contains('hidden'));
   assert.ok(skipHidden, 'a regular user should not see a tutorial skip button');
 
-  // Step through every step via "next" (8 total steps, so 7 clicks to
-  // reach the last one; the final "finish" click happens after the loop).
-  for (let i = 0; i < 7; i++) {
+  // Step through every step via "next" (9 total steps with Memo enabled -
+  // see tutorialSteps() in app.js - so 8 clicks to reach the last one; the
+  // final "finish" click happens after the loop).
+  for (let i = 0; i < 8; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);
@@ -1182,6 +1216,47 @@ test('the admin voting-advance button always confirms first - a misclick decline
   await context.close();
 });
 
+test('a tie for first place shows a "Desempate" button, and running it reopens voting scoped to just the tied contestants', async () => {
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'UI Runoff A', night } });
+  const b = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'UI Runoff B', night } });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const v1 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'UI Runoff Voter 1' } });
+  const v2 = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'UI Runoff Voter 2' } });
+  await api('POST', '/votes', { token: v1.token, body: { contestantId: a.id, night } });
+  await api('POST', '/votes', { token: v2.token, body: { contestantId: b.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.click('[data-night="swamp"]');
+  await page.waitForSelector('#voting-runoff-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#voting-runoff-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:not(.ghost)');
+  await page.waitForFunction(
+    () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  // A guest sees "it's a tie - vote again" and only the two tied names, not
+  // whatever else might be registered for this night.
+  const guestPage = await loginPage(context, v1.token, '/?night=swamp');
+  await guestPage.click('[data-tab="outfit"]');
+  await guestPage.waitForFunction(
+    () => document.getElementById('voting-status')?.textContent.length > 0,
+    { timeout: WAIT_TIMEOUT }
+  );
+  const statusText = await guestPage.textContent('#voting-status');
+  assert.match(statusText, /tie|empate/i, 'a guest should see runoff-specific status text, not the normal "voting is open" line');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
 test('the admin download-photos button shows progress, triggers a real download, and reports errors inline', async () => {
   const night = 'swamp';
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -1225,4 +1300,120 @@ test('the admin download-photos button shows progress, triggers a real download,
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();
+});
+
+/* ---------------------------------- Memo ----------------------------------- */
+// 5x/day, at a random independent time per user, a slot opens for 15
+// minutes to upload a photo/video. The scheduler cron isn't running in
+// this test process (only app.js, not server.js) - slots are forced open
+// the same way api.test.js does, with a direct DB write.
+
+function markMemoSlotNotified(slotId, when = new Date()) {
+  const ts = when.toISOString().replace('T', ' ').replace('Z', '');
+  db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
+}
+
+test('Memo: a guest can shoot an open moment, it shows in the shared feed, another guest can react, and the owner publishes its video to the Wall', async () => {
+  const { MEMO_REACTION_EMOJI } = await import('../src/memo.js');
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Tester' } });
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Bystander' } });
+  const today = await api('GET', '/memo/today', { token: user.token });
+  const slot = today.slots[0];
+  markMemoSlotNotified(slot.id);
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="memo"]');
+  await page.waitForSelector('#memo-dots', { timeout: WAIT_TIMEOUT });
+
+  await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+  await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  // The dot swaps from open to uploaded once the upload lands (see
+  // renderMemoDots() in app.js) - waiting for the class change beats a
+  // fixed sleep.
+  await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
+
+  // It shows up in today's shared feed for everyone, not just the uploader.
+  await page.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
+  const uploadId = await page.getAttribute('[data-memo-react]', 'data-memo-react');
+
+  // Regression: the reaction row rendered one button per entry in the
+  // client's own emoji list, and that list was left at four after the
+  // server's was cut to two - so two buttons shipped completely blank, and
+  // tapping either was rejected by the API. Asserting the count alone
+  // wouldn't have caught a *renamed* emoji, so this also checks every
+  // button actually drew an icon.
+  const reactionButtons = await page.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
+    els.map((el) => ({ emoji: el.dataset.emoji, svgPaths: el.querySelectorAll('svg path').length }))
+  );
+  assert.equal(reactionButtons.length, MEMO_REACTION_EMOJI.length, 'one button per server-accepted reaction, no more');
+  assert.deepEqual(reactionButtons.map((b) => b.emoji), MEMO_REACTION_EMOJI);
+  for (const b of reactionButtons) {
+    assert.ok(b.svgPaths > 0, `the "${b.emoji}" reaction button rendered without an icon`);
+  }
+
+  const bystanderPage = await loginPage(context, bystander.token);
+  await bystanderPage.click('[data-tab="memo"]');
+  await bystanderPage.waitForSelector(`[data-memo-react="${uploadId}"]`, { timeout: WAIT_TIMEOUT });
+  await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="💦"]`);
+  await bystanderPage.waitForFunction(
+    (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="💦"]`)?.textContent.includes('1'),
+    uploadId,
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  const adminPage = await loginPage(context, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="memo"]');
+  await adminPage.waitForSelector('#memo-days-list', { timeout: WAIT_TIMEOUT });
+  await adminPage.waitForFunction(
+    () => /\d\/\d/.test(document.getElementById('memo-days-list')?.textContent || ''),
+    { timeout: WAIT_TIMEOUT }
+  );
+  const [download] = await Promise.all([
+    adminPage.waitForEvent('download'),
+    adminPage.click('[data-memo-download-day]'),
+  ]);
+  assert.ok(download.suggestedFilename().endsWith('.zip'));
+
+  // Publishing is a single button on Memo's own admin tab now: the server
+  // stitches the day's photos into an mp4 (1s each, see buildDayRecapVideo()
+  // in memo.js) and stores it as that day's recap, which *is* what the Wall
+  // player reads - so there's no separate publish step and no file to pick.
+  await adminPage.click('[data-memo-publish-day]');
+  await adminPage.waitForFunction(
+    () => /\d/.test(document.querySelector('[data-memo-day-msg]')?.textContent || ''),
+    { timeout: WAIT_TIMEOUT }
+  );
+  // The download-video button only exists once that day actually has one.
+  await adminPage.waitForSelector('[data-memo-download-video]', { timeout: WAIT_TIMEOUT });
+  const [videoDownload] = await Promise.all([
+    adminPage.waitForEvent('download'),
+    adminPage.click('[data-memo-download-video]'),
+  ]);
+  assert.ok(videoDownload.suggestedFilename().endsWith('.mp4'));
+
+  // Any logged-in guest (not just the uploader/admin) sees it on the Wall.
+  await page.click('[data-tab="plaza"]');
+  await page.waitForFunction(
+    () => !document.getElementById('wall-video-card')?.classList.contains('hidden')
+      && document.getElementById('wall-video-list')?.querySelector('video'),
+    { timeout: WAIT_TIMEOUT }
+  );
+
+  await api('POST', '/admin/memo/wipe', { token: ADMIN });
+  await context.close();
+});
+
+test('Memo is gated behind ENABLE_MEMO - hidden from the tab bar and the admin panel when disabled', async () => {
+  process.env.ENABLE_MEMO = 'false';
+  try {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/');
+    assert.equal(await page.isVisible('[data-tab="memo"]'), false);
+    const adminPage = await loginPage(context, ADMIN, '/settings.html');
+    assert.equal(await adminPage.isVisible('[data-atab="memo"]'), false);
+    await context.close();
+  } finally {
+    process.env.ENABLE_MEMO = 'true';
+  }
 });

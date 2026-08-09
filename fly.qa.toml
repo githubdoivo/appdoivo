@@ -27,13 +27,27 @@ primary_region = "cdg"
   # fly.toml). Kept here for parity so QA never drifts from what prod
   # actually runs. See routes.js's Plaza section.
   ENABLE_PLAZA = "true"
+  # QA-only until tested end-to-end on a real phone and approved (see the
+  # Memo feature plan) - not set in fly.toml, so prod stays unaffected.
+  # QA has no persistent volume (see header above), so uploaded photos/
+  # videos live in the same ephemeral container filesystem as the DB and
+  # reset on every deploy - exactly like QA's DB already does, no extra
+  # volume needed for QA testing.
+  ENABLE_MEMO = "true"
 
 [http_service]
   internal_port = 3000
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  # Temporarily 1 instead of the usual 0 (see header) while Memo is being
+  # tested: scaling to zero between requests means the per-minute cron that
+  # fires Memo's random slots can't run while asleep, so every slot that
+  # came due during a nap fires all at once on the next wake-up - looks
+  # like several "moments" opening simultaneously, when really they're just
+  # queued. Same fix fly.toml already uses for Rata's 3h reveal in prod.
+  # Revert to 0 once Memo testing wraps up.
+  min_machines_running = 1
 
 [[vm]]
   size = "shared-cpu-1x"

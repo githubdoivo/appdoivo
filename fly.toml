@@ -31,10 +31,6 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   DB_FILE = "/data/app.sqlite"
-  # Not set anywhere else (QA included) - gates the owner's dev/test-only
-  # login shortcuts (see /auth/login and seed() in src/db.js): the "mossy"
-  # quick-login and an ADMIN_TOKEN-pinned owner key both only ever work
-  # when this is unset/non-production, never here.
   NODE_ENV = "production"
   # Lets the owner promote/revoke other real users to admin ("tester")
   # in production. The golden rule (only the owner sees access keys) is

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { rmSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import yauzl from 'yauzl';
 
 // Isolated test environment: temporary DB. The admin's real key is always
@@ -11,12 +11,23 @@ import yauzl from 'yauzl';
 // outside production), so ADMIN below reads the actual generated value
 // off seedResult rather than assuming a fixed string.
 const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
+// Memo's slots are a shared/global schedule now, not per-user - whichever
+// test in this file happens to be the first to call /memo/today is the one
+// that actually triggers generation, not necessarily the "5 daily slots"
+// test itself. Anchoring the no-past-scheduling check to this run's start
+// (not a timestamp captured locally inside that one test) is what the
+// invariant actually means regardless of test order.
+const TEST_RUN_STARTED_AT = Date.now();
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
+process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
+const { default: db } = await import('../src/db.js');
+const { MEMO_DIR, MEMO_MIN_GAP_MINUTES } = await import('../src/memo.js');
+const { today } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
 let server;
@@ -36,6 +47,9 @@ after(() => {
   for (const ext of ['', '-wal', '-shm']) {
     try { rmSync(DB + ext); } catch { /* ignore */ }
   }
+  // MEMO_DIR sits next to DB_FILE (see memo.js) - same temp-file lifecycle,
+  // cleaned up the same way.
+  try { rmSync(MEMO_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 async function api(method, path, { token, body } = {}) {
@@ -60,6 +74,23 @@ async function apiBuffer(path, { token } = {}) {
   });
   const buffer = Buffer.from(await res.arrayBuffer());
   return { status: res.status, headers: res.headers, buffer };
+}
+
+/** Multipart/form-data upload (Memo) - the outfit-photo tests above all go
+ * through base64-in-JSON instead, but that's a 2mb request-body cap (see
+ * express.json() in app.js), nowhere near enough for Memo's original-size
+ * uploads, so this is a real multipart request instead. */
+async function apiUpload(path, { token, buffer, filename, mimeType, method = 'POST' } = {}) {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: mimeType }), filename);
+  const res = await fetch(base + path, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* no body */ }
+  return { status: res.status, data, headers: res.headers };
 }
 
 /** Unpacks every entry in a zip buffer to { filename, contents } pairs. */
@@ -120,6 +151,27 @@ test('login accepts the admin', async () => {
   assert.equal(r.data.isAdmin, true);
 });
 
+// Regression: there used to be a "mossy" magic token that resolved to the
+// owner account. It was originally gated by NODE_ENV!=='production' alone
+// and was confirmed live on prod on 2026-08-08 despite fly.toml setting
+// NODE_ENV=production, letting anyone who read this repo's own docs log in
+// with full owner rights. It was then re-gated behind ENABLE_DEV_LOGIN and
+// has now been removed outright. This test locks that removal in: no env
+// var, in any environment, may bring it back.
+test('there is no magic dev token - "mossy" is rejected like any other wrong key, whatever the environment says', async () => {
+  const plain = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+  assert.equal(plain.status, 401);
+
+  // Even with the old escape hatch explicitly switched on.
+  process.env.ENABLE_DEV_LOGIN = 'true';
+  try {
+    const withOldFlag = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+    assert.equal(withOldFlag.status, 401, 'the removed dev-login flag must have no effect at all');
+  } finally {
+    delete process.env.ENABLE_DEV_LOGIN;
+  }
+});
+
 /* ----------------------------- Permissions ------------------------------- */
 
 test('admin creates a user', async () => {
@@ -169,9 +221,39 @@ test('logging in for real also closes the first-time key retrieval, even without
   await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
 });
 
-test('the owner is never searchable via first-time key retrieval', async () => {
-  const r = await api('GET', '/auth/unclaimed-users?name=test');
-  assert.ok(!r.data.users.some((u) => u.name === 'Test Admin'), 'the owner already has their key from setup');
+// The owner used to be excluded from this flow on purpose (pre-claimed at
+// seed time). That was reversed by request so the owner can retrieve their
+// own key the same way a guest does - see the security note on
+// searchUnclaimedUsers(). Exercised against keyClaim.js directly rather
+// than over HTTP: claiming shares the per-IP auth-attempt budget with
+// /auth/login (see rateLimit.js), and spending two of it here tipped a
+// later test expecting a plain 401 into a 429. The HTTP wiring itself is
+// already covered by the brand-new-user test above.
+test('the owner is searchable in the first-time key flow like anyone else, and claiming is still one-shot', async () => {
+  const { default: db } = await import('../src/db.js');
+  const { searchUnclaimedUsers, claimKey } = await import('../src/keyClaim.js');
+  const owner = db.prepare('SELECT id, name FROM users WHERE is_owner = 1').get();
+  // Already claimed by now (every earlier test authenticates as ADMIN, and
+  // authenticate() stamps key_claimed_at on first use) - clear it to get a
+  // freshly-seeded owner back.
+  db.prepare('UPDATE users SET key_claimed_at = NULL WHERE id = ?').run(owner.id);
+
+  try {
+    assert.ok(
+      searchUnclaimedUsers('test').some((u) => u.id === owner.id),
+      'the owner must not be filtered out of the search'
+    );
+
+    const claimed = claimKey(owner.id);
+    assert.equal(claimed.ok, true);
+    assert.equal(claimed.name, owner.name);
+    assert.ok(claimed.token, 'the flow hands back the real key');
+
+    assert.equal(claimKey(owner.id).error, 'err_key_already_claimed', 'claiming closes permanently, owner included');
+    assert.ok(!searchUnclaimedUsers('test').some((u) => u.id === owner.id), 'and they drop out of the search');
+  } finally {
+    db.prepare("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(owner.id);
+  }
 });
 
 test('a normal user cannot access the admin panel', async () => {
@@ -636,6 +718,165 @@ test('reset-all clears votes AND contestants, back to a never-started night', as
   assert.equal(night.started, false, 'reset-all should return the night to its never-started state');
 });
 
+test('a tie for first place can be broken with a runoff scoped to just the tied contestants', async () => {
+  await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff A', night: NIGHT } });
+  const b = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff B', night: NIGHT } });
+  const c = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff C', night: NIGHT } });
+
+  await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
+
+  const voters = [];
+  for (let i = 0; i < 5; i++) {
+    voters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Runoff Voter ${i}` } })).data.token);
+  }
+  // A and B tied at 2 votes each, C behind at 1.
+  await api('POST', '/votes', { token: voters[0], body: { contestantId: a.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[1], body: { contestantId: a.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[2], body: { contestantId: b.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[3], body: { contestantId: b.data.id, night: NIGHT } });
+  await api('POST', '/votes', { token: voters[4], body: { contestantId: c.data.id, night: NIGHT } });
+
+  const beforeClose = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(beforeClose.status, 409);
+  assert.equal(beforeClose.data.error, 'err_voting_not_closed', 'a tie can only be judged once voting is closed');
+
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+
+  const noTieYet = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(noTieYet.data.results[0].votes, noTieYet.data.results[1].votes, 'test setup: A and B should be tied at the top');
+
+  const runoff = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(runoff.status, 200);
+  assert.equal(runoff.data.votingStatus, 'open');
+  assert.deepEqual(new Set(runoff.data.contestantIds), new Set([a.data.id, b.data.id]));
+
+  const again = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(again.status, 409);
+  assert.equal(again.data.error, 'err_voting_not_closed', 'a runoff itself has to be voting-open, not still closed, to start another one');
+
+  // C lost the first round - no longer votable, even though voting reopened.
+  const status = await api('GET', `/votes/status?night=${NIGHT}`, { token: voters[0] });
+  assert.equal(status.data.runoffActive, true);
+  assert.deepEqual(new Set(status.data.contestants.map((x) => x.id)), new Set([a.data.id, b.data.id]));
+
+  const rejectedC = await api('POST', '/votes', { token: voters[4], body: { contestantId: c.data.id, night: NIGHT } });
+  assert.equal(rejectedC.status, 400);
+  assert.equal(rejectedC.data.error, 'err_not_in_runoff');
+
+  const okA = await api('POST', '/votes', { token: voters[4], body: { contestantId: a.data.id, night: NIGHT } });
+  assert.equal(okA.status, 201, 'voting for a tied contestant during the runoff should still work');
+
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+  const runoffResults = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
+  assert.equal(runoffResults.data.results.length, 2, 'runoff results should only include the tied contestants, not C');
+
+  const resetAgain = await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  assert.equal(resetAgain.status, 200);
+  assert.equal(resetAgain.data.votingStatus, 'closed', 'reset-all already leaves the night closed - no need to close it again');
+  const noTieResult = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  assert.equal(noTieResult.status, 409);
+  assert.equal(noTieResult.data.error, 'err_no_tie', 'reset-all should have cleared the runoff, and there are no contestants left to tie');
+});
+
+test('Miss Congeniality is a separate per-person round: duos split up, self-votes are refused, and the winner only appears once revealed', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const ana = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Ana' } });
+  const bea = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Bea' } });
+  const caio = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Caio' } });
+
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', '/admin/contestants/register', { token: ADMIN, body: { night, name: 'Cong Solo', userId: ana.data.id } });
+  // One duo entry - it must contribute its two people separately here, even
+  // though the outfit vote treats it as a single entry.
+  await api('POST', '/admin/contestants/register', { token: ADMIN, body: { night, name: 'Cong Duo', userId: bea.data.id, partnerUserId: caio.data.id } });
+
+  const closed = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: bea.data.id } });
+  assert.equal(closed.status, 400);
+  assert.equal(closed.data.error, 'err_congeniality_not_open', 'the round starts closed - nobody votes before the admin opens it');
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+
+  const status = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.deepEqual(
+    new Set(status.data.congeniality.candidates.map((c) => c.id)),
+    new Set([ana.data.id, bea.data.id, caio.data.id]),
+    'the duo should appear as its two individuals, alongside the solo entrant'
+  );
+
+  const own = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: ana.data.id } });
+  assert.equal(own.data.error, 'err_cannot_vote_self');
+
+  const outsider = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Outsider' } });
+  const notRunning = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: outsider.data.id } });
+  assert.equal(notRunning.data.error, 'err_not_a_candidate');
+
+  assert.equal((await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
+  assert.equal((await api('POST', '/congeniality/vote', { token: caio.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
+  const twice = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: caio.data.id } });
+  assert.equal(twice.data.error, 'err_already_voted', 'one vote each, no changing it');
+
+  const beforeReveal = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(beforeReveal.data.congeniality.winner, null, 'a guest must not see the winner before the reveal');
+  assert.equal(beforeReveal.data.congeniality.myVote, bea.data.id);
+
+  // An admin, by contrast, can watch the standings the whole way through.
+  const adminView = await api('GET', '/admin/voting', { token: ADMIN });
+  const nightRow = adminView.data.nights.find((n) => n.night === night);
+  assert.equal(nightRow.congenialityStatus, 'open');
+  assert.equal(nightRow.congenialityResults[0].votes, 2);
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+  const revealed = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(revealed.data.congeniality.winner.id, bea.data.id);
+  assert.equal(revealed.data.congeniality.winner.votes, 2);
+
+  // Restarting the night's round has to take the congeniality result with
+  // it - a revealed winner attached to votes that no longer exist would be
+  // a lie the Wall could still be showing.
+  await api('POST', `/admin/voting/${night}/reset`, { token: ADMIN });
+  const afterReset = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(afterReset.data.congeniality.status, 'closed');
+  assert.equal(afterReset.data.congeniality.winner, null);
+});
+
+test('publishing a Snatch result to the Wall needs the podium revealed first, and snapshots it so a later reset cannot rewrite it', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Podium A', night } });
+  await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Podium B', night } });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const voter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Podium Voter' } });
+  await api('POST', '/votes', { token: voter.data.token, body: { contestantId: a.data.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  const tooEarly = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(tooEarly.status, 400);
+  assert.equal(tooEarly.data.error, 'err_results_not_revealed', 'publishing before the reveal would spoil the countdown');
+
+  // hidden -> third -> second -> first
+  for (let i = 0; i < 3; i++) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+
+  const published = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(published.status, 201);
+
+  const feed = await api('GET', '/plaza-posts', { token: voter.data.token });
+  const post = feed.data.posts.find((p) => p.type === 'podium');
+  assert.ok(post, 'the podium post should be readable by any guest on the Wall');
+  const snapshot = JSON.parse(post.text);
+  assert.equal(snapshot.night, night);
+  assert.equal(snapshot.podium[0].name, 'Podium A');
+  assert.equal(snapshot.podium[0].votes, 1);
+  assert.equal(snapshot.podium[0].rank, 1);
+
+  // Wiping the night must leave the already-published post untouched.
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const afterWipe = await api('GET', '/plaza-posts', { token: voter.data.token });
+  const stillThere = afterWipe.data.posts.find((p) => p.type === 'podium');
+  assert.equal(JSON.parse(stillThere.text).podium[0].name, 'Podium A');
+});
+
 test('a solo contestant cannot vote for their own entry', async () => {
   const night = 'swamp'; // wiped clean by the reset-all test above
   const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Solo Voter' } });
@@ -1094,7 +1335,7 @@ test('a non-owner admin can read and change the day-rollover-hour setting', asyn
 
 test('a non-owner admin cannot use any feature wipe switch', async () => {
   await api('PATCH', `/admin/users/${userId}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  for (const path of ['/admin/consequences/wipe', '/admin/contestants/wipe', '/admin/plaza-posts/wipe', '/admin/chat/wipe']) {
+  for (const path of ['/admin/consequences/wipe', '/admin/contestants/wipe', '/admin/plaza-posts/wipe', '/admin/chat/wipe', '/admin/memo/wipe']) {
     const r = await api('POST', path, { token: userToken });
     assert.equal(r.status, 403, `${path} should be owner-only`);
   }
@@ -1439,6 +1680,330 @@ test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', 
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }
+});
+
+/* ---------------------------------- Memo ---------------------------------- */
+// 5x/day, at a random independent time per user, upload a photo/video
+// within 15 minutes of being notified. The scheduler (scheduler.js) is
+// what actually flips a slot from "waiting" to "open" in real use - it's
+// never started in this test file (only app.js's routes are under test,
+// not server.js's cron job), so every slot stays "waiting" until a test
+// deliberately marks it notified via a direct DB write, the same way this
+// suite handles other time-dependent state.
+
+function markSlotNotified(slotId, when = new Date()) {
+  const ts = when.toISOString().replace('T', ' ').replace('Z', '');
+  db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
+}
+
+test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () => {
+  const first = await api('GET', '/memo/today', { token: userToken });
+  assert.equal(first.status, 200);
+  assert.equal(first.data.slots.length, 5);
+  assert.ok(first.data.slots.every((s) => s.status === 'waiting'), 'nothing has been notified yet');
+
+  const second = await api('GET', '/memo/today', { token: userToken });
+  assert.deepEqual(second.data.slots.map((s) => s.id), first.data.slots.map((s) => s.id), 'a second call must not generate new slots for the same day');
+});
+
+test('the 5 daily slots never land close together - each is at least MEMO_MIN_GAP_MINUTES from the next', async () => {
+  const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
+  const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY scheduled_at`).all(...ids);
+  for (let i = 1; i < rows.length; i++) {
+    const gapMinutes = (new Date(`${rows[i].scheduled_at.replace(' ', 'T')}Z`) - new Date(`${rows[i - 1].scheduled_at.replace(' ', 'T')}Z`)) / 60000;
+    assert.ok(gapMinutes >= MEMO_MIN_GAP_MINUTES, `expected at least ${MEMO_MIN_GAP_MINUTES}min between consecutive slots, got ${gapMinutes}`);
+  }
+  // Regression: the window is always "11:00 today" on the calendar, but if
+  // the schedule ends up generated later than that (whoever opens the app
+  // first that day), anchoring purely to 11:00 would place several slots
+  // in the past already, so they'd all fire at once on the next scheduler
+  // tick instead of being spread out. None should ever be scheduled before
+  // this run could possibly have generated them - can't check against a
+  // timestamp taken locally above, since slots are a shared/global
+  // schedule now: whichever test in this file happens to call /memo/today
+  // first is the one that actually triggers generation, not necessarily
+  // this test.
+  for (const row of rows) {
+    const scheduledMs = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`).getTime();
+    assert.ok(scheduledMs >= TEST_RUN_STARTED_AT, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
+  }
+});
+
+// The five dots are read left to right as a progress bar, so the states
+// have to stay monotonic: everything before the open one is settled
+// (done or missed) and everything after it is still waiting. A later slot
+// firing while an earlier one is untouched would be nonsense on screen -
+// "you missed the third but the second hasn't happened yet".
+test("today's slots fire strictly in order, so a later moment can never open before an earlier one", async () => {
+  const { default: db } = await import('../src/db.js');
+  const { ensureTodaysSlots, triggerNextSlot, MEMO_SLOTS_PER_DAY } = await import('../src/memo.js');
+  const { today } = await import('../src/time.js');
+
+  db.prepare('DELETE FROM memo_uploads').run();
+  db.prepare('DELETE FROM memo_slots').run();
+  ensureTodaysSlots();
+
+  const slots = db.prepare('SELECT slot_index, scheduled_at FROM memo_slots WHERE day = ? ORDER BY slot_index').all(today());
+  assert.equal(slots.length, MEMO_SLOTS_PER_DAY);
+  for (let i = 1; i < slots.length; i++) {
+    assert.ok(
+      slots[i].scheduled_at > slots[i - 1].scheduled_at,
+      `slot ${i} is scheduled at or before slot ${i - 1} - the dots would fire out of order`
+    );
+  }
+
+  // The owner's manual trigger must respect the same order, not skip ahead.
+  for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
+    assert.equal(triggerNextSlot().slotIndex, i, 'trigger-next should always open the earliest unfired slot');
+  }
+  assert.equal(triggerNextSlot().error, 'err_memo_no_slots_left');
+
+  // And the notified timestamps came out in slot order too.
+  const fired = db.prepare('SELECT slot_index, notified_at FROM memo_slots WHERE day = ? ORDER BY notified_at').all(today());
+  assert.deepEqual(fired.map((f) => f.slot_index), [0, 1, 2, 3, 4]);
+
+  // This test deliberately fires every slot, which would leave the later
+  // tests with nothing un-notified to work against - clear them so the next
+  // ensureTodaysSlots() call regenerates a fresh, untouched day.
+  db.prepare('DELETE FROM memo_slots').run();
+});
+
+test('uploading to a slot that has not been notified yet is rejected', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[1];
+  const res = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.error, 'err_memo_slot_not_open');
+});
+
+test('a slot within its 15-minute window is shared - every guest can upload to it once, but not twice each', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[2];
+  markSlotNotified(slot.id);
+
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Bystander' } });
+  const alsoOk = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(alsoOk.status, 201, 'a shared slot accepts uploads from any guest, not just one');
+
+  const bystanderAgain = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo2.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(bystanderAgain.status, 409, 'but not twice for the same guest');
+  assert.equal(bystanderAgain.data.error, 'err_memo_already_uploaded');
+
+  const badType = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from('not a photo'),
+    filename: 'notes.txt',
+    mimeType: 'text/plain',
+  });
+  assert.equal(badType.status, 400);
+  assert.equal(badType.data.error, 'err_memo_invalid_type');
+
+  const ok = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.data.kind, 'photo');
+  const uploadId = ok.data.id;
+
+  const again = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'photo2.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(again.status, 409);
+  assert.equal(again.data.error, 'err_memo_already_uploaded');
+
+  const refreshed = await api('GET', '/memo/today', { token: userToken });
+  const uploadedSlot = refreshed.data.slots.find((s) => s.id === slot.id);
+  assert.equal(uploadedSlot.status, 'uploaded');
+  assert.equal(uploadedSlot.uploadId, uploadId);
+
+  const own = await apiBuffer(`/memo/uploads/${uploadId}`, { token: userToken });
+  assert.equal(own.status, 200);
+  assert.deepEqual([...own.buffer], [0xff, 0xd8, 0xff, 0xd9]);
+
+  // Every guest's moments are visible to every other guest via the shared
+  // feed, not just the uploader/admins.
+  const otherGuest = await apiBuffer(`/memo/uploads/${uploadId}`, { token: bystander.data.token });
+  assert.equal(otherGuest.status, 200, 'any logged-in guest can view any upload, via the shared feed');
+
+  const asAdmin = await apiBuffer(`/memo/uploads/${uploadId}`, { token: ADMIN });
+  assert.equal(asAdmin.status, 200, 'an admin can view anyone\'s upload');
+});
+
+test('the shared Memo feed shows every guest\'s uploads for today with reaction counts, and reacting twice with the same emoji clears it', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[0];
+  markSlotNotified(slot.id);
+  const ok = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'feed-photo.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(ok.status, 201);
+  const uploadId = ok.data.id;
+
+  const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Feed Bystander' } });
+
+  const feed = await api('GET', '/memo/feed', { token: bystander.data.token });
+  assert.equal(feed.status, 200);
+  const entry = feed.data.uploads.find((u) => u.id === uploadId);
+  assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
+  assert.equal(entry.myReaction, null);
+  assert.deepEqual(entry.reactions, {});
+
+  const badEmoji = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💀' } });
+  assert.equal(badEmoji.status, 400);
+  assert.equal(badEmoji.data.error, 'err_memo_invalid_reaction');
+
+  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💦' } });
+  assert.equal(react.status, 200);
+  assert.equal(react.data.emoji, '💦');
+
+  const afterReact = await api('GET', '/memo/feed', { token: bystander.data.token });
+  const entryAfter = afterReact.data.uploads.find((u) => u.id === uploadId);
+  assert.equal(entryAfter.myReaction, '💦');
+  assert.equal(entryAfter.reactions['💦'], 1);
+
+  // Reacting again with the same emoji toggles it off.
+  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💦' } });
+  assert.equal(toggleOff.data.emoji, null);
+  const afterToggleOff = await api('GET', '/memo/feed', { token: bystander.data.token });
+  const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
+  assert.equal(entryToggledOff.myReaction, null);
+  assert.equal(entryToggledOff.reactions['💦'] || 0, 0);
+});
+
+// The client keeps its own copy of the reaction list (app.js renders the
+// buttons from it; the server validates against its own). They drifted once
+// - the client still listed four after the server was cut to two, so two
+// buttons rendered blank and any tap on them was rejected by the API.
+test('the reaction list the client renders matches the one the server accepts', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { MEMO_REACTION_EMOJI } = await import('../src/memo.js');
+  const source = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  const literal = source.match(/const MEMO_REACTION_EMOJI = \[(.*?)\];/s);
+  assert.ok(literal, 'app.js should still declare MEMO_REACTION_EMOJI as an array literal');
+  const clientList = [...literal[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(clientList, MEMO_REACTION_EMOJI);
+});
+
+test('a slot missed past its 15-minute window is reported as missed, not open', async () => {
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const slot = data.slots[3];
+  markSlotNotified(slot.id, new Date(Date.now() - 20 * 60 * 1000));
+
+  const refreshed = await api('GET', '/memo/today', { token: userToken });
+  const missedSlot = refreshed.data.slots.find((s) => s.id === slot.id);
+  assert.equal(missedSlot.status, 'missed');
+
+  const res = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'late.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.error, 'err_memo_slot_not_open');
+});
+
+test('admin/owner can see per-day upload counts, download everything as a zip, and upload/view a recap video', async () => {
+  await api('GET', '/memo/today', { token: userToken });
+  const day = today();
+
+  const days = await api('GET', '/admin/memo/days', { token: ADMIN });
+  assert.equal(days.status, 200);
+  const todayRow = days.data.days.find((d) => d.day === day);
+  assert.ok(todayRow, 'today should show up once at least one slot has been notified');
+  assert.ok(todayRow.uploadedCount >= 1);
+  assert.equal(todayRow.hasRecap, false);
+
+  const zip = await apiBuffer(`/admin/memo/${day}/uploads.zip`, { token: ADMIN });
+  assert.equal(zip.status, 200);
+  assert.equal(zip.headers.get('content-type'), 'application/zip');
+  const entries = await readZipEntries(zip.buffer);
+  assert.ok(entries.length >= 1, 'the zip should contain at least the one uploaded photo');
+
+  // Recap: video-only, any admin can upload it, any logged-in user can watch/download it.
+  const badRecapType = await apiUpload(`/admin/memo/${day}/recap`, {
+    token: ADMIN,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'not-a-video.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(badRecapType.status, 400);
+  assert.equal(badRecapType.data.error, 'err_memo_invalid_type');
+
+  const recapBytes = Buffer.from('fake mp4 bytes');
+  const recapUpload = await apiUpload(`/admin/memo/${day}/recap`, {
+    token: ADMIN,
+    buffer: recapBytes,
+    filename: 'recap.mp4',
+    mimeType: 'video/mp4',
+  });
+  assert.equal(recapUpload.status, 201);
+
+  const recapDays = await api('GET', '/memo/recaps', { token: userToken });
+  assert.ok(recapDays.data.days.includes(day));
+
+  const recapFetch = await apiBuffer(`/memo/recaps/${day}`, { token: userToken });
+  assert.equal(recapFetch.status, 200);
+  assert.deepEqual([...recapFetch.buffer], [...recapBytes]);
+
+  const daysAfterRecap = await api('GET', '/admin/memo/days', { token: ADMIN });
+  assert.equal(daysAfterRecap.data.days.find((d) => d.day === day).hasRecap, true);
+});
+
+test('Memo is gated behind ENABLE_MEMO - disabled means every endpoint 404s', async () => {
+  process.env.ENABLE_MEMO = 'false';
+  try {
+    assert.equal((await api('GET', '/memo/today', { token: userToken })).status, 404);
+    assert.equal((await api('GET', '/memo/recaps', { token: userToken })).status, 404);
+    assert.equal((await api('GET', '/admin/memo/days', { token: ADMIN })).status, 404);
+    assert.equal((await apiUpload('/memo/slots/1/upload', { token: userToken, buffer: Buffer.from('x'), filename: 'x.jpg', mimeType: 'image/jpeg' })).status, 404);
+  } finally {
+    process.env.ENABLE_MEMO = 'true';
+  }
+});
+
+test('owner wipe clears every Memo table AND deletes the actual files from disk', async () => {
+  // Owner-only permission itself is covered by "a non-owner admin cannot
+  // use any feature wipe switch" above - this just checks what the wipe
+  // actually does. ADMIN is the seeded owner (see seedResult).
+  const before = await api('GET', '/memo/today', { token: userToken });
+  const slot = before.data.slots[2]; // already uploaded to in the earlier "accepts one upload" test
+  const uploadRow = db.prepare('SELECT file_path FROM memo_uploads WHERE slot_id = ?').get(slot.id);
+  assert.ok(uploadRow, 'setup: this slot should already have an upload from an earlier test');
+  const absPath = join(MEMO_DIR, uploadRow.file_path);
+  assert.ok(existsSync(absPath), 'setup: the file should exist on disk before wiping');
+
+  const asOwner = await api('POST', '/admin/memo/wipe', { token: ADMIN });
+  assert.equal(asOwner.status, 200);
+
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_slots').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_uploads').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memo_recaps').get().n, 0);
+  assert.ok(!existsSync(absPath), 'the uploaded file itself should be deleted, not just its DB row');
 });
 
 /* --------------------------- Feature wipe switches --------------------------- */

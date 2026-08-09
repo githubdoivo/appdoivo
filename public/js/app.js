@@ -6,7 +6,7 @@ import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
-import { formatHourInZone } from './time.js';
+import { formatHourInZone, formatEuDate } from './time.js';
 import { resizePhotoToJpeg } from './photo.js';
 
 // An installed iOS PWA keeps its WKWebView alive in the background rather
@@ -59,6 +59,11 @@ let myUserId = null;
 // src/routes.js and fly.qa.toml). Defaults true so nothing flashes/hides
 // before /me resolves; showApp() corrects it immediately after.
 let plazaEnabled = true;
+// Set from /me in showApp() - Memo is QA-only until tested (see
+// ENABLE_MEMO in src/routes.js/fly.qa.toml). Defaults false (unlike
+// plazaEnabled above) since it's a brand-new feature, not a temporarily-
+// hidden existing one - nothing should assume it's on before /me resolves.
+let memoEnabled = false;
 // Set from /me in showApp() - gates the tutorial's skip button (see
 // startTutorial()): only admin/owner accounts can skip, everyone else
 // has to read through it.
@@ -105,7 +110,9 @@ function showApp(me) {
   isAdmin = !!me.isAdmin;
   isOwner = !!me.isOwner;
   plazaEnabled = !!me.plazaEnabled;
+  memoEnabled = !!me.memoEnabled;
   document.querySelector('[data-tab="plaza"]').classList.toggle('hidden', !plazaEnabled);
+  document.querySelector('[data-tab="memo"]').classList.toggle('hidden', !memoEnabled);
   // Always opens on Wall (the landing tab - see currentTab above), the way
   // an app opens on its home tab, rather than resuming wherever it was
   // last left. The tab someone was on is deliberately NOT remembered: on
@@ -171,24 +178,35 @@ function startSessionWatcher() {
 // user row), not localStorage, so it doesn't repeat on a new device and
 // doesn't reappear just because storage got cleared.
 
-const TUTORIAL_STEPS = [
-  ['tutorial_1_title', 'tutorial_1_text'],
-  ['tutorial_plaza_title', 'tutorial_plaza_text'],
-  ['tutorial_2_title', 'tutorial_2_text'],
-  ['tutorial_3_title', 'tutorial_3_text'],
-  ['tutorial_wall_title', 'tutorial_wall_text'],
-  ['tutorial_4_title', 'tutorial_4_text'],
-  ['tutorial_5_title', 'tutorial_5_text'],
-  ['tutorial_6_title', 'tutorial_6_text'],
-];
+// A function, not a fixed array, because the Memo step only belongs in the
+// tour while memoEnabled is true (QA-only for now) - showing it on
+// production, where the tab itself is hidden, would be a step about a
+// feature nobody can actually see.
+function tutorialSteps() {
+  const steps = [
+    ['tutorial_1_title', 'tutorial_1_text'],
+    ['tutorial_plaza_title', 'tutorial_plaza_text'],
+    ['tutorial_2_title', 'tutorial_2_text'],
+    ['tutorial_3_title', 'tutorial_3_text'],
+    ['tutorial_wall_title', 'tutorial_wall_text'],
+  ];
+  if (memoEnabled) steps.push(['tutorial_memo_title', 'tutorial_memo_text']);
+  steps.push(
+    ['tutorial_4_title', 'tutorial_4_text'],
+    ['tutorial_5_title', 'tutorial_5_text'],
+    ['tutorial_6_title', 'tutorial_6_text'],
+  );
+  return steps;
+}
 let tutorialStep = 0;
 
 function renderTutorialStep() {
-  const [titleKey, textKey] = TUTORIAL_STEPS[tutorialStep];
+  const steps = tutorialSteps();
+  const [titleKey, textKey] = steps[tutorialStep];
   $('tutorial-title').textContent = t(titleKey);
   $('tutorial-text').textContent = t(textKey);
-  $('tutorial-next').textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? t('tutorial_done') : t('tutorial_next');
-  $('tutorial-dots').innerHTML = TUTORIAL_STEPS
+  $('tutorial-next').textContent = tutorialStep === steps.length - 1 ? t('tutorial_done') : t('tutorial_next');
+  $('tutorial-dots').innerHTML = steps
     .map((_, i) => `<span class="dot${i === tutorialStep ? ' active' : ''}"></span>`)
     .join('');
 }
@@ -224,7 +242,7 @@ $('tutorial-lang-en').addEventListener('click', () => beginTutorialContent('en')
 $('tutorial-skip').addEventListener('click', () => endTutorial());
 
 $('tutorial-next').addEventListener('click', () => {
-  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+  if (tutorialStep < tutorialSteps().length - 1) {
     tutorialStep++;
     renderTutorialStep();
   } else {
@@ -239,6 +257,10 @@ $('tutorial-next').addEventListener('click', () => {
 
 function updateLangUI() {
   $('lang-toggle').textContent = getLang();
+  // Also present (discreetly) on the login screen, pre-auth - see
+  // login-lang-toggle in index.html/styles.css. getLang()/setLang() are
+  // pure localStorage, no login required.
+  $('login-lang-toggle').textContent = getLang();
 }
 
 $('lang-toggle').addEventListener('click', () => {
@@ -249,6 +271,12 @@ $('lang-toggle').addEventListener('click', () => {
   refreshNotifButton();
   loadConsequences();
   loadVotes();
+});
+
+$('login-lang-toggle').addEventListener('click', () => {
+  setLang(getLang() === 'pt' ? 'en' : 'pt');
+  applyI18n();
+  updateLangUI();
 });
 
 $('theme-toggle').addEventListener('click', () => toggleMode());
@@ -365,11 +393,13 @@ function selectTab(tab) {
   $('tab-rata').classList.toggle('hidden', currentTab !== 'rata');
   $('tab-outfit').classList.toggle('hidden', currentTab !== 'outfit');
   $('tab-chat').classList.toggle('hidden', currentTab !== 'chat');
+  $('tab-memo').classList.toggle('hidden', currentTab !== 'memo');
   applyNight();
   if (currentTab === 'plaza') startPlazaPolling(); else stopPlazaPolling();
   if (currentTab === 'rata') startRataPolling(); else stopRataPolling();
   if (currentTab === 'outfit') startOutfitPolling(); else stopOutfitPolling();
   if (currentTab === 'chat') startChatPolling(); else stopChatPolling();
+  if (currentTab === 'memo') startMemoPolling(); else stopMemoPolling();
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {
@@ -440,6 +470,197 @@ $('chat-form').addEventListener('submit', async (e) => {
   }
 });
 
+/* --------------------------------- Memo ----------------------------------- */
+// 5x/day, at a random moment (different for every guest), a push
+// notification asks for a photo/video within 15 minutes ("slot"). Polled
+// every 15s for the server's own state (a new slot notified, an upload
+// landing from elsewhere) plus a 1s local ticker that just counts an open
+// slot's remaining time down without hitting the server every second.
+
+let memoPollTimer = null;
+let memoTickTimer = null;
+let memoSlotsCache = [];
+let memoFeedCache = [];
+// Set while a slot's upload request is in flight - both the poll and the
+// ticker skip re-rendering while this is set, so a fetch already in
+// progress doesn't get its dot clobbered mid-upload.
+let memoUploadingSlotId = null;
+
+function startMemoPolling() {
+  loadMemo();
+  if (!memoPollTimer) memoPollTimer = setInterval(loadMemo, 15000);
+  if (!memoTickTimer) memoTickTimer = setInterval(tickMemoCountdowns, 1000);
+}
+
+function stopMemoPolling() {
+  if (memoPollTimer) { clearInterval(memoPollTimer); memoPollTimer = null; }
+  if (memoTickTimer) { clearInterval(memoTickTimer); memoTickTimer = null; }
+}
+
+function memoUploadUrl(uploadId) {
+  return `/api/memo/uploads/${uploadId}?token=${encodeURIComponent(getToken())}`;
+}
+
+async function loadMemo() {
+  if (memoUploadingSlotId) return;
+  try {
+    const { slots } = await api('/memo/today');
+    memoSlotsCache = slots;
+    renderMemoDots();
+  } catch { /* transient network hiccup - the next poll retries */ }
+  loadMemoFeed();
+}
+
+function tickMemoCountdowns() {
+  if (memoUploadingSlotId) return;
+  let changed = false;
+  memoSlotsCache.forEach((s) => {
+    if (s.status === 'open') {
+      s.secondsLeft -= 1;
+      if (s.secondsLeft <= 0) { s.status = 'missed'; changed = true; }
+    }
+  });
+  if (changed) renderMemoDots();
+}
+
+const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+// Demure by design: 5 small dots instead of a detailed row-per-slot list -
+// filled in as they're completed, no times or countdowns cluttering it.
+// The dots are read-only status, never controls: tapping a circle to open a
+// camera was never obvious, and made the four non-actionable states look
+// pressable too. Shooting now has its own real button below them, shown
+// only while a moment is actually open.
+function renderMemoDots() {
+  // Fixed left-to-right chronological order (slot_index, as returned by the
+  // API) - not reordered by status. The dots are meant to read like a
+  // progress bar ("2 of 5 done so far"), which only works if position
+  // means something stable instead of shuffling completed ones around.
+  $('memo-dots').innerHTML = memoSlotsCache.map((s) => {
+    const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] ?? s.slotIndex + 1 });
+    return `<span class="memo-dot memo-dot-${s.status}" role="img" aria-label="${esc(label)}"></span>`;
+  }).join('');
+
+  const open = memoSlotsCache.find((s) => s.status === 'open');
+  $('memo-shoot').innerHTML = open
+    ? `<button type="button" id="memo-shoot-btn" data-memo-upload-btn="${open.id}">${esc(t('memo_shoot_btn'))}</button>
+       <input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${open.id}" />`
+    : '';
+  $('memo-shoot').classList.toggle('hidden', !open);
+}
+
+// Must stay in step with MEMO_REACTION_EMOJI in src/memo.js, which is what
+// the server validates against - a value listed only here renders a button
+// the API then rejects, and one listed only there can never be sent.
+const MEMO_REACTION_EMOJI = ['❤️', '💦'];
+
+// Hand-drawn-style FILLED icons instead of the OS's own emoji glyphs - a
+// native emoji renders as whatever the platform's font happens to look
+// like (very "iPhone"), which clashes with the app's own drawn-icon
+// language used elsewhere (sun/moon toggle, eye/eye-off, bell - see
+// index.html), themselves stroke-only. These are filled instead of
+// stroked specifically so they stay visible at the small size a reaction
+// button needs - a thin outline nearly disappears there. currentColor
+// still ties them to each theme's accent.
+const MEMO_REACTION_ICON = {
+  '\u2764\uFE0F': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
+  // Three teardrops falling on a diagonal, tips up-left - the previous pair
+  // sat upright and read as two plain blobs rather than splashing water.
+  '\u{1F4A6}': '<path transform="rotate(-14 8.4 15.9)" d="M8.4 5.24C9.71 9.72 12.75 11.33 12.75 15.9A4.35 4.35 0 0 1 4.05 15.9C4.05 11.33 7.1 9.72 8.4 5.24Z"/><path transform="rotate(-52 17.2 7)" d="M17.2 -1.21C18.2 2.24 20.55 3.48 20.55 7A3.35 3.35 0 0 1 13.85 7C13.85 3.48 16.2 2.24 17.2 -1.21Z"/><path transform="rotate(-42 18.3 17.7)" d="M18.3 10.96C19.13 13.79 21.05 14.81 21.05 17.7A2.75 2.75 0 0 1 15.55 17.7C15.55 14.81 17.48 13.79 18.3 10.96Z"/>',
+};
+
+
+
+
+function memoReactionIcon(emoji) {
+  return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
+}
+
+// Today's shared feed - every guest's uploads so far, like BeReal's own
+// friends-feed, with a light row of quick-tap emoji reactions per photo
+// instead of a comment thread.
+async function loadMemoFeed() {
+  try {
+    const { uploads } = await api('/memo/feed');
+    memoFeedCache = uploads;
+    renderMemoFeed();
+  } catch { /* transient network hiccup - the next poll retries */ }
+}
+
+function renderMemoFeed() {
+  $('memo-feed-card').classList.toggle('hidden', memoFeedCache.length === 0);
+  if (!memoFeedCache.length) return;
+  $('memo-feed').innerHTML = memoFeedCache.map((u) => {
+    const preview = u.kind === 'video'
+      ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`
+      : `<img class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" alt="" />`;
+    const reactionBar = MEMO_REACTION_EMOJI.map((emoji) => {
+      const count = u.reactions[emoji] || 0;
+      const mine = u.myReaction === emoji;
+      return `<button type="button" class="memo-reaction${mine ? ' active' : ''}" data-memo-react="${u.id}" data-emoji="${emoji}">${memoReactionIcon(emoji)}${count ? `<span>${count}</span>` : ''}</button>`;
+    }).join('');
+    return `
+      <div class="memo-feed-item">
+        ${preview}
+        <div class="memo-feed-meta">
+          <span class="memo-feed-name">${esc(u.userName)}</span>
+          <div class="memo-reaction-bar">${reactionBar}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// Delegated (not one listener per dot) since the whole thing is rebuilt on
+// every render - a tap just forwards to its own hidden file input, same
+// pattern as the outfit registration photo picker (see #register-photo-btn
+// in settings.js) but scoped to this container.
+$('memo-shoot').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-memo-upload-btn]');
+  if (!btn) return;
+  $('memo-shoot').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
+});
+
+$('memo-shoot').addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-memo-file-input]');
+  const file = input?.files?.[0];
+  if (!file) return;
+  const slotId = input.dataset.memoFileInput;
+  const btn = $('memo-shoot').querySelector('[data-memo-upload-btn]');
+  memoUploadingSlotId = slotId;
+  if (btn) { btn.disabled = true; btn.textContent = t('memo_uploading'); }
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`/api/memo/slots/${slotId}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+  } catch (err) {
+    await showAlert(err.message);
+  } finally {
+    memoUploadingSlotId = null;
+    loadMemo();
+  }
+});
+
+// Tapping your own already-active reaction clears it (toggle) - see
+// toggleReaction() in memo.js, which mirrors that same rule server-side.
+$('memo-feed').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-memo-react]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api(`/memo/uploads/${btn.dataset.memoReact}/react`, { method: 'POST', body: { emoji: btn.dataset.emoji } });
+    loadMemoFeed();
+  } catch { /* transient - next poll reconciles */ }
+  finally { btn.disabled = false; }
+});
+
 // Shared by both deep-link paths below: a fresh page load reads its own
 // ?tab=&night=, and the service worker message listener reads the same
 // params out of a notification's url without a real navigation.
@@ -507,13 +728,55 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
+const PLAZA_TYPE_LABEL = {
+  poll: 'plaza_type_poll',
+  announcement: 'plaza_type_announcement',
+  podium: 'plaza_type_podium',
+};
+
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
+  // Same "poll"/"announcement" labels the admin's own type picker already
+  // uses, just surfaced here too - at a glance in a mixed feed, nothing
+  // else says which kind of post this is before you start reading it.
+  const typeLabel = `<h2 class="plaza-post-type">${esc(t(PLAZA_TYPE_LABEL[post.type] ?? 'plaza_type_announcement'))}</h2>`;
+
+  // A published Snatch result. Its text is a JSON snapshot taken at publish
+  // time (see createPodiumPost() in plaza.js), not a live lookup - so what
+  // the party saw announced stays exactly that, even if the night is later
+  // re-run or reset.
+  if (post.type === 'podium') {
+    let snap;
+    try { snap = JSON.parse(post.text); } catch { return ''; }
+    const rows = (snap.podium ?? []).map((r) => `
+      <li class="podium-row">
+        <span class="podium-medal" aria-hidden="true">${MEDAL_EMOJI[r.rank] ?? ''}</span>
+        ${r.hasPhoto ? `<img class="podium-photo" src="${photoUrl(r.id)}" alt="" />` : '<span class="podium-photo podium-photo-empty"></span>'}
+        <span class="podium-name">${esc(contestantLabel(r))}</span>
+        <span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span>
+      </li>`).join('');
+    const cong = snap.congeniality
+      ? `<div class="podium-congeniality">
+           <h3>${esc(t('congeniality_title'))}</h3>
+           <p class="congeniality-winner">👑 ${esc(snap.congeniality.name)}</p>
+         </div>`
+      : '';
+    return `
+      <article class="plaza-post plaza-post-podium${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
+        ${pinnedBadge}
+        <p class="podium-night">${esc(t(`theme_${snap.night}`))}</p>
+        <ol class="podium-list">${rows}</ol>
+        ${cong}
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
 
   if (post.type !== 'poll') {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
         ${pinnedBadge}
         <p class="plaza-post-text">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -549,6 +812,7 @@ function renderPlazaPost(post) {
 
   return `
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
+      ${typeLabel}
       ${pinnedBadge}
       <p class="plaza-post-text">${linkify(esc(post.text))}</p>
       <div class="plaza-poll-options">${optionsHtml}</div>
@@ -621,6 +885,28 @@ async function loadPlaza() {
     const { posts } = await api('/plaza-posts');
     renderPlazaFeed(posts);
   } catch { /* transient - leaves whatever was last shown */ }
+  if (memoEnabled) loadWallVideo();
+}
+
+function memoRecapUrl(day) {
+  return `/api/memo/recaps/${encodeURIComponent(day)}?token=${encodeURIComponent(getToken())}`;
+}
+
+// Memo's daily recap, published to everyone here by the owner (see the
+// Wall admin tab) rather than staying inside Memo itself - hidden entirely
+// until at least one day has a video.
+async function loadWallVideo() {
+  try {
+    const { days } = await api('/memo/recaps');
+    $('wall-video-card').classList.toggle('hidden', days.length === 0);
+    if (days.length) {
+      $('wall-video-list').innerHTML = days.map((day) => `
+        <div class="wall-video-row">
+          <span class="wall-video-day">${esc(formatEuDate(day))}</span>
+          <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(day)}"></video>
+        </div>`).join('');
+    }
+  } catch { /* transient network hiccup - the next poll retries */ }
 }
 
 /* ------------------------------- Rata Game ------------------------------- */
@@ -631,8 +917,12 @@ let rataPollTimer = null;
 async function loadRataHistory() {
   try {
     const { consequences } = await api('/consequences/revealed');
-    $('rata-history').innerHTML = consequences.length
-      ? consequences.map((c) => {
+    // Nothing revealed yet (very start of the party) is the one time this
+    // would show - hidden entirely instead of an empty-state message, same
+    // as Memo's recap card.
+    $('rata-history-card').classList.toggle('hidden', consequences.length === 0);
+    if (consequences.length) {
+      $('rata-history').innerHTML = consequences.map((c) => {
         // No status tags/assign jargon here (that's admin-only, see
         // renderConsequenceCard() in settings.js) - just plain "done by X"
         // / "pending by X", or bare "pending" if nobody's confirmed
@@ -654,8 +944,8 @@ async function loadRataHistory() {
           </div>
           ${canMarkDone ? `<button type="button" class="small" data-mark-done="${c.id}" style="margin-top:8px">${t('rata_mark_done_btn')}</button>` : ''}
         </div>`;
-      }).join('')
-      : `<p class="muted">${t('rata_history_empty')}</p>`;
+      }).join('');
+    }
   } catch { /* transient - leaves whatever was last shown */ }
 }
 
@@ -728,7 +1018,7 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // WHOLE page and shows that night's vote. Nights this edition: furnished | swamp.
 const NIGHTS = ['furnished', 'swamp'];
 const NIGHT_KEY = 'appivo_night';
-const TABS = ['plaza', 'rata', 'outfit', 'chat'];
+const TABS = ['plaza', 'chat', 'memo', 'rata', 'outfit'];
 
 function getNight() {
   const n = localStorage.getItem(NIGHT_KEY);
@@ -751,6 +1041,7 @@ function applyNight() {
   // comment for the full "plaza"/"chat" internal-vs-displayed mapping.
   document.body.classList.toggle('theme-mural', currentTab === 'plaza');
   document.body.classList.toggle('theme-plaza', currentTab === 'chat');
+  document.body.classList.toggle('theme-memo', currentTab === 'memo');
   // The switch's own highlighted half already names the night, so there's
   // no separate "noite · swamp" line to keep in sync any more.
   document.querySelectorAll('#theme-switch button').forEach((b) => {
@@ -1084,6 +1375,7 @@ async function loadVotes() {
     // Status controlled by the admin: registration / open / closed-pending-reveal / closed.
     let statusKey;
     if (data.status === 'registration') statusKey = 'outfit_registration_open';
+    else if (data.status === 'open' && data.runoffActive) statusKey = 'outfit_runoff_open';
     else if (data.status === 'open') statusKey = 'outfit_open';
     else if (!data.started) statusKey = 'outfit_wait';
     else if (data.status === 'closed' && data.resultsPhase === 'hidden') statusKey = 'outfit_results_pending';
@@ -1169,10 +1461,61 @@ async function loadVotes() {
     } else {
       $('results-card').classList.add('hidden');
     }
+
+    renderCongeniality(data.congeniality);
   } catch (err) {
     $('voting-status').textContent = err.message;
   }
 }
+
+// Miss Congeniality: a separate, simpler round than the outfit vote above -
+// one vote for a person (never a duo entry), and a single winner instead of
+// a staged podium. Hidden entirely while the admin hasn't opened it, so it
+// doesn't sit there as an empty card all night.
+function renderCongeniality(c) {
+  const card = $('congeniality-card');
+  if (!c || c.status === 'closed') {
+    // Still worth showing once it's over, if there's a winner to show.
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  const area = $('congeniality-area');
+
+  if (c.status === 'revealed') {
+    area.innerHTML = c.winner
+      ? `<p class="congeniality-winner">👑 ${esc(c.winner.name)}</p>
+         <p class="muted">${c.winner.votes} ${t(c.winner.votes === 1 ? 'vote_one' : 'votes_short')}</p>`
+      : `<p class="muted">${t('congeniality_no_winner')}</p>`;
+    return;
+  }
+
+  // status === 'open'
+  if (c.myVote !== null) {
+    const voted = c.candidates.find((x) => x.id === c.myVote);
+    area.innerHTML = `<p class="muted">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
+    return;
+  }
+  area.innerHTML = c.candidates.length
+    ? c.candidates.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
+    : `<p class="muted">${t('congeniality_no_candidates')}</p>`;
+}
+
+$('congeniality-area').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-congeniality-vote]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api('/congeniality/vote', {
+      method: 'POST',
+      body: { night: getNight(), targetUserId: Number(btn.dataset.congenialityVote) },
+    });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+    btn.disabled = false;
+  }
+});
 
 // The named partner agreeing to a duo entry - the click that puts the
 // pair on the voting list. No extra prompt: what they're agreeing to is

@@ -23,6 +23,12 @@ jobs:
         with:
           node-version: 24
 
+      # Memo's "video of the day" shells out to ffmpeg (see
+      # buildDayRecapVideo() in src/memo.js), same as the runtime image does
+      # - installed explicitly rather than leaning on whatever the runner
+      # image happens to preinstall.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - run: npm install
 
       # UI suite drives the app with Playwright's WebKit engine (see

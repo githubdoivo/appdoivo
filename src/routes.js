@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { ZipFile } from 'yazl';
+import multer from 'multer';
 import db from './db.js';
 import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
@@ -41,6 +42,17 @@ import {
   resetResultsPhase,
   advanceResultsPhase,
   getResultsPhase,
+  isRunoffActive,
+  clearRunoff,
+  startRunoff,
+  congenialityStatus,
+  setCongenialityStatus,
+  congenialityCandidates,
+  myCongenialityVote,
+  castCongenialityVote,
+  congenialityResults,
+  congenialityWinner,
+  resetCongeniality,
 } from './votes.js';
 import {
   getPublicKey,
@@ -51,7 +63,25 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost } from './plaza.js';
+import {
+  MEMO_DIR,
+  MEMO_MAX_FILE_BYTES,
+  extForMime,
+  getTodayForUser,
+  recordUpload,
+  getUpload,
+  getTodayFeed,
+  toggleReaction,
+  listDays,
+  listUploadsForDay,
+  saveRecap,
+  buildDayRecapVideo,
+  triggerNextSlot,
+  getRecap,
+  listRecapDays,
+  wipeAll as wipeAllMemo,
+} from './memo.js';
 
 const router = Router();
 
@@ -111,6 +141,7 @@ router.get('/me', (req, res) => {
     ...req.user,
     adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
     plazaEnabled: process.env.ENABLE_PLAZA === 'true',
+    memoEnabled: process.env.ENABLE_MEMO === 'true',
   });
 });
 
@@ -291,7 +322,26 @@ router.get('/votes/status', (req, res) => {
     myContestant: myContestantForNight(req.user.id, night),
     results,
     resultsPhase: phase,
+    // So the voting screen can say "it's a tie - vote again" instead of
+    // just silently showing a shorter contestant list with no context.
+    runoffActive: isRunoffActive(night),
+    // The separate Miss Congeniality round (see votes.js) - its own status,
+    // its own candidate list of individuals, and the winner only once the
+    // admin actually reveals it.
+    congeniality: {
+      status: congenialityStatus(night),
+      candidates: congenialityCandidates(night),
+      myVote: myCongenialityVote(req.user.id, night),
+      winner: congenialityWinner(night),
+    },
   });
+});
+
+router.post('/congeniality/vote', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = castCongenialityVote(req.user.id, Number(req.body?.targetUserId), night);
+  if (result.error) return res.status(400).json(result);
+  res.status(201).json(result);
 });
 
 // Self-registration for Best Look: everyone (not just admins) can enter
@@ -442,6 +492,98 @@ router.post('/push/unsubscribe', (req, res) => {
   const endpoint = req.body?.endpoint;
   if (endpoint) removeSubscription(endpoint);
   res.json({ ok: true });
+});
+
+/* ---------------------------------- Memo --------------------------------- */
+// 5x/day, at a random independent time per guest, a push notification asks
+// them to upload a photo/video within a 15-minute window. QA-only until
+// tested (see ENABLE_MEMO) - same gating shape as ENABLE_PLAZA above.
+// Uploads are original-size photos/video, not the small resized-JPEG BLOBs
+// outfit entries use, so they're multipart/form-data straight to disk
+// (MEMO_DIR, see memo.js) rather than base64-in-JSON.
+
+const memoUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = join(MEMO_DIR, today());
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `${req.user.id}-slot${req.params.id}${extForMime(file.mimetype)}`),
+});
+const memoUpload = multer({
+  storage: memoUploadStorage,
+  limits: { fileSize: MEMO_MAX_FILE_BYTES },
+  fileFilter: (req, file, cb) => cb(null, /^(image|video)\//.test(file.mimetype)),
+});
+
+router.get('/memo/today', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ slots: getTodayForUser(req.user.id) });
+});
+
+router.post('/memo/slots/:id/upload', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  memoUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const code = err.code === 'LIMIT_FILE_SIZE' ? 'err_memo_file_too_large' : 'err_memo_upload_failed';
+      return res.status(400).json({ error: code });
+    }
+    if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
+    try {
+      const upload = recordUpload(Number(req.params.id), req.user.id, {
+        mimeType: req.file.mimetype,
+        filePath: relative(MEMO_DIR, req.file.path),
+        fileSize: req.file.size,
+      });
+      res.status(201).json({ id: upload.id, kind: upload.kind });
+    } catch (e) {
+      res.status(e.status || 400).json({ error: e.message });
+    }
+  });
+});
+
+// Serves a guest's own upload (or any admin's, for moderation/download) -
+// same ?token= query-param auth as the outfit contestant photo route
+// above, needed because <img>/<video> tags can't send an Authorization
+// header. res.sendFile() (not a manual read+send) handles Range requests
+// on its own, which video scrubbing needs.
+router.get('/memo/uploads/:id', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const upload = getUpload(Number(req.params.id));
+  if (!upload) return res.status(404).end();
+  // Every guest's moments are visible to every other guest via the shared
+  // feed (see GET /memo/feed) - not just the uploader/admins, unlike the
+  // outfit contestant photo route this pattern is otherwise copied from.
+  res.sendFile(join(MEMO_DIR, upload.file_path));
+});
+
+// Today's shared feed - everyone's uploads, newest first, with reaction
+// counts and the viewer's own reaction on each.
+router.get('/memo/feed', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ uploads: getTodayFeed(req.user.id) });
+});
+
+router.post('/memo/uploads/:id/react', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  try {
+    const emoji = toggleReaction(Number(req.params.id), req.user.id, req.body?.emoji);
+    res.json({ emoji });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+router.get('/memo/recaps', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ days: listRecapDays() });
+});
+
+router.get('/memo/recaps/:day', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const recap = getRecap(req.params.day);
+  if (!recap) return res.status(404).end();
+  res.sendFile(join(MEMO_DIR, recap.file_path));
 });
 
 /* --------------------------------- Admin --------------------------------- */
@@ -833,11 +975,85 @@ router.get('/admin/voting', (req, res) => {
       // enforces it, since plenty of real nights close with some guests
       // never getting around to voting and that's fine.
       notVoted: usersWithoutVoteCount(night),
+      // Lets the admin panel show "tie-breaker round in progress" - whether
+      // there IS a tie worth breaking is for the panel to work out from the
+      // results it already fetches via GET /admin/votes (rank 1 and 2
+      // sharing a vote count), not duplicated here.
+      runoffActive: isRunoffActive(night),
+      // The Miss Congeniality round runs on its own clock, after this one -
+      // its phase plus the live standings, which an admin may see at any
+      // point (guests only ever get the winner, and only once revealed).
+      congenialityStatus: congenialityStatus(night),
+      congenialityResults: congenialityResults(night),
     })),
   });
 });
 
 const NIGHT_LABEL = { furnished: 'Furnished', swamp: 'Swamp' };
+
+const CONGENIALITY_NOTIFY = {
+  open: {
+    pt: (n) => `miss congeniality: a votação abriu para a noite ${n}.`,
+    en: (n) => `miss congeniality: voting is open for ${n} night.`,
+  },
+  revealed: {
+    pt: (n) => `miss congeniality: já se sabe quem ganhou a noite ${n}.`,
+    en: (n) => `miss congeniality: the winner for ${n} night is in.`,
+  },
+};
+
+// Miss Congeniality's whole admin surface: open -> closed -> revealed, no
+// staged reveal (unlike the outfit vote's /reveal-next above - there's a
+// single winner here, so there's nothing to count down through).
+router.post('/admin/voting/:night/congeniality', async (req, res) => {
+  const { night } = req.params;
+  const status = req.body?.status;
+  const result = setCongenialityStatus(night, status);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+
+  const notify = CONGENIALITY_NOTIFY[status];
+  if (notify) {
+    await broadcast({
+      title: { pt: 'Snatch', en: 'Snatch' },
+      body: { pt: notify.pt(NIGHT_LABEL[night]), en: notify.en(NIGHT_LABEL[night]) },
+      tag: 'congeniality',
+      url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+    });
+  }
+});
+
+// Publishes the night's result to the Wall: podium + Miss Congeniality.
+// Requires the top 3 to already be revealed - the Wall post is public to
+// every guest, so publishing before the reveal would spoil the countdown
+// the staged reveal exists for (and the photos it links to are gated on
+// that same reveal state, see GET /outfit/contestants/:id/photo).
+router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  const phase = getResultsPhase(night);
+  if (phase !== 'first' && phase !== 'all') {
+    return res.status(400).json({ error: 'err_results_not_revealed' });
+  }
+  const podium = resultsForNight(night)
+    .filter((r) => r.rank <= 3)
+    .map((r) => ({
+      rank: r.rank, id: r.id, name: r.name, votes: r.votes,
+      hasPhoto: r.hasPhoto, registeredBy: r.registeredBy, partnerName: r.partnerName,
+    }));
+  if (podium.length === 0) return res.status(400).json({ error: 'err_no_results' });
+
+  const winner = congenialityWinner(night);
+  const result = createPodiumPost(req.user.id, { night, podium, congeniality: winner });
+  res.status(201).json(result);
+});
+
+router.post('/admin/voting/:night/congeniality/reset', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  resetCongeniality(night);
+  res.json({ ok: true, night });
+});
 
 // Opens registration: contestants can self-enter (see POST /outfit/register).
 // Voting options stay hidden from everyone until the admin explicitly moves
@@ -851,6 +1067,8 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  clearRunoff(night);
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'registration');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -942,6 +1160,11 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  clearRunoff(night);
+  // Congeniality runs off the back of this round, so restarting the round
+  // restarts it too - a winner from the previous run-through would
+  // otherwise stay revealed against a vote that no longer exists.
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -955,10 +1178,144 @@ router.post('/admin/voting/:night/reset-all', (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM contestants WHERE night = ?').run(night);
+  clearRunoff(night);
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'closed');
   setSetting(`voting_started_${night}`, '0');
   resetResultsPhase(night);
   res.json({ ok: true, night, votingStatus: 'closed' });
+});
+
+// Tie-breaker: a fresh round of voting scoped to just the contestants tied
+// for 1st place - see startRunoff() in votes.js for the actual rule (needs
+// voting closed, needs a real tie). Broadcasts the same way opening voting
+// normally does, so guests know to come back and vote again.
+router.post('/admin/voting/:night/runoff', async (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  const result = startRunoff(night);
+  if (result.error) return res.status(409).json({ error: result.error });
+  res.json({ ok: true, night, votingStatus: 'open', contestantIds: result.contestantIds });
+  await broadcast({
+    title: { pt: 'Snatch', en: 'Snatch' },
+    body: {
+      pt: `há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
+      en: `it's a tie - runoff vote for ${NIGHT_LABEL[night]} night, vote again!`,
+    },
+    tag: 'outfit-voting',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
+});
+
+/* ------------------------------- Admin: Memo ------------------------------ */
+
+const memoRecapStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = join(MEMO_DIR, req.params.day);
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `recap${extForMime(file.mimetype)}`),
+});
+// Video-only - the recap is explicitly a video for everyone to watch/
+// download, unlike the guest slots which accept either photo or video.
+const memoRecapUpload = multer({
+  storage: memoRecapStorage,
+  limits: { fileSize: MEMO_MAX_FILE_BYTES },
+  fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('video/')),
+});
+
+router.get('/admin/memo/days', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  res.json({ days: listDays() });
+});
+
+// Lighter than the outfit photos.zip route above: yazl's addFile() streams
+// straight from disk instead of having to pull every BLOB into memory
+// first, since these files already live on disk rather than in SQLite.
+router.get('/admin/memo/:day/uploads.zip', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const uploads = listUploadsForDay(req.params.day);
+  if (!uploads.length) return res.status(404).json({ error: 'err_memo_no_uploads' });
+  const zip = new ZipFile();
+  const usedNames = new Set();
+  for (const u of uploads) {
+    const abs = join(MEMO_DIR, u.file_path);
+    if (!existsSync(abs)) continue;
+    const ext = extForMime(u.mime_type);
+    const base = u.user_name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    let filename = `${base}-momento${u.slot_id}${ext}`;
+    if (usedNames.has(filename)) filename = `${base}-momento${u.slot_id}-${u.id}${ext}`;
+    usedNames.add(filename);
+    zip.addFile(abs, filename);
+  }
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="memo-${req.params.day}.zip"`);
+  zip.outputStream.pipe(res);
+  zip.end();
+});
+
+router.post('/admin/memo/:day/recap', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  memoRecapUpload.single('file')(req, res, (err) => {
+    if (err) {
+      const code = err.code === 'LIMIT_FILE_SIZE' ? 'err_memo_file_too_large' : 'err_memo_upload_failed';
+      return res.status(400).json({ error: code });
+    }
+    if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
+    saveRecap(req.params.day, req.user.id, {
+      mimeType: req.file.mimetype,
+      filePath: relative(MEMO_DIR, req.file.path),
+      fileSize: req.file.size,
+    });
+    res.status(201).json({ ok: true });
+  });
+});
+
+// Builds the day's video from its photos (1s each) and stores it as that
+// day's recap, which is what the Wall video player already reads (see
+// loadWallVideo() in app.js) - so generating it *is* publishing it. Kept
+// separate from the manual upload route above rather than replacing it:
+// this one takes no file at all.
+router.post('/admin/memo/:day/recap/generate', async (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  try {
+    const built = await buildDayRecapVideo(req.params.day);
+    if (built.error) return res.status(400).json({ error: built.error });
+    saveRecap(req.params.day, req.user.id, built);
+    res.status(201).json({ ok: true, photoCount: built.photoCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'err_memo_recap_failed' });
+  }
+});
+
+// Owner-only: opens the next scheduled moment right now instead of waiting
+// for its random time, notifying everyone exactly as the cron would (see
+// the memo job in scheduler.js). Owner-only rather than admin because it
+// pushes to every guest's phone - not something to leave a stray tap away
+// for anyone with an admin key.
+router.post('/admin/memo/trigger-next', requireOwner, async (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const result = triggerNextSlot();
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+  await broadcast({
+    title: { pt: 'memo', en: 'memo' },
+    body: {
+      pt: 'é agora - tens 15 minutos para captar este momento.',
+      en: "it's now - you have 15 minutes to capture this moment.",
+    },
+    tag: 'memo',
+    url: '/?tab=memo',
+  });
+});
+
+// Owner-only, same golden rule as every other feature's wipe switch - but
+// this one also has to unlink the actual files (see wipeAll() in memo.js),
+// unlike the DB-BLOB-based wipes above where deleting the row is enough.
+router.post('/admin/memo/wipe', requireOwner, (req, res) => {
+  wipeAllMemo();
+  res.json({ ok: true });
 });
 
 export default router;

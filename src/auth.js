@@ -7,19 +7,20 @@ import { checkAuthAttempt } from './rateLimit.js';
  * Shared by /auth/login (routes.js) and authenticate() below - the app has
  * no separate session token, the frontend just replays whatever was typed
  * at login on every subsequent request, so both places need to agree on
- * what counts as valid or a login that works once and then 401s on the
- * very next request. Dev/QA-only convenience: "mossy" always resolves to
- * the owner, whatever their real (randomly-generated, see seed() in
- * db.js) key actually is - never honored when NODE_ENV=production (see
- * fly.toml), so there's no guessable backdoor on the real deployment.
+ * what counts as valid, or a login works once and then 401s on the very
+ * next request.
+ *
+ * There is deliberately no magic/dev token here. A "mossy" shortcut used to
+ * resolve to the owner whenever ENABLE_DEV_LOGIN was set (QA only), after an
+ * earlier NODE_ENV-based version of it was found live on prod on 2026-08-08.
+ * Removed outright rather than re-gated: a documented magic string that
+ * authenticates as the account with full control over everyone's keys is not
+ * worth any amount of QA convenience, and every environment now takes the
+ * same path - the real, generated key or nothing.
  */
 export function findUserByToken(token) {
   const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
-  let user = db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
-  if (!user && token === 'mossy' && process.env.NODE_ENV !== 'production') {
-    user = db.prepare(`SELECT ${columns} FROM users WHERE is_owner = 1`).get();
-  }
-  return user;
+  return db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
 }
 
 /**

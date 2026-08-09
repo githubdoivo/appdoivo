@@ -7,6 +7,23 @@ import { isNight } from './nights.js';
 // awards countdown, at their own pace during the event.
 const REVEAL_PHASES = ['hidden', 'third', 'second', 'first', 'all'];
 
+/** Contestant IDs currently in a tie-breaker runoff for a night, or null if
+ * none is active - see startRunoff() below. */
+function getRunoffIds(night) {
+  const raw = getSetting(`runoff_ids_${night}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function isRunoffActive(night) {
+  return getRunoffIds(night) !== null;
+}
+
+/** Ends whatever runoff scope was active - a fresh registration/reset(-all)
+ * starts a genuinely new round, not a continuation of an old tie. */
+export function clearRunoff(night) {
+  setSetting(`runoff_ids_${night}`, '');
+}
+
 /** Current results-reveal phase for a night. */
 export function getResultsPhase(night) {
   return getSetting(`results_phase_${night}`, 'hidden');
@@ -33,7 +50,7 @@ export function advanceResultsPhase(night) {
  * real entry, so it's left out of the voting list entirely (see
  * registerContestant()/confirmContestant()). */
 export function contestantsForNight(night) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
@@ -41,6 +58,10 @@ export function contestantsForNight(night) {
     WHERE c.night = ? AND c.confirmed_at IS NOT NULL
     ORDER BY c.name COLLATE NOCASE
   `).all(night);
+  // A runoff narrows who's actually votable to just the tied group (see
+  // startRunoff()) - everyone else already lost the first round.
+  const runoff = getRunoffIds(night);
+  return runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
 }
 
 /** The OTHER user_id sharing this user's contestant entry for a night
@@ -338,6 +359,13 @@ export function castVote(userId, contestantId, night) {
     return { error: 'err_contestant_invalid_for_night' };
   }
 
+  // Mid-runoff, only the tied group is actually votable - everyone else
+  // already lost the first round (see startRunoff()).
+  const runoff = getRunoffIds(night);
+  if (runoff && !runoff.includes(contestantId)) {
+    return { error: 'err_not_in_runoff' };
+  }
+
   // Solo or as part of a duo, a contestant can't vote for their own entry -
   // left open, everyone would just vote for themselves, and a duo's shared
   // entry would get an "extra" vote nobody else's entry could get.
@@ -454,7 +482,12 @@ export function resultsForNight(night) {
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
   `).all(night);
-  return rows.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
+  // Once a runoff is active, the standings that matter are just the tied
+  // group revoting among themselves - everyone else's (now stale) tally
+  // from the first round would just be confusing clutter here.
+  const runoff = getRunoffIds(night);
+  const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
+  return scoped.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
 }
 
 /** Results a regular user may see right now, filtered by the reveal phase. */
@@ -468,4 +501,118 @@ export function visibleResultsForNight(night) {
   else if (phase === 'first') results = all.filter((r) => r.rank <= 3);
   else results = all; // 'all'
   return { phase, results };
+}
+
+/**
+ * Starts a tie-breaker runoff: a fresh vote scoped to only the contestants
+ * tied for 1st place, like a real election runoff, instead of leaving an
+ * actual tie standing. Requires voting to already be closed (a tie can
+ * only be judged once nobody can vote anymore) and at least two
+ * contestants sharing the top spot. Wipes the previous votes - they
+ * already served their purpose, identifying the tie - and reopens voting
+ * scoped to just the tied group; see contestantsForNight()/castVote()/
+ * resultsForNight() above for where that scope is enforced.
+ */
+export function startRunoff(night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (nightStatus(night) !== 'closed') return { error: 'err_voting_not_closed' };
+
+  const results = resultsForNight(night);
+  const topVotes = results[0]?.votes ?? 0;
+  const tied = results.filter((r) => r.votes === topVotes);
+  if (tied.length < 2) return { error: 'err_no_tie' };
+
+  setSetting(`runoff_ids_${night}`, JSON.stringify(tied.map((r) => r.id)));
+  db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  resetResultsPhase(night);
+  setSetting(`voting_status_${night}`, 'open');
+  return { ok: true, contestantIds: tied.map((r) => r.id) };
+}
+
+/* -------------------------- Miss Congeniality ----------------------------- */
+// A second vote per night, run after the outfit vote. Two things make it
+// deliberately simpler than the main vote above: it's cast for a *person*
+// rather than an entry (so a duo splits into its two individuals - the
+// pairing only ever mattered for the outfit itself), and it has no staged
+// reveal, just open -> closed -> revealed.
+
+const CONGENIALITY_PHASES = ['closed', 'open', 'revealed'];
+
+/** 'closed' (default, nobody can vote yet), 'open', or 'revealed'. */
+export function congenialityStatus(night) {
+  const s = getSetting(`congeniality_status_${night}`, 'closed');
+  return CONGENIALITY_PHASES.includes(s) ? s : 'closed';
+}
+
+export function setCongenialityStatus(night, status) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (!CONGENIALITY_PHASES.includes(status)) return { error: 'err_invalid_congeniality_status' };
+  setSetting(`congeniality_status_${night}`, status);
+  return { ok: true, night, congenialityStatus: status };
+}
+
+/**
+ * Everyone in the running: the individual people behind the night's
+ * confirmed entries, each listed once. A duo entry contributes both of its
+ * people separately (that's the whole point - congeniality is personal,
+ * the outfit was the shared part), and an admin-added entry with nobody
+ * linked to it contributes nobody, since there's no person to vote for.
+ */
+export function congenialityCandidates(night) {
+  return db.prepare(`
+    SELECT DISTINCT u.id, u.name
+    FROM contestants c
+    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+    ORDER BY u.name COLLATE NOCASE
+  `).all(night);
+}
+
+export function myCongenialityVote(userId, night) {
+  const row = db.prepare(
+    'SELECT target_user_id FROM congeniality_votes WHERE user_id = ? AND night = ?'
+  ).get(userId, night);
+  return row ? row.target_user_id : null;
+}
+
+export function castCongenialityVote(userId, targetUserId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (congenialityStatus(night) !== 'open') return { error: 'err_congeniality_not_open' };
+  // Same rule as the outfit vote - you don't get to crown yourself.
+  if (Number(targetUserId) === Number(userId)) return { error: 'err_cannot_vote_self' };
+  if (!congenialityCandidates(night).some((c) => c.id === Number(targetUserId))) {
+    return { error: 'err_not_a_candidate' };
+  }
+  if (myCongenialityVote(userId, night) !== null) return { error: 'err_already_voted' };
+
+  db.prepare(
+    'INSERT INTO congeniality_votes (user_id, target_user_id, night) VALUES (?, ?, ?)'
+  ).run(userId, targetUserId, night);
+  return { ok: true };
+}
+
+/** Full standings, most votes first. Admin-visible at any phase. */
+export function congenialityResults(night) {
+  return db.prepare(`
+    SELECT u.id, u.name, COUNT(v.id) AS votes
+    FROM contestants c
+    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
+    LEFT JOIN congeniality_votes v ON v.target_user_id = u.id AND v.night = c.night
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+    GROUP BY u.id
+    ORDER BY votes DESC, u.name COLLATE NOCASE
+  `).all(night);
+}
+
+/** Just the winner, and only once revealed - what a guest is allowed to see. */
+export function congenialityWinner(night) {
+  if (congenialityStatus(night) !== 'revealed') return null;
+  const [top] = congenialityResults(night);
+  return top && top.votes > 0 ? top : null;
+}
+
+/** Wipes this night's congeniality vote back to square one. */
+export function resetCongeniality(night) {
+  db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
+  setSetting(`congeniality_status_${night}`, 'closed');
 }

@@ -57,7 +57,12 @@
   --role-user:  #2a6ca6;
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
-  --status-pending: #8a6a1f;
+  --type-podium: #6b4a8a;
+  /* Was #8a6a1f, which carried enough red/blue to read as olive-mustard
+     rather than yellow. Same hue family with the blue taken out entirely -
+     a proper amber-yellow at identical contrast (3.9:1 on rata's light
+     paper), so nothing gets harder to read for the sake of the hue. */
+  --status-pending: #8a6a00;
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
@@ -93,7 +98,16 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
-  --brand:    #6b3420;
+  /* Solid fill for destructive buttons. --danger itself stays a light tint
+     because .error uses it as *text* on dark login art; a button needs the
+     opposite - a strong ground with light text on top. */
+  --danger-fill: #b04a36;
+  --danger-ink:  #fdf6f0;
+  /* Was #6b3420 (warm brown), then #602456 (plum). Now a dark lilac - the
+     plum still leaned magenta; this rotates the hue toward violet while
+     holding essentially the same contrast on every theme's paper
+     (8.1:1 rata, 5.7:1 memo, 4.5:1 mural). */
+  --brand:    #4a2f70;
   /* role-*/type-*/status-* stay at their :root (light-mode) values here -
      only mode-dark below needs to redefine them. */
 }
@@ -113,12 +127,15 @@ html.mode-dark {
   --clay:     #cf9a5c;
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
+  --danger-fill: #a83f2c;
+  --danger-ink:  #fbeee7;
   --brand:    #e2a878;
   --role-owner: #b294d6;
   --role-admin: #d9695a;
   --role-user:  #6badde;
   --type-announcement: #c9a07a;
   --type-poll: #e08a4a;
+  --type-podium: #b294d6;
   --status-pending: #d4b04a;
   /* Was #7ed181 - a bright mint/lime that clashed with the app's muted,
      earthy palette everywhere it showed up. Deeper, less saturated sage
@@ -210,7 +227,13 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
    as a second button instead of an alert. Full form width for the same
    reason the button is - a narrower chip made the stack step in and out.
    (8:1 against the text below, comfortably past AA.) */
-#login-error:not(:empty) {
+/* Always occupies its full box, error or not - the layout you see on a
+   fresh login is the same one you see after a rejected key, so nothing
+   above it jumps the moment a message appears. The :empty rule keeps a
+   single line's worth of height via generated content (generated content
+   doesn't count against :empty, so this stays stable), and hides the red
+   chip itself with visibility rather than display. */
+#login-error {
   display: block;
   width: 100%;
   max-width: 320px;
@@ -225,8 +248,20 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
   padding: 10px 16px;
   border-radius: var(--radius);
 }
+#login-error:empty { visibility: hidden; }
+#login-error:empty::before { content: '\00a0'; }
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
+/* Built mobile-first (this is a PWA meant to live on a home screen), which
+   left every desktop browser window with the same phone-width column and
+   everything else empty - most of a 1440px window, on every tab, guest
+   and admin alike. Doesn't need a real desktop redesign, just enough room
+   that a laptop visit (checking the Wall, moderating Manage Users) doesn't
+   look unfinished. #login is unaffected - it already overrides this
+   entirely (max-width: none) for its own full-bleed illustration. */
+@media (min-width: 900px) {
+  .view { max-width: 900px; }
+}
 
 /* ------------------------------- Typography ------------------------------ */
 
@@ -256,6 +291,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   --line: rgba(236, 229, 213, 0.35);
   --paper-3: #241d17;
 }
+/* #login's own background-color above only fills its own box - on iOS
+   Safari's overscroll/rubber-band bounce past the top or bottom of the
+   page, it's actually body's background showing through underneath
+   everything, which still carries whatever mode/theme was last active
+   (dark mode's own --paper is a dark purple) - jarring against the login
+   photo. Matches it to the same brown while the login screen is showing,
+   regardless of mode. */
+body:has(#login:not(.hidden)) { background-color: #241d17; }
 /* Plain "cover" - no extra transform:scale() on top of it. Cover already
    guarantees the illustration fills the entire screen with no gaps at its
    largest non-distorted size; an added scale() only ever throws away more
@@ -285,8 +328,13 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   z-index: 1;
   max-width: 620px;
   margin: 0 auto;
-  padding: 22px 20px 48px;
-  min-height: 88vh;
+  padding: 22px 20px calc(28px + env(safe-area-inset-bottom));
+  /* Was 88vh, then 94vh, then 99vh - the whole greeting-through-login block
+     sat too high up near the top of the illustration; taller here
+     (bottom-anchored, see justify-content below) leaves more of the artwork
+     visible above the text before it starts. */
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -299,7 +347,11 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
    headline of this screen, so this stays modest rather than competing for
    header-level weight); "mostra-me a tua chave" is the quieter functional
    instruction underneath. */
+/* The <p>s here carry the UA's own default block margins, which stack on
+   top of this gap and pushed the greeting far higher up the illustration
+   than the 5px suggests. */
 .greeting { display: flex; flex-direction: column; gap: 5px; }
+.greeting p { margin: 0; }
 .greeting .hello {
   font-family: var(--serif);
   font-style: italic;
@@ -307,12 +359,16 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   color: var(--ink);
   text-shadow: 0 2px 14px rgba(4, 6, 2, 0.55);
 }
-.greeting .instruction {
+.instruction {
   font-family: var(--body);
   font-size: 0.84rem;
   letter-spacing: 0.02em;
   color: var(--ink-soft);
-  text-shadow: 0 1px 10px rgba(4, 6, 2, 0.5);
+  /* Two shadows, not one: this line now sits lower on the illustration,
+     right over the brightest part of the cottage roof, where a single soft
+     glow left it barely legible. A tight opaque halo carries the letter
+     edges, the wider one keeps it off the busy texture behind. */
+  text-shadow: 0 1px 2px rgba(4, 6, 2, 0.95), 0 2px 12px rgba(4, 6, 2, 0.8);
 }
 
 #login-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
@@ -334,6 +390,13 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
   color: var(--ink-soft);
   font-family: var(--body);
   font-size: 0.85rem;
+  /* Without these, the generic button/.btn rule's bold weight + wide
+     letter-spacing (meant for solid CTAs like "entrar") carried over onto
+     what's meant to read as a plain inline link - "primeiro login?" stood
+     out as a completely different visual voice from the serif/script
+     text surrounding it on the login screen. */
+  font-weight: 400;
+  letter-spacing: normal;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -349,6 +412,58 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: 0.01em
    transitions to solid --ink and stays that way, permanently, after a
    single tap. */
 .link-btn:hover { background: none; color: var(--ink); }
+/* Discreet on purpose - a language switch is a nice-to-have on the login
+   screen, not a decision that deserves competing with "entrar"/"ainda não
+   tens a tua chave?" for attention. Smaller and dimmer than the base
+   .link-btn, same underline treatment so it still reads as tappable. */
+/* Instruction on the left, language toggle on the right, sharing the row
+   directly above the key field - which also keeps the space under "entrar"
+   free for the error banner to appear where the eye already is. */
+/* The tagline stays optically centred on the key field while the language
+   toggle sits out at the right edge. Absolute positioning for the toggle
+   rather than a flex row: in a row the toggle's own width would shove the
+   tagline off-centre, and it has to line up with the input below it. */
+.login-meta {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  /* Cancels most of .cover's own 20px gap so the line sits tight on the
+     field it describes. */
+  margin-bottom: -16px;
+}
+.login-meta .instruction { text-align: center; }
+.login-meta .login-lang-toggle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+.login-lang-toggle {
+  flex: none;
+  font-size: 0.68rem;
+  opacity: 0.6;
+  letter-spacing: 0.06em;
+  padding: 0;
+}
+/* Deliberately almost invisible - this is the only way into the Plaza
+   admin tab now (see wall-secret-btn in settings.js), meant to be found by
+   someone who already knows it's there, not stumbled onto. No underline,
+   no hover fill (unlike .link-btn above) - just a faint mark that gets
+   slightly more visible on tap/hover so it doesn't feel entirely broken. */
+.wall-secret-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: none;
+  display: block;
+  margin: 28px auto 0;
+  padding: 10px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  opacity: 0.18;
+  cursor: pointer;
+}
+.wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.5; }
+.login-lang-toggle:hover { opacity: 0.9; }
 
 #find-key-results {
   width: 100%;
@@ -393,7 +508,7 @@ input[type="password"] { text-transform: none; }
    as distinctly blue-tinted by contrast against every warm theme (mural's
    terracotta, rata's pink, furnished's clay). --ink-soft already tracks
    each active theme, so this stays in-palette everywhere instead. */
-::placeholder { text-transform: lowercase; font-weight: 600; color: var(--ink-soft); opacity: 1; }
+::placeholder { text-transform: lowercase; font-weight: 400; color: var(--ink-soft); opacity: 1; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--rata); }
 textarea { resize: vertical; }
 
@@ -509,24 +624,23 @@ button.ghost:hover, a.ghost:hover {
 /* Size modifier: small buttons, just padding/font size, inherit color scheme. */
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 
-/* Destructive: Red danger button (delete, wipe, reset). Filled by default,
-   not just outlined - an outline-only "wipe everything" control read as too
-   quiet/easy to miss next to the app's other plain-outline (ghost) buttons,
-   undercutting exactly the action that most needs to read as a warning.
-   Tinted into --paper-2 with --ink text (same recipe as the per-tab CTA
-   tint elsewhere in this file) rather than a flat --danger fill with
-   --paper-3 text - checked, that combination fails contrast badly in
-   several theme/mode pairs (as low as 1.4:1 in mural light), while this
-   stays 5.2-8.4:1 everywhere at 50%/60% (was 35%/55% - still read as too
-   subtle/not clearly "filled" against some themes' own paper-2). */
+/* Destructive: Red danger button (delete, wipe, reset). A genuinely solid
+   fill, not a tint. This used to color-mix --danger 50% into --paper-2,
+   which on a light-mode brick/mural surface diluted an already-pale
+   --danger (#d98a7a) into a washed-out pink whose 1px --danger border
+   disappeared into it entirely - "remover" read as disabled rather than
+   destructive. --danger-fill/--danger-ink exist precisely so this can be a
+   strong ground with light text (5.1:1 light, 6.3:1 dark) without touching
+   --danger itself, which is still needed as *text* elsewhere (.error). */
 button.danger {
-  border: 1px solid var(--danger);
-  background: color-mix(in srgb, var(--danger) 50%, var(--paper-2));
-  color: var(--ink);
+  border: 1px solid var(--danger-fill);
+  background: var(--danger-fill);
+  color: var(--danger-ink);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger) 60%, var(--paper-2));
-  color: var(--ink);
+  background: color-mix(in srgb, var(--danger-fill) 85%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 85%, #000);
+  color: var(--danger-ink);
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -572,10 +686,16 @@ button.danger:hover {
      never exceeds the available space, while the min/max bounds keep it
      from ever reading as too small on a narrow phone or comically large on
      a wide one. */
-  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
+  font-size: clamp(2.15rem, 9.6vw, 2.95rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand);
+  /* The script face only ships 400/700, so "bolder" past 700 has to come
+     from a hairline stroke in the same colour rather than a heavier weight
+     that doesn't exist (and would silently synthesise). Kept well under a
+     full pixel - more than this and the cursive's thin joins fill in. */
+  -webkit-text-stroke: 0.4px currentColor;
+  paint-order: stroke fill;
 }
 .brand .badge,
 .user-row-name .badge {
@@ -612,6 +732,7 @@ button.danger:hover {
 .badge.type-announcement, .badge.type-poll { margin-left: -9px; }
 .badge.type-announcement { border-color: var(--type-announcement); color: var(--type-announcement); }
 .badge.type-poll { border-color: var(--type-poll); color: var(--type-poll); }
+.badge.type-podium { border-color: var(--type-podium); color: var(--type-podium); }
 
 /* Rata history: each revealed consequence, who was assigned, and its
    completion status - a standalone pill (not .badge, which is scoped to
@@ -790,21 +911,12 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    sets one, see settings.js), where the plain light-mode --clay reads
    pale/salmon against the paper, too soft to read as "selected" at a
    glance. Every regular-page theme below (furnished/swamp/rata/mural/
-   plaza) sets its own --clay-active matching its own --clay, which - set
-   directly on body, closer in the tree than this html-level default -
+   plaza/memo) sets its own --clay-active matching its own --clay, which -
+   set directly on body, closer in the tree than this html-level default -
    wins whenever one of those is active, restoring each tab's own color.
    Dark mode's warmer clays already have enough contrast as-is, no
    equivalent override needed there. */
 html.mode-light { --clay-active: #b5624a; }
-/* Regular pages only: A Rata shares --clay with every other tab there,
-   making its active underline indistinguishable from Wall's right next to
-   it - rats are grey, so it gets its own neutral accent instead. The admin
-   page never switches body theme per tab (unlike the regular pages, whose
-   active-tab color intentionally follows whichever section's theme is
-   open), so every admin tab already renders identically without this -
-   scoped to [data-tab], not [data-atab], on purpose. */
-[data-tab="rata"].active { border-bottom-color: #83807a; }
-html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
 
 /* --------------------------------- Cards --------------------------------- */
 
@@ -816,6 +928,14 @@ html.mode-light [data-tab="rata"].active { border-bottom-color: #5c5952; }
   margin-bottom: 18px;
 }
 .card h2 { font-size: 1.15rem; margin-bottom: 6px; }
+/* Every theme's --ink is tuned within its own hue (see each body.theme-X
+   block) - some read distinctly "whiter" than others at similar lightness
+   (a cool cyan vs. a warm cream/gold), which made card titles look
+   inconsistently bold from one page to the next. Literal white in dark
+   mode everywhere, for the same visual weight regardless of theme. Light
+   mode keeps each theme's own --ink (already dark, tuned to read against
+   its own light paper - literal white there would be invisible). */
+html.mode-dark .card h2 { color: #fff; }
 
 .hero-line {
   font-family: var(--serif);
@@ -968,7 +1088,6 @@ html.mode-light .hero-line { color: var(--ink); }
 
 /* --------------------------------- Admin --------------------------------- */
 
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 8px; }
@@ -1008,6 +1127,20 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
    text itself (unlike the old copy button, which safely could). */
 .user-row-token.just-copied, .account-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
+/* Collapsed to name+role by default (see renderUsersList() in settings.js) -
+   with a real guest list, showing every key/action for every row at once
+   made Manage Users an extremely long, mostly-irrelevant scroll. Tap a row
+   to reveal its own key/actions instead. */
+.user-row-top { cursor: pointer; }
+.user-row-chevron {
+  color: var(--ink-soft);
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.user-row-top[aria-expanded="true"] .user-row-chevron { transform: rotate(90deg); }
+.user-row-details { margin-top: 6px; }
 
 /* Click-to-rename a contestant or user (see loadContestants()/renderUsersList()). */
 .contestant-name-edit, .user-row-name-text.name-edit { cursor: pointer; border-bottom: 1px dotted var(--line); }
@@ -1025,6 +1158,11 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
 .inline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .inline input { margin-bottom: 0; }
 .inline button { white-space: nowrap; }
+/* The search-or-create user input otherwise wraps its "criar" button onto
+   its own line (inputs are width:100% by default) - here the button is a
+   short, immediate action tied to what's typed, so it reads better sitting
+   right next to the input instead of below it. */
+#user-form input { flex: 1 1 auto; width: auto; min-width: 0; }
 
 .help { font-size: 0.95rem; color: var(--ink-soft); margin: 0 0 14px; }
 
@@ -1075,9 +1213,12 @@ body { transition: background-color 0.45s ease; }
 
 /* --- FURNISHED: cozy interior, teal velvet, warm wallpaper --- */
 body.theme-furnished {
-  --paper:    #d6ded7;
-  --paper-2:  #e2e8e1;
-  --paper-3:  #ebefe9;
+  /* Was #d6ded7/#e2e8e1/#ebefe9 (~11% saturation) - read as plain grey
+     rather than green next to Swamp's own ~28%. Boosted saturation at the
+     same lightness so it reads as sage green instead of grey-green. */
+  --paper:    #d0e4d3;
+  --paper-2:  #e0ebde;
+  --paper-3:  #eaf1e7;
   --ink:      #22302b;
   --ink-soft: #566a62;
   /* Was #a9bab2 (~1.6:1 against --paper-2) - card/post borders read as
@@ -1124,6 +1265,12 @@ body.theme-swamp {
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
 body.theme-furnished .hero-line,
+/* Furnished never got its own hero-line accent (unlike swamp/rata/mural/
+   plaza/memo below), so it fell back to the deliberately muted default
+   (.hero-line's own color:var(--ink-soft)) - read as much less bold than
+   every other theme's hero-line, since bold text.at low contrast still
+   looks thin. */
+body.theme-furnished .hero-line { color: var(--ot-2); }
 body.theme-swamp .hero-line { color: var(--ot-2); }
 body.theme-furnished .card,
 body.theme-swamp .card {
@@ -1152,9 +1299,10 @@ body.theme-rata {
      as Rata's own color. Pink keeps Rata in its own established dusty
      pink-grey family (see --paper/--ink above) instead of borrowing a warm
      hue that's already spoken for elsewhere. */
-  --clay:     #a82f57;
-  --clay-2:   #cb5c81;
-  --rata:     #a82f57;
+  /* Same off-red-toward-mauve shift as the light variant below. */
+  --clay:     #b8438a;
+  --clay-2:   #d678ad;
+  --rata:     #b8438a;
   background-color: #190f13;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1213,13 +1361,17 @@ html.mode-dark body.theme-swamp .card {
 }
 
 html.mode-light body.theme-rata {
-  /* Was a neutral light grey (#ececed family) - same dusty pink-grey shift
-     as the dark variant above, just lifted to a pale tone. */
-  --paper:    #ece3e4;
-  --paper-2:  #f1e9ea;
-  --paper-3:  #f6f0f0;
-  --ink:      #302629;
-  --ink-soft: #6d5c60;
+  /* Was a neutral light grey (#ececed family), then a dusty pink-grey
+     (#ece3e4) that still read as plain grey next to the other themes.
+     Properly pink now - roughly triple the chroma at the same lightness, so
+     it looks like the rata tab rather than an unthemed page. The two inks
+     were neutral greys sitting on top of it; both carry the same pink bias
+     now, still 10.7:1 and 4.8:1 against --paper (comfortably past AA). */
+  --paper:    #f0d9df;
+  --paper-2:  #f6e2e7;
+  --paper-3:  #fbebef;
+  --ink:      #40202c;
+  --ink-soft: #805062;
   /* Was #dcc9cc/#e6d6d8 - barely distinguishable from --paper-2 (#f1e9ea),
      so card borders read as missing entirely on this tab specifically,
      unlike every other night theme. Darkened within the same dusty-pink
@@ -1228,9 +1380,18 @@ html.mode-light body.theme-rata {
   --line-2:   #c7a8ac;
   /* Same pink hue-shift as the dark variant above - was #8a5b2c/#6e4822
      (orange), before that #8a3f2c/#6e3122 (brick-red). */
-  --clay:     #8a2c4b;
-  --clay-2:   #6e223b;
-  --rata:     #8a2c4b;
+  /* Shifted off red toward mauve-pink, by request: these were #8a2c4b /
+     #6e223b, which read as maroon against the (now properly pink) paper
+     rather than as part of it. Same lightness, hue rotated toward magenta -
+     the hero line still clears 7:1 and the accents 5:1 on --paper. */
+  --clay:     #9c3374;
+  --clay-2:   #7a2860;
+  --rata:     #9c3374;
+  /* Missing here despite the html.mode-light fallback's own comment
+     claiming every regular-page theme sets one - fell through to that
+     stray global default (#b5624a, meant only for admin's theme-less
+     Settings tab) instead of Rata's own pink underline. */
+  --clay-active: #8a2c4b;
   background-color: #efe6e7;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23f0e8e9'/%3E%3Cg fill='%23978387' fill-opacity='0.14'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23978387' stroke-opacity='0.18' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
@@ -1266,7 +1427,10 @@ body.theme-mural {
   --line:     #8c5a3a;
   --line-2:   #bd8964;
   --clay:     #8f3a26;
-  --clay-2:   #a84631;
+  /* Was #a84631 (~2.4:1 against --paper) - the hero-line ("o que se passa
+     agora") failed WCAG AA even at large-text size. Darkened within the
+     same rust family to ~4.6:1. */
+  --clay-2:   #642818;
   --clay-active: #8f3a26;
   --rata:     #8f3a26;
   background-color: #c48f6d;
@@ -1326,11 +1490,20 @@ body.theme-plaza {
   /* Was a blue accent (#2a4a7a/#3f679c) for newsstand/masthead contrast -
      read as out of place next to every other theme's warm, single-hue
      accent. Back to a monochrome newsprint mood: a darker, more saturated
-     yellow/mustard than the paper itself, not a different hue. */
-  --clay:     #7a5200;
+     yellow/mustard than the paper itself, not a different hue. Was
+     #7a5200 (hue 40, orange-leaning) - rotated to hue 48 at the same
+     lightness/saturation to read more "yellow", less brown, without the
+     contrast hit a straight lightening would cause (this color doubles as
+     both a text color on pale paper and a badge/button background under
+     light text, so it can't just get brighter). */
+  --clay:     #7a6200;
   --clay-2:   #9c6e15;
-  --clay-active: #7a5200;
-  --rata:     #7a5200;
+  /* Both were left at the pre-rotation #7a5200 when --clay above changed -
+     every other theme keeps --clay-active/--rata identical to --clay, so
+     this diverging quietly undid the yellow-not-brown fix for both the
+     tab underline and the .highlight box accent. */
+  --clay-active: #7a6200;
+  --rata:     #7a6200;
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
@@ -1362,21 +1535,162 @@ html.mode-dark body.theme-plaza {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23e8e2d3' fill-opacity='0.025'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23e8e2d3' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
 }
 
-.plaza-eyebrow {
-  display: block;
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: var(--text-xs);
-  letter-spacing: 0.14em;
-  text-transform: lowercase;
-  color: var(--clay);
+/* ================= Memo: flash de câmara, ao acaso ao longo do dia ======= */
+/* Aplicado a <body> apenas quando o separador Memo esta ativo (ver
+   applyNight() em app.js), mesmo mecanismo dos outros temas noturnos. The
+   one cool accent among five warm ones (teal/olive/mauve/terracotta/gold) -
+   deliberate, see the design exploration this was picked from. Motif is a
+   scatter of small sparks/dust catching a flash, not an illustrated scene
+   like the other themes' paw-prints/bricks/skyline, since this theme's own
+   idea is "a camera flash," not a place. */
+body.theme-memo {
+  --paper:    #11232c;
+  --paper-2:  #182e39;
+  --paper-3:  #1f3946;
+  --ink:      #dff5fa;
+  --ink-soft: #7fb8c9;
+  /* Was #2c5261 (~1.7:1 against --paper-2) - same weak-border issue fixed
+     on every other theme tonight, lightened to ~2.4:1. */
+  --line:     #396a7d;
+  --line-2:   #4a7f94;
+  --clay:     #2bcdee;
+  --clay-2:   #6fe0f5;
+  --rata:     #2bcdee;
+  background-color: #0c1a20;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160'%3E%3Cg fill='%232bcdee' fill-opacity='0.22'%3E%3Ccircle cx='18' cy='24' r='2.2'/%3E%3Ccircle cx='60' cy='12' r='1.4'/%3E%3Ccircle cx='96' cy='40' r='1.8'/%3E%3Ccircle cx='150' cy='20' r='1.4'/%3E%3Ccircle cx='180' cy='58' r='2.2'/%3E%3Ccircle cx='34' cy='78' r='1.4'/%3E%3Ccircle cx='120' cy='84' r='2.2'/%3E%3Ccircle cx='8' cy='120' r='1.8'/%3E%3Ccircle cx='70' cy='128' r='1.4'/%3E%3Ccircle cx='108' cy='150' r='1.8'/%3E%3Ccircle cx='160' cy='118' r='1.4'/%3E%3Ccircle cx='190' cy='140' r='2.2'/%3E%3C/g%3E%3C/svg%3E");
 }
+body.theme-memo .hero-line { color: var(--clay-2); }
+body.theme-memo .card {
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+html.mode-light body.theme-memo {
+  /* Was #e2eff3/#d5e6ec/#c8dde4 (L~85-88%) - noticeably lighter/more
+     saturated than every other theme's light-mode paper (all sit around
+     L65-77%), reading as glaringly bright/washed out by comparison even
+     after a first darkening pass wasn't enough. Now in that same L~60-70%
+     range within the same cyan family. ink-soft/line/clay-2 all darkened
+     alongside to hold their contrast against the now-noticeably-darker
+     paper (a color only tuned against the old, much lighter background
+     loses contrast when the background gets this much deeper). */
+  --paper:    #94c3d1;
+  --paper-2:  #82b9c9;
+  --paper-3:  #70afc2;
+  --ink:      #152c37;
+  --ink-soft: #2f4c59;
+  --line:     #2d6478;
+  --line-2:   #7bb0c2;
+  --clay:     #0e90aa;
+  --clay-2:   #0a5464;
+  --rata:     #0e90aa;
+  /* Missing here despite the html.mode-light fallback's own comment
+     claiming every regular-page theme sets one - fell through to that
+     stray global default (#b5624a, meant only for admin's theme-less
+     Settings tab) instead of Memo's own cyan underline. */
+  --clay-active: #0e90aa;
+  /* Was #e2eff3 - the stale pre-darkening paper value, never updated when
+     --paper darkened above, so the page background stayed pale while cards
+     (which use --paper-2 via .card) correctly picked up the new color -
+     a jarring mismatch instead of the same small "body slightly darker
+     than card" offset every other theme has between its own --paper and
+     this. */
+  background-color: #87b6c3;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160'%3E%3Cg fill='%230e90aa' fill-opacity='0.16'%3E%3Ccircle cx='18' cy='24' r='2.2'/%3E%3Ccircle cx='60' cy='12' r='1.4'/%3E%3Ccircle cx='96' cy='40' r='1.8'/%3E%3Ccircle cx='150' cy='20' r='1.4'/%3E%3Ccircle cx='180' cy='58' r='2.2'/%3E%3Ccircle cx='34' cy='78' r='1.4'/%3E%3Ccircle cx='120' cy='84' r='2.2'/%3E%3Ccircle cx='8' cy='120' r='1.8'/%3E%3Ccircle cx='70' cy='128' r='1.4'/%3E%3Ccircle cx='108' cy='150' r='1.8'/%3E%3Ccircle cx='160' cy='118' r='1.4'/%3E%3Ccircle cx='190' cy='140' r='2.2'/%3E%3C/g%3E%3C/svg%3E");
+}
+html.mode-light body.theme-memo .card {
+  box-shadow: 0 12px 34px rgba(21, 44, 55, 0.14);
+}
+
+/* ------------------------------- Memo (UI) -------------------------------- */
+
+/* Demure by request: 5 small dots instead of a detailed row-per-slot list -
+   waiting is a hollow ring, open pulses solid to invite a tap, done is a
+   plain filled dot, missed is filled but dim. No numbers/times on the dots
+   themselves (see the aria-label for the roman-numeral name instead). */
+.memo-dots { display: flex; gap: 14px; }
+.memo-shoot { margin-top: 16px; }
+.memo-shoot button { width: 100%; }
+/* A plain indicator, not a control - see renderMemoDots() in app.js. */
+.memo-dot {
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: transparent;
+  padding: 0;
+  cursor: default;
+}
+/* Read as a temperature scale rather than four unrelated colours: the two
+   still-to-do states are light blue, done is the deep blue they resolve
+   into, and a missed one drains to plain white - the odd one out, which is
+   the point. Fixed hex rather than theme tokens: Memo owns the blue, and
+   these have to mean the same thing in both light and dark mode. */
+.memo-dot-waiting { background: #8fd6e8; border-color: #8fd6e8; opacity: 0.55; }
+.memo-dot-uploaded { background: #0b5f77; border-color: #0b5f77; }
+.memo-dot-missed { background: #fff; border-color: #fff; opacity: 0.85; }
+/* Same light blue as waiting - it's still "to be done" - but at full
+   strength and pulsing, so the one you can actually act on stands out. */
+.memo-dot-open {
+  background: #8fd6e8;
+  border-color: #8fd6e8;
+  animation: memo-dot-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .memo-dot-open { animation: none; }
+}
+@keyframes memo-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(143, 214, 232, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(143, 214, 232, 0); }
+}
+
+.memo-feed-item { margin-bottom: 18px; }
+.memo-feed-item:last-child { margin-bottom: 0; }
+.memo-feed-thumb {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #000;
+  display: block;
+}
+.memo-feed-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.memo-feed-name { font-family: var(--serif); font-size: 1rem; color: var(--ink); }
+.memo-reaction-bar { display: flex; gap: 4px; }
+.memo-reaction {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  border-radius: 999px;
+  padding: 5px 9px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.memo-reaction svg { width: 19px; height: 19px; flex-shrink: 0; }
+.memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
+.memo-reaction.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 
 /* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
    glance tells an announcement from a poll - a plain torn front-page column
    for announcements, a boxed "magazine spread" card for polls (the
    interactive one). A pinned announcement borrows the same boxed treatment
    so it reads as prominent rather than blending into the column. */
+.wall-video-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wall-video-row:last-child { border-bottom: none; padding-bottom: 0; }
+.wall-video-day { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); }
+.wall-video-player { width: 100%; border-radius: var(--radius); background: #000; }
+
 .plaza-feed { display: flex; flex-direction: column; }
 .plaza-post { border-top: 1px solid var(--line); padding: 20px 0; }
 /* Excludes the boxed types below (announcement/poll): they carry their own
@@ -1384,7 +1698,14 @@ html.mode-dark body.theme-plaza {
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium) { border-top: none; padding-top: 0; }
+/* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
+   an announcement/poll post is its own self-contained "boxed" card (see
+   the comment on .plaza-post above), so its type label is that card's
+   title and should look like one, not a caption underneath it. Matches
+   .card h2's size, and gets the same dark-mode-white treatment below. */
+.plaza-post-type { font-size: 1.15rem; margin-bottom: 6px; }
+html.mode-dark .plaza-post-type { color: #fff; }
 .plaza-post-text {
   font-family: var(--serif);
   font-size: 1.05rem;
@@ -1406,18 +1727,36 @@ html.mode-dark body.theme-plaza {
 }
 .plaza-byline { font-family: var(--body); font-size: var(--text-sm); color: var(--ink-soft); margin: 10px 0 0; }
 
-.plaza-post-announcement {
+/* Admin's own post-history preview (loadPlazaPosts() in settings.js) - the
+   byline (meta), question (content) and poll tally (data) used to all
+   render at the same weight/color, making a poll entry read as one
+   undifferentiated block. The vote count is now the one bold element per
+   row (it's the actual data being scanned for), the option label stays
+   plain body text, and voter names stay muted - a top divider plus
+   indent separates the tally visually from the question above it. */
+.admin-post-options {
+  margin: 10px 0 0;
+  padding: 10px 0 0 4px;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  font-family: var(--body);
+  font-size: 0.92rem;
+}
+.admin-post-options li { padding: 3px 0; }
+.admin-post-options strong { font-weight: 700; margin-left: 4px; }
+
+.plaza-post-announcement, .plaza-post-podium {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-announcement:first-child { margin-top: 0; }
+.plaza-post-announcement:first-child, .plaza-post-podium:first-child { margin-top: 0; }
 /* Boxed like a poll now (was a plain unboxed "torn column" that read as
    an afterthought next to the poll's card) - pinning still upgrades the
    border to stand out further, same as polls. */
-.plaza-post-announcement.pinned { border-color: var(--clay); }
+.plaza-post-announcement.pinned, .plaza-post-podium.pinned { border-color: var(--clay); }
 .plaza-pinned-badge {
   display: inline-block;
   font-family: var(--body);
@@ -1475,7 +1814,12 @@ html.mode-dark body.theme-plaza {
   transition: width 0.3s ease;
 }
 .plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
-.plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Neither side of the row is bold. The option label briefly was (to
+   outweigh the tally beside it), but these rows inherit the button rule's
+   wide letter-spacing, and bold on top of that made a plain list of choices
+   read as four shouting CTAs. */
+.plaza-poll-option-label { font-weight: 400; }
+.plaza-poll-option-pct { font-variant-numeric: tabular-nums; }
 .plaza-poll-submit { margin-top: 12px; }
 
 /* Banner com motivo tematico + interruptor de tema */
@@ -1487,8 +1831,12 @@ html.mode-dark body.theme-plaza {
   margin-bottom: 18px;
   background: var(--ot-tint);
 }
+/* Was 84px - the largest stretch of pure decoration-with-no-content
+   anywhere in the app, sitting between the hero-line and the actual
+   night switch/contestant list. Still reads as the same motif at a
+   third less height. */
 .theme-motif {
-  height: 84px;
+  height: 56px;
   background-image: var(--ot-motif);
   background-repeat: repeat;
   border-bottom: 1px solid var(--line-2);
@@ -1558,14 +1906,16 @@ html.mode-dark body.theme-plaza {
 #admin-register-form button[type="submit"],
 #voting-advance-btn,
 [data-reveal-next] {
-  /* Was 22% (and 35% before that, deemed too vivid/heavy in light mode) -
-     30% strikes a middle ground: some of these (revelar, criar, iniciar)
-     are the one clear primary action on their card and read as too washed-
-     out/easy to miss at 22%. Contrast stays 6-9:1 regardless of percentage
-     here (the ink/paper pairing dominates it). */
-  background: color-mix(in srgb, var(--clay) 30%, var(--paper-2));
-  border-color: var(--clay);
-  color: var(--ink);
+  /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
+     --ink text. Even at 35% it read as a washed-out, half-transparent
+     "fake" button rather than a real one. Solid now: --clay darkened
+     against black so a single white text colour clears AA on every theme's
+     accent (worst case 4.9:1, Memo's cyan; most sit 8-13:1). Darkening is
+     what makes one text colour possible at all - several --clay values are
+     light enough (#e2a798, #2bcdee) that white on the raw accent fails. */
+  background: color-mix(in srgb, var(--clay) 60%, #000);
+  border-color: color-mix(in srgb, var(--clay) 60%, #000);
+  color: #fff;
 }
 #register-form button[type="submit"]:hover,
 #confirm-entry-btn:hover,
@@ -1578,8 +1928,20 @@ html.mode-dark body.theme-plaza {
 #admin-register-form button[type="submit"]:hover,
 #voting-advance-btn:hover,
 [data-reveal-next]:hover {
-  background: color-mix(in srgb, var(--clay) 35%, var(--paper-2));
-  color: var(--ink);
+  background: color-mix(in srgb, var(--clay) 52%, #000);
+  border-color: color-mix(in srgb, var(--clay) 52%, #000);
+  color: #fff;
+}
+/* The generic button:disabled { opacity: 0.45 } fades this button's own
+   tinted background AND its var(--ink) text toward the same card
+   background behind it, which shrinks the gap between the two much more
+   than a flat 45% suggests - on a poll with nothing picked yet, "votar"
+   read as barely-there instead of just "not yet available". A lighter
+   fade keeps the label legible while still reading as disabled. */
+#register-form button[type="submit"]:disabled,
+.plaza-poll-submit:disabled,
+#plaza-post-form button[type="submit"]:disabled {
+  opacity: 0.7;
 }
 
 /* ----------------------------- Tutorial overlay --------------------------- */
@@ -1669,3 +2031,43 @@ html.mode-dark body.theme-plaza {
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
 .chat-empty { color: var(--ink-soft); font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }
+
+/* ------------------- Miss Congeniality + published podium ----------------- */
+
+/* The single crowned name, in the same script face the app uses for its
+   other "this is the moment" text (hero lines, the login greeting) rather
+   than the body face a plain result list would get. */
+.congeniality-winner {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.35rem;
+  color: var(--clay-2);
+  margin: 0 0 2px;
+}
+
+/* A Snatch result published to the Wall. Reuses the feed's own post frame -
+   this is a row of placings inside it, not a new kind of surface. */
+.podium-night { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 0 0 10px; }
+.podium-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.podium-row { display: flex; align-items: center; gap: 10px; }
+.podium-medal { font-size: 1.2rem; flex: none; }
+.podium-photo {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+/* Same footprint as a real thumbnail so a photoless entry doesn't shunt the
+   name and tally out of line with the rows above it. */
+.podium-photo-empty { display: inline-block; background: var(--paper-3); }
+.podium-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.podium-row .votes { flex: none; color: var(--ink-soft); font-size: var(--text-xs); }
+.podium-congeniality { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.podium-congeniality h3 { font-size: 0.95rem; margin: 0 0 4px; }
+
+/* Separates the phases of one night's control card (outfit vote ->
+   congeniality -> publish) without splitting them into separate cards -
+   they're the same night being run, in order. */
+.voting-divider { border: none; border-top: 1px solid var(--line); margin: 20px 0 16px; }

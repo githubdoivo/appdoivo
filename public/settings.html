@@ -4,8 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#e7e3d6" />
-  <link rel="icon" href="/favicon.ico?v=2" sizes="32x32" />
-  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=3" />
+  <!-- SVG first: it carries both light/dark tunings and swaps them itself
+       (see favicon.svg). The PNGs below are the fallback for anything that
+       doesn't take an SVG favicon; .ico is the last resort. -->
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=5" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=5" media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32-dark.png?v=5" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png?v=5" />
+  <link rel="icon" href="/favicon.ico?v=5" sizes="32x32" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Italianno&display=swap" />
@@ -46,11 +52,20 @@
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
+        <!-- Settings first (it's the one tab every user gets), then the
+             exact order of the guest tab bar in index.html - wall, plaza,
+             memo, rata, snatch - so the two navs don't disagree. Mind the
+             internal naming swap when reading this: atab="plaza" is the
+             tab displayed as "wall", atab="wall" the one displayed as
+             "plaza". See CLAUDE.md. -->
         <button class="tab active" data-atab="settings" data-i18n="tab_settings">Settings</button>
         <button class="tab" data-atab="plaza" data-i18n="tab_plaza">Plaza</button>
+        <!-- No longer a normal tab bar entry - see the star trigger at the
+             end of atab-memo instead (#wall-secret-btn in settings.js). -->
+        <button class="tab hidden" data-atab="wall" data-i18n="tab_chat">Wall</button>
+        <button class="tab" data-atab="memo" data-i18n="tab_memo">Memo</button>
         <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
         <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
-        <button class="tab" data-atab="wall" data-i18n="tab_chat">Wall</button>
       </nav>
 
       <!-- Separador: Plaza (qualquer admin pode publicar - feed visivel a
@@ -117,10 +132,42 @@
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" class="small" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
+            <!-- Only shown once voting's closed AND the top spot is tied -
+                 see the tie check in loadVotes() in settings.js. Starts a
+                 fresh vote scoped to just the tied contestants (see
+                 startRunoff() in votes.js). -->
+            <button type="button" class="small hidden" id="voting-runoff-btn" data-i18n="voting_runoff_btn">Desempate</button>
             <button type="button" class="small" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
             <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>
           <span id="voting-msg" class="muted"></span>
+
+          <!-- The night's second round, run after the outfit vote. Same
+               control shape as above (one advancing button + a reset), not
+               three separate phase buttons - see renderCongenialityAdmin()
+               in settings.js. Lives inside this card rather than its own
+               because it's the same night being run, and because the
+               publish button below covers BOTH results at once. -->
+          <hr class="voting-divider" />
+          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
+          <p style="margin-top:8px">
+            <span data-i18n="voting_state">Estado atual</span>:
+            <strong id="congeniality-state" class="voting-state">--</strong>
+          </p>
+          <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
+          <div class="voting-controls" style="margin-top:12px">
+            <button type="button" class="small" id="congeniality-advance-btn" data-i18n="congeniality_start_btn">Iniciar</button>
+            <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar</button>
+          </div>
+          <table id="congeniality-table" class="table" style="margin-top:12px"></table>
+
+          <!-- Publishes the whole night in one post: every revealed tier
+               with photos and medals, plus the congeniality winner. -->
+          <hr class="voting-divider" />
+          <div class="voting-controls">
+            <button type="button" class="small" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
+          </div>
+          <span id="congeniality-msg" class="muted"></span>
         </div>
 
         <div class="card">
@@ -251,6 +298,44 @@
           <button id="chat-wipe-btn" type="button" class="danger" data-i18n="chat_wipe_btn">Apagar tudo da Plaza</button>
           <span id="chat-wipe-msg" class="muted wipe-msg"></span>
         </div>
+      </div>
+
+      <!-- Separador: Memo (QA-only until tested, see memoEnabled/boot() -
+           hidden entirely when the flag is off, same shape as Plaza). -->
+      <div id="atab-memo" class="tab-panel hidden">
+        <!-- Owner-only: starts the next scheduled moment on demand rather
+             than waiting for its random time. Hidden for a regular admin in
+             boot() in settings.js - it pushes to every guest's phone. -->
+        <div class="card hidden" id="memo-trigger-card">
+          <h2 data-i18n="memo_trigger_title">Momento agora</h2>
+          <p class="help" data-i18n="memo_trigger_help">Explicação</p>
+          <button type="button" class="small" id="memo-trigger-btn" data-i18n="memo_trigger_btn">Abrir o próximo momento</button>
+          <span id="memo-trigger-msg" class="muted" style="display:block;margin-top:8px"></span>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="memo_admin_days_title">Dias</h2>
+          <p class="help" data-i18n="memo_admin_days_help">Explicação</p>
+          <div id="memo-days-list" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Owner-only kill switch, scoped to just this feature (see
+             POST /admin/memo/wipe) - hidden for a regular admin in
+             boot() in settings.js. Unlike every other feature's wipe,
+             this one also deletes the actual files on disk, not just DB
+             rows (see wipeAll() in memo.js). -->
+        <div class="card" id="memo-wipe-card">
+          <h2 data-i18n="wipe_title">Zona perigosa</h2>
+          <p class="help" data-i18n="memo_wipe_help">Explicação</p>
+          <button id="memo-wipe-btn" type="button" class="danger" data-i18n="memo_wipe_btn">Apagar tudo do Memo</button>
+          <span id="memo-wipe-msg" class="muted wipe-msg"></span>
+        </div>
+
+        <!-- Owner-only secret entry point to the Plaza admin tab (internal
+             id "wall" - see the tab button above, permanently hidden now).
+             Deliberately near-invisible, not a labeled button - see
+             wall-secret-btn in settings.js/styles.css. -->
+        <button type="button" id="wall-secret-btn" class="wall-secret-btn hidden" aria-label="✦">✦</button>
       </div>
 
       <!-- Tab: Settings (every user, including the owner) -->
