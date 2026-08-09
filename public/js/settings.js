@@ -1246,7 +1246,8 @@ function rataStatus(c) {
 // three start selected (matches the pills' own default "active" state in
 // the HTML) - deselecting one hides it, rather than starting from
 // "nothing picked means show everything".
-const rataStatusFilter = new Set(['atribuir', 'fila', 'pendente', 'feita']);
+// Same order as the filter chips in settings.html - the lifecycle order.
+const rataStatusFilter = new Set(['fila', 'atribuir', 'pendente', 'feita']);
 let rataRows = [];
 let rataAssignableUsers = [];
 
