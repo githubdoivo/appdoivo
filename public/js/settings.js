@@ -473,21 +473,41 @@ function renderUsersList(users) {
   $('users-list').innerHTML = users.length
     ? users.map((u) => `
       <div class="user-row">
-        <div class="user-row-top">
+        <div class="user-row-top" data-row-toggle role="button" tabindex="0" aria-expanded="false">
           <div class="user-row-name">
             <span class="user-row-name-text${isOwner ? ' name-edit' : ''}"${isOwner ? ` data-rename-user="${u.id}" data-current-name="${esc(u.name)}" role="button" tabindex="0"` : ''}>${esc(u.name)}</span>
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
-          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          <span class="user-row-chevron">›</span>
         </div>
-        ${isOwner ? `
-        <div class="row-actions">
-          ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
-          <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-          ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
-        </div>` : ''}
+        <div class="user-row-details hidden">
+          <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
+          ${isOwner ? `
+          <div class="row-actions">
+            ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
+            <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
+            ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
+          </div>` : ''}
+        </div>
       </div>`).join('')
     : `<p class="muted">${t('no_users')}</p>`;
+
+  // Collapsed to just name+role by default - with a real guest list (not
+  // 24 demo accounts), showing every key/action for every single row at
+  // once made the whole tab one very long, mostly-irrelevant scroll. Tap
+  // the row to reveal its key and actions instead of dumping everyone's
+  // open at once.
+  $('users-list').querySelectorAll('[data-row-toggle]').forEach((row) => {
+    const toggle = () => {
+      const details = row.nextElementSibling;
+      const nowOpen = details.classList.toggle('hidden') === false;
+      row.setAttribute('aria-expanded', String(nowOpen));
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
 
   // Keys are censored by default (someone glancing at a screen share
   // shouldn't see everyone's access keys) - click to reveal/hide. Every
@@ -545,10 +565,17 @@ function renderUsersList(users) {
         if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
         if (e.key === 'Escape') { settled = true; loadUsers(); }
       });
+      // Same bubbling issue as the span it replaced - typing/clicking into
+      // the input would otherwise also toggle the row shut mid-edit.
+      input.addEventListener('click', (e) => e.stopPropagation());
     };
-    b.addEventListener('click', startEdit);
+    // Both stop propagation - without it, clicking the name to rename (or
+    // just tabbing/space-ing into it) also bubbles up to the row's own
+    // expand/collapse toggle, since the name sits inside that same
+    // clickable row header.
+    b.addEventListener('click', (e) => { e.stopPropagation(); startEdit(); });
     b.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); startEdit(); }
     });
   });
 

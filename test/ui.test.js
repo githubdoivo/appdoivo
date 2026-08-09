@@ -489,13 +489,16 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
 
 /* --------------- Manage Users key layout (regression) --------------- */
 
-test('Manage Users row keeps the access key visible with no overflow', async () => {
+test('Manage Users row keeps the access key visible with no overflow, once expanded', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
+  // Rows are collapsed to just name+role by default (see renderUsersList()
+  // in settings.js) - the key only renders once its row is expanded.
+  await page.click('#users-list [data-row-toggle]');
   const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
-  assert.ok(tokenVisible, 'access key is not visible in the user row');
+  assert.ok(tokenVisible, 'access key is not visible in the expanded user row');
 
   const overflow = await horizontalOverflow(page);
   assert.ok(overflow <= 1, `Manage Users overflows by ${overflow}px with the key inline`);
@@ -514,6 +517,9 @@ test('access keys are censored by default, reveal on click, and copy automatical
     navigator.clipboard.writeText = (text) => { window.__copied = text; return Promise.resolve(); };
   });
 
+  // Rows are collapsed to just name+role by default - expand it first, the
+  // key itself lives in the hidden details section until then.
+  await page.click('#users-list [data-row-toggle]');
   const tokenEl = await page.$('.user-row-token');
   const realToken = await tokenEl.getAttribute('data-token');
   const shownBefore = await tokenEl.textContent();

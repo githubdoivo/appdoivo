@@ -229,6 +229,16 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
 }
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
+/* Built mobile-first (this is a PWA meant to live on a home screen), which
+   left every desktop browser window with the same phone-width column and
+   everything else empty - most of a 1440px window, on every tab, guest
+   and admin alike. Doesn't need a real desktop redesign, just enough room
+   that a laptop visit (checking the Wall, moderating Manage Users) doesn't
+   look unfinished. #login is unaffected - it already overrides this
+   entirely (max-width: none) for its own full-bleed illustration. */
+@media (min-width: 900px) {
+  .view { max-width: 900px; }
+}
 
 /* ------------------------------- Typography ------------------------------ */
 
@@ -348,6 +358,13 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   color: var(--ink-soft);
   font-family: var(--body);
   font-size: 0.85rem;
+  /* Without these, the generic button/.btn rule's bold weight + wide
+     letter-spacing (meant for solid CTAs like "entrar") carried over onto
+     what's meant to read as a plain inline link - "primeiro login?" stood
+     out as a completely different visual voice from the serif/script
+     text surrounding it on the login screen. */
+  font-weight: 400;
+  letter-spacing: normal;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -1045,6 +1062,20 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
    text itself (unlike the old copy button, which safely could). */
 .user-row-token.just-copied, .account-token.just-copied { color: var(--clay); transition: color 0.15s; }
 .user-row .row-actions { justify-content: flex-end; flex-wrap: wrap; white-space: normal; margin-top: 8px; }
+/* Collapsed to name+role by default (see renderUsersList() in settings.js) -
+   with a real guest list, showing every key/action for every row at once
+   made Manage Users an extremely long, mostly-irrelevant scroll. Tap a row
+   to reveal its own key/actions instead. */
+.user-row-top { cursor: pointer; }
+.user-row-chevron {
+  color: var(--ink-soft);
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.user-row-top[aria-expanded="true"] .user-row-chevron { transform: rotate(90deg); }
+.user-row-details { margin-top: 6px; }
 
 /* Click-to-rename a contestant or user (see loadContestants()/renderUsersList()). */
 .contestant-name-edit, .user-row-name-text.name-edit { cursor: pointer; border-bottom: 1px dotted var(--line); }
@@ -1700,7 +1731,12 @@ html.mode-dark .plaza-post-type { color: #fff; }
   transition: width 0.3s ease;
 }
 .plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
-.plaza-poll-option-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Was the other way round (bold %, plain label) - the number someone's
+   about to vote among should outweigh the tally next to it, not the
+   reverse, especially before anyone's voted and every percentage reads
+   the same anyway. */
+.plaza-poll-option-label { font-weight: 700; }
+.plaza-poll-option-pct { font-variant-numeric: tabular-nums; }
 .plaza-poll-submit { margin-top: 12px; }
 
 /* Banner com motivo tematico + interruptor de tema */
@@ -1712,8 +1748,12 @@ html.mode-dark .plaza-post-type { color: #fff; }
   margin-bottom: 18px;
   background: var(--ot-tint);
 }
+/* Was 84px - the largest stretch of pure decoration-with-no-content
+   anywhere in the app, sitting between the hero-line and the actual
+   night switch/contestant list. Still reads as the same motif at a
+   third less height. */
 .theme-motif {
-  height: 84px;
+  height: 56px;
   background-image: var(--ot-motif);
   background-repeat: repeat;
   border-bottom: 1px solid var(--line-2);
@@ -1805,6 +1845,17 @@ html.mode-dark .plaza-post-type { color: #fff; }
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 40%, var(--paper-2));
   color: var(--ink);
+}
+/* The generic button:disabled { opacity: 0.45 } fades this button's own
+   tinted background AND its var(--ink) text toward the same card
+   background behind it, which shrinks the gap between the two much more
+   than a flat 45% suggests - on a poll with nothing picked yet, "votar"
+   read as barely-there instead of just "not yet available". A lighter
+   fade keeps the label legible while still reading as disabled. */
+#register-form button[type="submit"]:disabled,
+.plaza-poll-submit:disabled,
+#plaza-post-form button[type="submit"]:disabled {
+  opacity: 0.7;
 }
 
 /* ----------------------------- Tutorial overlay --------------------------- */
