@@ -44,8 +44,20 @@
         <button type="button" id="login-lang-toggle" class="link-btn login-lang-toggle" title="Language">pt</button>
       </div>
       <form id="login-form">
+        <!-- The key is a password in everything but name, so it is declared
+             as one instead of hiding from the password manager with
+             autocomplete="off". Two things follow: iCloud Keychain saves it
+             on first login, which matters when fifty guests would otherwise
+             have to keep a code somewhere; and Safari stops hunting the rest
+             of the app for a field to autofill (see the anchor in
+             settings.html for the other half of that story).
+             The username is unknown while typing - the guest supplies only a
+             key - so it is filled in from the login response just before the
+             page navigates, which is the moment Safari reads the pair. -->
+        <input id="login-username" type="text" autocomplete="username"
+               class="autofill-anchor" readonly tabindex="-1" aria-hidden="true" />
         <div class="password-field">
-          <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+          <input id="token-input" type="password" data-i18n-ph="access_key" placeholder="Chave de acesso" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required />
           <button type="button" id="token-toggle" class="password-toggle" title="Mostrar" aria-label="Mostrar">
             <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />

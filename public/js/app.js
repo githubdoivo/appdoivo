@@ -294,7 +294,17 @@ $('login-form').addEventListener('submit', async (e) => {
   try {
     setToken(token);
     const me = await api('/me');
-    showApp(me);
+    // Naming the account before leaving the page is what lets iCloud
+    // Keychain store a real username/key pair rather than a stray password
+    // with nothing attached.
+    $('login-username').value = me.name || '';
+    // Deliberately a navigation, not showApp(me). iOS only offers to save a
+    // password when a form carrying one is submitted *and* the page then
+    // changes - an SPA that quietly swaps a section for another never gives
+    // it that signal, so the key was never saved and every guest had to keep
+    // typing it. Boot re-reads the token from storage and calls /me again,
+    // so the reload costs one request and changes nothing else.
+    location.replace('/');
   } catch (err) {
     clearToken();
     $('login-error').textContent = err.message;
@@ -321,6 +331,10 @@ function setFindKeyMode(on) {
   $('find-key-results').innerHTML = '';
   input.value = '';
   input.type = on ? 'text' : 'password';
+  // In find-key mode this same box is a name search, not a key - leaving
+  // current-password on it would have the password manager offering to fill
+  // a key into a field looking someone up by name.
+  input.setAttribute('autocomplete', on ? 'off' : 'current-password');
   input.setAttribute('data-i18n-ph', on ? 'find_key_ph' : 'access_key');
   input.placeholder = t(on ? 'find_key_ph' : 'access_key');
   $('token-toggle').classList.toggle('hidden', on);

@@ -1647,3 +1647,61 @@ test('the status bar colour follows whichever theme is on screen', async () => {
   await context.close();
   await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
 });
+
+test('logging in through the real form lands in the app, and hands the password manager a username', async () => {
+  // The form path had no coverage at all - every other test logs in by
+  // writing the token straight to localStorage - which is why turning the
+  // submit into a navigation broke nothing here while changing how login
+  // actually behaves.
+  //
+  // The navigation is the point: iOS only offers to save a password when a
+  // form carrying one is submitted and the page then changes. An SPA that
+  // swaps one section for another gives it no such signal, so the key was
+  // never saved and guests retyped it every time. The username field is the
+  // other half - a password with no account attached is not a credential.
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Form Login Guest' } });
+  await api('POST', '/me/tutorial-seen', { token: user.token });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  assert.equal(
+    await page.getAttribute('#token-input', 'autocomplete'),
+    'current-password',
+    'the key is a password and has to say so, or the manager will not store it',
+  );
+
+  // The reload wipes the field, and the only moment that matters is the one
+  // just before it - that is when the browser reads the pair off the form.
+  // sessionStorage survives the navigation; the field does not.
+  await page.evaluate(() => {
+    window.addEventListener('beforeunload', () => {
+      sessionStorage.setItem('captured-username', document.getElementById('login-username').value);
+    });
+  });
+
+  await page.fill('#token-input', user.token);
+  await page.click('#login-submit-btn');
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  assert.equal(
+    await page.evaluate(() => sessionStorage.getItem('captured-username')),
+    // Stored with its capitals - the app only lowercases names on screen.
+    'Form Login Guest',
+    'the account name has to be in place before the page leaves, or the saved credential has no account attached',
+  );
+  assert.equal(await page.isVisible('#login'), false, 'the login screen should be gone, not merely behind the app');
+
+  // Switching to find-my-key turns the same box into a name search, where
+  // offering to fill a key would be nonsense.
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('#find-key-link');
+  assert.equal(await page.getAttribute('#token-input', 'autocomplete'), 'off');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
