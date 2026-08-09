@@ -78,20 +78,7 @@
      :root rather than inside each body.theme-* block. A 16x40 tile that
      repeats vertically: the box grows with its text, so the motif has to
      be a band, not a fixed drawing. */
-  /* Label colour for any button whose ground is dark regardless of
-     light/dark mode - the red danger buttons and the darkened-accent CTAs.
-     Plain #fff belonged to no theme and read as a foreign white sitting on
-     the page; a touch of the section's own accent mixed in keeps it warm
-     on the terracotta Wall, green on Furnished, blue on Memo, while staying
-     bright enough to clear AA everywhere. 10% was too faint to read as
-     anything but white, and the ceiling was not the label but the grounds
-     under it: at 60% clay the CTA ground was light enough that any more
-     tint failed on Memo's cyan, and the raw danger fill failed on
-     Furnished. Darkening both (50% and 82% below) buys the headroom, so
-     the tint could triple - worst case now 5.0:1, measured across all six
-     themes in both modes. --clay is redefined per theme, so this follows
-     on its own. */
-  --on-solid: color-mix(in srgb, var(--clay) 22%, #fff);
+
 
   --rata-trail: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cpath d='M8 0 C-4 10 20 30 8 40' fill='none' stroke='%23000' stroke-opacity='0.45' stroke-width='1.6' stroke-linecap='round'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='12' cy='7' r='1.1'/%3E%3Ccircle cx='13.6' cy='9.6' r='0.85'/%3E%3Ccircle cx='4' cy='27' r='1.1'/%3E%3Ccircle cx='2.4' cy='29.6' r='0.85'/%3E%3C/g%3E%3C/svg%3E");
 }
@@ -187,6 +174,27 @@ html.mode-dark {
 html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; overflow-y: scroll; }
 
 body {
+  /* Label colour for any button whose ground is dark regardless of
+     light/dark mode - the red danger buttons and the darkened-accent CTAs.
+     Plain #fff belonged to no theme and read as a foreign white sitting on
+     the page; a touch of the section's own accent mixed in keeps it warm
+     on the terracotta Wall, green on Furnished, blue on Memo, while staying
+     bright enough to clear AA everywhere. 10% was too faint to read as
+     anything but white, and the ceiling was not the label but the grounds
+     under it: at 60% clay the CTA ground was light enough that any more
+     tint failed on Memo's cyan, and the raw danger fill failed on
+     Furnished. Darkening both (50% and 82% below) buys the headroom, so
+     the tint could triple - worst case now 5.0:1, measured across all six
+     themes in both modes. --clay is redefined per theme, so this follows
+     on its own. */
+  --on-solid: color-mix(in srgb, var(--clay) 22%, #fff);
+  /* The CTA buttons sit on a much deeper ground than the red ones, so they
+     can carry far more of the accent before contrast bites - half, against
+     the danger button's 22%. That is the difference between a label that is
+     technically tinted and one that actually reads as the section's colour:
+     terracotta on the Wall, olive on Swamp, cyan on Memo. Worst case
+     4.7:1, on Memo in dark mode. */
+  --on-cta: color-mix(in srgb, var(--clay) 50%, #fff);
   margin: 0;
   font-family: var(--body);
   font-size: 18px;
@@ -2078,7 +2086,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
      light enough (#e2a798, #2bcdee) that white on the raw accent fails. */
   background: color-mix(in srgb, var(--clay) 50%, #000);
   border-color: color-mix(in srgb, var(--clay) 50%, #000);
-  color: var(--on-solid);
+  color: var(--on-cta);
 }
 #register-form button[type="submit"]:hover,
 #confirm-entry-btn:hover,
@@ -2092,7 +2100,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 42%, #000);
   border-color: color-mix(in srgb, var(--clay) 42%, #000);
-  color: var(--on-solid);
+  color: var(--on-cta);
 }
 /* The generic button:disabled { opacity: 0.45 } fades this button's own
    tinted background AND its var(--ink) text toward the same card

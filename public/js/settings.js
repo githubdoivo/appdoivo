@@ -308,9 +308,27 @@ function applyAdminTheme(tab) {
 // loadVotingState() already fetched instead of a redundant request.
 let votingStateCache = {};
 
+// The chosen night is remembered, and remembered in the same place the
+// guest-facing app keeps it (NIGHT_KEY in app.js), so the two pages agree.
+// It used to live only in which button carried .active, which reset to
+// furnished on every load - on a swamp night that meant reaching for the
+// switch again after every single page open.
+const NIGHT_KEY = 'appivo_night';
+const NIGHTS = ['furnished', 'swamp'];
+
+function setAdminNight(night) {
+  const chosen = NIGHTS.includes(night) ? night : NIGHTS[0];
+  localStorage.setItem(NIGHT_KEY, chosen);
+  $('admin-night-switch').querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.night === chosen);
+  });
+}
+
+setAdminNight(localStorage.getItem(NIGHT_KEY));
+
 $('admin-night-switch').querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
-    $('admin-night-switch').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+    setAdminNight(btn.dataset.night);
     applyAdminTheme('outfit');
     loadVotingState();
     loadContestants();
@@ -1134,11 +1152,21 @@ function renderCongenialityAdmin() {
 
   const btn = $('congeniality-advance-btn');
   const next = congenialityAdvance(status, hasVotes);
-  btn.textContent = next ? t(next.label) : t('congeniality_state_revealed');
+  // Same word as Best Outfit's own terminal state (reveal_next_btn_done),
+  // not this round's status label - one finished round should not read
+  // as 'revealed' next to another reading as 'done'.
+  btn.textContent = next ? t(next.label) : t('reveal_next_btn_done');
   btn.dataset.action = next ? next.action : '';
   btn.dataset.confirm = next ? next.confirm : '';
   btn.disabled = !next;
 
+  // The Wall post carries both rounds, so it can only go out once both are
+  // finished. Disabled rather than left tappable to fail: the server
+  // refuses it either way, and a button that only tells you no after you
+  // press it is worse than one that shows it is not ready.
+  const podiumReady = state?.resultsPhase === 'first' || state?.resultsPhase === 'all';
+  const congBusy = status === 'open' || (status === 'closed' && hasVotes);
+  $('publish-podium-btn').disabled = !podiumReady || congBusy;
 }
 
 $('congeniality-advance-btn').addEventListener('click', async () => {

@@ -1052,6 +1052,19 @@ router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
   if (phase !== 'first' && phase !== 'all') {
     return res.status(400).json({ error: 'err_results_not_revealed' });
   }
+  // Both rounds have to be finished, not just the outfit one: the post
+  // carries the congeniality winner alongside the podium, so publishing
+  // mid-round would either spoil it or freeze a half-counted result into a
+  // snapshot that cannot be rewritten. Deliberately keyed on whether that
+  // round is actually running rather than on "is it revealed" - a night
+  // where congeniality was never opened has no votes and nothing to wait
+  // for, and must still be publishable.
+  const congStatus = congenialityStatus(night);
+  const congVotes = congenialityResults(night).reduce((n, r) => n + r.votes, 0);
+  if (congStatus === 'open' || (congStatus === 'closed' && congVotes > 0)) {
+    return res.status(400).json({ error: 'err_congeniality_not_revealed' });
+  }
+
   const podium = resultsForNight(night)
     .filter((r) => r.rank <= 3)
     .map((r) => ({

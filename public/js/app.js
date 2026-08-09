@@ -1565,8 +1565,12 @@ function renderCongeniality(c) {
     area.innerHTML = `<p class="muted">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
     return;
   }
-  area.innerHTML = c.candidates.length
-    ? c.candidates.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
+  // You don't get to crown yourself (castCongenialityVote() refuses it
+  // server-side), so you are left out of the list entirely rather than
+  // shown and then rejected on tap - same as the outfit round already does.
+  const votable = c.candidates.filter((x) => x.id !== myUserId);
+  area.innerHTML = votable.length
+    ? votable.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
     : `<p class="muted">${t('congeniality_no_candidates')}</p>`;
 }
 

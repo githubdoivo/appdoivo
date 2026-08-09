@@ -2252,3 +2252,45 @@ test('the pt and en dictionaries hold the same keys, once each', async () => {
   assert.deepEqual(pt.filter((k) => !en.includes(k)), [], 'every Portuguese string needs an English one');
   assert.deepEqual(en.filter((k) => !pt.includes(k)), [], 'and the other way round');
 });
+
+test('publishing the night to the Wall waits for both rounds, but not for a round that never ran', async () => {
+  // The post carries the podium and the congeniality winner in one
+  // snapshot, so going out mid-round would either spoil that round or
+  // freeze a half-counted result into something that cannot be rewritten.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Publish Gate A' } });
+  const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Publish Gate B' } });
+  for (const u of [a, b]) {
+    await api('POST', '/admin/contestants/register', { token: ADMIN, body: { userId: u.data.id, name: `${u.data.name} look`, night } });
+  }
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  const listed = (await api('GET', `/votes/status?night=${night}`, { token: a.data.token })).data.contestants;
+  await api('POST', '/votes', { token: a.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate B')).id } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
+  for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+
+  // Congeniality never opened: nothing to wait for, publishing is fine.
+  const noRound = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(noRound.status, 201, 'a night without a congeniality round must still be publishable');
+
+  // Now run one, and it blocks until revealed.
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+  const whileOpen = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(whileOpen.status, 400);
+  assert.equal(whileOpen.data.error, 'err_congeniality_not_revealed', 'cannot publish while congeniality is still taking votes');
+
+  await api('POST', '/congeniality/vote', { token: a.data.token, body: { night, targetUserId: b.data.id } });
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'closed' } });
+  const closedUnrevealed = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(closedUnrevealed.status, 400, 'closed with votes still counted is not finished - the winner is not out yet');
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+  const revealed = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(revealed.status, 201, 'both rounds finished, so it goes out');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  for (const u of [a, b]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+});

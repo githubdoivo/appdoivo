@@ -1623,6 +1623,31 @@ test('the settings user search is not something iOS password autofill will grab'
   assert.equal(fields.search, 'search', 'the user search must not be a plain text field');
   assert.equal(fields.current, 'current-password', 'the key fields must describe themselves, so Safari stops guessing');
   assert.equal(fields.next, 'new-password');
+
+  // The anchor only works if autofill will actually consider it. WebKit
+  // skips readonly fields, so a readonly anchor left the hunt running and
+  // the search box still got grabbed - and it has to carry a real value,
+  // since a username field with nothing in it anchors nothing.
+  const anchor = await page.$eval('#change-key-username', (el) => ({
+    autocomplete: el.getAttribute('autocomplete'),
+    readOnly: el.readOnly,
+    disabled: el.disabled,
+    inChangeKeyForm: el.closest('form')?.id,
+    value: el.value,
+  }));
+  assert.equal(anchor.autocomplete, 'username');
+  assert.equal(anchor.readOnly, false, 'a readonly anchor is invisible to autofill, which defeats the point');
+  assert.equal(anchor.disabled, false, 'so is a disabled one');
+  assert.equal(anchor.inChangeKeyForm, 'change-key-form', 'it has to sit in the form with the password fields');
+  assert.ok(anchor.value.length > 0, 'and it has to name the account, or there is no credential to pair');
+
+  // The search box must not be in a form - a text input plus a button
+  // inside one is the shape read as a sign-in.
+  assert.equal(
+    await page.$eval('#user-name-input', (el) => !!el.closest('form')),
+    false,
+    'the user search should not sit inside a form',
+  );
   await context.close();
 });
 
@@ -1795,4 +1820,133 @@ test('an empty Wall feed is a titled card too, not a stray line under the hero',
   await context.close();
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
   await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
+
+test('Miss Congeniality never offers you your own name, and its finished button reads like Best Outfit\'s', async () => {
+  // castCongenialityVote() has always refused a self-vote, but the list
+  // still showed you - so the only way to find out was to tap your own name
+  // and be told off. Best Outfit already leaves you out; this matches it.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const me = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Self Voter' } });
+  const other = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Other Person' } });
+  for (const u of [me, other]) {
+    await api('POST', '/admin/contestants/register', {
+      token: ADMIN, body: { userId: u.id, name: `${u.name} persona`, night },
+    });
+  }
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, me.token);
+  await page.evaluate((n) => localStorage.setItem('appivo_night', n), night);
+  await page.goto(base + '/?tab=outfit');
+  await page.waitForSelector('#congeniality-card:not(.hidden) [data-congeniality-vote]', { timeout: WAIT_TIMEOUT });
+
+  const names = await page.$$eval('[data-congeniality-vote]', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(names.length > 0, 'there should be someone to vote for');
+  assert.ok(
+    !names.some((n) => n.toLowerCase().includes('cong self voter')),
+    `you should not be in your own congeniality list, but got: ${names.join(', ')}`,
+  );
+  assert.ok(names.some((n) => n.toLowerCase().includes('cong other person')), 'everyone else still is');
+  await context.close();
+
+  // Once revealed there is nowhere left to go, and the disabled button says
+  // so in the same word Best Outfit uses for the same state.
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'closed' } });
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+
+  const adminCtx = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(adminCtx, ADMIN, '/settings.html');
+  await adminPage.evaluate((n) => localStorage.setItem('appivo_night', n), night);
+  await adminPage.reload();
+  await adminPage.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await adminPage.click('[data-atab="outfit"]');
+  await adminPage.waitForSelector('#congeniality-advance-btn', { timeout: WAIT_TIMEOUT });
+  await adminPage.waitForTimeout(800);
+
+  assert.equal(await adminPage.isDisabled('#congeniality-advance-btn'), true, 'a finished round has no next step');
+  const congLabel = (await adminPage.textContent('#congeniality-advance-btn')).trim();
+  assert.ok(congLabel.length > 0, 'the finished button still says something');
+  assert.notEqual(congLabel, 'revelada', 'it should read as finished, the same word Best Outfit uses, not as a status');
+
+  await adminCtx.close();
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const u of [me, other]) await api('DELETE', `/admin/users/${u.id}`, { token: ADMIN });
+});
+
+test('the chosen night is remembered, on both the admin page and the app', async () => {
+  // The admin switch kept its choice only in which button carried .active,
+  // so every page load fell back to furnished - on a swamp night that is a
+  // reach for the switch after every single open. It now shares the key the
+  // guest app already used, so the two pages agree as well as persist.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#admin-night-switch', { timeout: WAIT_TIMEOUT });
+
+  await page.click('#admin-night-switch [data-night="swamp"]');
+  await page.waitForTimeout(400);
+
+  await page.reload();
+  await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('[data-atab="outfit"]');
+  assert.equal(
+    await page.$eval('#admin-night-switch .active', (el) => el.dataset.night),
+    'swamp',
+    'the admin page should reopen on the night last chosen',
+  );
+
+  await page.goto(base + '/?tab=outfit');
+  await page.waitForSelector('#theme-switch .active', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.$eval('#theme-switch .active', (el) => el.dataset.theme),
+    'swamp',
+    'and the guest app should agree with it',
+  );
+
+  await context.close();
+});
+
+test('a solid button label takes its colour from the section it is in, not from one global tint', async () => {
+  // The tokens behind these labels reference --clay, and a custom property
+  // that references another resolves on the element where it is *declared*,
+  // not where it is used. Declared on :root they computed against the base
+  // accent and every theme got the same washed-out label - which looked
+  // exactly like "the tint is too weak" rather than like a bug. Moving them
+  // to body, where the theme's own --clay lives, is what makes them follow.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  const labelOn = async (atab) => {
+    await page.click(`[data-atab="${atab}"]`);
+    await page.waitForTimeout(500);
+    return page.$eval('#plaza-post-form button[type="submit"], [data-reveal-next]', (el) => getComputedStyle(el).color);
+  };
+
+  const wall = await labelOn('plaza');
+  const rata = await labelOn('rata');
+  assert.notEqual(wall, rata, `the Wall and Rata labels should not be the same colour (both ${wall})`);
+
+  // And it has to still be readable, which is the whole reason the tint has
+  // a ceiling at all.
+  const contrast = await page.$eval('#plaza-post-form button[type="submit"], [data-reveal-next]', (el) => {
+    const s = getComputedStyle(el);
+    const lum = (css) => {
+      const [r, g, b] = css.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
+        const c = v <= 1 ? v : v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const [hi, lo] = [lum(s.color), lum(s.backgroundColor)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  });
+  assert.ok(contrast >= 4.5, `the tinted label still has to be readable, got ${contrast.toFixed(2)}:1`);
+
+  await context.close();
 });

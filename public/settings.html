@@ -412,8 +412,15 @@
                  this form is what stops the hunt. Off-screen rather than
                  hidden/display:none, which autofill skips entirely; readonly
                  because it is a hint for the browser, never an input. -->
-            <input id="change-key-username" type="text" autocomplete="username"
-                   class="autofill-anchor" readonly tabindex="-1" aria-hidden="true" />
+            <!-- Deliberately NOT readonly: WebKit skips readonly fields when
+                 it looks for somewhere to put a username, so a readonly
+                 anchor is no anchor at all - it kept hunting and kept
+                 landing on the user-search box below. Off-screen and
+                 untabbable is what keeps it out of the way instead. The
+                 name attribute is there because the heuristic reads that
+                 too, not only autocomplete. -->
+            <input id="change-key-username" name="username" type="text" autocomplete="username"
+                   class="autofill-anchor" tabindex="-1" aria-hidden="true" />
             <div class="password-field">
               <!-- Explicit current-password/new-password (rather than the
                    autocomplete="off" these had, which Safari ignores) so the
