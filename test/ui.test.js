@@ -516,8 +516,16 @@ test('Manage Users row keeps the access key visible with no overflow, once expan
   // Rows are collapsed to just name+role by default (see renderUsersList()
   // in settings.js) - the key only renders once its row is expanded.
   await page.click('#users-list [data-row-toggle]');
-  const tokenVisible = await page.$eval('.user-row-token', (el) => el.getBoundingClientRect().width > 0);
-  assert.ok(tokenVisible, 'access key is not visible in the expanded user row');
+  // Waited for, not sampled: expanding lays the row out again, and reading
+  // the width in the same tick as the click catches it at zero on a loaded
+  // run. This was the suite's most frequent intermittent failure.
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('.user-row-token');
+      return !!el && el.getBoundingClientRect().width > 0;
+    },
+    { timeout: WAIT_TIMEOUT },
+  );
 
   const overflow = await horizontalOverflow(page);
   assert.ok(overflow <= 1, `Manage Users overflows by ${overflow}px with the key inline`);
@@ -1983,6 +1991,21 @@ test('filtering the user list does not yank the page out from under you', async 
   // And the filter did actually run - otherwise this passes for the wrong reason.
   const rows = await page.$$eval('#users-list .user-row', (els) => els.length);
   assert.equal(rows, 1, 'exactly one account matches "carla"');
+
+  // The role chips shorten the same list the same way, and were reported
+  // separately - one shared helper covers both, so both are checked.
+  await page.fill('#user-name-input', '');
+  await page.waitForTimeout(300);
+  await page.$eval('#user-role-filter', (el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(300);
+  const beforeChip = await page.evaluate(() => window.scrollY);
+  await page.click('#user-role-filter [data-role="user"]');
+  await page.waitForTimeout(400);
+  const afterChip = await page.evaluate(() => window.scrollY);
+  assert.ok(
+    Math.abs(afterChip - beforeChip) <= 2,
+    `toggling a role chip should not move the page, but it moved ${Math.abs(afterChip - beforeChip)}px`,
+  );
 
   await context.close();
 });
