@@ -1950,3 +1950,39 @@ test('a solid button label takes its colour from the section it is in, not from 
 
   await context.close();
 });
+
+test('filtering the user list does not yank the page out from under you', async () => {
+  // Typing a name shortens the list, a shorter page cannot hold the scroll
+  // position you were at, and the browser clamps it - so the page jumped
+  // upward mid-word, exactly as the results appeared. Reported from a real
+  // phone, where it is far more disruptive than on a desktop.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.waitForSelector('#user-name-input', { timeout: WAIT_TIMEOUT });
+
+  // Enough accounts for the list to be worth shortening.
+  for (const name of ['Scroll Anna', 'Scroll Bruno', 'Scroll Carla', 'Scroll Diogo', 'Scroll Elsa']) {
+    await api('POST', '/admin/users', { token: ADMIN, body: { name } });
+  }
+  await page.reload();
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  await page.$eval('#user-name-input', (el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(300);
+  const before = await page.evaluate(() => window.scrollY);
+
+  await page.click('#user-name-input');
+  await page.type('#user-name-input', 'carla', { delay: 60 });
+  await page.waitForTimeout(500);
+
+  const after = await page.evaluate(() => window.scrollY);
+  assert.ok(
+    Math.abs(after - before) <= 2,
+    `the page should stay put while the list filters, but it moved ${Math.abs(after - before)}px`,
+  );
+  // And the filter did actually run - otherwise this passes for the wrong reason.
+  const rows = await page.$$eval('#users-list .user-row', (els) => els.length);
+  assert.equal(rows, 1, 'exactly one account matches "carla"');
+
+  await context.close();
+});

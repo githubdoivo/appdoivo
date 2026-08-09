@@ -708,16 +708,30 @@ function syncRolePills() {
   });
 }
 
+// Filtering the list makes the page shorter, and a shorter page cannot hold
+// the scroll position you were at - the browser clamps it and everything
+// jumps upward, mid-word, right as the results appear. Holding the list at
+// the height it had unfiltered keeps the document the same length, so
+// nothing moves under your thumb. Measured while the list is whole (that
+// is, whenever the box is empty) rather than on every keystroke, or the
+// floor would shrink along with the results and defeat itself.
+let fullUsersListHeight = 0;
+
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
   const createBtn = $('user-create-btn');
+  const list = $('users-list');
 
   if (term.length < 3) {
     renderUsersList(withRecentFirst(byRole(allUsers)));
+    list.style.minHeight = '';
+    fullUsersListHeight = list.offsetHeight;
     $('user-search-hint').classList.add('hidden');
     createBtn.disabled = true;
     return;
   }
+
+  if (fullUsersListHeight) list.style.minHeight = `${fullUsersListHeight}px`;
 
   const foldedTerm = foldAccents(term.toLowerCase());
   const nameMatches = allUsers.filter((u) => foldAccents(u.name.toLowerCase()).includes(foldedTerm));
