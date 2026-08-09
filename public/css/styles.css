@@ -2130,7 +2130,10 @@ html.mode-light .chat-empty { color: var(--ink); }
   gap: 10px;
   margin-top: 12px;
 }
-.actions-right .muted { text-align: right; }
+/* margin-right:auto rather than space-between on the parent: with a lone
+   button (most of these rows) space-between would shove it to the left. This
+   pushes the status text to the far edge only when there is one. */
+.actions-right .muted { margin-right: auto; text-align: left; }
 .actions-right .muted:empty { display: none; }
 
 /* The guest Snatch night switch, loose in the page rather than inside the
@@ -2164,9 +2167,10 @@ html.mode-light .chat-empty { color: var(--ink); }
    the thing they do, not as a small action tucked in a corner. */
 button[id$="-wipe-btn"] { display: block; width: 100%; }
 
-/* The voting-logs diamond, stretched vertically - the glyph on its own is
-   nearly square, which reads as a bullet rather than a lozenge at this size. */
-#votelog-secret-btn { transform: scaleY(1.45); font-size: 0.95rem; }
+/* Plain round dot, no stretching: the Furnished and Swamp backgrounds are
+   both patterned with diamonds, so a diamond here read as a deliberate mark
+   while a dot disappears into them. */
+#votelog-secret-btn { font-size: 0.8rem; }
 
 /* Stand-in for a tab with nothing in it yet - centred and quiet, so an empty
    Snatch reads as "not started" rather than as a page that failed to load. */
