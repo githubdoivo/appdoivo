@@ -64,6 +64,30 @@ session's work and deploy once at the end.
 8. Verify production directly (HTTP check, login, and whatever the batch
    actually touched) before considering the session's work done.
 
+### Before the party: extend the production volume
+
+**The party is 18-20 September 2026.** Memo stores every uploaded photo
+and video, plus the generated day videos, as real files on the production
+volume (`/data/memo-uploads`) - not as rows in SQLite. That volume is
+still at its original **1GB**, which Memo would fill on day one, and a
+full disk means uploads start failing mid-party.
+
+Sometime in the week before (~14 September), extend it:
+
+```
+fly volumes extend vol_v8ep3d82yoxxg65v -s 20 -a appdoivo
+```
+
+Sizing: ~50 guests x 5 slots/day at a realistic ~12MB average is ~3GB a
+day, so 20GB covers the whole weekend with room to spare. Two things to
+know before running it:
+
+- Fly bills volumes on **provisioned** size, not bytes used - 20GB costs
+  ~$3/month from the moment you extend, whether or not it's full.
+- A volume can be **extended but never shrunk**, so this is one-way.
+  That's why it's deliberately left until close to the date rather than
+  done up front.
+
 ## Secrets
 
 - `.env` (local) and `fly secrets` (per app) are the only place secrets
