@@ -2299,3 +2299,34 @@ test('publishing the night to the Wall waits for both rounds, but not for a roun
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
   for (const u of [a, b]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
 });
+
+test('a feature can be filled with demo data and cleared again, owner-only', async () => {
+  // The point is a final check on prod with something in it, then one press
+  // to clear - rather than inventing entries by hand and picking them back
+  // out. Seeding is deliberately a no-op when the feature already holds
+  // anything, so a double press cannot double the data.
+  await api('POST', '/admin/consequences/wipe', { token: ADMIN });
+
+  // Its own admin rather than the file's shared user, whose key several
+  // earlier tests regenerate - borrowing it here got a 401 that looked like
+  // a permission result and was not one.
+  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Seed Button Helper' } });
+  await api('PATCH', `/admin/users/${helper.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const asAdmin = await api('POST', '/admin/consequences/seed-demo', { token: helper.data.token });
+  assert.equal(asAdmin.status, 403, 'filling a feature belongs with the owner, like every other danger-zone switch');
+  await api('DELETE', `/admin/users/${helper.data.id}`, { token: ADMIN });
+
+  const seeded = await api('POST', '/admin/consequences/seed-demo', { token: ADMIN });
+  assert.equal(seeded.status, 200);
+  const after = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
+  assert.ok(after.length > 0, 'the feature should have something in it now');
+
+  const again = await api('POST', '/admin/consequences/seed-demo', { token: ADMIN });
+  assert.equal(again.status, 200);
+  const afterTwice = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
+  assert.equal(afterTwice.length, after.length, 'pressing twice must not double the data');
+
+  await api('POST', '/admin/consequences/wipe', { token: ADMIN });
+  const cleared = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
+  assert.equal(cleared.length, 0, 'and the wipe beside it takes it all back out');
+});

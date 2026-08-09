@@ -191,10 +191,9 @@ async function boot() {
       // fixing the roster on the night - but removing one stays owner-only
       // (the per-row remove button is already gated in renderContestants()).
       //
-      // The standings are not. An admin opens and closes the vote without
-      // watching it unfold, which keeps the result a surprise to everyone
-      // running the night except the one person publishing it.
-      $('voting-results-card').classList.add('hidden');
+      // The results card stays: it is a tally now, not standings, and
+      // knowing whether the votes are in is exactly what someone running
+      // the night needs. The order itself lives behind the owner-only dot.
     }
   }
   // Whoever you are, tapping the settings icon should always land you on
@@ -824,6 +823,35 @@ function wireWipeButton(btnId, msgId, endpoint, confirmKey, doneMsgKey, afterWip
   });
 }
 
+// The other half of a danger zone: fill this feature with throwaway data so
+// a final check can be done on something, then clear it with the button
+// beside it. No-op when the feature already holds anything, so a second
+// press cannot double up.
+function wireSeedButton(btnId, msgId, path, after) {
+  $(btnId).addEventListener('click', async () => {
+    if (!(await showConfirm(t('confirm_seed_demo')))) return;
+    const msg = $(msgId);
+    msg.classList.remove('error');
+    msg.textContent = '';
+    try {
+      await api(path, { method: 'POST' });
+      msg.textContent = t('seed_demo_done');
+      setTimeout(() => { if (msg.textContent === t('seed_demo_done')) msg.textContent = ''; }, 4000);
+      after();
+    } catch (err) {
+      msg.classList.add('error');
+      msg.textContent = err.message;
+    }
+  });
+}
+
+wireSeedButton('rata-seed-btn', 'rata-wipe-msg', '/admin/consequences/seed-demo', loadConsequences);
+wireSeedButton('outfit-seed-btn', 'outfit-wipe-msg', '/admin/contestants/seed-demo', () => {
+  loadContestants();
+  loadVotes();
+});
+wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo', loadPlazaPosts);
+
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
   loadVotingState();
@@ -1125,14 +1153,28 @@ async function loadVotes() {
   // separate cards: Results (everyone with admin access) and Voting logs
   // (owner-only, kept last on the page). Scoped by the same admin-night-switch
   // as voting control/contestants above - one night picker for the whole tab.
-  const { votes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
+  const { votes, congenialityVotes, results } = await api(`/admin/votes?night=${encodeURIComponent(currentNight())}`);
+
+  // What the Snatch tab itself shows: how far each round has got, not who
+  // is winning. Everyone running the night needs the first to decide when
+  // to close; nobody running it needs the second, and not having it keeps
+  // the result a surprise to the organisers too.
+  const congResultsForTally = votingStateCache[currentNight()]?.congenialityResults ?? [];
+  const cast = (rows) => rows.reduce((n, r) => n + r.votes, 0);
+  $('voting-tally').innerHTML = `
+    <p class="tally-line"><span>${esc(t('best_outfit_title'))}</span>
+      <b>${cast(results)}</b> <span class="muted">${t(cast(results) === 1 ? 'vote_one' : 'votes_short')}</span></p>
+    <p class="tally-line"><span>${esc(t('congeniality_title'))}</span>
+      <b>${cast(congResultsForTally)}</b> <span class="muted">${t(cast(congResultsForTally) === 1 ? 'vote_one' : 'votes_short')}</span></p>`;
+
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
       results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
   // The night's other round, in the same card - it comes from
-  // GET /admin/voting (already cached per night), not /admin/votes.
+  // GET /admin/voting (already cached per night), not /admin/votes. Both
+  // tables live behind the dot at the end of the tab now, with the logs.
   const congResults = votingStateCache[currentNight()]?.congenialityResults ?? [];
   $('congeniality-results-table').innerHTML = congResults.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
@@ -1149,12 +1191,20 @@ async function loadVotes() {
 
   renderCongenialityAdmin();
 
+  // Both the standings and the logs are owner-only, and `votes` being
+  // absent from the response is how the server says so.
+  $('voting-standings-card').classList.toggle('hidden', !votes);
   $('voter-log-card').classList.toggle('hidden', !votes);
   if (votes) {
-    $('voter-log-table').innerHTML = votes.length
-      ? `<tr><th>${t('col_voter')}</th><th>${t('col_contestant')}</th><th>${t('col_time')}</th></tr>` +
-        votes.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
-      : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+    const logRows = (rows, who) => (rows.length
+      ? `<tr><th>${t('col_voter')}</th><th>${who}</th><th>${t('col_time')}</th></tr>` +
+        rows.map((v) => `<tr><td>${esc(v.voter)}</td><td>${esc(v.contestant ?? v.target)}</td><td class="muted">${esc(formatEuDateTime(v.created_at))}</td></tr>`).join('')
+      : `<tr><td class="muted">${t('no_votes')}</td></tr>`);
+    $('voter-log-table').innerHTML = logRows(votes, t('col_contestant'));
+    // Miss Congeniality's log, alongside the outfit one - a vote for a
+    // person rather than for an entry, so a duo appears as two names here
+    // where it is a single entry above.
+    $('congeniality-log-table').innerHTML = logRows(congenialityVotes ?? [], t('col_contestant'));
   }
 }
 
@@ -1260,7 +1310,7 @@ $('congeniality-reset-btn').addEventListener('click', async () => {
 // medals, and the congeniality winner underneath (see createPodiumPost()).
 $('publish-podium-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_publish_podium')))) return;
-  const msg = $('congeniality-msg');
+  const msg = $('publish-podium-msg');
   msg.classList.remove('error');
   msg.textContent = '';
   try {

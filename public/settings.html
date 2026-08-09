@@ -112,7 +112,10 @@
         <div class="card" id="plaza-wipe-card">
           <h2 data-i18n="wipe_title">Zona perigosa</h2>
           <p class="help" data-i18n="plaza_wipe_help">Explicação</p>
-          <button id="plaza-wipe-btn" type="button" class="danger" data-i18n="plaza_wipe_btn">Apagar tudo do Wall</button>
+          <div class="actions-right">
+            <button id="plaza-seed-btn" type="button" class="small ghost" data-i18n="seed_demo_btn">Dados de teste</button>
+            <button id="plaza-wipe-btn" type="button" class="danger" data-i18n="plaza_wipe_btn">Apagar tudo do Wall</button>
+          </div>
           <span id="plaza-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
@@ -173,13 +176,25 @@
             <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar tudo</button>
           </div>
 
-          <!-- Publishes the whole night in one post: every revealed tier
-               with photos and medals, plus the congeniality winner. -->
+          <span id="congeniality-msg" class="muted"></span>
+        </div>
+
+        <!-- How far each round has got, not who is winning. Whoever is
+             running the night needs to know whether to keep waiting; they
+             do not need the standings, and not having them keeps the result
+             a surprise to the people organising it too. The full order lives
+             behind the dot at the end of this tab, for the owner alone.
+             Publishing sits here because what gates it is about the results
+             (see renderCongenialityAdmin() in settings.js): both rounds have
+             to be finished before the post can go out. -->
+        <div class="card" id="voting-results-card">
+          <h2 data-i18n="votes_title">Resultados da votação</h2>
+          <div id="voting-tally"></div>
           <hr class="voting-divider" />
           <div class="voting-controls">
             <button type="button" class="small publish-wide" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
           </div>
-          <span id="congeniality-msg" class="muted"></span>
+          <span id="publish-podium-msg" class="muted"></span>
         </div>
 
         <div class="card">
@@ -235,20 +250,6 @@
           <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
 
-        <!-- Owner-only: an admin runs the night but does not get to watch the
-             standings while it is running (see boot() in settings.js and
-             requireOwner on the routes behind it). -->
-        <div class="card" id="voting-results-card">
-          <h2 data-i18n="votes_title">Resultados da votação</h2>
-          <!-- Both rounds of the night, each under its own name - they are
-               two separate votes and their standings mean different things. -->
-          <h3 data-i18n="best_outfit_title">Best Outfit</h3>
-          <div class="table-scroll"><table id="results-table"></table></div>
-          <hr class="voting-divider" />
-          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
-          <div class="table-scroll"><table id="congeniality-results-table"></table></div>
-        </div>
-
         <!-- Owner-only kill switch, scoped to just this feature (see
              POST /admin/contestants/wipe) - hidden for a regular admin in
              boot() in settings.js. Distinct from "Reiniciar tudo" above,
@@ -256,7 +257,10 @@
         <div class="card" id="outfit-wipe-card">
           <h2 data-i18n="wipe_title">Zona perigosa</h2>
           <p class="help" data-i18n="outfit_wipe_help">Explicação</p>
-          <button id="outfit-wipe-btn" type="button" class="danger" data-i18n="outfit_wipe_btn">Apagar tudo do Snatch</button>
+          <div class="actions-right">
+            <button id="outfit-seed-btn" type="button" class="small ghost" data-i18n="seed_demo_btn">Dados de teste</button>
+            <button id="outfit-wipe-btn" type="button" class="danger" data-i18n="outfit_wipe_btn">Apagar tudo do Snatch</button>
+          </div>
           <span id="outfit-wipe-msg" class="muted wipe-msg"></span>
         </div>
         <!-- Owner-only secret entry point to the voting logs, same treatment
@@ -304,7 +308,10 @@
         <div class="card" id="rata-wipe-card">
           <h2 data-i18n="wipe_title">Zona perigosa</h2>
           <p class="help" data-i18n="rata_wipe_help">Explicação</p>
-          <button id="rata-wipe-btn" type="button" class="danger" data-i18n="rata_wipe_btn">Apagar tudo da Rata</button>
+          <div class="actions-right">
+            <button id="rata-seed-btn" type="button" class="small ghost" data-i18n="seed_demo_btn">Dados de teste</button>
+            <button id="rata-wipe-btn" type="button" class="danger" data-i18n="rata_wipe_btn">Apagar tudo da Rata</button>
+          </div>
           <span id="rata-wipe-msg" class="muted wipe-msg"></span>
         </div>
       </div>
@@ -373,10 +380,26 @@
            only: a regular admin never sees who voted for whom, just the
            aggregate results. -->
       <div id="atab-votelog" class="tab-panel hidden">
+        <!-- The one place the standings live. Kept with the per-vote log
+             rather than on the tab everyone running the night can see, so
+             the result stays a surprise until it is published. -->
+        <div class="card" id="voting-standings-card">
+          <h2 data-i18n="voting_standings_title">Mais votados</h2>
+          <h3 data-i18n="best_outfit_title">Best Outfit</h3>
+          <div class="table-scroll"><table id="results-table"></table></div>
+          <hr class="voting-divider" />
+          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
+          <div class="table-scroll"><table id="congeniality-results-table"></table></div>
+        </div>
+
         <div class="card" id="voter-log-card">
           <h2 data-i18n="voter_log_title">Registos da votação</h2>
           <p class="help" data-i18n="voter_log_help">Explicação</p>
+          <h3 data-i18n="best_outfit_title">Best Outfit</h3>
           <div class="table-scroll"><table id="voter-log-table"></table></div>
+          <hr class="voting-divider" />
+          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
+          <div class="table-scroll"><table id="congeniality-log-table"></table></div>
         </div>
       </div>
 

@@ -64,6 +64,7 @@ import {
   notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
+import { seedDemoConsequences, seedDemoContestants, seedDemoWall } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
@@ -733,6 +734,26 @@ router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) =>
 // zone" bundling all of them together.
 
 // Rata: every consequence, any status/day.
+// Fills a single feature with throwaway data, so a final check on prod can
+// be done with something in it and then cleared with the wipe button right
+// beside this one - rather than inventing entries by hand and picking them
+// back out afterwards. Owner-only, like every other switch in a danger
+// zone, and a no-op if that feature already holds anything.
+router.post('/admin/consequences/seed-demo', requireOwner, (req, res) => {
+  seedDemoConsequences();
+  res.json({ ok: true });
+});
+
+router.post('/admin/contestants/seed-demo', requireOwner, (req, res) => {
+  seedDemoContestants();
+  res.json({ ok: true });
+});
+
+router.post('/admin/plaza-posts/seed-demo', requireOwner, (req, res) => {
+  seedDemoWall();
+  res.json({ ok: true });
+});
+
 router.post('/admin/consequences/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM consequences').run();
   res.json({ ok: true });
@@ -786,7 +807,18 @@ router.get('/admin/votes', (req, res) => {
     WHERE v.night = ?
     ORDER BY v.created_at
   `).all(night);
-  res.json({ night, votes: rows, results });
+  // Miss Congeniality's own log, kept separate rather than merged: it is a
+  // vote for a person, not for an entry, and a duo shows up as two names
+  // here where it is one entry above.
+  const congenialityVotes = db.prepare(`
+    SELECT cv.id, u.name AS voter, t.name AS target, cv.created_at
+    FROM congeniality_votes cv
+    JOIN users u ON u.id = cv.user_id
+    JOIN users t ON t.id = cv.target_user_id
+    WHERE cv.night = ?
+    ORDER BY cv.created_at
+  `).all(night);
+  res.json({ night, votes: rows, congenialityVotes, results });
 });
 
 // Consequences (full view)

@@ -1601,11 +1601,15 @@ test('a results category subtitle never outranks the card header above it', asyn
   // congeniality" both rendered larger than "resultados da votação".
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
+  // The standings moved behind the owner-only dot at the end of the Snatch
+  // tab, so that is where the two category subtitles now live.
   await page.click('[data-atab="outfit"]');
-  await page.waitForSelector('#results-table', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#votelog-secret-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('#votelog-secret-btn');
+  await page.waitForSelector('#voting-standings-card', { timeout: WAIT_TIMEOUT });
 
   const sizes = await page.evaluate(() => {
-    const card = document.getElementById('results-table').closest('.card');
+    const card = document.getElementById('voting-standings-card');
     const px = (el) => parseFloat(getComputedStyle(el).fontSize);
     return { h2: px(card.querySelector('h2')), h3s: [...card.querySelectorAll('h3')].map(px) };
   });

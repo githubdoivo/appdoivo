@@ -1369,6 +1369,18 @@ body { transition: background-color 0.45s ease; }
    rather than sharing a row with the phase controls. */
 .publish-wide { grid-column: 1 / -1; width: 100%; }
 .voting-state { font-family: var(--serif); font-size: 1.2rem; }
+/* One line per round: what it is on the left, how many votes are in on the
+   right. Tabular figures so the numbers line up as they climb. */
+.tally-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+}
+.tally-line span:first-child { margin-right: auto; }
+.tally-line b { font-variant-numeric: tabular-nums; font-size: 1.2rem; }
 .voting-state.is-registration { color: var(--clay); }
 .voting-state.is-open { color: var(--rata); }
 /* --danger is tuned as a fill, and as text on a light card it sits around

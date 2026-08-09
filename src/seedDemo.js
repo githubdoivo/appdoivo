@@ -89,9 +89,16 @@ const CONSEQUENCES_PENDING = [
   'Use your best pickup line on a stranger in the room.',
 ];
 
-export function seedDemo() {
+/**
+ * Each feature seeds on its own so the owner can populate just one from its
+ * danger zone (see POST /admin/<feature>/seed-demo) and clear it again with
+ * the wipe button right beside it - which is how a final check on prod gets
+ * done with throwaway data instead of by inventing entries by hand.
+ * Every one is a no-op when that feature already holds something, so
+ * pressing twice cannot double up.
+ */
+export function seedDemoUsers() {
   const day = today();
-
   // 1) Demo users ------------------------------------------------------------
   // Displayed name keeps accents (NAMES as-is); the access key is always
   // stripped of them, e.g. "Carla Mendes" -> "carlamendes1234". Uses the
@@ -122,6 +129,12 @@ export function seedDemo() {
     db.prepare('SELECT id FROM users WHERE is_owner = 0').all().forEach((u) => demoUsers.push(u.id));
   }
 
+
+  return demoUsers;
+}
+
+export function seedDemoConsequences(demoUsers = seedDemoUsers()) {
+  const day = today();
   // 2) Consequences ------------------------------------------------------------
   const consExist = db.prepare('SELECT COUNT(*) AS n FROM consequences').get().n;
   if (consExist === 0 && demoUsers.length) {
@@ -140,6 +153,10 @@ export function seedDemo() {
     console.log(`[seed-demo] Added 1 revealed consequence and ${CONSEQUENCES_PENDING.length} pending.`);
   }
 
+}
+
+export function seedDemoContestants(demoUsers = seedDemoUsers()) {
+  const day = today();
   // 3) Contestants (QA convenience only - prod never sets SEED_DEMO, so the
   // owner always adds contestants manually there) -----------------------------
   const contestantCount = db.prepare('SELECT COUNT(*) AS n FROM contestants').get().n;
@@ -171,6 +188,10 @@ export function seedDemo() {
     console.log(`[seed-demo] Registered 5 contestants for each night (${NIGHTS.join(', ')}).`);
   }
 
+}
+
+export function seedDemoWall(demoUsers = seedDemoUsers()) {
+  const day = today();
   // 4) Wall posts (QA convenience only - lets ENABLE_PLAZA be checked
   // without publishing anything by hand first) --------------------------------
   const plazaPostCount = db.prepare('SELECT COUNT(*) AS n FROM plaza_posts').get().n;
@@ -186,4 +207,11 @@ export function seedDemo() {
     });
     console.log('[seed-demo] Added 1 Wall announcement and 1 poll.');
   }
+}
+
+export function seedDemo() {
+  const demoUsers = seedDemoUsers();
+  seedDemoConsequences(demoUsers);
+  seedDemoContestants(demoUsers);
+  seedDemoWall(demoUsers);
 }
