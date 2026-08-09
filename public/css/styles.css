@@ -83,10 +83,15 @@
      Plain #fff belonged to no theme and read as a foreign white sitting on
      the page; a touch of the section's own accent mixed in keeps it warm
      on the terracotta Wall, green on Furnished, blue on Memo, while staying
-     bright enough to clear AA everywhere (worst case ~4.6:1, measured
-     across all six themes in both modes). --clay is redefined per theme,
-     so this follows on its own. */
-  --on-solid: color-mix(in srgb, var(--clay) 10%, #fff);
+     bright enough to clear AA everywhere. 10% was too faint to read as
+     anything but white, and the ceiling was not the label but the grounds
+     under it: at 60% clay the CTA ground was light enough that any more
+     tint failed on Memo's cyan, and the raw danger fill failed on
+     Furnished. Darkening both (50% and 82% below) buys the headroom, so
+     the tint could triple - worst case now 5.0:1, measured across all six
+     themes in both modes. --clay is redefined per theme, so this follows
+     on its own. */
+  --on-solid: color-mix(in srgb, var(--clay) 22%, #fff);
 
   --rata-trail: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cpath d='M8 0 C-4 10 20 30 8 40' fill='none' stroke='%23000' stroke-opacity='0.45' stroke-width='1.6' stroke-linecap='round'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='12' cy='7' r='1.1'/%3E%3Ccircle cx='13.6' cy='9.6' r='0.85'/%3E%3Ccircle cx='4' cy='27' r='1.1'/%3E%3Ccircle cx='2.4' cy='29.6' r='0.85'/%3E%3C/g%3E%3C/svg%3E");
 }
@@ -358,6 +363,13 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   --ink-soft: #c7bca3;
   --line: rgba(236, 229, 213, 0.35);
   --paper-3: #241d17;
+  /* This screen has a fixed palette of its own over the photo, so every
+     token a solid button reads has to be declared here or it falls through
+     to whatever light/dark mode is set - which is how "entrar" ended up
+     pale-on-pale in light mode: the button paints --ink (cream) as its
+     ground and --paper as its label, and --paper was still the app's lilac.
+     Same dark brown as --paper-3, since both play the same role here. */
+  --paper: #241d17;
 }
 /* #login's own background-color above only fills its own box - on iOS
    Safari's overscroll/rubber-band bounce past the top or bottom of the
@@ -715,13 +727,15 @@ button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.1
    strong ground with light text (5.1:1 light, 6.3:1 dark) without touching
    --danger itself, which is still needed as *text* elsewhere (.error). */
 button.danger {
-  border: 1px solid var(--danger-fill);
-  background: var(--danger-fill);
+  /* Deepened 18% off --danger-fill so the label can carry the theme tint
+     and still clear AA - the raw fill was too light for it on Furnished. */
+  border: 1px solid color-mix(in srgb, var(--danger-fill) 82%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 82%, #000);
   color: var(--on-solid);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger-fill) 85%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 85%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 70%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 70%, #000);
   color: var(--on-solid);
 }
 
@@ -2062,8 +2076,8 @@ html.mode-dark .plaza-post-type { color: #fff; }
      accent (worst case 4.9:1, Memo's cyan; most sit 8-13:1). Darkening is
      what makes one text colour possible at all - several --clay values are
      light enough (#e2a798, #2bcdee) that white on the raw accent fails. */
-  background: color-mix(in srgb, var(--clay) 60%, #000);
-  border-color: color-mix(in srgb, var(--clay) 60%, #000);
+  background: color-mix(in srgb, var(--clay) 50%, #000);
+  border-color: color-mix(in srgb, var(--clay) 50%, #000);
   color: var(--on-solid);
 }
 #register-form button[type="submit"]:hover,
@@ -2076,8 +2090,8 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #plaza-post-form button[type="submit"]:hover,
 #admin-register-form button[type="submit"]:hover,
 [data-reveal-next]:hover {
-  background: color-mix(in srgb, var(--clay) 52%, #000);
-  border-color: color-mix(in srgb, var(--clay) 52%, #000);
+  background: color-mix(in srgb, var(--clay) 42%, #000);
+  border-color: color-mix(in srgb, var(--clay) 42%, #000);
   color: var(--on-solid);
 }
 /* The generic button:disabled { opacity: 0.45 } fades this button's own

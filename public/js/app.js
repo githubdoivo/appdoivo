@@ -1478,11 +1478,10 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    // The card itself always stays - it carries the night switch, which has
-    // to be reachable in every phase. Only its contents come and go, and the
-    // switch holds the same spot throughout.
-    //
-    // Best Outfit has nothing of its own to say in three cases: the round
+    // Best Outfit hides whenever it has nothing of its own to say. The
+    // night switch is not in here - it sits above every card, since it
+    // governs the tab rather than any one component - so hiding this costs
+    // nothing. Three cases: the round
     // never started (no point announcing a vote the organiser has not
     // opened, especially with Miss Congeniality stacked below it); the
     // results are already showing below, which makes the status text and
@@ -1493,9 +1492,7 @@ async function loadVotes() {
     const bestOutfitQuiet = !roundStarted
       || data.status === 'registration'
       || (revealing && results.length > 0);
-    $('voting-title').classList.toggle('hidden', bestOutfitQuiet);
-    $('voting-status').classList.toggle('hidden', bestOutfitQuiet);
-    $('vote-area').classList.toggle('hidden', bestOutfitQuiet);
+    $('voting-card').classList.toggle('hidden', bestOutfitQuiet);
 
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
@@ -1521,13 +1518,14 @@ async function loadVotes() {
 
     renderCongeniality(data.congeniality);
 
-    // With nothing running, the card would be a switch over empty space,
-    // which reads as broken rather than "nothing yet" - say so inside it.
+    // With every component hidden the tab would be a hero line over empty
+    // space, which reads as broken rather than "nothing yet" - so the empty
+    // state gets a titled card of its own instead.
     const nothingOpen = bestOutfitQuiet
       && $('results-card').classList.contains('hidden')
       && $('congeniality-card').classList.contains('hidden')
       && $('register-card').classList.contains('hidden');
-    $('outfit-idle').classList.toggle('hidden', !nothingOpen);
+    $('outfit-idle-card').classList.toggle('hidden', !nothingOpen);
   } catch (err) {
     $('voting-status').textContent = err.message;
   }

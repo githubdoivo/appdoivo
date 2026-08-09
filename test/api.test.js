@@ -2226,3 +2226,29 @@ test('no push notification copy carries a capital letter - the golden rule survi
   assert.ok(labels.length, 'the night labels should still be found');
   assert.deepEqual(labels.filter((l) => /[A-ZÀ-Ý]/.test(l)), [], 'night labels reach push bodies and must be lowercase');
 });
+
+test('the pt and en dictionaries hold the same keys, once each', async () => {
+  // Two Portuguese strings had been pasted into the English block on top of
+  // their own keys - plaza_confirm_vote and outfit_nothing_open - leaving en
+  // with 416 entries against pt's 414. Nothing broke, because a later
+  // duplicate wins in an object literal and the later one happened to be
+  // the English, so the mistake was invisible from the app and from every
+  // test. It would not have been invisible if the paste had landed the
+  // other way round.
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/js/i18n.js', import.meta.url), 'utf8');
+  const ptBlock = src.slice(src.indexOf('  pt: {'), src.indexOf('  en: {'));
+  const enBlock = src.slice(src.indexOf('  en: {'));
+  const keysOf = (block) => [...block.matchAll(/^ {4}([a-z0-9_]+):/gm)].map(([, k]) => k);
+
+  for (const [lang, block] of [['pt', ptBlock], ['en', enBlock]]) {
+    const keys = keysOf(block);
+    const dupes = [...new Set(keys.filter((k, i) => keys.indexOf(k) !== i))];
+    assert.deepEqual(dupes, [], `${lang} defines these keys more than once: ${dupes.join(', ')}`);
+  }
+
+  const pt = keysOf(ptBlock);
+  const en = keysOf(enBlock);
+  assert.deepEqual(pt.filter((k) => !en.includes(k)), [], 'every Portuguese string needs an English one');
+  assert.deepEqual(en.filter((k) => !pt.includes(k)), [], 'and the other way round');
+});

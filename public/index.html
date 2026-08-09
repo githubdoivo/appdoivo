@@ -132,7 +132,14 @@
            tab) - hidden entirely until at least one day's video exists.
            QA-only for now, same as Memo itself (see memoEnabled). -->
       <div id="plaza-feed" class="plaza-feed"></div>
-      <p id="plaza-feed-empty" class="muted hidden" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
+      <!-- An empty feed is a state worth naming, so it gets a titled card
+           like every other component here, rather than one grey line under
+           the hero with nothing around it. Same treatment as the empty
+           night on Snatch. -->
+      <div class="card hidden" id="plaza-feed-empty">
+        <h2 data-i18n="plaza_wait_title">Aguarda</h2>
+        <p class="idle-note" data-i18n="plaza_feed_empty">Ainda sem publicações.</p>
+      </div>
     </div>
 
     <!-- Rata Game -->
@@ -174,28 +181,31 @@
     <div id="tab-outfit" class="tab-panel hidden">
       <p class="hero-line" data-i18n="outfit_hero">Quem tem o melhor visual da noite?</p>
 
-      <!-- This card is never hidden, whatever phase the night is in - the
-           night switch lives in it, and a switch that vanishes with its
-           container would take the only way of changing nights with it.
-           What changes is the contents: the title appears beside the switch
-           once a round is running, and the "nothing open yet" note sits
-           inside rather than floating under a bare pair of buttons. The
-           switch keeps exactly the same position through all of it. -->
-      <div class="card" id="voting-card">
-        <div class="card-head">
-          <!-- Named, because Miss Congeniality sits right below it with its
-               own name - one round labelled and the other not read as if the
-               second were a subsection of the first. Hidden rather than
-               absent between rounds, so the switch never shifts. -->
-          <h2 id="voting-title" class="hidden" data-i18n="best_outfit_title">Best Outfit</h2>
-          <div class="theme-switch" id="theme-switch">
-            <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
-            <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
-          </div>
+      <!-- The switch stays outside every card and above all of them: it
+           governs the whole tab, not any one component, and it has to be
+           reachable in every phase. -->
+      <div class="night-switch-loose">
+        <div class="theme-switch" id="theme-switch">
+          <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
+          <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
         </div>
+      </div>
+
+      <!-- An empty night is a state worth naming, so it gets a card with a
+           title of its own rather than a line of italics floating on the
+           page - every other thing on this tab is a titled component. -->
+      <div class="card hidden" id="outfit-idle-card">
+        <h2 data-i18n="outfit_wait_title">Aguarda</h2>
+        <p id="outfit-idle" class="idle-note" data-i18n="outfit_nothing_open">Ainda não há votações abertas.</p>
+      </div>
+
+      <div class="card hidden" id="voting-card">
+        <!-- Named, because Miss Congeniality sits right below it with its own
+             name - one round labelled and the other not read as if the second
+             were a subsection of the first. -->
+        <h2 data-i18n="best_outfit_title">Best Outfit</h2>
         <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
         <div id="vote-area"></div>
-        <p id="outfit-idle" class="idle-note hidden" data-i18n="outfit_nothing_open">Ainda não há votações abertas.</p>
       </div>
 
       <div class="card hidden" id="register-card">

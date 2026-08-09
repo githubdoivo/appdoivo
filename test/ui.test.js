@@ -1236,10 +1236,8 @@ test('once results start revealing, "you voted for X" clears instead of sitting 
   // showing its "closed" status line on top of the results card until this
   // was fixed. The card itself stays put, because the night switch lives in
   // it, so what has to go quiet is its title, status line and vote area.
-  assert.equal(await page.isVisible('#voting-title'), false, 'the round title is redundant once results are up');
-  assert.equal(await page.isVisible('#voting-status'), false, 'the "closed" status line should not sit on top of the results');
-  assert.equal(await page.isVisible('#vote-area'), false, 'and neither should a leftover vote area');
-  assert.equal(await page.isVisible('#theme-switch'), true, 'the night switch survives, as it must in every phase');
+  assert.equal(await page.isVisible('#voting-card'), false, 'the votação card should hide entirely once results are revealed');
+  assert.equal(await page.isVisible('#theme-switch'), true, 'the night switch is outside it, and survives');
   // With only one contestant, they're both 1st place and the only result -
   // gold medal included.
   const firstResultText = await page.textContent('#results-list li');
@@ -1520,12 +1518,13 @@ test('the admin contestant form can actually attach a photo - its picker button 
   await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
 });
 
-test('the night card is always there, and Best Outfit only speaks up when it has something to say', async () => {
-  // Two rules at once. The card never goes away, because the night switch
-  // lives in it and a switch that disappears with its container takes the
-  // only way of changing nights with it. And Best Outfit stays quiet during
-  // registration, where its only line would be "entries are open, put yours
-  // in" directly above the entry card that says exactly that.
+test('an empty night gets a titled card of its own, and Best Outfit only speaks up when it has something to say', async () => {
+  // With nothing running the tab used to be a hero line over empty space,
+  // which reads as broken. The empty state is a real state, so it gets a
+  // card and a title like everything else here rather than a stray line of
+  // italics. Best Outfit stays quiet during registration, where its only
+  // line would be "entries are open, put yours in" directly above the entry
+  // card that says exactly that.
   const night = 'furnished';
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reg Phase Viewer' } });
@@ -1533,31 +1532,27 @@ test('the night card is always there, and Best Outfit only speaks up when it has
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, user.token);
   await page.click('[data-tab="outfit"]');
-  await page.waitForSelector('#voting-card', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#outfit-idle-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
-  const switchBox = async () => page.$eval('#theme-switch', (el) => {
-    const r = el.getBoundingClientRect();
-    return { right: Math.round(r.right), top: Math.round(r.top) };
-  });
-
-  // Nothing started at all: the note explains the emptiness from inside the
-  // card, rather than floating under a bare pair of buttons.
-  assert.equal(await page.isVisible('#voting-card'), true);
-  assert.equal(await page.isVisible('#outfit-idle'), true, 'an empty night should say so');
-  assert.equal(await page.isVisible('#voting-title'), false, 'no round, no title');
-  const atRest = await switchBox();
+  assert.equal(await page.isVisible('#voting-card'), false, 'nothing started, nothing to say');
+  const idleTitle = await page.textContent('#outfit-idle-card h2');
+  assert.ok(idleTitle.trim().length > 0, 'the empty state is a titled component, not a loose note');
+  // The switch governs the whole tab, so it belongs outside every card.
+  assert.equal(await page.isVisible('#theme-switch'), true);
+  assert.equal(
+    await page.$eval('#theme-switch', (el) => !!el.closest('.card')),
+    false,
+    'the night switch should sit outside the cards, not inside one',
+  );
 
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await page.waitForSelector('#register-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.equal(await page.isVisible('#voting-card'), true, 'the switch has to survive every phase');
-  assert.equal(await page.isVisible('#voting-title'), false, 'the entry card already says entries are open');
-  assert.equal(await page.isVisible('#outfit-idle'), false, 'and it is not an empty night either');
+  assert.equal(await page.isVisible('#voting-card'), false, 'the entry card already says entries are open');
+  assert.equal(await page.isVisible('#outfit-idle-card'), false, 'and it is not an empty night either');
+  assert.equal(await page.isVisible('#theme-switch'), true, 'the switch survives every phase');
 
-  // Once voting opens the title appears beside the switch - without moving it.
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
-  await page.waitForSelector('#voting-title:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  const whenOpen = await switchBox();
-  assert.deepEqual(whenOpen, atRest, 'the switch must hold its position as the title comes and goes');
+  await page.waitForSelector('#voting-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
   await context.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -1725,5 +1720,76 @@ test('logging in through the real form lands in the app, and hands the password 
   assert.equal(await page.getAttribute('#token-input', 'autocomplete'), 'off');
 
   await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
+
+test('every solid button keeps its label readable, on the login screen and in both modes', async () => {
+  // A real regression, shipped to QA: the login button paints --ink as its
+  // ground and its label with the token the generic button rule names.
+  // #login carries a fixed palette over the photo and declares only some
+  // tokens, so when that rule moved from --paper-3 to --paper the label
+  // fell through to the app's light-mode lilac and "entrar" went
+  // pale-on-pale - unreadable, on the one screen every guest has to use.
+  //
+  // Contrast is measured rather than the colour asserted, so this keeps
+  // working through any future retune of either palette.
+  const relLum = (css) => {
+    const [r, g, b] = css.match(/\d+/g).map(Number).map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg, bg) => {
+    const [hi, lo] = [relLum(fg), relLum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await context.newPage();
+    await page.goto(base + '/');
+    await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+    await page.goto(base + '/');
+    await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+    const { fg, bg } = await page.$eval('#login-submit-btn', (el) => {
+      const s = getComputedStyle(el);
+      return { fg: s.color, bg: s.backgroundColor };
+    });
+    const contrast = ratio(fg, bg);
+    assert.ok(
+      contrast >= 4.5,
+      `in ${mode} mode "entrar" reads at ${contrast.toFixed(2)}:1 (${fg} on ${bg}) - it has to clear 4.5`,
+    );
+    await context.close();
+  }
+});
+
+test('an empty Wall feed is a titled card too, not a stray line under the hero', async () => {
+  // Matches the empty night on Snatch. Every other thing on these tabs is a
+  // titled component, so a lone grey sentence floating below the hero reads
+  // as something that failed to load rather than as "nothing yet".
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Empty Wall Viewer' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.waitForSelector('#plaza-feed-empty:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  assert.equal(
+    await page.$eval('#plaza-feed-empty', (el) => el.classList.contains('card')),
+    true,
+    'the empty state should be a card',
+  );
+  const title = await page.textContent('#plaza-feed-empty h2');
+  assert.ok(title.trim().length > 0, 'and a card here always carries a title');
+
+  // It goes away the moment there is something to show.
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'first post' } });
+  await page.waitForSelector('#plaza-feed-empty', { state: 'hidden', timeout: WAIT_TIMEOUT });
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
   await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
 });
