@@ -1768,6 +1768,73 @@ test("today's slots fire strictly in order, so a later moment can never open bef
   db.prepare('DELETE FROM memo_slots').run();
 });
 
+// A slot that never fired used to stay "due" indefinitely, with no day
+// filter on the query - so a day of downtime, or Memo being switched off and
+// back on, would fire every accumulated slot at once. A missed moment stays
+// missed.
+test('a slot from a previous day is never resurrected as due, however long it sat unfired', async () => {
+  const { default: db } = await import('../src/db.js');
+  const { getDueSlots, ensureTodaysSlots } = await import('../src/memo.js');
+  const { today } = await import('../src/time.js');
+
+  db.prepare('DELETE FROM memo_uploads').run();
+  db.prepare('DELETE FROM memo_slots').run();
+  db.prepare("INSERT INTO memo_slots (day, slot_index, scheduled_at) VALUES ('2026-01-01', 0, '2026-01-01 12:00:00')").run();
+
+  assert.deepEqual(getDueSlots(), [], "a January slot must not be due in " + today());
+
+  // A genuinely due slot today still fires.
+  ensureTodaysSlots();
+  db.prepare("UPDATE memo_slots SET scheduled_at = '2020-01-01 00:00:00' WHERE day = ? AND slot_index = 0").run(today());
+  const due = getDueSlots();
+  assert.equal(due.length, 1);
+  assert.equal(due[0].day, today());
+
+  db.prepare('DELETE FROM memo_slots').run();
+});
+
+// Memo ships to prod fully working but shut to guests until the party, so
+// it can actually be exercised beforehand instead of sitting behind a flag
+// nobody can test. Admins are the exception throughout.
+test('MEMO_START_DATE hides Memo from guests and silences the scheduler, while admins keep full access', async () => {
+  const { memoAvailableTo, memoScheduleActive, memoOpenToEveryone } = await import('../src/memo.js');
+  const original = process.env.MEMO_START_DATE;
+  const guest = { isAdmin: false }, admin = { isAdmin: true };
+  try {
+    delete process.env.MEMO_START_DATE;
+    assert.equal(memoOpenToEveryone(), true, 'unset means open now - what QA wants');
+    assert.equal(memoAvailableTo(guest), true);
+    assert.equal(memoScheduleActive(), true);
+
+    process.env.MEMO_START_DATE = '2099-01-01';
+    assert.equal(memoAvailableTo(guest), false, 'a guest must not reach Memo before the date');
+    assert.equal(memoAvailableTo(admin), true, 'an admin still can, so prod stays testable');
+    assert.equal(memoScheduleActive(), false, 'and nobody gets pushed a prompt they cannot open');
+
+    process.env.MEMO_START_DATE = '2000-01-01';
+    assert.equal(memoAvailableTo(guest), true, 'once the day arrives it opens to everyone');
+    assert.equal(memoScheduleActive(), true);
+  } finally {
+    if (original === undefined) delete process.env.MEMO_START_DATE;
+    else process.env.MEMO_START_DATE = original;
+  }
+});
+
+// The flag still wins over the date - ENABLE_MEMO off means off for everyone.
+test('ENABLE_MEMO=off blocks Memo even for an admin, and even after the start date', async () => {
+  const { memoAvailableTo, memoScheduleActive } = await import('../src/memo.js');
+  const originalFlag = process.env.ENABLE_MEMO, originalDate = process.env.MEMO_START_DATE;
+  try {
+    process.env.ENABLE_MEMO = 'false';
+    process.env.MEMO_START_DATE = '2000-01-01';
+    assert.equal(memoAvailableTo({ isAdmin: true }), false);
+    assert.equal(memoScheduleActive(), false);
+  } finally {
+    if (originalFlag === undefined) delete process.env.ENABLE_MEMO; else process.env.ENABLE_MEMO = originalFlag;
+    if (originalDate === undefined) delete process.env.MEMO_START_DATE; else process.env.MEMO_START_DATE = originalDate;
+  }
+});
+
 test('uploading to a slot that has not been notified yet is rejected', async () => {
   const { data } = await api('GET', '/memo/today', { token: userToken });
   const slot = data.slots[1];

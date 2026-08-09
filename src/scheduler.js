@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { revealRandomConsequence } from './consequences.js';
 import { getTimezone } from './time.js';
-import { getDueSlots, markSlotNotified } from './memo.js';
+import { getDueSlots, markSlotNotified, memoScheduleActive } from './memo.js';
 import { broadcast } from './push.js';
 
 /**
@@ -39,6 +39,9 @@ export function startScheduler() {
   if (process.env.ENABLE_MEMO === 'true') {
     cron.schedule('* * * * *', async () => {
       try {
+        // Silent until MEMO_START_DATE (see memoScheduleActive()) - the owner's
+        // manual trigger is unaffected, so prod stays testable meanwhile.
+        if (!memoScheduleActive()) return;
         for (const slot of getDueSlots()) {
           markSlotNotified(slot.id);
           await broadcast({

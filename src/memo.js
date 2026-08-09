@@ -97,12 +97,49 @@ export function ensureTodaysSlots() {
   }
 }
 
-/** Slots due to fire right now (scheduled, not yet notified) - polled by the scheduler. */
+/**
+ * Slots due to fire right now (scheduled, not yet notified) - polled by the
+ * scheduler. Scoped to today deliberately: without the day filter, any slot
+ * that never fired stays "due" forever, so a day of downtime (or Memo being
+ * switched off and back on) makes every accumulated slot fire at once, in a
+ * single burst of notifications. A missed moment is missed - it doesn't get
+ * replayed days later.
+ */
 export function getDueSlots() {
   return db.prepare(`
     SELECT id, day, slot_index FROM memo_slots
-    WHERE notified_at IS NULL AND scheduled_at <= strftime('%Y-%m-%d %H:%M:%f', 'now')
-  `).all();
+    WHERE notified_at IS NULL
+      AND day = ?
+      AND scheduled_at <= strftime('%Y-%m-%d %H:%M:%f', 'now')
+  `).all(today());
+}
+
+/**
+ * Memo is for the event itself, not the weeks before it. With
+ * MEMO_START_DATE set, the whole feature stays shut to guests until that
+ * day - the tab is hidden, every guest route 404s, and the scheduler sends
+ * nothing. Admins keep full access throughout, so the feature ships to prod
+ * fully working and testable rather than sitting behind a flag nobody can
+ * exercise until the morning of the party.
+ *
+ * Unset means "open now", which is what QA wants.
+ */
+export function memoOpenToEveryone() {
+  const start = process.env.MEMO_START_DATE;
+  if (!start) return true;
+  return today() >= start;
+}
+
+/** Whether this user may use Memo at all right now. */
+export function memoAvailableTo(user) {
+  if (process.env.ENABLE_MEMO !== 'true') return false;
+  return memoOpenToEveryone() || !!(user && user.isAdmin);
+}
+
+/** The scheduler only broadcasts once Memo is open to everyone - a push sent
+ *  while guests still 404 would advertise a tab they can't open. */
+export function memoScheduleActive() {
+  return process.env.ENABLE_MEMO === 'true' && memoOpenToEveryone();
 }
 
 export function markSlotNotified(slotId) {

@@ -60,6 +60,7 @@ import {
   saveSubscription,
   removeSubscription,
   broadcast,
+  notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
@@ -77,6 +78,8 @@ import {
   listUploadsForDay,
   saveRecap,
   buildDayRecapVideo,
+  memoAvailableTo,
+  memoOpenToEveryone,
   triggerNextSlot,
   getRecap,
   listRecapDays,
@@ -141,7 +144,8 @@ router.get('/me', (req, res) => {
     ...req.user,
     adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
     plazaEnabled: process.env.ENABLE_PLAZA === 'true',
-    memoEnabled: process.env.ENABLE_MEMO === 'true',
+    // Hidden from guests until MEMO_START_DATE; admins always see it.
+    memoEnabled: memoAvailableTo(req.user),
   });
 });
 
@@ -517,12 +521,12 @@ const memoUpload = multer({
 });
 
 router.get('/memo/today', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   res.json({ slots: getTodayForUser(req.user.id) });
 });
 
 router.post('/memo/slots/:id/upload', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   memoUpload.single('file')(req, res, (err) => {
     if (err) {
       const code = err.code === 'LIMIT_FILE_SIZE' ? 'err_memo_file_too_large' : 'err_memo_upload_failed';
@@ -548,7 +552,7 @@ router.post('/memo/slots/:id/upload', (req, res) => {
 // header. res.sendFile() (not a manual read+send) handles Range requests
 // on its own, which video scrubbing needs.
 router.get('/memo/uploads/:id', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   const upload = getUpload(Number(req.params.id));
   if (!upload) return res.status(404).end();
   // Every guest's moments are visible to every other guest via the shared
@@ -560,12 +564,12 @@ router.get('/memo/uploads/:id', (req, res) => {
 // Today's shared feed - everyone's uploads, newest first, with reaction
 // counts and the viewer's own reaction on each.
 router.get('/memo/feed', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   res.json({ uploads: getTodayFeed(req.user.id) });
 });
 
 router.post('/memo/uploads/:id/react', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   try {
     const emoji = toggleReaction(Number(req.params.id), req.user.id, req.body?.emoji);
     res.json({ emoji });
@@ -575,12 +579,12 @@ router.post('/memo/uploads/:id/react', (req, res) => {
 });
 
 router.get('/memo/recaps', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   res.json({ days: listRecapDays() });
 });
 
 router.get('/memo/recaps/:day', (req, res) => {
-  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   const recap = getRecap(req.params.day);
   if (!recap) return res.status(404).end();
   res.sendFile(join(MEMO_DIR, recap.file_path));
@@ -1290,16 +1294,17 @@ router.post('/admin/memo/:day/recap/generate', async (req, res) => {
 });
 
 // Owner-only: opens the next scheduled moment right now instead of waiting
-// for its random time, notifying everyone exactly as the cron would (see
-// the memo job in scheduler.js). Owner-only rather than admin because it
-// pushes to every guest's phone - not something to leave a stray tap away
-// for anyone with an admin key.
+// for its random time, notifying exactly as the cron would (see the memo job
+// in scheduler.js). Owner-only rather than admin because it pushes to real
+// phones - not something to leave a stray tap away for anyone with an admin
+// key.
 router.post('/admin/memo/trigger-next', requireOwner, async (req, res) => {
   if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = triggerNextSlot();
   if (result.error) return res.status(400).json(result);
   res.json(result);
-  await broadcast({
+
+  const payload = {
     title: { pt: 'memo', en: 'memo' },
     body: {
       pt: 'é agora - tens 15 minutos para captar este momento.',
@@ -1307,7 +1312,17 @@ router.post('/admin/memo/trigger-next', requireOwner, async (req, res) => {
     },
     tag: 'memo',
     url: '/?tab=memo',
-  });
+  };
+  if (memoOpenToEveryone()) {
+    await broadcast(payload);
+  } else {
+    // Memo is still shut to guests (see memoAvailableTo()), so a broadcast
+    // would ping people straight into a tab that 404s for them. Only the
+    // admins who can actually open it get the push, which is what makes this
+    // usable for testing on prod before the party.
+    const admins = db.prepare('SELECT id FROM users WHERE is_admin = 1').all();
+    for (const a of admins) await notifyUser(a.id, payload);
+  }
 });
 
 // Owner-only, same golden rule as every other feature's wipe switch - but

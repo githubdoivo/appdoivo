@@ -41,6 +41,14 @@ primary_region = "cdg"
   # while it was being rebuilt - fully redesigned, tested, and approved
   # on QA, so it's on for the real event now too.
   ENABLE_PLAZA = "true"
+  # Memo is on here so it can be used and tested on prod, but its random
+  # prompts stay silent until the party (see memoScheduleActive() in memo.js).
+  # Without this the cron would push 5 notifications a day to every guest
+  # from now until 18 September - people would mute the app before the event
+  # it exists for. The owner's manual "open the next moment" trigger still
+  # works meanwhile, which is what makes prod testable.
+  ENABLE_MEMO = "true"
+  MEMO_START_DATE = "2026-09-18"
 
 [[mounts]]
   source = "appdoivo_data"

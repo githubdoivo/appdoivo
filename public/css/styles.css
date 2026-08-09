@@ -103,11 +103,12 @@ html.mode-light {
      opposite - a strong ground with light text on top. */
   --danger-fill: #b04a36;
   --danger-ink:  #fdf6f0;
-  /* Was #6b3420 (warm brown), then #602456 (plum). Now a dark lilac - the
-     plum still leaned magenta; this rotates the hue toward violet while
-     holding essentially the same contrast on every theme's paper
-     (8.1:1 rata, 5.7:1 memo, 4.5:1 mural). */
-  --brand:    #4a2f70;
+  /* Back to the original warm brown, after a detour through plum (#602456)
+     and lilac (#4a2f70). This is the same warm family as dark mode's
+     #e2a878, so the wordmark reads as one colour across both modes - the
+     literal dark value can't be reused here, it lands at 1.1-2.0:1 on light
+     paper and effectively disappears. 4.0:1 worst case, 9.5:1 best. */
+  --brand:    #6b3420;
   /* role-*/type-*/status-* stay at their :root (light-mode) values here -
      only mode-dark below needs to redefine them. */
 }
@@ -419,16 +420,15 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
 /* Instruction on the left, language toggle on the right, sharing the row
    directly above the key field - which also keeps the space under "entrar"
    free for the error banner to appear where the eye already is. */
-/* The tagline stays optically centred on the key field while the language
-   toggle sits out at the right edge. Absolute positioning for the toggle
-   rather than a flex row: in a row the toggle's own width would shove the
-   tagline off-centre, and it has to line up with the input below it. */
+/* Tagline centred over the key field, language toggle tucked at the right
+   just beneath it. The toggle is taken out of flow so its width can't pull
+   the tagline off-centre - it drops onto its own short line above the
+   input, which is the arrangement that was picked. */
 .login-meta {
   position: relative;
   width: 100%;
   max-width: 320px;
-  /* Cancels most of .cover's own 20px gap so the line sits tight on the
-     field it describes. */
+  /* Cancels most of .cover's own 20px gap so it sits tight on the field. */
   margin-bottom: -16px;
 }
 .login-meta .instruction { text-align: center; }
@@ -686,16 +686,10 @@ button.danger:hover {
      never exceeds the available space, while the min/max bounds keep it
      from ever reading as too small on a narrow phone or comically large on
      a wide one. */
-  font-size: clamp(2.15rem, 9.6vw, 2.95rem);
+  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand);
-  /* The script face only ships 400/700, so "bolder" past 700 has to come
-     from a hairline stroke in the same colour rather than a heavier weight
-     that doesn't exist (and would silently synthesise). Kept well under a
-     full pixel - more than this and the cursive's thin joins fill in. */
-  -webkit-text-stroke: 0.4px currentColor;
-  paint-order: stroke fill;
 }
 .brand .badge,
 .user-row-name .badge {
