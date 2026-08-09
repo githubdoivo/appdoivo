@@ -1025,6 +1025,14 @@ async function loadVotes() {
       results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
+  // The night's other round, in the same card - it comes from
+  // GET /admin/voting (already cached per night), not /admin/votes.
+  const congResults = votingStateCache[currentNight()]?.congenialityResults ?? [];
+  $('congeniality-results-table').innerHTML = congResults.length
+    ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
+      congResults.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+
   // The runoff button only makes sense once voting's closed, there's
   // already a runoff going and it also closed (tie could recur), and the
   // top spot is a genuine tie (0-0 across the board doesn't count - that's
@@ -1078,10 +1086,6 @@ function renderCongenialityAdmin() {
   btn.dataset.confirm = next ? next.confirm : '';
   btn.disabled = !next;
 
-  $('congeniality-table').innerHTML = results.length
-    ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
-      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
-    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 }
 
 $('congeniality-advance-btn').addEventListener('click', async () => {

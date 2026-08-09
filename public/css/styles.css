@@ -2145,3 +2145,7 @@ html.mode-light .chat-empty { color: var(--ink); }
    each one owns its whole card - full width so they read as the weight of
    the thing they do, not as a small action tucked in a corner. */
 button[id$="-wipe-btn"] { display: block; width: 100%; }
+
+/* The voting-logs diamond, stretched vertically - the glyph on its own is
+   nearly square, which reads as a bullet rather than a lozenge at this size. */
+#votelog-secret-btn { transform: scaleY(1.45); font-size: 0.95rem; }

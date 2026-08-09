@@ -166,7 +166,6 @@
             <button type="button" class="small" id="congeniality-reset-votes-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
             <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar tudo</button>
           </div>
-          <table id="congeniality-table" class="table" style="margin-top:12px"></table>
 
           <!-- Publishes the whole night in one post: every revealed tier
                with photos and medals, plus the congeniality winner. -->
@@ -232,7 +231,13 @@
 
         <div class="card">
           <h2 data-i18n="votes_title">Resultados da votação</h2>
+          <!-- Both rounds of the night, each under its own name - they are
+               two separate votes and their standings mean different things. -->
+          <h3 data-i18n="best_outfit_title">Best Outfit</h3>
           <div class="table-scroll"><table id="results-table"></table></div>
+          <hr class="voting-divider" />
+          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
+          <div class="table-scroll"><table id="congeniality-results-table"></table></div>
         </div>
 
         <!-- Owner-only kill switch, scoped to just this feature (see
@@ -249,7 +254,7 @@
              as the star that opens the Plaza admin tab: near-invisible, no
              title attribute (that produces a hover tooltip on desktop and
              gives it away), just a faint mark for someone who knows. -->
-        <button type="button" id="votelog-secret-btn" class="wall-secret-btn hidden" aria-label="◆">◆</button>
+        <button type="button" id="votelog-secret-btn" class="wall-secret-btn hidden" aria-label="⬧">⬧</button>
       </div>
 
       <!-- Separador: A Rata -->
