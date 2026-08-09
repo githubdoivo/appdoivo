@@ -1508,6 +1508,10 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
 
 /* ---------------------------------- Memo ---------------------------------- */
 
+// A day with nothing uploaded gets no buttons at all: the zip would 404 and
+// publishing would fail with err_memo_no_photos, so offering either is just
+// an invitation to hit an error. The download-video button additionally
+// waits until a video actually exists.
 async function loadMemoDays() {
   try {
     const { days } = await api('/admin/memo/days');
@@ -1518,11 +1522,12 @@ async function loadMemoDays() {
             <div class="user-row-name">${esc(formatEuDate(d.day))}</div>
           </div>
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
+          ${d.uploadedCount > 0 ? `
           <div class="row-actions">
             <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
             <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
-          </div>
+          </div>` : ''}
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
       : `<p class="muted">${t('memo_admin_no_days')}</p>`;
