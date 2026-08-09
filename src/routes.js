@@ -77,6 +77,7 @@ import {
   listUploadsForDay,
   saveRecap,
   buildDayRecapVideo,
+  triggerNextSlot,
   getRecap,
   listRecapDays,
   wipeAll as wipeAllMemo,
@@ -1286,6 +1287,27 @@ router.post('/admin/memo/:day/recap/generate', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message || 'err_memo_recap_failed' });
   }
+});
+
+// Owner-only: opens the next scheduled moment right now instead of waiting
+// for its random time, notifying everyone exactly as the cron would (see
+// the memo job in scheduler.js). Owner-only rather than admin because it
+// pushes to every guest's phone - not something to leave a stray tap away
+// for anyone with an admin key.
+router.post('/admin/memo/trigger-next', requireOwner, async (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const result = triggerNextSlot();
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+  await broadcast({
+    title: { pt: 'memo', en: 'memo' },
+    body: {
+      pt: 'é agora - tens 15 minutos para captar este momento.',
+      en: "it's now - you have 15 minutes to capture this moment.",
+    },
+    tag: 'memo',
+    url: '/?tab=memo',
+  });
 });
 
 // Owner-only, same golden rule as every other feature's wipe switch - but

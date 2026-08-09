@@ -32,14 +32,6 @@ primary_region = "cdg"
   PORT = "3000"
   DB_FILE = "/data/app.sqlite"
   NODE_ENV = "production"
-  # The "mossy" dev-only quick-login (see auth.js) is gated by
-  # ENABLE_DEV_LOGIN=true instead of NODE_ENV - deliberately absent here.
-  # It used to check NODE_ENV!=='production' alone, which is "fail-open"
-  # (active unless something else disables it); confirmed live on prod on
-  # 2026-08-08 despite NODE_ENV=production being set right above, for
-  # reasons still under investigation. Not setting this var here at all is
-  # "fail-closed" - the safe default is off regardless of what else does
-  # or doesn't propagate correctly.
   # Lets the owner promote/revoke other real users to admin ("tester")
   # in production. The golden rule (only the owner sees access keys) is
   # unaffected - that's enforced separately in src/routes.js regardless

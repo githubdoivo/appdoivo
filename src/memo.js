@@ -109,6 +109,28 @@ export function markSlotNotified(slotId) {
   db.prepare("UPDATE memo_slots SET notified_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(slotId);
 }
 
+/**
+ * Brings today's next un-fired slot forward to right now, so the owner can
+ * start a moment on demand instead of waiting for its random time. Returns
+ * the slot so the caller can notify for it exactly as the cron would.
+ *
+ * Picks the earliest still-unfired slot rather than inventing a new one:
+ * the day still gets its five moments, one of them just happens sooner.
+ * Returns { error } if today's are all used up.
+ */
+export function triggerNextSlot() {
+  ensureTodaysSlots();
+  const slot = db.prepare(`
+    SELECT id, day, slot_index FROM memo_slots
+    WHERE day = ? AND notified_at IS NULL
+    ORDER BY scheduled_at
+    LIMIT 1
+  `).get(today());
+  if (!slot) return { error: 'err_memo_no_slots_left' };
+  markSlotNotified(slot.id);
+  return { ok: true, slotIndex: slot.slot_index };
+}
+
 /** A slot's derived status for display: waiting / open (+ secondsLeft) / uploaded / missed. */
 function deriveStatus(slot, upload) {
   if (upload) return { status: 'uploaded', uploadId: upload.id, kind: upload.kind };
@@ -168,7 +190,7 @@ export function getUpload(uploadId) {
 // A small fixed set rather than a full picker - keeps the feed a quick tap,
 // no emoji keyboard needed, and matches the deliberately light BeReal-style
 // reaction weight (a glance, not a comment thread).
-export const MEMO_REACTION_EMOJI = ['❤️', '👎', '💦', '🍆'];
+export const MEMO_REACTION_EMOJI = ['❤️', '💦'];
 
 /** Today's feed: every guest's uploads, newest first, with reaction counts
  * and this viewer's own reaction (if any) on each. */

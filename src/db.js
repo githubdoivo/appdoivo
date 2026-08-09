@@ -238,7 +238,8 @@ db.exec(`
 // caught on 2026-07-27 when a whole prod guest list came back unsearchable).
 if (!columnExists('users', 'key_claimed_at')) {
   db.exec('ALTER TABLE users ADD COLUMN key_claimed_at TEXT');
-  db.exec("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE is_owner = 1");
+  // The owner is no longer stamped as pre-claimed here - they retrieve
+  // their key through the same first-time flow as everyone else now.
 }
 
 // Migration: per-day voting -> per-night voting.
@@ -515,15 +516,15 @@ export function seed({ adminName }) {
     // touches what's actually stored here - the real key is always
     // generated and never surfaced as "mossy" anywhere.
     const token = generateUserToken(adminName || 'Admin');
-    // Still pre-claimed unlike a regular user - not because the owner
-    // "already knows their key" (they may not, now that it's generated
-    // the same as anyone else's), but because the public, unauthenticated
-    // first-time key-retrieval flow (keyClaim.js) does zero identity
-    // verification beyond a name match. That's an acceptable trade-off
-    // for a guest account; it is not for the one account with full admin
-    // control over everyone else's keys and data.
+    // Left unclaimed, exactly like a guest, so the owner can pick their own
+    // name out of the first-time key-retrieval flow (keyClaim.js) instead of
+    // needing someone to read the key off the server for them. This used to
+    // be pre-claimed deliberately, because that flow does zero identity
+    // verification beyond a name match - see the security note on
+    // searchUnclaimedUsers() for why that's a real trade-off here and why
+    // claiming it promptly is what closes the window.
     const info = db.prepare(
-      "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at, key_claimed_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+      "INSERT INTO users (name, token_hash, token_enc, is_admin, is_owner, updated_at) VALUES (?, ?, ?, 1, 1, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
     ).run(adminName || 'Admin', hashToken(token), encryptToken(token));
     admin = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     return { admin, created: true, token };

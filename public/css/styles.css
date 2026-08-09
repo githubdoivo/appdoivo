@@ -57,6 +57,7 @@
   --role-user:  #2a6ca6;
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
+  --type-podium: #6b4a8a;
   /* Was #8a6a1f, which carried enough red/blue to read as olive-mustard
      rather than yellow. Same hue family with the blue taken out entirely -
      a proper amber-yellow at identical contrast (3.9:1 on rata's light
@@ -132,6 +133,7 @@ html.mode-dark {
   --role-user:  #6badde;
   --type-announcement: #c9a07a;
   --type-poll: #e08a4a;
+  --type-podium: #b294d6;
   --status-pending: #d4b04a;
   /* Was #7ed181 - a bright mint/lime that clashed with the app's muted,
      earthy palette everywhere it showed up. Deeper, less saturated sage
@@ -663,10 +665,16 @@ button.danger:hover {
      never exceeds the available space, while the min/max bounds keep it
      from ever reading as too small on a narrow phone or comically large on
      a wide one. */
-  font-size: clamp(1.9rem, 8.5vw, 2.6rem);
+  font-size: clamp(2.15rem, 9.6vw, 2.95rem);
   line-height: 0.8;
   white-space: nowrap;
   color: var(--brand);
+  /* The script face only ships 400/700, so "bolder" past 700 has to come
+     from a hairline stroke in the same colour rather than a heavier weight
+     that doesn't exist (and would silently synthesise). Kept well under a
+     full pixel - more than this and the cursive's thin joins fill in. */
+  -webkit-text-stroke: 0.4px currentColor;
+  paint-order: stroke fill;
 }
 .brand .badge,
 .user-row-name .badge {
@@ -703,6 +711,7 @@ button.danger:hover {
 .badge.type-announcement, .badge.type-poll { margin-left: -9px; }
 .badge.type-announcement { border-color: var(--type-announcement); color: var(--type-announcement); }
 .badge.type-poll { border-color: var(--type-poll); color: var(--type-poll); }
+.badge.type-podium { border-color: var(--type-podium); color: var(--type-podium); }
 
 /* Rata history: each revealed consequence, who was assigned, and its
    completion status - a standalone pill (not .badge, which is scoped to
@@ -1330,13 +1339,17 @@ html.mode-dark body.theme-swamp .card {
 }
 
 html.mode-light body.theme-rata {
-  /* Was a neutral light grey (#ececed family) - same dusty pink-grey shift
-     as the dark variant above, just lifted to a pale tone. */
-  --paper:    #ece3e4;
-  --paper-2:  #f1e9ea;
-  --paper-3:  #f6f0f0;
-  --ink:      #302629;
-  --ink-soft: #6d5c60;
+  /* Was a neutral light grey (#ececed family), then a dusty pink-grey
+     (#ece3e4) that still read as plain grey next to the other themes.
+     Properly pink now - roughly triple the chroma at the same lightness, so
+     it looks like the rata tab rather than an unthemed page. The two inks
+     were neutral greys sitting on top of it; both carry the same pink bias
+     now, still 10.7:1 and 4.8:1 against --paper (comfortably past AA). */
+  --paper:    #f0d9df;
+  --paper-2:  #f6e2e7;
+  --paper-3:  #fbebef;
+  --ink:      #40202c;
+  --ink-soft: #805062;
   /* Was #dcc9cc/#e6d6d8 - barely distinguishable from --paper-2 (#f1e9ea),
      so card borders read as missing entirely on this tab specifically,
      unlike every other night theme. Darkened within the same dusty-pink
@@ -1657,7 +1670,7 @@ html.mode-light body.theme-memo .card {
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium) { border-top: none; padding-top: 0; }
 /* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
    an announcement/poll post is its own self-contained "boxed" card (see
    the comment on .plaza-post above), so its type label is that card's
@@ -2022,3 +2035,8 @@ html.mode-light .chat-empty { color: var(--ink); }
 .podium-row .votes { flex: none; color: var(--ink-soft); font-size: var(--text-xs); }
 .podium-congeniality { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .podium-congeniality h3 { font-size: 0.95rem; margin: 0 0 4px; }
+
+/* Separates the phases of one night's control card (outfit vote ->
+   congeniality -> publish) without splitting them into separate cards -
+   they're the same night being run, in order. */
+.voting-divider { border: none; border-top: 1px solid var(--line); margin: 20px 0 16px; }

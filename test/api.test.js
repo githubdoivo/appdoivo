@@ -23,12 +23,6 @@ process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
 process.env.ENABLE_PLAZA = 'true';
 process.env.ENABLE_MEMO = 'true';
-// Explicit, not just "not set" - dotenv (loaded by app.js) never overrides
-// an already-set var, but without this a developer's own local .env
-// (which needs ENABLE_DEV_LOGIN=true for their own "mossy" convenience)
-// would leak into the test run and make the off-by-default test below a
-// false pass instead of a real one.
-process.env.ENABLE_DEV_LOGIN = 'false';
 
 const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
@@ -157,23 +151,22 @@ test('login accepts the admin', async () => {
   assert.equal(r.data.isAdmin, true);
 });
 
-// Regression: the "mossy" dev-only quick-login used to be gated by
-// NODE_ENV!=='production' alone - confirmed live on prod on 2026-08-08
-// despite fly.toml setting NODE_ENV=production there, letting anyone who
-// read this repo's own docs log in as the real owner. Now gated by an
-// explicit ENABLE_DEV_LOGIN=true (see auth.js) that fly.toml never sets -
-// this locks in "off by default", not just "off when something else is
-// configured correctly".
-test('the "mossy" dev-login shortcut only works when ENABLE_DEV_LOGIN is explicitly true, never by default', async () => {
-  assert.notEqual(process.env.ENABLE_DEV_LOGIN, 'true', 'sanity check: this test file must not itself enable it');
-  const byDefault = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-  assert.equal(byDefault.status, 401, '"mossy" must not authenticate when ENABLE_DEV_LOGIN is unset');
+// Regression: there used to be a "mossy" magic token that resolved to the
+// owner account. It was originally gated by NODE_ENV!=='production' alone
+// and was confirmed live on prod on 2026-08-08 despite fly.toml setting
+// NODE_ENV=production, letting anyone who read this repo's own docs log in
+// with full owner rights. It was then re-gated behind ENABLE_DEV_LOGIN and
+// has now been removed outright. This test locks that removal in: no env
+// var, in any environment, may bring it back.
+test('there is no magic dev token - "mossy" is rejected like any other wrong key, whatever the environment says', async () => {
+  const plain = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+  assert.equal(plain.status, 401);
 
+  // Even with the old escape hatch explicitly switched on.
   process.env.ENABLE_DEV_LOGIN = 'true';
   try {
-    const enabled = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-    assert.equal(enabled.status, 200);
-    assert.equal(enabled.data.isAdmin, true, '"mossy" should resolve to the owner once explicitly enabled');
+    const withOldFlag = await api('POST', '/auth/login', { body: { token: 'mossy' } });
+    assert.equal(withOldFlag.status, 401, 'the removed dev-login flag must have no effect at all');
   } finally {
     delete process.env.ENABLE_DEV_LOGIN;
   }
@@ -228,9 +221,39 @@ test('logging in for real also closes the first-time key retrieval, even without
   await api('DELETE', `/admin/users/${created.data.id}`, { token: ADMIN });
 });
 
-test('the owner is never searchable via first-time key retrieval', async () => {
-  const r = await api('GET', '/auth/unclaimed-users?name=test');
-  assert.ok(!r.data.users.some((u) => u.name === 'Test Admin'), 'the owner already has their key from setup');
+// The owner used to be excluded from this flow on purpose (pre-claimed at
+// seed time). That was reversed by request so the owner can retrieve their
+// own key the same way a guest does - see the security note on
+// searchUnclaimedUsers(). Exercised against keyClaim.js directly rather
+// than over HTTP: claiming shares the per-IP auth-attempt budget with
+// /auth/login (see rateLimit.js), and spending two of it here tipped a
+// later test expecting a plain 401 into a 429. The HTTP wiring itself is
+// already covered by the brand-new-user test above.
+test('the owner is searchable in the first-time key flow like anyone else, and claiming is still one-shot', async () => {
+  const { default: db } = await import('../src/db.js');
+  const { searchUnclaimedUsers, claimKey } = await import('../src/keyClaim.js');
+  const owner = db.prepare('SELECT id, name FROM users WHERE is_owner = 1').get();
+  // Already claimed by now (every earlier test authenticates as ADMIN, and
+  // authenticate() stamps key_claimed_at on first use) - clear it to get a
+  // freshly-seeded owner back.
+  db.prepare('UPDATE users SET key_claimed_at = NULL WHERE id = ?').run(owner.id);
+
+  try {
+    assert.ok(
+      searchUnclaimedUsers('test').some((u) => u.id === owner.id),
+      'the owner must not be filtered out of the search'
+    );
+
+    const claimed = claimKey(owner.id);
+    assert.equal(claimed.ok, true);
+    assert.equal(claimed.name, owner.name);
+    assert.ok(claimed.token, 'the flow hands back the real key');
+
+    assert.equal(claimKey(owner.id).error, 'err_key_already_claimed', 'claiming closes permanently, owner included');
+    assert.ok(!searchUnclaimedUsers('test').some((u) => u.id === owner.id), 'and they drop out of the search');
+  } finally {
+    db.prepare("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(owner.id);
+  }
 });
 
 test('a normal user cannot access the admin panel', async () => {
@@ -1814,22 +1837,22 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   assert.equal(badEmoji.status, 400);
   assert.equal(badEmoji.data.error, 'err_memo_invalid_reaction');
 
-  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '👎' } });
+  const react = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💦' } });
   assert.equal(react.status, 200);
-  assert.equal(react.data.emoji, '👎');
+  assert.equal(react.data.emoji, '💦');
 
   const afterReact = await api('GET', '/memo/feed', { token: bystander.data.token });
   const entryAfter = afterReact.data.uploads.find((u) => u.id === uploadId);
-  assert.equal(entryAfter.myReaction, '👎');
-  assert.equal(entryAfter.reactions['👎'], 1);
+  assert.equal(entryAfter.myReaction, '💦');
+  assert.equal(entryAfter.reactions['💦'], 1);
 
   // Reacting again with the same emoji toggles it off.
-  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '👎' } });
+  const toggleOff = await api('POST', `/memo/uploads/${uploadId}/react`, { token: bystander.data.token, body: { emoji: '💦' } });
   assert.equal(toggleOff.data.emoji, null);
   const afterToggleOff = await api('GET', '/memo/feed', { token: bystander.data.token });
   const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
   assert.equal(entryToggledOff.myReaction, null);
-  assert.equal(entryToggledOff.reactions['👎'] || 0, 0);
+  assert.equal(entryToggledOff.reactions['💦'] || 0, 0);
 });
 
 test('a slot missed past its 15-minute window is reported as missed, not open', async () => {

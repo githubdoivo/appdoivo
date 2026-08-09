@@ -166,6 +166,9 @@ async function boot() {
     // near-invisible star at the end of atab-memo, itself only shown to
     // the owner.
     $('wall-secret-btn').classList.toggle('hidden', !isOwner);
+    // Owner-only, and only when Memo is on at all - it fires a push to
+    // every guest (see POST /admin/memo/trigger-next).
+    $('memo-trigger-card').classList.toggle('hidden', !(isOwner && memoEnabled));
     if (!isOwner) {
       // Any admin - not just the owner - can post to Plaza (see requireAdmin
       // on POST /admin/plaza-posts), so the tab stays visible.
@@ -1029,19 +1032,38 @@ async function loadVotes() {
 }
 
 /* --------------------------- Miss Congeniality ---------------------------- */
-// Reads from the same votingStateCache the outfit controls above use (it's
-// filled by loadVotingState() from GET /admin/voting, which now carries this
-// round's phase and live standings alongside the outfit ones).
+// Same control shape as the outfit vote above - one advancing button that
+// relabels itself through the phases, plus a reset - rather than three
+// separate phase buttons. Reads from the same votingStateCache, which
+// GET /admin/voting fills with this round's phase and live standings.
+
+// closed -> open -> revealed. "closed" is both the start state and the
+// mid-state (voting shut, winner not out yet), so the label depends on
+// whether any vote has actually been cast.
+function congenialityAdvance(status, hasVotes) {
+  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close' };
+  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal' };
+  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open' };
+  return null; // revealed - nowhere left to go
+}
 
 function renderCongenialityAdmin() {
   const state = votingStateCache[currentNight()];
   const status = state?.congenialityStatus ?? 'closed';
   const results = state?.congenialityResults ?? [];
+  const hasVotes = results.some((r) => r.votes > 0);
 
-  $('congeniality-state').textContent = t(`congeniality_state_${status}`);
-  document.querySelectorAll('[data-congeniality-set]').forEach((b) => {
-    b.disabled = b.dataset.congenialitySet === status;
-  });
+  const label = $('congeniality-state');
+  label.textContent = t(`congeniality_state_${status}`);
+  label.classList.toggle('is-open', status === 'open');
+  label.classList.toggle('is-closed', status !== 'open');
+
+  const btn = $('congeniality-advance-btn');
+  const next = congenialityAdvance(status, hasVotes);
+  btn.textContent = next ? t(next.label) : t('congeniality_state_revealed');
+  btn.dataset.action = next ? next.action : '';
+  btn.dataset.confirm = next ? next.confirm : '';
+  btn.disabled = !next;
 
   $('congeniality-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
@@ -1049,22 +1071,24 @@ function renderCongenialityAdmin() {
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 }
 
-document.querySelectorAll('[data-congeniality-set]').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    const msg = $('congeniality-msg');
-    msg.classList.remove('error');
-    msg.textContent = '';
-    try {
-      await api(`/admin/voting/${currentNight()}/congeniality`, {
-        method: 'POST', body: { status: btn.dataset.congenialitySet },
-      });
-      await loadVotingState();
-      await loadVotes();
-    } catch (err) {
-      msg.classList.add('error');
-      msg.textContent = err.message;
-    }
-  });
+$('congeniality-advance-btn').addEventListener('click', async () => {
+  const btn = $('congeniality-advance-btn');
+  const action = btn.dataset.action;
+  if (!action) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  // Same reasoning as the outfit vote's own confirms: every one of these
+  // changes what the whole party sees at once, and revealing can't be undone.
+  if (!(await showConfirm(t(btn.dataset.confirm)))) return;
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality`, { method: 'POST', body: { status: action } });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
 });
 
 $('congeniality-reset-btn').addEventListener('click', async () => {
@@ -1082,9 +1106,8 @@ $('congeniality-reset-btn').addEventListener('click', async () => {
   }
 });
 
-// One post carrying both halves of the night's result - the podium with
-// photos and medals, and the congeniality winner underneath (see
-// createPodiumPost() in plaza.js).
+// One post carrying the whole night: every revealed tier with photos and
+// medals, and the congeniality winner underneath (see createPodiumPost()).
 $('publish-podium-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_publish_podium')))) return;
   const msg = $('congeniality-msg');
@@ -1338,6 +1361,34 @@ $('plaza-add-option-btn').addEventListener('click', () => {
   $('plaza-add-option-btn').before(input);
 });
 
+const PLAZA_ADMIN_LABEL = {
+  poll: 'plaza_type_poll',
+  announcement: 'plaza_type_announcement',
+  podium: 'plaza_type_podium',
+};
+const PLAZA_ADMIN_BADGE = {
+  poll: ' type-poll',
+  announcement: ' type-announcement',
+  podium: ' type-podium',
+};
+
+// A published result's text is a JSON snapshot (see createPodiumPost() in
+// plaza.js), not prose - printing it raw here dumped the whole object into
+// the history list. Rendered as the placings it actually represents.
+function adminPodiumSummary(p) {
+  let snap;
+  try { snap = JSON.parse(p.text); } catch { return ''; }
+  const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const rows = (snap.podium ?? [])
+    .map((r) => `<li><span>${medal[r.rank] ?? ''} ${esc(r.name)}</span> <strong>${r.votes}</strong></li>`)
+    .join('');
+  const cong = snap.congeniality
+    ? `<li><span>👑 ${esc(snap.congeniality.name)}</span> <strong>${snap.congeniality.votes}</strong></li>`
+    : '';
+  return `<p class="muted" style="margin:8px 0 0">${esc(t(`theme_${snap.night}`))}</p>
+    <ul class="admin-post-options">${rows}${cong}</ul>`;
+}
+
 async function loadPlazaPosts() {
   const { posts } = await api('/admin/plaza-posts');
   $('plaza-posts-list').innerHTML = posts.length
@@ -1345,12 +1396,12 @@ async function loadPlazaPosts() {
       <div class="user-row">
         <div class="user-row-top">
           <div class="user-row-name">
-            <span class="badge${p.type === 'poll' ? ' type-poll' : ' type-announcement'}">${p.type === 'poll' ? t('plaza_type_poll') : t('plaza_type_announcement')}</span>
+            <span class="badge${PLAZA_ADMIN_BADGE[p.type] ?? ' type-announcement'}">${t(PLAZA_ADMIN_LABEL[p.type] ?? 'plaza_type_announcement')}</span>
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        <p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>
+        ${p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
         ${p.type === 'poll' ? `
         <ul class="admin-post-options">
           ${p.options.map((o) => {
@@ -1519,6 +1570,25 @@ $('memo-days-list').addEventListener('click', async (e) => {
 });
 
 wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
+
+// Owner-only (card hidden otherwise, see boot()). Confirmed first because
+// it notifies every guest at once - the same reason the voting phase
+// buttons confirm.
+$('memo-trigger-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_memo_trigger')))) return;
+  const msg = $('memo-trigger-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api('/admin/memo/trigger-next', { method: 'POST' });
+    msg.textContent = t('memo_trigger_done');
+    loadMemoDays();
+    setTimeout(() => { if (msg.textContent === t('memo_trigger_done')) msg.textContent = ''; }, 4000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
 
 /* --------------------------------- Tabs ---------------------------------- */
 

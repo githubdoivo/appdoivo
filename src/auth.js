@@ -7,28 +7,20 @@ import { checkAuthAttempt } from './rateLimit.js';
  * Shared by /auth/login (routes.js) and authenticate() below - the app has
  * no separate session token, the frontend just replays whatever was typed
  * at login on every subsequent request, so both places need to agree on
- * what counts as valid or a login that works once and then 401s on the
- * very next request. Dev/QA-only convenience: "mossy" always resolves to
- * the owner, whatever their real (randomly-generated, see seed() in
- * db.js) key actually is.
+ * what counts as valid, or a login works once and then 401s on the very
+ * next request.
  *
- * Gated by ENABLE_DEV_LOGIN=true (fly.qa.toml only) rather than checking
- * NODE_ENV!=='production' as this used to - that was "fail-open" (active
- * by default, disabled only if something else correctly sets NODE_ENV),
- * and it was confirmed live on prod on 2026-08-08 despite fly.toml setting
- * NODE_ENV=production there: a well-documented magic string was silently
- * authenticating as the real owner account. Requiring an explicit true is
- * "fail-closed" - if this env var ever fails to propagate for whatever
- * reason (the same way NODE_ENV apparently did), the safe default is off,
- * not on. Never set in fly.toml on purpose.
+ * There is deliberately no magic/dev token here. A "mossy" shortcut used to
+ * resolve to the owner whenever ENABLE_DEV_LOGIN was set (QA only), after an
+ * earlier NODE_ENV-based version of it was found live on prod on 2026-08-08.
+ * Removed outright rather than re-gated: a documented magic string that
+ * authenticates as the account with full control over everyone's keys is not
+ * worth any amount of QA convenience, and every environment now takes the
+ * same path - the real, generated key or nothing.
  */
 export function findUserByToken(token) {
   const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
-  let user = db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
-  if (!user && token === 'mossy' && process.env.ENABLE_DEV_LOGIN === 'true') {
-    user = db.prepare(`SELECT ${columns} FROM users WHERE is_owner = 1`).get();
-  }
-  return user;
+  return db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
 }
 
 /**

@@ -135,24 +135,30 @@
             <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>
           <span id="voting-msg" class="muted"></span>
-        </div>
 
-        <!-- The second round of the night, run after the outfit vote above:
-             open -> close -> reveal, no staged countdown (see the
-             congeniality helpers in votes.js). Publishing sends the podium
-             AND this winner to the Wall as one post. -->
-        <div class="card">
-          <h2 data-i18n="congeniality_title">Miss Congeniality</h2>
+          <!-- The night's second round, run after the outfit vote. Same
+               control shape as above (one advancing button + a reset), not
+               three separate phase buttons - see renderCongenialityAdmin()
+               in settings.js. Lives inside this card rather than its own
+               because it's the same night being run, and because the
+               publish button below covers BOTH results at once. -->
+          <hr class="voting-divider" />
+          <h3 data-i18n="congeniality_title">Miss Congeniality</h3>
+          <p style="margin-top:8px">
+            <span data-i18n="voting_state">Estado atual</span>:
+            <strong id="congeniality-state" class="voting-state">--</strong>
+          </p>
           <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
-          <p id="congeniality-state" class="muted" style="margin:8px 0 12px"></p>
-          <div class="row-actions">
-            <button type="button" class="small" data-congeniality-set="open" data-i18n="congeniality_open_btn">Abrir</button>
-            <button type="button" class="small" data-congeniality-set="closed" data-i18n="congeniality_close_btn">Fechar</button>
-            <button type="button" class="small" data-congeniality-set="revealed" data-i18n="congeniality_reveal_btn">Revelar</button>
+          <div class="voting-controls" style="margin-top:12px">
+            <button type="button" class="small" id="congeniality-advance-btn" data-i18n="congeniality_start_btn">Iniciar</button>
             <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar</button>
           </div>
           <table id="congeniality-table" class="table" style="margin-top:12px"></table>
-          <div class="row-actions" style="margin-top:12px">
+
+          <!-- Publishes the whole night in one post: every revealed tier
+               with photos and medals, plus the congeniality winner. -->
+          <hr class="voting-divider" />
+          <div class="voting-controls">
             <button type="button" class="small" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
           </div>
           <span id="congeniality-msg" class="muted"></span>
@@ -291,6 +297,16 @@
       <!-- Separador: Memo (QA-only until tested, see memoEnabled/boot() -
            hidden entirely when the flag is off, same shape as Plaza). -->
       <div id="atab-memo" class="tab-panel hidden">
+        <!-- Owner-only: starts the next scheduled moment on demand rather
+             than waiting for its random time. Hidden for a regular admin in
+             boot() in settings.js - it pushes to every guest's phone. -->
+        <div class="card hidden" id="memo-trigger-card">
+          <h2 data-i18n="memo_trigger_title">Momento agora</h2>
+          <p class="help" data-i18n="memo_trigger_help">Explicação</p>
+          <button type="button" class="small" id="memo-trigger-btn" data-i18n="memo_trigger_btn">Abrir o próximo momento</button>
+          <span id="memo-trigger-msg" class="muted" style="display:block;margin-top:8px"></span>
+        </div>
+
         <div class="card">
           <h2 data-i18n="memo_admin_days_title">Dias</h2>
           <p class="help" data-i18n="memo_admin_days_help">Explicação</p>

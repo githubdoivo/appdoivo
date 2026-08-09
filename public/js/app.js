@@ -560,14 +560,14 @@ const MEMO_REACTION_EMOJI = ['❤️', '👎', '💦', '🍆'];
 // button needs - a thin outline nearly disappears there. currentColor
 // still ties them to each theme's accent.
 const MEMO_REACTION_ICON = {
-  '❤️': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
-  '👎': '<path d="M17 14.5v-9h2.5v9H17Zm-2.5.7-3.4 5.5a1.8 1.8 0 0 1-3.2-1.5L9 14.5H6a2 2 0 0 1-2-2.3l1-6.2a2.5 2.5 0 0 1 2.5-2H14a1.5 1.5 0 0 1 1.5 1.5v8Z"/>',
-  '💦': '<path d="M11 6c2.2 2.7 3.5 4.8 3.5 6.3a3.5 3.5 0 1 1-7 0C7.5 10.8 8.8 8.7 11 6Z"/><path d="M16.5 12c1.4 1.7 2.2 3 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .8-2.3 2.2-4Z"/>',
-  // A single rotated ellipse read as an ambiguous blob - shaped as an
-  // actual bulb (wide base, narrowing to a neck) plus a small 3-point leaf
-  // cap, the two features that actually make an eggplant recognizable.
-  '🍆': '<path d="M11.5 21.5c-3 0-5.2-2.8-5-6.3.3-4.5 2.8-8.4 5.8-9.4 2.2-.7 3.9.9 4.1 3.3.4 5.3-1.5 12.4-4.9 12.4Z"/><path d="M9.2 5.6c-.3-1.3.4-2.6 1.6-3.1.5 1.2-.2 2.6-1.6 3.1Z"/><path d="M11.6 5c.1-1.4 1.1-2.4 2.4-2.6.2 1.3-.6 2.5-2.4 2.6Z"/><path d="M13.8 5.9c.5-1.2 1.7-1.9 3-1.8-.3 1.3-1.5 2.1-3 1.8Z"/>',
+  '\u2764\uFE0F': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
+  // Three teardrops falling on a diagonal, tips up-left - the previous pair
+  // sat upright and read as two plain blobs rather than splashing water.
+  '\u{1F4A6}': '<path transform="rotate(-14 8.4 15.9)" d="M8.4 5.24C9.71 9.72 12.75 11.33 12.75 15.9A4.35 4.35 0 0 1 4.05 15.9C4.05 11.33 7.1 9.72 8.4 5.24Z"/><path transform="rotate(-52 17.2 7)" d="M17.2 -1.21C18.2 2.24 20.55 3.48 20.55 7A3.35 3.35 0 0 1 13.85 7C13.85 3.48 16.2 2.24 17.2 -1.21Z"/><path transform="rotate(-42 18.3 17.7)" d="M18.3 10.96C19.13 13.79 21.05 14.81 21.05 17.7A2.75 2.75 0 0 1 15.55 17.7C15.55 14.81 17.48 13.79 18.3 10.96Z"/>',
 };
+
+
+
 
 function memoReactionIcon(emoji) {
   return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
