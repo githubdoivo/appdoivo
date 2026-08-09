@@ -2267,19 +2267,7 @@ html.mode-light .chat-empty { color: var(--ink); }
 /* The guest Snatch night switch, loose in the page rather than inside the
    bordered banner it used to live in - see index.html. Same right-aligned
    placement, none of the frame. */
-/* Title left, switch right, on one line. justify-content is flex-end with
-   the title pushing itself over, rather than space-between: between rounds
-   there is no title, and space-between would slide the lone switch across
-   to the left. The switch has to sit in exactly the same place in every
-   phase - it is the only way to change nights. */
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.card-head h2 { margin-right: auto; margin-bottom: 0; }
+.night-switch-loose { display: flex; justify-content: flex-end; margin-bottom: 18px; }
 
 /* The phase button ("iniciar", "fechar votação", "revelar") in both rounds
    of the Snatch card. Deliberately a lighter green than every other filled

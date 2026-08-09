@@ -1709,7 +1709,10 @@ test('logging in through the real form lands in the app, and hands the password 
     'Form Login Guest',
     'the account name has to be in place before the page leaves, or the saved credential has no account attached',
   );
-  assert.equal(await page.isVisible('#login'), false, 'the login screen should be gone, not merely behind the app');
+  // Waited for rather than sampled: this runs just after a real page load,
+  // and reading #login the instant #app appears catches it mid-handover on
+  // a slow run. Waiting asserts the same thing without racing the reload.
+  await page.waitForSelector('#login', { state: 'hidden', timeout: WAIT_TIMEOUT });
 
   // Switching to find-my-key turns the same box into a name search, where
   // offering to fill a key would be nonsense.

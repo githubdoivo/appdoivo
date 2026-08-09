@@ -1258,13 +1258,19 @@ function renderRegistration(data) {
       </div>
       <input id="register-name" type="text" maxlength="60" placeholder="${esc(t('outfit_register_ph'))}" style="margin-top:10px" autocomplete="off" />
       <p class="help" style="margin-top:10px">${esc(t('outfit_register_photo_help'))}</p>
-      <button type="button" class="small ghost" id="register-photo-btn" style="margin-top:6px">${esc(t('outfit_choose_photo_btn'))}</button>
       <input type="file" accept="image/*" id="register-photo-input" class="file-input-visually-hidden" />
       <div id="register-photo-preview" class="hidden" style="margin-top:10px">
         <img class="entry-photo-preview" alt="" />
         <span class="photo-attached-label">${esc(t('outfit_photo_attached'))}</span>
       </div>
-      <button type="submit" class="small" style="margin-top:10px">${t('outfit_register_btn')}</button>
+      <!-- Both on one row at the right edge, like every other card's
+           actions. They were stacked and left-aligned, which read as two
+           unrelated controls rather than the two halves of finishing an
+           entry - the same pairing the admin form already uses. -->
+      <div class="actions-right">
+        <button type="button" class="small ghost" id="register-photo-btn">${esc(t('outfit_choose_photo_btn'))}</button>
+        <button type="submit" class="small">${t('outfit_register_btn')}</button>
+      </div>
     </form>`;
 
   const modeButtons = area.querySelectorAll('#register-mode-switch button');
