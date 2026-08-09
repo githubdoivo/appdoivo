@@ -125,6 +125,11 @@ async function boot() {
     memoEnabled = !!me.memoEnabled;
     myUserId = me.id;
     myName = me.name;
+    // Feeds the off-screen autocomplete="username" anchor in the change-key
+    // form (see settings.html) - Safari needs a username to pair with the
+    // saved password, and giving it one here is what keeps it off the
+    // user-search box.
+    $('change-key-username').value = me.name;
     wireLogoEasterEgg(me.name, me.logo_customized);
     renderAccountCard();
   } catch {
@@ -687,7 +692,7 @@ function syncRolePills() {
 
 function applyUserSearch() {
   const term = $('user-name-input').value.trim();
-  const createBtn = $('user-form').querySelector('button[type="submit"]');
+  const createBtn = $('user-create-btn');
 
   if (term.length < 3) {
     renderUsersList(withRecentFirst(byRole(allUsers)));
@@ -728,20 +733,29 @@ $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
   });
 });
 
-$('user-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+// #user-form is a div rather than a <form> (see settings.html) so Safari
+// stops reading this box as a sign-in, which means submit has to be wired
+// by hand: the button, plus Enter, which a real form would have given free.
+async function createUserFromInput() {
   const name = $('user-name-input').value.trim();
-  if (!name) return;
+  if (!name || $('user-create-btn').disabled) return;
   try {
     const u = await api('/admin/users', { method: 'POST', body: { name } });
     $('user-name-input').value = '';
     $('user-search-hint').classList.add('hidden');
-    $('user-form').querySelector('button[type="submit"]').disabled = true;
+    $('user-create-btn').disabled = true;
     markRecent(u.id);
     await showAlert(t('user_created', { name: u.name, token: u.token }));
     loadUsers();
   } catch (err) {
     await showAlert(err.message);
+  }
+}
+$('user-create-btn').addEventListener('click', createUserFromInput);
+$('user-name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    createUserFromInput();
   }
 });
 

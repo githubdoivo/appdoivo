@@ -78,6 +78,16 @@
      :root rather than inside each body.theme-* block. A 16x40 tile that
      repeats vertically: the box grows with its text, so the motif has to
      be a band, not a fixed drawing. */
+  /* Label colour for any button whose ground is dark regardless of
+     light/dark mode - the red danger buttons and the darkened-accent CTAs.
+     Plain #fff belonged to no theme and read as a foreign white sitting on
+     the page; a touch of the section's own accent mixed in keeps it warm
+     on the terracotta Wall, green on Furnished, blue on Memo, while staying
+     bright enough to clear AA everywhere (worst case ~4.6:1, measured
+     across all six themes in both modes). --clay is redefined per theme,
+     so this follows on its own. */
+  --on-solid: color-mix(in srgb, var(--clay) 10%, #fff);
+
   --rata-trail: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cpath d='M8 0 C-4 10 20 30 8 40' fill='none' stroke='%23000' stroke-opacity='0.45' stroke-width='1.6' stroke-linecap='round'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='12' cy='7' r='1.1'/%3E%3Ccircle cx='13.6' cy='9.6' r='0.85'/%3E%3Ccircle cx='4' cy='27' r='1.1'/%3E%3Ccircle cx='2.4' cy='29.6' r='0.85'/%3E%3C/g%3E%3C/svg%3E");
 }
 
@@ -199,6 +209,19 @@ body {
    fails to open the picker at all, worst inside an installed PWA. Kept
    in the layout (zero-size, clipped, off the visual flow) instead, which
    iOS treats as a valid click target. */
+/* The username field the change-key form carries purely so Safari has
+   something to pair its saved password with (see settings.html). It must
+   stay a real, laid-out field - display:none, visibility:hidden and the
+   hidden attribute all take it out of autofill's reach, which defeats the
+   whole point - so it is parked off-screen instead. */
+.autofill-anchor {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 .file-input-visually-hidden {
   position: absolute;
   width: 1px;
@@ -650,11 +673,15 @@ button, .btn {
   padding: 12px 20px;
   font-size: 0.78rem;
   background: var(--ink);
-  color: var(--paper-3);
+  /* --paper, not --paper-3: the palest step reads as plain white against a
+     dark ground, which is what these labels were being flagged for. The
+     base paper carries the theme's hue visibly and still clears AA (6:1 at
+     worst, on Wall). */
+  color: var(--paper);
 }
 button:hover, .btn:hover {
   background: var(--ink);
-  color: var(--paper-3);
+  color: var(--paper);
   opacity: 0.8;
 }
 button:disabled {
@@ -690,12 +717,12 @@ button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.1
 button.danger {
   border: 1px solid var(--danger-fill);
   background: var(--danger-fill);
-  color: var(--danger-ink);
+  color: var(--on-solid);
 }
 button.danger:hover {
   background: color-mix(in srgb, var(--danger-fill) 85%, #000);
   border-color: color-mix(in srgb, var(--danger-fill) 85%, #000);
-  color: var(--danger-ink);
+  color: var(--on-solid);
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -2037,7 +2064,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
      light enough (#e2a798, #2bcdee) that white on the raw accent fails. */
   background: color-mix(in srgb, var(--clay) 60%, #000);
   border-color: color-mix(in srgb, var(--clay) 60%, #000);
-  color: #fff;
+  color: var(--on-solid);
 }
 #register-form button[type="submit"]:hover,
 #confirm-entry-btn:hover,
@@ -2051,7 +2078,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 52%, #000);
   border-color: color-mix(in srgb, var(--clay) 52%, #000);
-  color: #fff;
+  color: var(--on-solid);
 }
 /* The generic button:disabled { opacity: 0.45 } fades this button's own
    tinted background AND its var(--ink) text toward the same card

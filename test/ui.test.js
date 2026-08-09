@@ -390,7 +390,7 @@ test('Manage Users: a freshly created user floats to the top of this session\'s 
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
   await page.fill('#user-name-input', 'Zzz Session Tester');
-  await page.click('#user-form button[type="submit"]');
+  await page.click('#user-create-btn');
   const alertOk = page.locator('.modal-actions button');
   await alertOk.first().waitFor({ timeout: WAIT_TIMEOUT });
   await alertOk.first().click();

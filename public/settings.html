@@ -401,6 +401,16 @@
           <h2 data-i18n="change_key_title">Mudar chave de acesso</h2>
           <p class="help" data-i18n="change_key_help">Explicação</p>
           <form id="change-key-form">
+            <!-- Safari has a saved password for the site and wants somewhere
+                 to put the matching username. A change-password form with no
+                 username field makes it hunt the rest of the page, and it was
+                 landing on the user-search box below - popping the Face ID
+                 sheet every time settings opened. Giving it an anchor inside
+                 this form is what stops the hunt. Off-screen rather than
+                 hidden/display:none, which autofill skips entirely; readonly
+                 because it is a hint for the browser, never an input. -->
+            <input id="change-key-username" type="text" autocomplete="username"
+                   class="autofill-anchor" readonly tabindex="-1" aria-hidden="true" />
             <div class="password-field">
               <!-- Explicit current-password/new-password (rather than the
                    autocomplete="off" these had, which Safari ignores) so the
@@ -447,17 +457,22 @@
           <div class="card">
             <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
             <div id="user-search-card" style="margin-top:12px">
-              <form id="user-form" class="inline">
-                <!-- type=search, not text: this page also has the change-key
-                     password fields, and Safari's password manager hunts the
-                     page for a nearby text input to treat as the username -
-                     it would pop its Face ID "sign in" sheet on this field
-                     the moment settings opened. autocomplete="off" does not
-                     stop that (iOS ignores it for autofill); excluding the
-                     field from the heuristic does. -->
+              <!-- A div, not a form. A text input plus a button inside a
+                   <form> is the shape Safari reads as a sign-in, which is
+                   half of why autofill kept targeting this field. Enter is
+                   wired by hand in settings.js instead. -->
+              <div id="user-form" class="inline">
+                <!-- type=search, not text: the page also carries the
+                     change-key password fields, and Safari's password
+                     manager looks for a nearby text input to treat as the
+                     username. autocomplete="off" does not stop it - iOS
+                     ignores that for autofill - so this leans on three
+                     things at once: not being a text field, not sitting in
+                     a <form>, and the change-key form having a username
+                     anchor of its own so nothing has to be hunted for. -->
                 <input id="user-name-input" type="search" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
-                <button type="submit" class="small" disabled data-i18n="create_user">Criar</button>
-              </form>
+                <button type="button" id="user-create-btn" class="small" disabled data-i18n="create_user">Criar</button>
+              </div>
               <div class="role-pills" id="user-role-filter" style="margin-top:8px">
                 <button type="button" class="role-pill" data-role="owner">owner</button>
                 <button type="button" class="role-pill" data-role="admin">admin</button>
