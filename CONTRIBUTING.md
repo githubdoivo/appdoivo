@@ -91,6 +91,29 @@ know before running it:
   That's why it's deliberately left until close to the date rather than
   done up front.
 
+## Domain and email
+
+`security.txt` is **not** served from this repo. `public/.well-known/security.txt`
+exists as a fallback, but Cloudflare's Security Center serves its own copy at
+the edge and that is what the world (and Cloudflare's own scanner) sees - the
+scanner will keep flagging the domain as unconfigured however correct the file
+in here is. Edit it via the zone's `security-center/securitytxt` API, or under
+Security -> Settings in the dashboard.
+
+It names `security@appdoivo.com`, which is a Cloudflare Email Routing address,
+not a real mailbox. Two things about that:
+
+- **Failure is silent.** DNS being right (MX, SPF, the DMARC `rua`) is not
+  enough; if the routing destination has never been verified, mail is accepted
+  and dropped, with no bounce to tell you. This is exactly what happened when
+  it was first set up.
+- **It cannot be checked remotely.** Cloudflare's MX rejects senders without
+  reverse DNS, so an SMTP probe never gets far enough to ask. The only real
+  test is to send the address an email and see whether it arrives.
+
+The same address receives DMARC aggregate reports, so if it breaks, those are
+lost too - not just vulnerability reports.
+
 ## Secrets
 
 - `.env` (local) and `fly secrets` (per app) are the only place secrets

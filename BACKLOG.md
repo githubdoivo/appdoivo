@@ -49,18 +49,10 @@ them himself; a blank entry means "leave this one alone". Unrelated to
 the PDF feature above - this is the app's own wording, not anything
 guests write.
 
-## Settled
-
-### `security@appdoivo.com` receives mail — confirmed 2026-08-09
-
-`security.txt` is served at the edge by Cloudflare's Security Center and
-names this address. DNS was already correct (Cloudflare MX, SPF, and a
-DMARC record whose `rua` reports also go there), but mail was being
-dropped because the routing destination had never been verified. Once
-verified, a test message arrived. Worth knowing if it ever breaks again:
-the symptom is silence rather than a bounce, and it cannot be probed
-remotely, since Cloudflare's MX rejects senders without reverse DNS - so
-the only real test is to send it an email.
+Finished items come off this page rather than moving to a "done"
+section - a backlog that accumulates history stops being read. Anything
+worth keeping from a finished item goes wherever that knowledge belongs
+(usually CONTRIBUTING.md), not here.
 
 ## Elsewhere
 
