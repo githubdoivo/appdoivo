@@ -93,6 +93,13 @@ the normal branch → QA → approve → prod flow above.
 - Move fast on implementation without asking permission for each small step
   — implement, test, report. Batch rapid-fire follow-up requests instead of
   only addressing the latest one.
+- **Agreed-but-unscheduled work goes in [BACKLOG.md](BACKLOG.md)**, written
+  in UK English like the rest of the repo docs. A session's own task list
+  disappears with the session, so anything Ivo has asked for and not had
+  yet has to be written down there instead. Keep it separate from work in
+  progress, and never report a backlog item as if it were blocking a
+  release — a finished build ships regardless of what is still on that
+  page.
 - Explicit check-in required before: deploying to **production**, rotating
   **already-live** secrets, writing directly to a production database, or
   anything else destructive/costly.
