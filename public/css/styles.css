@@ -2076,6 +2076,11 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #chat-form button[type="submit"],
 #plaza-post-form button[type="submit"],
 #admin-register-form button[type="submit"],
+/* "fixar" sits next to "publicar" on the same page and does the same kind
+   of thing, so it belongs to the same family. On the default button style
+   it was a pale block in dark mode against publicar's deep one - the two
+   read as unrelated controls depending which mode you were in. */
+[data-pin-post],
 [data-reveal-next] {
   /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
      --ink text. Even at 35% it read as a washed-out, half-transparent
@@ -2097,6 +2102,7 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #chat-form button[type="submit"]:hover,
 #plaza-post-form button[type="submit"]:hover,
 #admin-register-form button[type="submit"]:hover,
+[data-pin-post]:hover,
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 42%, #000);
   border-color: color-mix(in srgb, var(--clay) 42%, #000);
