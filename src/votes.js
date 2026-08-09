@@ -528,3 +528,91 @@ export function startRunoff(night) {
   setSetting(`voting_status_${night}`, 'open');
   return { ok: true, contestantIds: tied.map((r) => r.id) };
 }
+
+/* -------------------------- Miss Congeniality ----------------------------- */
+// A second vote per night, run after the outfit vote. Two things make it
+// deliberately simpler than the main vote above: it's cast for a *person*
+// rather than an entry (so a duo splits into its two individuals - the
+// pairing only ever mattered for the outfit itself), and it has no staged
+// reveal, just open -> closed -> revealed.
+
+const CONGENIALITY_PHASES = ['closed', 'open', 'revealed'];
+
+/** 'closed' (default, nobody can vote yet), 'open', or 'revealed'. */
+export function congenialityStatus(night) {
+  const s = getSetting(`congeniality_status_${night}`, 'closed');
+  return CONGENIALITY_PHASES.includes(s) ? s : 'closed';
+}
+
+export function setCongenialityStatus(night, status) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (!CONGENIALITY_PHASES.includes(status)) return { error: 'err_invalid_congeniality_status' };
+  setSetting(`congeniality_status_${night}`, status);
+  return { ok: true, night, congenialityStatus: status };
+}
+
+/**
+ * Everyone in the running: the individual people behind the night's
+ * confirmed entries, each listed once. A duo entry contributes both of its
+ * people separately (that's the whole point - congeniality is personal,
+ * the outfit was the shared part), and an admin-added entry with nobody
+ * linked to it contributes nobody, since there's no person to vote for.
+ */
+export function congenialityCandidates(night) {
+  return db.prepare(`
+    SELECT DISTINCT u.id, u.name
+    FROM contestants c
+    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+    ORDER BY u.name COLLATE NOCASE
+  `).all(night);
+}
+
+export function myCongenialityVote(userId, night) {
+  const row = db.prepare(
+    'SELECT target_user_id FROM congeniality_votes WHERE user_id = ? AND night = ?'
+  ).get(userId, night);
+  return row ? row.target_user_id : null;
+}
+
+export function castCongenialityVote(userId, targetUserId, night) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (congenialityStatus(night) !== 'open') return { error: 'err_congeniality_not_open' };
+  // Same rule as the outfit vote - you don't get to crown yourself.
+  if (Number(targetUserId) === Number(userId)) return { error: 'err_cannot_vote_self' };
+  if (!congenialityCandidates(night).some((c) => c.id === Number(targetUserId))) {
+    return { error: 'err_not_a_candidate' };
+  }
+  if (myCongenialityVote(userId, night) !== null) return { error: 'err_already_voted' };
+
+  db.prepare(
+    'INSERT INTO congeniality_votes (user_id, target_user_id, night) VALUES (?, ?, ?)'
+  ).run(userId, targetUserId, night);
+  return { ok: true };
+}
+
+/** Full standings, most votes first. Admin-visible at any phase. */
+export function congenialityResults(night) {
+  return db.prepare(`
+    SELECT u.id, u.name, COUNT(v.id) AS votes
+    FROM contestants c
+    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
+    LEFT JOIN congeniality_votes v ON v.target_user_id = u.id AND v.night = c.night
+    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+    GROUP BY u.id
+    ORDER BY votes DESC, u.name COLLATE NOCASE
+  `).all(night);
+}
+
+/** Just the winner, and only once revealed - what a guest is allowed to see. */
+export function congenialityWinner(night) {
+  if (congenialityStatus(night) !== 'revealed') return null;
+  const [top] = congenialityResults(night);
+  return top && top.votes > 0 ? top : null;
+}
+
+/** Wipes this night's congeniality vote back to square one. */
+export function resetCongeniality(night) {
+  db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
+  setSetting(`congeniality_status_${night}`, 'closed');
+}

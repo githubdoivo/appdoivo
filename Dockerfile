@@ -2,6 +2,13 @@ FROM node:24-slim
 
 WORKDIR /app
 
+# ffmpeg: usado para gerar o video do dia do Memo a partir das fotos
+# (ver buildDayRecapVideo() em src/memo.js). Sem recomendados, para nao
+# arrastar pacotes de audio/X11 que nao usamos.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 # Instala apenas dependencias de producao
 COPY package*.json ./
 RUN npm install --omit=dev

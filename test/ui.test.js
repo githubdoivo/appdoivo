@@ -1359,23 +1359,22 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   ]);
   assert.ok(download.suggestedFilename().endsWith('.zip'));
 
-  // Publishing the day's video is a Wall admin action, not a Memo one -
-  // see the "Vídeo do dia" card added to atab-plaza in settings.html.
-  await adminPage.click('[data-atab="plaza"]');
-  await adminPage.waitForSelector('#wall-memo-video-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  // Publishing is a single button on Memo's own admin tab now: the server
+  // stitches the day's photos into an mp4 (1s each, see buildDayRecapVideo()
+  // in memo.js) and stores it as that day's recap, which *is* what the Wall
+  // player reads - so there's no separate publish step and no file to pick.
+  await adminPage.click('[data-memo-publish-day]');
   await adminPage.waitForFunction(
-    () => document.getElementById('wall-memo-video-day')?.options.length > 0,
+    () => /\d/.test(document.querySelector('[data-memo-day-msg]')?.textContent || ''),
     { timeout: WAIT_TIMEOUT }
   );
-  await adminPage.setInputFiles('#wall-memo-video-input', {
-    name: 'recap.mp4',
-    mimeType: 'video/mp4',
-    buffer: Buffer.from('fake mp4 bytes'),
-  });
-  await adminPage.waitForFunction(
-    () => document.getElementById('wall-memo-video-msg')?.textContent.length > 0,
-    { timeout: WAIT_TIMEOUT }
-  );
+  // The download-video button only exists once that day actually has one.
+  await adminPage.waitForSelector('[data-memo-download-video]', { timeout: WAIT_TIMEOUT });
+  const [videoDownload] = await Promise.all([
+    adminPage.waitForEvent('download'),
+    adminPage.click('[data-memo-download-video]'),
+  ]);
+  assert.ok(videoDownload.suggestedFilename().endsWith('.mp4'));
 
   // Any logged-in guest (not just the uploader/admin) sees it on the Wall.
   await page.click('[data-tab="plaza"]');

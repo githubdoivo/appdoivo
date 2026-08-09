@@ -756,6 +756,104 @@ test('a tie for first place can be broken with a runoff scoped to just the tied 
   assert.equal(noTieResult.data.error, 'err_no_tie', 'reset-all should have cleared the runoff, and there are no contestants left to tie');
 });
 
+test('Miss Congeniality is a separate per-person round: duos split up, self-votes are refused, and the winner only appears once revealed', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const ana = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Ana' } });
+  const bea = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Bea' } });
+  const caio = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Caio' } });
+
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', '/admin/contestants/register', { token: ADMIN, body: { night, name: 'Cong Solo', userId: ana.data.id } });
+  // One duo entry - it must contribute its two people separately here, even
+  // though the outfit vote treats it as a single entry.
+  await api('POST', '/admin/contestants/register', { token: ADMIN, body: { night, name: 'Cong Duo', userId: bea.data.id, partnerUserId: caio.data.id } });
+
+  const closed = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: bea.data.id } });
+  assert.equal(closed.status, 400);
+  assert.equal(closed.data.error, 'err_congeniality_not_open', 'the round starts closed - nobody votes before the admin opens it');
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+
+  const status = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.deepEqual(
+    new Set(status.data.congeniality.candidates.map((c) => c.id)),
+    new Set([ana.data.id, bea.data.id, caio.data.id]),
+    'the duo should appear as its two individuals, alongside the solo entrant'
+  );
+
+  const own = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: ana.data.id } });
+  assert.equal(own.data.error, 'err_cannot_vote_self');
+
+  const outsider = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Outsider' } });
+  const notRunning = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: outsider.data.id } });
+  assert.equal(notRunning.data.error, 'err_not_a_candidate');
+
+  assert.equal((await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
+  assert.equal((await api('POST', '/congeniality/vote', { token: caio.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
+  const twice = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: caio.data.id } });
+  assert.equal(twice.data.error, 'err_already_voted', 'one vote each, no changing it');
+
+  const beforeReveal = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(beforeReveal.data.congeniality.winner, null, 'a guest must not see the winner before the reveal');
+  assert.equal(beforeReveal.data.congeniality.myVote, bea.data.id);
+
+  // An admin, by contrast, can watch the standings the whole way through.
+  const adminView = await api('GET', '/admin/voting', { token: ADMIN });
+  const nightRow = adminView.data.nights.find((n) => n.night === night);
+  assert.equal(nightRow.congenialityStatus, 'open');
+  assert.equal(nightRow.congenialityResults[0].votes, 2);
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+  const revealed = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(revealed.data.congeniality.winner.id, bea.data.id);
+  assert.equal(revealed.data.congeniality.winner.votes, 2);
+
+  // Restarting the night's round has to take the congeniality result with
+  // it - a revealed winner attached to votes that no longer exist would be
+  // a lie the Wall could still be showing.
+  await api('POST', `/admin/voting/${night}/reset`, { token: ADMIN });
+  const afterReset = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
+  assert.equal(afterReset.data.congeniality.status, 'closed');
+  assert.equal(afterReset.data.congeniality.winner, null);
+});
+
+test('publishing a Snatch result to the Wall needs the podium revealed first, and snapshots it so a later reset cannot rewrite it', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Podium A', night } });
+  await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Podium B', night } });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const voter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Podium Voter' } });
+  await api('POST', '/votes', { token: voter.data.token, body: { contestantId: a.data.id, night } });
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  const tooEarly = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(tooEarly.status, 400);
+  assert.equal(tooEarly.data.error, 'err_results_not_revealed', 'publishing before the reveal would spoil the countdown');
+
+  // hidden -> third -> second -> first
+  for (let i = 0; i < 3; i++) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+
+  const published = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(published.status, 201);
+
+  const feed = await api('GET', '/plaza-posts', { token: voter.data.token });
+  const post = feed.data.posts.find((p) => p.type === 'podium');
+  assert.ok(post, 'the podium post should be readable by any guest on the Wall');
+  const snapshot = JSON.parse(post.text);
+  assert.equal(snapshot.night, night);
+  assert.equal(snapshot.podium[0].name, 'Podium A');
+  assert.equal(snapshot.podium[0].votes, 1);
+  assert.equal(snapshot.podium[0].rank, 1);
+
+  // Wiping the night must leave the already-published post untouched.
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const afterWipe = await api('GET', '/plaza-posts', { token: voter.data.token });
+  const stillThere = afterWipe.data.posts.find((p) => p.type === 'podium');
+  assert.equal(JSON.parse(stillThere.text).podium[0].name, 'Podium A');
+});
+
 test('a solo contestant cannot vote for their own entry', async () => {
   const night = 'swamp'; // wiped clean by the reset-all test above
   const solo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Solo Voter' } });

@@ -166,6 +166,14 @@
         <h2 data-i18n="outfit_results">Resultados</h2>
         <ol id="results-list" class="tier" style="margin-top:10px"></ol>
       </div>
+      <!-- The separate Miss Congeniality round - only ever visible once the
+           admin opens it, and only showing a winner once revealed (see
+           congeniality in /votes/status). -->
+      <div class="card hidden" id="congeniality-card">
+        <h2 data-i18n="congeniality_title">Miss Congeniality</h2>
+        <p class="help" data-i18n="congeniality_help">Explicação</p>
+        <div id="congeniality-area" style="margin-top:12px"></div>
+      </div>
     </div>
 
     <!-- Chat efemero - now labeled "Plaza" (see nav above). -->
@@ -191,6 +199,9 @@
         <h2 data-i18n="memo_checklist_title">Os teus momentos</h2>
         <p class="help" data-i18n="memo_checklist_help">Explicação</p>
         <div id="memo-dots" class="memo-dots" style="margin-top:12px"></div>
+        <!-- Only rendered while a moment is actually open - the dots above
+             are read-only status, so shooting needs its own real button. -->
+        <div id="memo-shoot" class="memo-shoot hidden"></div>
       </div>
       <div class="card hidden" id="memo-feed-card">
         <h2 data-i18n="memo_feed_title">O dia de hoje</h2>

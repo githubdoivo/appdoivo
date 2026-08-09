@@ -1,6 +1,7 @@
 import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, unlinkSync, existsSync } from 'node:fs';
+import { mkdirSync, unlinkSync, existsSync, writeFileSync, statSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import db from './db.js';
 import { today, getTimezone } from './time.js';
 
@@ -275,6 +276,89 @@ export function saveRecap(day, userId, { mimeType, filePath, fileSize }) {
 
 export function getRecap(day) {
   return db.prepare('SELECT * FROM memo_recaps WHERE day = ?').get(day);
+}
+
+// Seconds each photo is held on screen in the generated day video.
+export const MEMO_RECAP_SECONDS_PER_PHOTO = 1;
+
+// Portrait 1080x1920 - these are phone photos, and the recap is watched on
+// a phone in the Wall feed. Anything that doesn't fit gets letterboxed
+// rather than cropped, so nobody's moment loses its subject to a centre
+// crop.
+const RECAP_WIDTH = 1080;
+const RECAP_HEIGHT = 1920;
+
+/**
+ * Stitches every photo uploaded on `day` into a single mp4, one second per
+ * photo, in the order they were taken. Videos in that day are skipped -
+ * mixing arbitrary user-shot clips (each with its own resolution, rotation
+ * and frame rate, some with audio) into a concat stream needs a full
+ * re-encode pass per clip and is a different feature; the photo slideshow
+ * is what "video of the day" means here.
+ *
+ * Returns { error } instead of throwing for the expected empty-day case, so
+ * the route can surface it as a normal message.
+ */
+export async function buildDayRecapVideo(day) {
+  const photos = db.prepare(
+    "SELECT file_path FROM memo_uploads WHERE day = ? AND kind = 'photo' ORDER BY uploaded_at"
+  ).all(day);
+  if (photos.length === 0) return { error: 'err_memo_no_photos' };
+
+  const outName = `recap-${day}-${Date.now()}.mp4`;
+  const outPath = join(MEMO_DIR, outName);
+  // ffmpeg's concat demuxer reads durations from a manifest. Its parser
+  // treats a single quote as the path delimiter, so the only escaping that
+  // matters is a quote inside a filename - ours are all generated names,
+  // but this stays honest about it rather than assuming.
+  const listPath = join(MEMO_DIR, `.recap-${day}-${Date.now()}.txt`);
+  const q = (p) => `'${join(MEMO_DIR, p).replace(/'/g, "'\\''")}'`;
+  const lines = photos.map((p) => `file ${q(p.file_path)}\nduration ${MEMO_RECAP_SECONDS_PER_PHOTO}`);
+  // The concat demuxer ignores the final entry's duration, so the last
+  // photo is repeated - without this it flashes by in a single frame.
+  lines.push(`file ${q(photos[photos.length - 1].file_path)}`);
+  writeFileSync(listPath, `${lines.join('\n')}\n`);
+
+  try {
+    await runFfmpeg([
+      '-y',
+      '-f', 'concat', '-safe', '0', '-i', listPath,
+      '-vf', [
+        `scale=${RECAP_WIDTH}:${RECAP_HEIGHT}:force_original_aspect_ratio=decrease`,
+        `pad=${RECAP_WIDTH}:${RECAP_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        'format=yuv420p',
+      ].join(','),
+      '-r', '30',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      // Baseline-friendly output so it plays inline in iOS Safari.
+      '-profile:v', 'high', '-level', '4.0',
+      '-movflags', '+faststart',
+      outPath,
+    ]);
+  } finally {
+    try { unlinkSync(listPath); } catch { /* best effort */ }
+  }
+
+  return { filePath: outName, mimeType: 'video/mp4', fileSize: statSync(outPath).size, photoCount: photos.length };
+}
+
+function runFfmpeg(args) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d; });
+    proc.on('error', (e) => reject(
+      e.code === 'ENOENT' ? new Error('err_memo_ffmpeg_missing') : e
+    ));
+    proc.on('close', (code) => {
+      if (code === 0) return resolve();
+      // ffmpeg is verbose even on success - only the tail is useful, and
+      // only in the server log, never surfaced to the client.
+      console.error('[memo] ffmpeg failed:', stderr.split('\n').slice(-8).join('\n'));
+      reject(new Error('err_memo_recap_failed'));
+    });
+  });
 }
 
 export function listRecapDays() {

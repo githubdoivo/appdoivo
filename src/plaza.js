@@ -165,3 +165,23 @@ export function castPlazaVote(userId, postId, optionId) {
   }
   return { ok: true };
 }
+
+/**
+ * Publishes a Snatch night's result as a Wall post: the podium (with each
+ * placing's contestant id, so the feed can show their photo) and, below it,
+ * the Miss Congeniality winner.
+ *
+ * The whole thing is stored as a JSON snapshot in `text` rather than as a
+ * live reference to the night. A Wall post is a record of what was
+ * announced at the time - re-running or resetting the night afterwards
+ * (see /admin/voting/:night/reset) must not silently rewrite a result the
+ * whole party already saw. It also means rendering needs no extra
+ * permission logic: whatever the owner chose to publish is public.
+ */
+export function createPodiumPost(authorId, { night, podium, congeniality }) {
+  const payload = JSON.stringify({ night, podium, congeniality: congeniality ?? null });
+  const info = db.prepare(
+    "INSERT INTO plaza_posts (type, author_id, text) VALUES ('podium', ?, ?)"
+  ).run(authorId, payload);
+  return { ok: true, id: info.lastInsertRowid };
+}

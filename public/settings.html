@@ -46,14 +46,20 @@
 
     <div id="admin-content" class="hidden">
       <nav class="tabs" id="admin-tabs">
+        <!-- Settings first (it's the one tab every user gets), then the
+             exact order of the guest tab bar in index.html - wall, plaza,
+             memo, rata, snatch - so the two navs don't disagree. Mind the
+             internal naming swap when reading this: atab="plaza" is the
+             tab displayed as "wall", atab="wall" the one displayed as
+             "plaza". See CLAUDE.md. -->
         <button class="tab active" data-atab="settings" data-i18n="tab_settings">Settings</button>
         <button class="tab" data-atab="plaza" data-i18n="tab_plaza">Plaza</button>
-        <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
-        <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
         <!-- No longer a normal tab bar entry - see the star trigger at the
              end of atab-memo instead (#wall-secret-btn in settings.js). -->
         <button class="tab hidden" data-atab="wall" data-i18n="tab_chat">Wall</button>
         <button class="tab" data-atab="memo" data-i18n="tab_memo">Memo</button>
+        <button class="tab" data-atab="rata" data-i18n="tab_rata">Rata</button>
+        <button class="tab" data-atab="outfit" data-i18n="tab_outfit">Snatch</button>
       </nav>
 
       <!-- Separador: Plaza (qualquer admin pode publicar - feed visivel a
@@ -84,22 +90,6 @@
         <div class="card">
           <h2 data-i18n="plaza_posts_list_title">Publicações</h2>
           <div id="plaza-posts-list" style="margin-top:12px"></div>
-        </div>
-
-        <!-- Publishes a Memo day's recap video onto the Wall for everyone
-             to watch - hidden entirely when Memo itself is off (see
-             memoEnabled in settings.js), same as the atab-memo separator
-             below. Lives here (not in Memo's own admin tab) since the
-             result is a Wall post, not a Memo-only artifact. -->
-        <div class="card hidden" id="wall-memo-video-card">
-          <h2 data-i18n="wall_memo_video_title">Vídeo do dia</h2>
-          <p class="help" data-i18n="wall_memo_video_help">Explicação</p>
-          <div class="inline" style="margin-top:12px">
-            <select id="wall-memo-video-day"></select>
-            <button type="button" class="small" id="wall-memo-video-btn" data-i18n="memo_admin_recap_btn">Publicar</button>
-            <input type="file" accept="video/*" class="file-input-visually-hidden" id="wall-memo-video-input" />
-          </div>
-          <span id="wall-memo-video-msg" class="muted" style="display:block;margin-top:8px"></span>
         </div>
 
         <!-- Owner-only kill switch, scoped to just this feature (see
@@ -145,6 +135,27 @@
             <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
           </div>
           <span id="voting-msg" class="muted"></span>
+        </div>
+
+        <!-- The second round of the night, run after the outfit vote above:
+             open -> close -> reveal, no staged countdown (see the
+             congeniality helpers in votes.js). Publishing sends the podium
+             AND this winner to the Wall as one post. -->
+        <div class="card">
+          <h2 data-i18n="congeniality_title">Miss Congeniality</h2>
+          <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
+          <p id="congeniality-state" class="muted" style="margin:8px 0 12px"></p>
+          <div class="row-actions">
+            <button type="button" class="small" data-congeniality-set="open" data-i18n="congeniality_open_btn">Abrir</button>
+            <button type="button" class="small" data-congeniality-set="closed" data-i18n="congeniality_close_btn">Fechar</button>
+            <button type="button" class="small" data-congeniality-set="revealed" data-i18n="congeniality_reveal_btn">Revelar</button>
+            <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar</button>
+          </div>
+          <table id="congeniality-table" class="table" style="margin-top:12px"></table>
+          <div class="row-actions" style="margin-top:12px">
+            <button type="button" class="small" id="publish-podium-btn" data-i18n="publish_podium_btn">Publicar no Wall</button>
+          </div>
+          <span id="congeniality-msg" class="muted"></span>
         </div>
 
         <div class="card">

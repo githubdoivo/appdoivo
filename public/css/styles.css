@@ -57,7 +57,11 @@
   --role-user:  #2a6ca6;
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
-  --status-pending: #8a6a1f;
+  /* Was #8a6a1f, which carried enough red/blue to read as olive-mustard
+     rather than yellow. Same hue family with the blue taken out entirely -
+     a proper amber-yellow at identical contrast (3.9:1 on rata's light
+     paper), so nothing gets harder to read for the sake of the hue. */
+  --status-pending: #8a6a00;
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
@@ -93,6 +97,11 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
+  /* Solid fill for destructive buttons. --danger itself stays a light tint
+     because .error uses it as *text* on dark login art; a button needs the
+     opposite - a strong ground with light text on top. */
+  --danger-fill: #b04a36;
+  --danger-ink:  #fdf6f0;
   /* Was #6b3420 (warm brown) - shifted to a dark plum at the same
      saturation/lightness, by request. */
   --brand:    #602456;
@@ -115,6 +124,8 @@ html.mode-dark {
   --clay:     #cf9a5c;
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
+  --danger-fill: #a83f2c;
+  --danger-ink:  #fbeee7;
   --brand:    #e2a878;
   --role-owner: #b294d6;
   --role-admin: #d9695a;
@@ -212,11 +223,13 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
    as a second button instead of an alert. Full form width for the same
    reason the button is - a narrower chip made the stack step in and out.
    (8:1 against the text below, comfortably past AA.) */
-/* Empty by default (no error yet) - without this it still reserved its UA
-   block margins, leaving a visible hole between the language toggle and the
-   "ainda sem chave?" link and holding the whole stack higher up the page. */
-#login-error:empty { display: none; }
-#login-error:not(:empty) {
+/* Always occupies its full box, error or not - the layout you see on a
+   fresh login is the same one you see after a rejected key, so nothing
+   above it jumps the moment a message appears. The :empty rule keeps a
+   single line's worth of height via generated content (generated content
+   doesn't count against :empty, so this stays stable), and hides the red
+   chip itself with visibility rather than display. */
+#login-error {
   display: block;
   width: 100%;
   max-width: 320px;
@@ -231,6 +244,8 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
   padding: 10px 16px;
   border-radius: var(--radius);
 }
+#login-error:empty { visibility: hidden; }
+#login-error:empty::before { content: '\00a0'; }
 
 .view { max-width: 620px; margin: 0 auto; padding: 22px 20px 48px; }
 /* Built mobile-first (this is a PWA meant to live on a home screen), which
@@ -309,7 +324,7 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 1;
   max-width: 620px;
   margin: 0 auto;
-  padding: 22px 20px calc(14px + env(safe-area-inset-bottom));
+  padding: 22px 20px calc(40px + env(safe-area-inset-bottom));
   /* Was 88vh, then 94vh, then 99vh - the whole greeting-through-login block
      sat too high up near the top of the illustration; taller here
      (bottom-anchored, see justify-content below) leaves more of the artwork
@@ -586,24 +601,23 @@ button.ghost:hover, a.ghost:hover {
 /* Size modifier: small buttons, just padding/font size, inherit color scheme. */
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
 
-/* Destructive: Red danger button (delete, wipe, reset). Filled by default,
-   not just outlined - an outline-only "wipe everything" control read as too
-   quiet/easy to miss next to the app's other plain-outline (ghost) buttons,
-   undercutting exactly the action that most needs to read as a warning.
-   Tinted into --paper-2 with --ink text (same recipe as the per-tab CTA
-   tint elsewhere in this file) rather than a flat --danger fill with
-   --paper-3 text - checked, that combination fails contrast badly in
-   several theme/mode pairs (as low as 1.4:1 in mural light), while this
-   stays 5.2-8.4:1 everywhere at 50%/60% (was 35%/55% - still read as too
-   subtle/not clearly "filled" against some themes' own paper-2). */
+/* Destructive: Red danger button (delete, wipe, reset). A genuinely solid
+   fill, not a tint. This used to color-mix --danger 50% into --paper-2,
+   which on a light-mode brick/mural surface diluted an already-pale
+   --danger (#d98a7a) into a washed-out pink whose 1px --danger border
+   disappeared into it entirely - "remover" read as disabled rather than
+   destructive. --danger-fill/--danger-ink exist precisely so this can be a
+   strong ground with light text (5.1:1 light, 6.3:1 dark) without touching
+   --danger itself, which is still needed as *text* elsewhere (.error). */
 button.danger {
-  border: 1px solid var(--danger);
-  background: color-mix(in srgb, var(--danger) 50%, var(--paper-2));
-  color: var(--ink);
+  border: 1px solid var(--danger-fill);
+  background: var(--danger-fill);
+  color: var(--danger-ink);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger) 60%, var(--paper-2));
-  color: var(--ink);
+  background: color-mix(in srgb, var(--danger-fill) 85%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 85%, #000);
+  color: var(--danger-ink);
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -1556,8 +1570,11 @@ html.mode-light body.theme-memo .card {
    plain filled dot, missed is filled but dim. No numbers/times on the dots
    themselves (see the aria-label for the roman-numeral name instead). */
 .memo-dots { display: flex; gap: 14px; }
-.memo-dot-wrap { position: relative; }
+.memo-shoot { margin-top: 16px; }
+.memo-shoot button { width: 100%; }
+/* A plain indicator, not a control - see renderMemoDots() in app.js. */
 .memo-dot {
+  display: block;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -1566,13 +1583,17 @@ html.mode-light body.theme-memo .card {
   padding: 0;
   cursor: default;
 }
+/* Four states, each a different fill: empty (still to come), solid white
+   (captured), shaded (missed), and the theme's cyan (open right now). White
+   rather than --ink-soft for "done" so a finished moment reads as brightly
+   ticked off against Memo's cyan paper in either mode, instead of blending
+   into the same muted tone the missed ones use. */
 .memo-dot-waiting { opacity: 0.7; }
-.memo-dot-uploaded { background: var(--ink-soft); border-color: var(--ink-soft); }
+.memo-dot-uploaded { background: #fff; border-color: #fff; }
 .memo-dot-missed { background: var(--line); border-color: var(--line); opacity: 0.5; }
 .memo-dot-open {
   background: var(--rata);
   border-color: var(--rata);
-  cursor: pointer;
   animation: memo-dot-pulse 1.6s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1683,18 +1704,18 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .admin-post-options li { padding: 3px 0; }
 .admin-post-options strong { font-weight: 700; margin-left: 4px; }
 
-.plaza-post-announcement {
+.plaza-post-announcement, .plaza-post-podium {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-announcement:first-child { margin-top: 0; }
+.plaza-post-announcement:first-child, .plaza-post-podium:first-child { margin-top: 0; }
 /* Boxed like a poll now (was a plain unboxed "torn column" that read as
    an afterthought next to the poll's card) - pinning still upgrades the
    border to stand out further, same as polls. */
-.plaza-post-announcement.pinned { border-color: var(--clay); }
+.plaza-post-announcement.pinned, .plaza-post-podium.pinned { border-color: var(--clay); }
 .plaza-pinned-badge {
   display: inline-block;
   font-family: var(--body);
@@ -1752,11 +1773,11 @@ html.mode-dark .plaza-post-type { color: #fff; }
   transition: width 0.3s ease;
 }
 .plaza-poll-option-label, .plaza-poll-option-pct { position: relative; z-index: 1; }
-/* Was the other way round (bold %, plain label) - the number someone's
-   about to vote among should outweigh the tally next to it, not the
-   reverse, especially before anyone's voted and every percentage reads
-   the same anyway. */
-.plaza-poll-option-label { font-weight: 700; }
+/* Neither side of the row is bold. The option label briefly was (to
+   outweigh the tally beside it), but these rows inherit the button rule's
+   wide letter-spacing, and bold on top of that made a plain list of choices
+   read as four shouting CTAs. */
+.plaza-poll-option-label { font-weight: 400; }
 .plaza-poll-option-pct { font-variant-numeric: tabular-nums; }
 .plaza-poll-submit { margin-top: 12px; }
 
@@ -1966,3 +1987,38 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .chat-msg-text { font-family: var(--serif); font-size: 1.05rem; word-wrap: break-word; }
 .chat-empty { color: var(--ink-soft); font-weight: 600; font-size: 0.92rem; }
 html.mode-light .chat-empty { color: var(--ink); }
+
+/* ------------------- Miss Congeniality + published podium ----------------- */
+
+/* The single crowned name, in the same script face the app uses for its
+   other "this is the moment" text (hero lines, the login greeting) rather
+   than the body face a plain result list would get. */
+.congeniality-winner {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.35rem;
+  color: var(--clay-2);
+  margin: 0 0 2px;
+}
+
+/* A Snatch result published to the Wall. Reuses the feed's own post frame -
+   this is a row of placings inside it, not a new kind of surface. */
+.podium-night { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 0 0 10px; }
+.podium-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.podium-row { display: flex; align-items: center; gap: 10px; }
+.podium-medal { font-size: 1.2rem; flex: none; }
+.podium-photo {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+/* Same footprint as a real thumbnail so a photoless entry doesn't shunt the
+   name and tally out of line with the rows above it. */
+.podium-photo-empty { display: inline-block; background: var(--paper-3); }
+.podium-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.podium-row .votes { flex: none; color: var(--ink-soft); font-size: var(--text-xs); }
+.podium-congeniality { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.podium-congeniality h3 { font-size: 0.95rem; margin: 0 0 4px; }

@@ -527,8 +527,10 @@ const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 
 
 // Demure by design: 5 small dots instead of a detailed row-per-slot list -
 // filled in as they're completed, no times or countdowns cluttering it.
-// Only the open one is actually interactive (tap it to shoot); waiting/
-// done/missed dots are just a glanceable state, nothing to act on.
+// The dots are read-only status, never controls: tapping a circle to open a
+// camera was never obvious, and made the four non-actionable states look
+// pressable too. Shooting now has its own real button below them, shown
+// only while a moment is actually open.
 function renderMemoDots() {
   // Fixed left-to-right chronological order (slot_index, as returned by the
   // API) - not reordered by status. The dots are meant to read like a
@@ -536,14 +538,15 @@ function renderMemoDots() {
   // means something stable instead of shuffling completed ones around.
   $('memo-dots').innerHTML = memoSlotsCache.map((s) => {
     const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] ?? s.slotIndex + 1 });
-    const isOpen = s.status === 'open';
-    return `
-      <div class="memo-dot-wrap">
-        <button type="button" class="memo-dot memo-dot-${s.status}" aria-label="${esc(label)}"
-          ${isOpen ? `data-memo-upload-btn="${s.id}"` : 'disabled'}></button>
-        ${isOpen ? `<input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${s.id}" />` : ''}
-      </div>`;
+    return `<span class="memo-dot memo-dot-${s.status}" role="img" aria-label="${esc(label)}"></span>`;
   }).join('');
+
+  const open = memoSlotsCache.find((s) => s.status === 'open');
+  $('memo-shoot').innerHTML = open
+    ? `<button type="button" id="memo-shoot-btn" data-memo-upload-btn="${open.id}">${esc(t('memo_shoot_btn'))}</button>
+       <input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${open.id}" />`
+    : '';
+  $('memo-shoot').classList.toggle('hidden', !open);
 }
 
 const MEMO_REACTION_EMOJI = ['❤️', '👎', '💦', '🍆'];
@@ -608,20 +611,20 @@ function renderMemoFeed() {
 // every render - a tap just forwards to its own hidden file input, same
 // pattern as the outfit registration photo picker (see #register-photo-btn
 // in settings.js) but scoped to this container.
-$('memo-dots').addEventListener('click', (e) => {
+$('memo-shoot').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-memo-upload-btn]');
   if (!btn) return;
-  $('memo-dots').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
+  $('memo-shoot').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
 });
 
-$('memo-dots').addEventListener('change', async (e) => {
+$('memo-shoot').addEventListener('change', async (e) => {
   const input = e.target.closest('[data-memo-file-input]');
   const file = input?.files?.[0];
   if (!file) return;
   const slotId = input.dataset.memoFileInput;
-  const dot = input.previousElementSibling;
+  const btn = $('memo-shoot').querySelector('[data-memo-upload-btn]');
   memoUploadingSlotId = slotId;
-  dot.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = t('memo_uploading'); }
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -722,13 +725,50 @@ function timeAgo(dbTimestamp) {
 // (owner-only, see the admin Plaza page) already sort first from the API -
 // this just marks them visually so a pin doesn't blend into the rest of
 // the feed.
+const PLAZA_TYPE_LABEL = {
+  poll: 'plaza_type_poll',
+  announcement: 'plaza_type_announcement',
+  podium: 'plaza_type_podium',
+};
+
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
   // Same "poll"/"announcement" labels the admin's own type picker already
   // uses, just surfaced here too - at a glance in a mixed feed, nothing
   // else says which kind of post this is before you start reading it.
-  const typeLabel = `<h2 class="plaza-post-type">${esc(t(post.type === 'poll' ? 'plaza_type_poll' : 'plaza_type_announcement'))}</h2>`;
+  const typeLabel = `<h2 class="plaza-post-type">${esc(t(PLAZA_TYPE_LABEL[post.type] ?? 'plaza_type_announcement'))}</h2>`;
+
+  // A published Snatch result. Its text is a JSON snapshot taken at publish
+  // time (see createPodiumPost() in plaza.js), not a live lookup - so what
+  // the party saw announced stays exactly that, even if the night is later
+  // re-run or reset.
+  if (post.type === 'podium') {
+    let snap;
+    try { snap = JSON.parse(post.text); } catch { return ''; }
+    const rows = (snap.podium ?? []).map((r) => `
+      <li class="podium-row">
+        <span class="podium-medal" aria-hidden="true">${MEDAL_EMOJI[r.rank] ?? ''}</span>
+        ${r.hasPhoto ? `<img class="podium-photo" src="${photoUrl(r.id)}" alt="" />` : '<span class="podium-photo podium-photo-empty"></span>'}
+        <span class="podium-name">${esc(contestantLabel(r))}</span>
+        <span class="votes">${r.votes} ${t(r.votes === 1 ? 'vote_one' : 'votes_short')}</span>
+      </li>`).join('');
+    const cong = snap.congeniality
+      ? `<div class="podium-congeniality">
+           <h3>${esc(t('congeniality_title'))}</h3>
+           <p class="congeniality-winner">👑 ${esc(snap.congeniality.name)}</p>
+         </div>`
+      : '';
+    return `
+      <article class="plaza-post plaza-post-podium${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
+        ${pinnedBadge}
+        <p class="podium-night">${esc(t(`theme_${snap.night}`))}</p>
+        <ol class="podium-list">${rows}</ol>
+        ${cong}
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
 
   if (post.type !== 'poll') {
     return `
@@ -1418,10 +1458,61 @@ async function loadVotes() {
     } else {
       $('results-card').classList.add('hidden');
     }
+
+    renderCongeniality(data.congeniality);
   } catch (err) {
     $('voting-status').textContent = err.message;
   }
 }
+
+// Miss Congeniality: a separate, simpler round than the outfit vote above -
+// one vote for a person (never a duo entry), and a single winner instead of
+// a staged podium. Hidden entirely while the admin hasn't opened it, so it
+// doesn't sit there as an empty card all night.
+function renderCongeniality(c) {
+  const card = $('congeniality-card');
+  if (!c || c.status === 'closed') {
+    // Still worth showing once it's over, if there's a winner to show.
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  const area = $('congeniality-area');
+
+  if (c.status === 'revealed') {
+    area.innerHTML = c.winner
+      ? `<p class="congeniality-winner">👑 ${esc(c.winner.name)}</p>
+         <p class="muted">${c.winner.votes} ${t(c.winner.votes === 1 ? 'vote_one' : 'votes_short')}</p>`
+      : `<p class="muted">${t('congeniality_no_winner')}</p>`;
+    return;
+  }
+
+  // status === 'open'
+  if (c.myVote !== null) {
+    const voted = c.candidates.find((x) => x.id === c.myVote);
+    area.innerHTML = `<p class="muted">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
+    return;
+  }
+  area.innerHTML = c.candidates.length
+    ? c.candidates.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
+    : `<p class="muted">${t('congeniality_no_candidates')}</p>`;
+}
+
+$('congeniality-area').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-congeniality-vote]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api('/congeniality/vote', {
+      method: 'POST',
+      body: { night: getNight(), targetUserId: Number(btn.dataset.congenialityVote) },
+    });
+    loadVotes();
+  } catch (err) {
+    await showAlert(err.message);
+    btn.disabled = false;
+  }
+});
 
 // The named partner agreeing to a duo entry - the click that puts the
 // pair on the voting list. No extra prompt: what they're agreeing to is

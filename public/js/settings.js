@@ -141,8 +141,6 @@ async function boot() {
   // Same QA-only gating shape as Plaza above, see ENABLE_MEMO.
   if (!memoEnabled) {
     document.querySelector('#admin-tabs [data-atab="memo"]').classList.add('hidden');
-  } else {
-    $('wall-memo-video-card').classList.remove('hidden');
   }
 
   // This page is now open to every logged-in user, not just admins - a
@@ -243,7 +241,6 @@ function reloadAll() {
   if (isOwner) loadWallPseudonyms();
   if (isAdmin) loadPlazaPosts();
   if (isAdmin && memoEnabled) loadMemoDays();
-  if (isAdmin && memoEnabled) loadWallMemoVideoDays();
 }
 
 /* -------------------------------- Idioma --------------------------------- */
@@ -1020,6 +1017,8 @@ async function loadVotes() {
   const isTie = results.length >= 2 && results[0].votes > 0 && results[0].votes === results[1].votes;
   $('voting-runoff-btn').classList.toggle('hidden', !(status === 'closed' && isTie));
 
+  renderCongenialityAdmin();
+
   $('voter-log-card').classList.toggle('hidden', !votes);
   if (votes) {
     $('voter-log-table').innerHTML = votes.length
@@ -1028,6 +1027,78 @@ async function loadVotes() {
       : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
   }
 }
+
+/* --------------------------- Miss Congeniality ---------------------------- */
+// Reads from the same votingStateCache the outfit controls above use (it's
+// filled by loadVotingState() from GET /admin/voting, which now carries this
+// round's phase and live standings alongside the outfit ones).
+
+function renderCongenialityAdmin() {
+  const state = votingStateCache[currentNight()];
+  const status = state?.congenialityStatus ?? 'closed';
+  const results = state?.congenialityResults ?? [];
+
+  $('congeniality-state').textContent = t(`congeniality_state_${status}`);
+  document.querySelectorAll('[data-congeniality-set]').forEach((b) => {
+    b.disabled = b.dataset.congenialitySet === status;
+  });
+
+  $('congeniality-table').innerHTML = results.length
+    ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
+      results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+    : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
+}
+
+document.querySelectorAll('[data-congeniality-set]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const msg = $('congeniality-msg');
+    msg.classList.remove('error');
+    msg.textContent = '';
+    try {
+      await api(`/admin/voting/${currentNight()}/congeniality`, {
+        method: 'POST', body: { status: btn.dataset.congenialitySet },
+      });
+      await loadVotingState();
+      await loadVotes();
+    } catch (err) {
+      msg.classList.add('error');
+      msg.textContent = err.message;
+    }
+  });
+});
+
+$('congeniality-reset-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_congeniality_reset')))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality/reset`, { method: 'POST' });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
+// One post carrying both halves of the night's result - the podium with
+// photos and medals, and the congeniality winner underneath (see
+// createPodiumPost() in plaza.js).
+$('publish-podium-btn').addEventListener('click', async () => {
+  if (!(await showConfirm(t('confirm_publish_podium')))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/publish-podium`, { method: 'POST' });
+    msg.textContent = t('publish_podium_done');
+    setTimeout(() => { if (msg.textContent === t('publish_podium_done')) msg.textContent = ''; }, 4000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
 
 /* ------------------------------ Rata Game -------------------------------- */
 
@@ -1357,6 +1428,8 @@ async function loadMemoDays() {
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           <div class="row-actions">
             <button type="button" class="small ghost" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
+            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
+            ${d.hasRecap ? `<button type="button" class="small ghost" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
           </div>
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
@@ -1368,100 +1441,95 @@ async function loadMemoDays() {
 // fetch-blob-and-download pattern as download-photos-btn above, and the
 // same hidden-file-input-behind-a-button pattern as the guest checklist
 // in app.js, just per-day instead of per-slot.
+async function downloadMemoFile(url, filename, msg, doneKey) {
+  msg.classList.remove('error');
+  msg.textContent = t('download_photos_in_progress');
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
+    }
+    const blobUrl = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+    msg.textContent = t(doneKey);
+    setTimeout(() => { if (msg.textContent === t(doneKey)) msg.textContent = ''; }, 3000);
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+}
+
 $('memo-days-list').addEventListener('click', async (e) => {
+  const dayMsg = (day) => $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+
   const dlBtn = e.target.closest('[data-memo-download-day]');
   if (dlBtn) {
     const day = dlBtn.dataset.memoDownloadDay;
-    const msg = $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
+    await downloadMemoFile(
+      `/api/admin/memo/${encodeURIComponent(day)}/uploads.zip`,
+      `memo-${day}.zip`, dayMsg(day), 'download_photos_done'
+    );
+    return;
+  }
+
+  const videoBtn = e.target.closest('[data-memo-download-video]');
+  if (videoBtn) {
+    const day = videoBtn.dataset.memoDownloadVideo;
+    await downloadMemoFile(
+      `/api/memo/recaps/${encodeURIComponent(day)}`,
+      `memo-${day}.mp4`, dayMsg(day), 'download_photos_done'
+    );
+    return;
+  }
+
+  // Generating the video and publishing it are the same action - the Wall
+  // player reads whatever is stored as that day's recap (see loadWallVideo()
+  // in app.js), so there's nothing to "publish" separately afterwards.
+  const pubBtn = e.target.closest('[data-memo-publish-day]');
+  if (pubBtn) {
+    const day = pubBtn.dataset.memoPublishDay;
+    const msg = dayMsg(day);
     msg.classList.remove('error');
-    msg.textContent = t('download_photos_in_progress');
+    // Stitching a full day of photos is not instant - say so, and stop a
+    // second click from kicking off a duplicate encode.
+    msg.textContent = t('memo_admin_publishing');
+    pubBtn.disabled = true;
     try {
-      const res = await fetch(`/api/admin/memo/${encodeURIComponent(day)}/uploads.zip`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `memo-${day}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      msg.textContent = t('download_photos_done');
-      setTimeout(() => { if (msg.textContent === t('download_photos_done')) msg.textContent = ''; }, 3000);
+      const r = await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      // Reload first, then write the message: the reload rebuilds every row
+      // (that's what makes the download-video button appear), so setting the
+      // text before it would just be thrown away with the old element.
+      await loadMemoDays();
+      const fresh = dayMsg(day);
+      if (fresh) fresh.textContent = t('memo_admin_published', { n: r.photoCount });
     } catch (err) {
       msg.classList.add('error');
       msg.textContent = err.message;
+    } finally {
+      pubBtn.disabled = false;
     }
-    return;
   }
 });
 
 wireWipeButton('memo-wipe-btn', 'memo-wipe-msg', '/admin/memo/wipe', 'confirm_memo_wipe', 'memo_wipe_done_msg', loadMemoDays);
 
-/* ------------------------- Wall: publish a Memo video --------------------- */
-// The recap video is a Wall artifact (everyone watches it there, see
-// loadWallVideo() in app.js), so publishing it lives on Wall's own admin
-// tab instead of Memo's - Memo's admin tab stays focused on the raw
-// per-day upload counts/zip download.
-
-async function loadWallMemoVideoDays() {
-  if (!memoEnabled) return;
-  try {
-    const { days } = await api('/admin/memo/days');
-    $('wall-memo-video-day').innerHTML = days.map((d) =>
-      `<option value="${esc(d.day)}">${esc(formatEuDate(d.day))}${d.hasRecap ? ` (${t('memo_admin_has_recap')})` : ''}</option>`
-    ).join('');
-  } catch { /* transient network hiccup */ }
-}
-
-$('wall-memo-video-btn').addEventListener('click', () => $('wall-memo-video-input').click());
-
-$('wall-memo-video-input').addEventListener('change', async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const day = $('wall-memo-video-day').value;
-  const msg = $('wall-memo-video-msg');
-  msg.classList.remove('error');
-  msg.textContent = t('memo_uploading');
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch(`/api/admin/memo/${encodeURIComponent(day)}/recap`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: formData,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error ? t(data.error) : `Error ${res.status}`);
-    }
-    msg.textContent = t('memo_upload_done');
-    loadWallMemoVideoDays();
-  } catch (err) {
-    msg.classList.add('error');
-    msg.textContent = err.message;
-  } finally {
-    e.target.value = '';
-  }
-});
-
 /* --------------------------------- Tabs ---------------------------------- */
 
 function selectAdminTab(tab) {
   document.querySelectorAll('#admin-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === tab));
-  ['plaza', 'outfit', 'rata', 'wall', 'memo', 'settings'].forEach((name) => {
+  ['settings', 'plaza', 'wall', 'memo', 'rata', 'outfit'].forEach((name) => {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   applyAdminTheme(tab);
   if (tab === 'wall' && isOwner) loadWallPseudonyms();
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
-  if (tab === 'plaza' && isAdmin && memoEnabled) loadWallMemoVideoDays();
   if (tab === 'memo' && isAdmin) loadMemoDays();
 }
 

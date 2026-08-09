@@ -273,6 +273,20 @@ db.exec(`
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_vote_user_night
     ON votes(user_id, night);
+
+  -- Miss Congeniality: a second, separate vote per night, run after the
+  -- outfit vote closes. Unlike votes above (cast for a contestant *entry*,
+  -- which can be a duo), this one is always cast for an individual person,
+  -- so it targets a user directly.
+  CREATE TABLE IF NOT EXISTS congeniality_votes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    night          TEXT NOT NULL,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_congeniality_user_night
+    ON congeniality_votes(user_id, night);
 `);
 
 // Migration: self-registered contestants (Best Look). A contestant can

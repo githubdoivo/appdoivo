@@ -45,6 +45,14 @@ import {
   isRunoffActive,
   clearRunoff,
   startRunoff,
+  congenialityStatus,
+  setCongenialityStatus,
+  congenialityCandidates,
+  myCongenialityVote,
+  castCongenialityVote,
+  congenialityResults,
+  congenialityWinner,
+  resetCongeniality,
 } from './votes.js';
 import {
   getPublicKey,
@@ -55,7 +63,7 @@ import {
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost } from './plaza.js';
 import {
   MEMO_DIR,
   MEMO_MAX_FILE_BYTES,
@@ -68,6 +76,7 @@ import {
   listDays,
   listUploadsForDay,
   saveRecap,
+  buildDayRecapVideo,
   getRecap,
   listRecapDays,
   wipeAll as wipeAllMemo,
@@ -315,7 +324,23 @@ router.get('/votes/status', (req, res) => {
     // So the voting screen can say "it's a tie - vote again" instead of
     // just silently showing a shorter contestant list with no context.
     runoffActive: isRunoffActive(night),
+    // The separate Miss Congeniality round (see votes.js) - its own status,
+    // its own candidate list of individuals, and the winner only once the
+    // admin actually reveals it.
+    congeniality: {
+      status: congenialityStatus(night),
+      candidates: congenialityCandidates(night),
+      myVote: myCongenialityVote(req.user.id, night),
+      winner: congenialityWinner(night),
+    },
   });
+});
+
+router.post('/congeniality/vote', (req, res) => {
+  const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
+  const result = castCongenialityVote(req.user.id, Number(req.body?.targetUserId), night);
+  if (result.error) return res.status(400).json(result);
+  res.status(201).json(result);
 });
 
 // Self-registration for Best Look: everyone (not just admins) can enter
@@ -954,11 +979,80 @@ router.get('/admin/voting', (req, res) => {
       // results it already fetches via GET /admin/votes (rank 1 and 2
       // sharing a vote count), not duplicated here.
       runoffActive: isRunoffActive(night),
+      // The Miss Congeniality round runs on its own clock, after this one -
+      // its phase plus the live standings, which an admin may see at any
+      // point (guests only ever get the winner, and only once revealed).
+      congenialityStatus: congenialityStatus(night),
+      congenialityResults: congenialityResults(night),
     })),
   });
 });
 
 const NIGHT_LABEL = { furnished: 'Furnished', swamp: 'Swamp' };
+
+const CONGENIALITY_NOTIFY = {
+  open: {
+    pt: (n) => `miss congeniality: a votação abriu para a noite ${n}.`,
+    en: (n) => `miss congeniality: voting is open for ${n} night.`,
+  },
+  revealed: {
+    pt: (n) => `miss congeniality: já se sabe quem ganhou a noite ${n}.`,
+    en: (n) => `miss congeniality: the winner for ${n} night is in.`,
+  },
+};
+
+// Miss Congeniality's whole admin surface: open -> closed -> revealed, no
+// staged reveal (unlike the outfit vote's /reveal-next above - there's a
+// single winner here, so there's nothing to count down through).
+router.post('/admin/voting/:night/congeniality', async (req, res) => {
+  const { night } = req.params;
+  const status = req.body?.status;
+  const result = setCongenialityStatus(night, status);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+
+  const notify = CONGENIALITY_NOTIFY[status];
+  if (notify) {
+    await broadcast({
+      title: { pt: 'Snatch', en: 'Snatch' },
+      body: { pt: notify.pt(NIGHT_LABEL[night]), en: notify.en(NIGHT_LABEL[night]) },
+      tag: 'congeniality',
+      url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+    });
+  }
+});
+
+// Publishes the night's result to the Wall: podium + Miss Congeniality.
+// Requires the top 3 to already be revealed - the Wall post is public to
+// every guest, so publishing before the reveal would spoil the countdown
+// the staged reveal exists for (and the photos it links to are gated on
+// that same reveal state, see GET /outfit/contestants/:id/photo).
+router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  const phase = getResultsPhase(night);
+  if (phase !== 'first' && phase !== 'all') {
+    return res.status(400).json({ error: 'err_results_not_revealed' });
+  }
+  const podium = resultsForNight(night)
+    .filter((r) => r.rank <= 3)
+    .map((r) => ({
+      rank: r.rank, id: r.id, name: r.name, votes: r.votes,
+      hasPhoto: r.hasPhoto, registeredBy: r.registeredBy, partnerName: r.partnerName,
+    }));
+  if (podium.length === 0) return res.status(400).json({ error: 'err_no_results' });
+
+  const winner = congenialityWinner(night);
+  const result = createPodiumPost(req.user.id, { night, podium, congeniality: winner });
+  res.status(201).json(result);
+});
+
+router.post('/admin/voting/:night/congeniality/reset', (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  resetCongeniality(night);
+  res.json({ ok: true, night });
+});
 
 // Opens registration: contestants can self-enter (see POST /outfit/register).
 // Voting options stay hidden from everyone until the admin explicitly moves
@@ -973,6 +1067,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   clearRunoff(night);
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'registration');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -1065,6 +1160,10 @@ router.post('/admin/voting/:night/reset', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM votes WHERE night = ?').run(night);
   clearRunoff(night);
+  // Congeniality runs off the back of this round, so restarting the round
+  // restarts it too - a winner from the previous run-through would
+  // otherwise stay revealed against a vote that no longer exists.
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');
   resetResultsPhase(night);
@@ -1079,6 +1178,7 @@ router.post('/admin/voting/:night/reset-all', (req, res) => {
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
   db.prepare('DELETE FROM contestants WHERE night = ?').run(night);
   clearRunoff(night);
+  resetCongeniality(night);
   setSetting(`voting_status_${night}`, 'closed');
   setSetting(`voting_started_${night}`, '0');
   resetResultsPhase(night);
@@ -1169,6 +1269,23 @@ router.post('/admin/memo/:day/recap', (req, res) => {
     });
     res.status(201).json({ ok: true });
   });
+});
+
+// Builds the day's video from its photos (1s each) and stores it as that
+// day's recap, which is what the Wall video player already reads (see
+// loadWallVideo() in app.js) - so generating it *is* publishing it. Kept
+// separate from the manual upload route above rather than replacing it:
+// this one takes no file at all.
+router.post('/admin/memo/:day/recap/generate', async (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  try {
+    const built = await buildDayRecapVideo(req.params.day);
+    if (built.error) return res.status(400).json({ error: built.error });
+    saveRecap(req.params.day, req.user.id, built);
+    res.status(201).json({ ok: true, photoCount: built.photoCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'err_memo_recap_failed' });
+  }
 });
 
 // Owner-only, same golden rule as every other feature's wipe switch - but
