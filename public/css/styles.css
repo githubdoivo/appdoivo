@@ -817,15 +817,25 @@ button.danger:hover {
    this only needs to guard the inactive state. */
 .role-pill:hover { background: none; }
 .role-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); }
-.role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); }
-.role-pill[data-role="user"].active { background: var(--role-user); border-color: var(--role-user); }
+/* Inactive: the same outlined pill the list renders for that role/state, so
+   an unselected filter still reads as "this is the owner colour" rather than
+   a neutral grey blob. Active: the same shape filled in. */
+.role-pill[data-role="owner"] { border-color: var(--role-owner); color: var(--role-owner); }
+.role-pill[data-role="admin"] { border-color: var(--role-admin); color: var(--role-admin); }
+.role-pill[data-role="user"]  { border-color: var(--role-user);  color: var(--role-user); }
+.role-pill[data-role="owner"].active { background: var(--role-owner); border-color: var(--role-owner); color: var(--paper); }
+.role-pill[data-role="admin"].active { background: var(--role-admin); border-color: var(--role-admin); color: var(--paper); }
+.role-pill[data-role="user"].active { background: var(--role-user); border-color: var(--role-user); color: var(--paper); }
 
 /* Rata status filter - same colors as the rata-badge each state renders
    with in the list below, so the filter pill you toggled and what it's
    showing read as the same thing. */
-.role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); }
-.role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); }
+.role-pill[data-status="fila"] { border-color: var(--status-fila); color: var(--status-fila); }
+.role-pill[data-status="atribuir"] { border-color: var(--status-atribuir); color: var(--status-atribuir); }
+.role-pill[data-status="pendente"] { border-color: var(--status-pending); color: var(--status-pending); }
+.role-pill[data-status="feita"] { border-color: var(--status-done); color: var(--status-done); }
+.role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); color: var(--paper); }
+.role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); color: var(--paper); }
 /* Matches the filled chip the list renders for this state, ink included -
    the filter and the thing it filters have to be the same yellow, and this
    is the one that had to become a filled pill to read as yellow at all. */
@@ -834,7 +844,7 @@ button.danger:hover {
   border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
   color: var(--status-pending-ink);
 }
-.role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); }
+.role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); color: var(--paper); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
 .topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
@@ -2092,8 +2102,18 @@ html.mode-light .chat-empty { color: var(--ink); }
 @media (max-width: 360px) { .form-actions { grid-template-columns: 1fr; } }
 
 /* A single action that belongs to the card above it, pushed to the right
-   edge like the other per-card actions rather than hanging off the left. */
-.actions-right { display: flex; justify-content: flex-end; margin-top: 12px; }
+   edge like the other per-card actions rather than hanging off the left.
+   Any status text shares the line, sitting just left of the button instead
+   of dropping to its own row underneath. */
+.actions-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.actions-right .muted { text-align: right; }
+.actions-right .muted:empty { display: none; }
 
 /* The guest Snatch night switch, loose in the page rather than inside the
    bordered banner it used to live in - see index.html. Same right-aligned
@@ -2120,3 +2140,8 @@ html.mode-light .chat-empty { color: var(--ink); }
 }
 #voting-advance-btn:disabled,
 #congeniality-advance-btn:disabled { opacity: 0.55; }
+
+/* The wipe switches are the only buttons on the page that destroy data, and
+   each one owns its whole card - full width so they read as the weight of
+   the thing they do, not as a small action tucked in a corner. */
+button[id$="-wipe-btn"] { display: block; width: 100%; }

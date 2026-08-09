@@ -1267,11 +1267,10 @@ function renderConsequences() {
   // so the first 'used' one encountered is simply the current one.
   const revealed = rataRows.find((c) => c.status === 'used');
 
-  const assignRows = rataRows.filter((c) => rataStatus(c).state === 'atribuir');
-  $('consequences-assign-list').innerHTML = assignRows.length
-    ? assignRows.map((c) => renderConsequenceCard(c, revealed)).join('')
-    : `<p class="muted">${t('rata_admin_assign_empty')}</p>`;
-
+  // Freshly revealed consequences used to get their own box above the
+  // history. They live in the history now (top of it, since it sorts by most
+  // recently touched) and carry the same assign control there, so the same
+  // row is not rendered twice on one page.
   // 'atribuir' rows show here too, not only in the assign box above: the list
   // is the running history, and a consequence that was just revealed is the
   // most recently touched thing there is - leaving it out made a fresh reveal
@@ -1298,7 +1297,7 @@ $('rata-status-filter').querySelectorAll('.role-pill').forEach((btn) => {
 });
 
 // Delegated on document, not #consequences-table - an assign select can
-// now render in either #consequences-assign-list (atribuir) or
+// render in the history list (atribuir rows) or
 // #consequences-table (Histórico, once it's moved past atribuir).
 document.addEventListener('change', async (e) => {
   const select = e.target.closest('[data-assign-id]');
