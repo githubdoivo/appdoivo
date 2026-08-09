@@ -72,7 +72,10 @@ volume (`/data/memo-uploads`) - not as rows in SQLite. That volume is
 still at its original **1GB**, which Memo would fill on day one, and a
 full disk means uploads start failing mid-party.
 
-Sometime in the week before (~14 September), extend it:
+Memo opens itself on **15 September** (see `MEMO_START_DATE` in `fly.toml`),
+three days before the party so there is room to fix anything that misbehaves.
+The volume therefore has to be extended **before the 15th** - aim for the
+13th:
 
 ```
 fly volumes extend vol_v8ep3d82yoxxg65v -s 20 -a appdoivo
