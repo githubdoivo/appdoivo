@@ -174,29 +174,34 @@
     <div id="tab-outfit" class="tab-panel hidden">
       <p class="hero-line" data-i18n="outfit_hero">Quem tem o melhor visual da noite?</p>
 
-      <!-- Just the switch, top right - it used to sit inside a bordered
-           banner with a decorative motif, which was a whole component built
-           around two buttons. -->
-      <div class="night-switch-loose">
-        <div class="theme-switch" id="theme-switch">
-          <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
-          <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
+      <!-- This card is never hidden, whatever phase the night is in - the
+           night switch lives in it, and a switch that vanishes with its
+           container would take the only way of changing nights with it.
+           What changes is the contents: the title appears beside the switch
+           once a round is running, and the "nothing open yet" note sits
+           inside rather than floating under a bare pair of buttons. The
+           switch keeps exactly the same position through all of it. -->
+      <div class="card" id="voting-card">
+        <div class="card-head">
+          <!-- Named, because Miss Congeniality sits right below it with its
+               own name - one round labelled and the other not read as if the
+               second were a subsection of the first. Hidden rather than
+               absent between rounds, so the switch never shifts. -->
+          <h2 id="voting-title" class="hidden" data-i18n="best_outfit_title">Best Outfit</h2>
+          <div class="theme-switch" id="theme-switch">
+            <button type="button" data-theme="furnished"><span data-i18n="theme_furnished">Furnished</span></button>
+            <button type="button" data-theme="swamp"><span data-i18n="theme_swamp">Swamp</span></button>
+          </div>
         </div>
+        <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
+        <div id="vote-area"></div>
+        <p id="outfit-idle" class="idle-note hidden" data-i18n="outfit_nothing_open">Ainda não há votações abertas.</p>
       </div>
 
       <div class="card hidden" id="register-card">
         <h2 data-i18n="outfit_register_title">A tua candidatura</h2>
         <p class="help" data-i18n="outfit_register_help">Explicação</p>
         <div id="register-area" style="margin-top:12px"></div>
-      </div>
-
-      <div class="card" id="voting-card">
-        <!-- Named, because Miss Congeniality sits right below it with its own
-             name - one round labelled and the other not read as if the second
-             were a subsection of the first. -->
-        <h2 data-i18n="best_outfit_title">Best Outfit</h2>
-        <p id="voting-status" class="muted" style="margin:8px 0 14px"></p>
-        <div id="vote-area"></div>
       </div>
       <div class="card hidden" id="results-card">
         <h2 data-i18n="outfit_results">Resultados</h2>
@@ -205,9 +210,6 @@
       <!-- The separate Miss Congeniality round - only ever visible once the
            admin opens it, and only showing a winner once revealed (see
            congeniality in /votes/status). -->
-      <!-- Shown only when neither round is running - otherwise the tab is a
-           hero line above nothing at all. -->
-      <p id="outfit-idle" class="idle-note hidden" data-i18n="outfit_nothing_open">Ainda não há votações abertas.</p>
       <div class="card hidden" id="congeniality-card">
         <h2 data-i18n="congeniality_title">Miss Congeniality</h2>
         <p class="help" data-i18n="congeniality_help">Explicação</p>

@@ -1478,18 +1478,24 @@ async function loadVotes() {
       area.innerHTML = '';
     }
 
-    // The Best Outfit card hides whenever it has nothing of its own to say:
-    // the round never started (no point announcing a vote the organiser has
-    // not opened, especially with Miss Congeniality stacked below it); the
+    // The card itself always stays - it carries the night switch, which has
+    // to be reachable in every phase. Only its contents come and go, and the
+    // switch holds the same spot throughout.
+    //
+    // Best Outfit has nothing of its own to say in three cases: the round
+    // never started (no point announcing a vote the organiser has not
+    // opened, especially with Miss Congeniality stacked below it); the
     // results are already showing below, which makes the status text and
     // leftover vote area redundant; and during registration, where its only
-    // content is "entries are open, put yours in" directly underneath the
-    // entry card that already says so and takes the entry.
+    // line would be "entries are open, put yours in" directly above the
+    // entry card that says exactly that and takes the entry.
     const roundStarted = !!data.started;
-    $('voting-card').classList.toggle(
-      'hidden',
-      !roundStarted || data.status === 'registration' || (revealing && results.length > 0),
-    );
+    const bestOutfitQuiet = !roundStarted
+      || data.status === 'registration'
+      || (revealing && results.length > 0);
+    $('voting-title').classList.toggle('hidden', bestOutfitQuiet);
+    $('voting-status').classList.toggle('hidden', bestOutfitQuiet);
+    $('vote-area').classList.toggle('hidden', bestOutfitQuiet);
 
     if (revealing && results.length) {
       $('results-card').classList.remove('hidden');
@@ -1515,9 +1521,9 @@ async function loadVotes() {
 
     renderCongeniality(data.congeniality);
 
-    // With both rounds hidden the tab is a hero line over empty space, which
-    // reads as broken rather than "nothing yet" - say so instead.
-    const nothingOpen = $('voting-card').classList.contains('hidden')
+    // With nothing running, the card would be a switch over empty space,
+    // which reads as broken rather than "nothing yet" - say so inside it.
+    const nothingOpen = bestOutfitQuiet
       && $('results-card').classList.contains('hidden')
       && $('congeniality-card').classList.contains('hidden')
       && $('register-card').classList.contains('hidden');

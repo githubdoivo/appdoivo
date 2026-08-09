@@ -1232,10 +1232,14 @@ test('once results start revealing, "you voted for X" clears instead of sitting 
   // in the vote area above is just clutter once that's true.
   const voteAreaEmpty = await page.evaluate(() => document.getElementById('vote-area').innerHTML.trim() === '');
   assert.ok(voteAreaEmpty, 'the "you voted for X" message should clear once results start revealing');
-  // The whole votação card (not just the vote-area within it) is redundant
-  // now too - it was still showing its "closed" status line on top of the
-  // results card until this was fixed.
-  assert.equal(await page.isVisible('#voting-card'), false, 'the votação card should hide entirely once results are revealed');
+  // Everything Best Outfit had to say is redundant now - it was still
+  // showing its "closed" status line on top of the results card until this
+  // was fixed. The card itself stays put, because the night switch lives in
+  // it, so what has to go quiet is its title, status line and vote area.
+  assert.equal(await page.isVisible('#voting-title'), false, 'the round title is redundant once results are up');
+  assert.equal(await page.isVisible('#voting-status'), false, 'the "closed" status line should not sit on top of the results');
+  assert.equal(await page.isVisible('#vote-area'), false, 'and neither should a leftover vote area');
+  assert.equal(await page.isVisible('#theme-switch'), true, 'the night switch survives, as it must in every phase');
   // With only one contestant, they're both 1st place and the only result -
   // gold medal included.
   const firstResultText = await page.textContent('#results-list li');
@@ -1516,26 +1520,44 @@ test('the admin contestant form can actually attach a photo - its picker button 
   await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
 });
 
-test('the Best Outfit card stays out of the way while entries are still open', async () => {
-  // During registration its whole content was "entries are open, put yours
-  // in", sitting directly under the entry card that says the same thing and
-  // actually takes the entry.
+test('the night card is always there, and Best Outfit only speaks up when it has something to say', async () => {
+  // Two rules at once. The card never goes away, because the night switch
+  // lives in it and a switch that disappears with its container takes the
+  // only way of changing nights with it. And Best Outfit stays quiet during
+  // registration, where its only line would be "entries are open, put yours
+  // in" directly above the entry card that says exactly that.
   const night = 'furnished';
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
-  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reg Phase Viewer' } });
 
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, user.token);
   await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#voting-card', { timeout: WAIT_TIMEOUT });
+
+  const switchBox = async () => page.$eval('#theme-switch', (el) => {
+    const r = el.getBoundingClientRect();
+    return { right: Math.round(r.right), top: Math.round(r.top) };
+  });
+
+  // Nothing started at all: the note explains the emptiness from inside the
+  // card, rather than floating under a bare pair of buttons.
+  assert.equal(await page.isVisible('#voting-card'), true);
+  assert.equal(await page.isVisible('#outfit-idle'), true, 'an empty night should say so');
+  assert.equal(await page.isVisible('#voting-title'), false, 'no round, no title');
+  const atRest = await switchBox();
+
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await page.waitForSelector('#register-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(await page.isVisible('#voting-card'), true, 'the switch has to survive every phase');
+  assert.equal(await page.isVisible('#voting-title'), false, 'the entry card already says entries are open');
+  assert.equal(await page.isVisible('#outfit-idle'), false, 'and it is not an empty night either');
 
-  assert.equal(await page.isVisible('#voting-card'), false, 'the Best Outfit card should be hidden while entries are open');
-  assert.equal(await page.isVisible('#outfit-idle'), false, 'and the "nothing open" note must not appear either - the entry card is right there');
-
-  // Once voting actually opens it has something to say again.
+  // Once voting opens the title appears beside the switch - without moving it.
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
-  await page.waitForSelector('#voting-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#voting-title:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const whenOpen = await switchBox();
+  assert.deepEqual(whenOpen, atRest, 'the switch must hold its position as the title comes and goes');
 
   await context.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
