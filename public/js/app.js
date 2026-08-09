@@ -332,6 +332,34 @@ function setFindKeyMode(on) {
 
 $('find-key-link').addEventListener('click', () => setFindKeyMode(!findKeyMode));
 
+// TEMPORARY tuning aid: ?lift=NN shifts the whole login block up or down on
+// a real phone, so its position can be dialled in by eye without a deploy per
+// guess. ?lift alone (no value) shows a slider that writes the number as you
+// drag it. Delete this block once the value is picked and hardcoded into
+// #login .cover's padding-bottom.
+(function loginLiftTuner() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('lift')) return;
+  const cover = document.querySelector('#login .cover');
+  const apply = (px) => { cover.style.paddingBottom = `calc(${px}px + env(safe-area-inset-bottom))`; };
+
+  const preset = Number(params.get('lift'));
+  if (params.get('lift') !== '' && Number.isFinite(preset)) { apply(preset); return; }
+
+  apply(84);
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99;background:rgba(20,24,18,.92);'
+    + 'color:#ece5d5;font:13px/1.4 system-ui,sans-serif;padding:10px 14px;border-radius:10px;text-align:center';
+  box.innerHTML = '<div>lift: <b id="lift-val">84</b>px</div>'
+    + '<input id="lift-range" type="range" min="0" max="240" value="84" style="width:100%;margin-top:6px">';
+  document.body.appendChild(box);
+  box.querySelector('#lift-range').addEventListener('input', (e) => {
+    box.querySelector('#lift-val').textContent = e.target.value;
+    apply(e.target.value);
+  });
+})();
+
+
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);

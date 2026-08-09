@@ -329,7 +329,7 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 1;
   max-width: 620px;
   margin: 0 auto;
-  padding: 22px 20px calc(28px + env(safe-area-inset-bottom));
+  padding: 22px 20px calc(84px + env(safe-area-inset-bottom));
   /* Was 88vh, then 94vh, then 99vh - the whole greeting-through-login block
      sat too high up near the top of the illustration; taller here
      (bottom-anchored, see justify-content below) leaves more of the artwork
