@@ -212,6 +212,10 @@ html.mode-light tr.contestant-duo { background: color-mix(in srgb, #a8c9e8 10%, 
    as a second button instead of an alert. Full form width for the same
    reason the button is - a narrower chip made the stack step in and out.
    (8:1 against the text below, comfortably past AA.) */
+/* Empty by default (no error yet) - without this it still reserved its UA
+   block margins, leaving a visible hole between the language toggle and the
+   "ainda sem chave?" link and holding the whole stack higher up the page. */
+#login-error:empty { display: none; }
 #login-error:not(:empty) {
   display: block;
   width: 100%;
@@ -305,12 +309,13 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 1;
   max-width: 620px;
   margin: 0 auto;
-  padding: 22px 20px 48px;
-  /* Was 88vh - the whole greeting-through-login block sat right up near
-     the top of the illustration; taller here (bottom-anchored, see
-     justify-content below) leaves more of the artwork visible above the
-     text before it starts. */
-  min-height: 94vh;
+  padding: 22px 20px calc(14px + env(safe-area-inset-bottom));
+  /* Was 88vh, then 94vh, then 99vh - the whole greeting-through-login block
+     sat too high up near the top of the illustration; taller here
+     (bottom-anchored, see justify-content below) leaves more of the artwork
+     visible above the text before it starts. */
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -323,7 +328,11 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
    headline of this screen, so this stays modest rather than competing for
    header-level weight); "mostra-me a tua chave" is the quieter functional
    instruction underneath. */
+/* The <p>s here carry the UA's own default block margins, which stack on
+   top of this gap and pushed the greeting far higher up the illustration
+   than the 5px suggests. */
 .greeting { display: flex; flex-direction: column; gap: 5px; }
+.greeting p { margin: 0; }
 .greeting .hello {
   font-family: var(--serif);
   font-style: italic;
@@ -384,7 +393,19 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
    screen, not a decision that deserves competing with "entrar"/"ainda não
    tens a tua chave?" for attention. Smaller and dimmer than the base
    .link-btn, same underline treatment so it still reads as tappable. */
-.login-lang-toggle { font-size: 0.68rem; opacity: 0.6; margin-top: 14px; letter-spacing: 0.06em; }
+/* Sits above the key field, right-aligned to its edge - which keeps the
+   space directly under "entrar" free for the error banner to appear where
+   the eye already is after submitting. */
+.login-lang-toggle {
+  align-self: center;
+  width: 100%;
+  max-width: 320px;
+  text-align: right;
+  font-size: 0.68rem;
+  opacity: 0.6;
+  margin-bottom: -12px;
+  letter-spacing: 0.06em;
+}
 /* Deliberately almost invisible - this is the only way into the Plaza
    admin tab now (see wall-secret-btn in settings.js), meant to be found by
    someone who already knows it's there, not stumbled onto. No underline,
