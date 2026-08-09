@@ -332,34 +332,6 @@ function setFindKeyMode(on) {
 
 $('find-key-link').addEventListener('click', () => setFindKeyMode(!findKeyMode));
 
-// TEMPORARY tuning aid: ?lift=NN shifts the whole login block up or down on
-// a real phone, so its position can be dialled in by eye without a deploy per
-// guess. ?lift alone (no value) shows a slider that writes the number as you
-// drag it. Delete this block once the value is picked and hardcoded into
-// #login .cover's padding-bottom.
-(function loginLiftTuner() {
-  const params = new URLSearchParams(location.search);
-  if (!params.has('lift')) return;
-  const cover = document.querySelector('#login .cover');
-  const apply = (px) => { cover.style.paddingBottom = `calc(${px}px + env(safe-area-inset-bottom))`; };
-
-  const preset = Number(params.get('lift'));
-  if (params.get('lift') !== '' && Number.isFinite(preset)) { apply(preset); return; }
-
-  apply(84);
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99;background:rgba(20,24,18,.92);'
-    + 'color:#ece5d5;font:13px/1.4 system-ui,sans-serif;padding:10px 14px;border-radius:10px;text-align:center';
-  box.innerHTML = '<div>lift: <b id="lift-val">84</b>px</div>'
-    + '<input id="lift-range" type="range" min="0" max="240" value="84" style="width:100%;margin-top:6px">';
-  document.body.appendChild(box);
-  box.querySelector('#lift-range').addEventListener('input', (e) => {
-    box.querySelector('#lift-val').textContent = e.target.value;
-    apply(e.target.value);
-  });
-})();
-
-
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -596,8 +568,6 @@ const MEMO_REACTION_ICON = {
   // sat upright and read as two plain blobs rather than splashing water.
   '\u{1F4A6}': '<path transform="rotate(-14 8.4 15.9)" d="M8.4 5.24C9.71 9.72 12.75 11.33 12.75 15.9A4.35 4.35 0 0 1 4.05 15.9C4.05 11.33 7.1 9.72 8.4 5.24Z"/><path transform="rotate(-52 17.2 7)" d="M17.2 -1.21C18.2 2.24 20.55 3.48 20.55 7A3.35 3.35 0 0 1 13.85 7C13.85 3.48 16.2 2.24 17.2 -1.21Z"/><path transform="rotate(-42 18.3 17.7)" d="M18.3 10.96C19.13 13.79 21.05 14.81 21.05 17.7A2.75 2.75 0 0 1 15.55 17.7C15.55 14.81 17.48 13.79 18.3 10.96Z"/>',
 };
-
-
 
 
 function memoReactionIcon(emoji) {
