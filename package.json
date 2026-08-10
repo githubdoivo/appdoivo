@@ -10,8 +10,7 @@
     "genkeys": "node scripts/generate-vapid.js",
     "admin-token": "node --disable-warning=ExperimentalWarning scripts/print-admin-token.js",
     "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
-    "test": "node --disable-warning=ExperimentalWarning --test",
-    "test:ci": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1",
+    "test": "node scripts/run-tests.js",
     "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js",
     "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
