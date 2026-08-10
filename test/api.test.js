@@ -703,7 +703,7 @@ test('admin opens the night and each user votes once', async () => {
   assert.equal(night.started, true, 'once a night has been opened, it should never look "unstarted" again');
 });
 
-test('GET /admin/voting reports how many non-admin accounts have not voted, excluding admins from the count', async () => {
+test('GET /admin/voting counts every account that has not voted, admins and owner included', async () => {
   // A separate night from NIGHT/'furnished' (heavily reused by neighboring
   // tests) - and asserting deltas off a baseline rather than an absolute
   // number, since this file shares one DB across the whole run and earlier
@@ -718,21 +718,26 @@ test('GET /admin/voting reports how many non-admin accounts have not voted, excl
   };
   const baseline = (await nightsInfo()).notVoted;
 
-  // A fresh admin should never raise the count - the organiser running the
-  // show very often doesn't vote themselves.
+  // An admin raises it like anyone else. They are at the party and they
+  // vote, so leaving them out counted a smaller room than the one actually
+  // voting - "5 of 30" against a 30 that was never the real number.
   const freshAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Fresh Admin For NotVoted' } });
   await api('PATCH', `/admin/users/${freshAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  assert.equal((await nightsInfo()).notVoted, baseline, 'a new admin account should not raise the count');
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'an admin who has not voted is still someone who has not voted');
 
   // Two fresh regular accounts should raise it by exactly two.
   const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest A' } });
   await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest B' } });
   const contestant = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'NotVoted Target', night } });
-  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'two fresh non-admin accounts should each raise the count by one');
+  assert.equal((await nightsInfo()).notVoted, baseline + 3, 'each new account raises it by one, whatever its role');
 
   // One of them voting should drop it back by one.
   await api('POST', '/votes', { token: a.data.token, body: { contestantId: contestant.data.id, night } });
-  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'voting should remove that account from the count');
+  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'voting should remove that account from the count');
+
+  // And an admin voting counts the same way.
+  await api('POST', '/votes', { token: freshAdmin.data.token, body: { contestantId: contestant.data.id, night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'an admin voting counts like anyone else voting');
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });
