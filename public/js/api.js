@@ -40,16 +40,57 @@ let sessionEnded = false;
 // out for mistyping it would be absurd.
 const KEEPS_SESSION_ON_401 = ['/me/change-token', '/auth/login', '/auth/claim-key'];
 
+// Every poller in app.js swallows its own failures - deliberately, because
+// one dropped request during a party on house wifi is not worth a message.
+// The cost was that a *sustained* outage looked identical to nothing
+// happening: the screen simply stopped changing, with no way to tell a quiet
+// party from a broken connection. So the reachability signal lives here, at
+// the single point every request already passes through, rather than in nine
+// separate catch blocks.
+//
+// Two in a row, not one: a single failure is genuinely common on a phone
+// moving between rooms, and flashing a warning at it would cry wolf all
+// night.
+const FAILURES_BEFORE_OFFLINE = 2;
+let consecutiveFailures = 0;
+let offline = false;
+const offlineListeners = new Set();
+
+/** Notified with true/false whenever the connection state actually changes. */
+export function onConnectionChange(fn) {
+  offlineListeners.add(fn);
+  fn(offline);
+  return () => offlineListeners.delete(fn);
+}
+
+function setOffline(next) {
+  if (next === offline) return;
+  offline = next;
+  for (const fn of offlineListeners) fn(offline);
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkError) {
+    // Only a genuine transport failure lands here. An HTTP error means the
+    // server answered, so it says nothing about reachability and must not
+    // count towards it.
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= FAILURES_BEFORE_OFFLINE) setOffline(true);
+    throw networkError;
+  }
+  consecutiveFailures = 0;
+  setOffline(false);
 
   if (res.status === 401 && token && !sessionEnded
       && !KEEPS_SESSION_ON_401.some((p) => path.startsWith(p))) {

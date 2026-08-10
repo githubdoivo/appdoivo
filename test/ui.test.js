@@ -989,6 +989,74 @@ test('with ENABLE_PLAZA disabled, Wall is hidden in both the main app and Settin
 // A render-blocking CSS @import caused a visible reflow on font swap; fonts
 // must load via a <link> in <head> instead, in parallel with styles.css.
 
+test('a dropped connection says so, instead of the screen quietly going still', async () => {
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Offline Tester' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await page.click('[data-tab="chat"]');
+
+  assert.equal(await page.isVisible('#offline-banner'), false, 'nothing to say while it is working');
+
+  // Every poller swallows its own failures, so before this a real outage and
+  // a quiet party looked identical - the screen simply stopped changing.
+  await context.setOffline(true);
+  // Two consecutive failures before it speaks up (see api.js), and the chat
+  // poller runs every 3s - so this legitimately needs longer than the
+  // suite's default wait, which is shorter than one round trip of that.
+  await page.waitForSelector('#offline-banner:not(.hidden)', { timeout: Math.max(WAIT_TIMEOUT, 12000) });
+  const text = (await page.textContent('#offline-banner')).trim();
+  assert.ok(text.length > 0, 'the banner has to actually say something');
+  assert.equal(text, text.toLowerCase(), 'lowercase, like the rest of the app');
+
+  // And it clears itself when the connection returns - no tap required.
+  await context.setOffline(false);
+  // state:'hidden', not a '.hidden' selector - the default waits for the
+  // element to become *visible*, which a hidden one never does.
+  await page.waitForSelector('#offline-banner', { state: 'hidden', timeout: Math.max(WAIT_TIMEOUT, 12000) });
+
+  await context.close();
+});
+
+test('every tab clears the 44px minimum, and no two of their hit areas overlap', async () => {
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN);
+
+  // Tabs only. The topbar icons sit at 38px on purpose - see the note by
+  // .icon-btn in styles.css for why widening them was reverted.
+  const targets = await page.$$eval('.tab', (els) => els.map((e) => {
+    const b = e.getBoundingClientRect();
+    const a = getComputedStyle(e, '::after');
+    const grow = (v) => Math.abs(parseFloat(v) || 0);
+    return {
+      name: (e.textContent || e.getAttribute('aria-label') || e.title || '?').trim().slice(0, 14),
+      w: b.width + grow(a.left) + grow(a.right),
+      h: b.height + grow(a.top) + grow(a.bottom),
+      left: b.left - grow(a.left),
+      right: b.right + grow(a.right),
+    };
+  }));
+  assert.ok(targets.length >= 5, 'expected the whole tab row');
+  for (const t of targets) {
+    assert.ok(t.w >= 44, `"${t.name}" is only ${Math.round(t.w)}px wide`);
+    assert.ok(t.h >= 44, `"${t.name}" is only ${Math.round(t.h)}px tall`);
+  }
+
+  // A hit area that reaches into its neighbour is worse than a small one:
+  // the tap lands on the wrong control instead of on nothing.
+  const tabs = await page.$$eval('.tab', (els) => els.map((e) => {
+    const b = e.getBoundingClientRect();
+    const a = getComputedStyle(e, '::after');
+    const grow = (v) => Math.abs(parseFloat(v) || 0);
+    return { left: b.left - grow(a.left), right: b.right + grow(a.right) };
+  }));
+  for (let i = 1; i < tabs.length; i += 1) {
+    assert.ok(tabs[i].left >= tabs[i - 1].right - 0.5,
+      `tab ${i} starts at ${tabs[i].left} but the one before it ends at ${tabs[i - 1].right}`);
+  }
+
+  await context.close();
+});
+
 test('fonts load via a <link> in <head>, not a render-blocking @import', async () => {
   const html = await (await fetch(base + '/')).text();
   assert.match(html, /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com/, 'no font <link> found in <head>');

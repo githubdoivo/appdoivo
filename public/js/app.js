@@ -1,4 +1,4 @@
-import { api, getToken, setToken, clearToken } from './api.js';
+import { api, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
@@ -1809,3 +1809,9 @@ async function changeVote() {
 }
 
 boot();
+
+// One subscriber for the whole page - see onConnectionChange() in api.js for
+// why the signal is centralised there rather than in each poller.
+onConnectionChange((isOffline) => {
+  document.getElementById('offline-banner')?.classList.toggle('hidden', !isOffline);
+});
