@@ -266,12 +266,22 @@ function updateLangUI() {
 
 $('lang-toggle').addEventListener('click', () => {
   setLang(getLang() === 'pt' ? 'en' : 'pt');
+  // applyI18n() only rewrites nodes that carry data-i18n in the HTML.
+  // Anything a render function bakes into innerHTML - the empty-feed lines,
+  // the vote options, the memo checklist - is invisible to it, and used to
+  // sit in the old language until that view's next poll came round, which
+  // is seconds. Every such view is redrawn here instead.
   applyI18n();
   updateLangUI();
   applyNight();
   refreshNotifButton();
   loadConsequences();
+  loadRataHistory();
   loadVotes();
+  loadPlaza();
+  loadChat();
+  loadDedication();
+  if (memoEnabled) loadMemo();
 });
 
 $('login-lang-toggle').addEventListener('click', () => {
@@ -1150,6 +1160,12 @@ document.querySelectorAll('#theme-switch button').forEach((b) => {
     // fresh render instead of leaving the other night's blank form up (see
     // registerFormReady in renderRegistration()).
     registerFormReady = false;
+    // Draw whatever this night looked like last time straight away, so the
+    // colours and the content change together. The fetch below corrects it
+    // a moment later, and almost never has anything to correct - nothing
+    // about a night changes while you are looking at the other one.
+    const cached = votesByNight[b.dataset.theme];
+    if (cached) renderVotes(cached, b.dataset.theme);
     loadVotes();
   });
 });
@@ -1462,11 +1478,31 @@ function contestantLabel(c) {
 // rest of the app which stays emoji-free by default.
 const MEDAL_EMOJI = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
+// Last response per night. Switching nights repaints the theme instantly
+// and then waits on the network for the cards, so for a beat you saw the
+// previous night's content already wearing the new night's colours. With
+// the other night's last state kept here, the switch can draw it at once
+// and let the fetch correct it a moment later - which is almost always a
+// no-op, since nothing about a night changes while you are looking at the
+// other one.
+const votesByNight = {};
+
 async function loadVotes() {
   const area = $('vote-area');
   const night = getNight();
   try {
     const data = await api(`/votes/status?night=${encodeURIComponent(night)}`);
+    votesByNight[night] = data;
+    renderVotes(data, night);
+  } catch (err) {
+    $('voting-status').textContent = err.message;
+  }
+}
+
+function renderVotes(data, night) {
+  const area = $('vote-area');
+  {
+    void night;
     const results = Array.isArray(data.results) ? data.results : [];
 
     renderRegistration(data);
@@ -1582,8 +1618,6 @@ async function loadVotes() {
       && $('congeniality-card').classList.contains('hidden')
       && $('register-card').classList.contains('hidden');
     $('outfit-idle-card').classList.toggle('hidden', !nothingOpen);
-  } catch (err) {
-    $('voting-status').textContent = err.message;
   }
 }
 

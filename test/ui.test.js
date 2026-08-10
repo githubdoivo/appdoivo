@@ -2071,3 +2071,50 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   await api('POST', '/admin/dedications/wipe', { token: ADMIN });
   await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
 });
+
+test('switching language repaints every visible string at once, not on the next poll', async () => {
+  // applyI18n() only rewrites nodes carrying data-i18n. Anything a render
+  // function bakes into innerHTML is invisible to it, so those strings used
+  // to sit in the old language until that view's next poll - seconds, on a
+  // tab you were looking at. Reported as "the language switch is slow"; it
+  // was not slow, it was not happening.
+  await api('POST', '/admin/chat/wipe', { token: ADMIN });
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Language Switcher' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+
+  // Sampled right after the click, with no waiting at all: anything that
+  // needs a poll to catch up fails here, which is the point.
+  const switchAndRead = async (tab, selector) => {
+    await page.click(`[data-tab="${tab}"]`);
+    await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
+    const before = (await page.textContent(selector)).trim();
+    const started = Date.now();
+    await page.click('#lang-toggle');
+    await page.waitForFunction(
+      ([sel, was]) => {
+        const el = document.querySelector(sel);
+        return !!el && el.textContent.trim() !== was;
+      },
+      [selector, before],
+      { timeout: 2000 },
+    );
+    return { tab, ms: Date.now() - started, before, after: (await page.textContent(selector)).trim() };
+  };
+
+  const results = [];
+  // One of each kind, deliberately. The hero lines carry data-i18n and were
+  // never the problem; .chat-empty is written into innerHTML by loadChat()
+  // and is exactly the string that used to lag. A selector that can fall
+  // back to a data-i18n node would pass either way and prove nothing.
+  results.push(await switchAndRead('rata', '#tab-rata .hero-line'));
+  results.push(await switchAndRead('chat', '#tab-chat .chat-empty'));
+
+  for (const r of results) {
+    assert.notEqual(r.after, r.before, `${r.tab} did not change language at all`);
+    assert.ok(r.ms < 1500, `${r.tab} took ${r.ms}ms to change language - it should be immediate`);
+  }
+
+  await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
