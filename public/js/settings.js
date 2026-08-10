@@ -1,4 +1,4 @@
-import { api, getToken, setToken, clearToken, onConnectionChange } from './api.js';
+import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
@@ -105,7 +105,6 @@ async function boot() {
   applyI18n();
   updateLangUI();
   wireVersionBadge();
-  await registerServiceWorker().catch(() => {});
   // Not authenticated (no token, or one the server no longer accepts) -
   // land on the actual login page, same as the main app does on a failed
   // /me (see boot() in app.js). This used to just print an error message
@@ -117,7 +116,7 @@ async function boot() {
   }
   let me;
   try {
-    me = await api('/me');
+    me = await fetchMe();
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
@@ -132,8 +131,12 @@ async function boot() {
     $('change-key-username').value = me.name;
     wireLogoEasterEgg(me.name, me.logo_customized);
     renderAccountCard();
-  } catch {
-    clearToken();
+  } catch (err) {
+    // Same rule as the main app's boot(): only the server actually refusing
+    // the key ends the session. A request that never made it says nothing
+    // about whether the key is good, and clearing it here cost someone the
+    // only way back into their account.
+    if (err?.status === 401) clearToken();
     location.href = '/';
     return;
   }
@@ -206,6 +209,11 @@ async function boot() {
   wireChangeKeyForm();
   if (isAdmin) reloadAll();
   startRoleWatcher();
+  // Last, and deliberately not awaited: registration is only needed for
+  // push, and nothing on this page depends on it. It used to run first,
+  // which meant a registration that never settled left the admin page
+  // blank - see the same fix in app.js's boot().
+  registerServiceWorker().catch(() => {});
 }
 
 // Polls /me every 30s for a role change (promoted, demoted, or removed

@@ -69,6 +69,27 @@ function setOffline(next) {
   for (const fn of offlineListeners) fn(offline);
 }
 
+/**
+ * /me, with a couple of retries - shared by both pages' boot().
+ *
+ * The startup call is the one request whose failure the app cannot shrug
+ * off: it decides between "you are logged in" and "you are not", so a
+ * single dropped one on a phone changing rooms used to read as "logged
+ * out" and take the stored key with it. A refusal from the server is
+ * passed straight back untouched - that is an answer, not a connectivity
+ * problem, and only it should end a session.
+ */
+export async function fetchMe(attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await api('/me');
+    } catch (err) {
+      if (err?.status || attempt === attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();

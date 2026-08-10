@@ -401,6 +401,14 @@ test('the app still opens when service worker registration never settles', async
     await page.isVisible('[data-tab="rata"]'),
     'push registration is not something the app should wait on before it can be used',
   );
+
+  // Settings has its own boot() with its own copy of this, and it was the
+  // half that stayed broken after the main app's was fixed.
+  const settings = await loginPage(context, ADMIN, '/settings.html');
+  assert.ok(
+    await settings.isVisible('#admin-tabs'),
+    'the admin page waits on push registration the same way the main app did',
+  );
   await context.close();
 });
 
@@ -429,6 +437,15 @@ test('a request dropped at startup does not throw away the stored key', async ()
     await page.evaluate(() => localStorage.getItem('appivo_token')),
     ADMIN,
     'a dropped request says nothing about the key being valid - losing it costs the only way back in',
+  );
+
+  // Settings threw the key away on any failure too, and bounced to the
+  // login page - so the same dropped request logged an admin out for good.
+  const settings = await loginPage(context, ADMIN, '/settings.html');
+  assert.equal(
+    await settings.evaluate(() => localStorage.getItem('appivo_token')),
+    ADMIN,
+    'the admin page must not throw the key away over a request that never arrived',
   );
   await context.close();
 });

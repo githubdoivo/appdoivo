@@ -1,4 +1,4 @@
-import { api, getToken, setToken, clearToken, onConnectionChange } from './api.js';
+import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
@@ -113,23 +113,6 @@ async function boot() {
  */
 function registerPushWorker() {
   registerServiceWorker().catch(() => {});
-}
-
-/**
- * /me, with a couple of retries. The startup call is the one request whose
- * failure the app cannot shrug off, so a single dropped one on a phone
- * changing rooms should not read as "logged out". A refusal from the server
- * is passed straight back - that is an answer, not a connectivity problem.
- */
-async function fetchMe(attempts = 3) {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await api('/me');
-    } catch (err) {
-      if (err?.status || attempt === attempts) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
-    }
-  }
 }
 
 function showLogin() {
