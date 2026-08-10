@@ -434,7 +434,30 @@ router.get('/outfit/contestants/:id/photo', (req, res) => {
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
 // picker on Best Look registration - every logged-in user can see it.
+//
+// ?freeFor=<night> drops anyone who already has an entry that night, either
+// as the entrant or as the named partner. registerContestant() refuses those
+// anyway (err_you_already_registered), so offering them up could only ever
+// end in an error message - the organiser picks a name off the list and is
+// told off for it. Not filtering by default: the guest-facing duo picker
+// wants everyone, and refusing there is the honest answer, since who is
+// already entered is not something to publish to the whole party.
 router.get('/users/basic', (req, res) => {
+  const freeFor = req.query.freeFor;
+  if (isNight(freeFor)) {
+    // Keeps the caller, unlike the plain list below: the organiser filling
+    // in the admin form may well be entering themselves, and this list is
+    // "who is still free", not "everyone but you".
+    const rows = db.prepare(`
+      SELECT u.id, u.name FROM users u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contestants c
+        WHERE c.night = ? AND (c.user_id = u.id OR c.partner_user_id = u.id)
+      )
+      ORDER BY u.name COLLATE NOCASE
+    `).all(freeFor);
+    return res.json(rows);
+  }
   const rows = db.prepare(
     'SELECT id, name FROM users WHERE id != ? ORDER BY name COLLATE NOCASE'
   ).all(req.user.id);

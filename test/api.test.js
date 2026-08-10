@@ -1248,6 +1248,37 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });
 
+test('the contestant picker only offers people who are still free that night', async () => {
+  const night = 'swamp';
+  const entered = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Already In Duo' } });
+  const partner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Already In Partner' } });
+  const free = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Still Free Person' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId: entered.data.id, partnerUserId: partner.data.id, name: 'Taken Pair', night },
+  });
+
+  const plain = await api('GET', '/users/basic', { token: ADMIN });
+  assert.ok(plain.data.some((u) => u.id === entered.data.id), 'the unfiltered list is unchanged - the guest picker still wants everyone');
+
+  const freeOnly = await api('GET', `/users/basic?freeFor=${night}`, { token: ADMIN });
+  const ids = freeOnly.data.map((u) => u.id);
+  assert.ok(!ids.includes(entered.data.id), 'whoever entered is not offered again');
+  assert.ok(!ids.includes(partner.data.id), 'nor the partner named on their entry');
+  assert.ok(ids.includes(free.data.id), 'anyone still free is');
+  // Unlike the plain list, this one keeps the caller: an organiser filling
+  // the form in may be entering themselves.
+  assert.ok(ids.includes(1), 'the caller is offered too, as long as they are free');
+
+  // A night nobody has entered is untouched by the filter.
+  const otherNight = await api('GET', '/users/basic?freeFor=furnished', { token: ADMIN });
+  assert.ok(otherNight.data.some((u) => u.id === entered.data.id), 'being entered for one night says nothing about another');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const u of [entered, partner, free]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+});
+
 test('an admin entering a pair on their behalf does not need a confirmation', async () => {
   const night = 'swamp';
   const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Admin Pair One' } });

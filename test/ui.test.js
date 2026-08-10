@@ -1846,15 +1846,11 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   const plainDots = await page.$$eval('#memo-dots span.memo-dot', (els) => els.length);
   assert.ok(plainDots > 0, 'the moments you cannot act on stay plain, not pressable');
 
-  // Before posting, the feed is sealed rather than empty - the card is up and
-  // says so, so posting doesn't look optional.
-  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.equal(
-    await page.getAttribute('#memo-feed-help', 'data-i18n'),
-    'memo_feed_locked',
-    'the feed should tell you it is waiting on your own moment',
-  );
-  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'nothing leaks through a locked feed');
+  // Before posting there is no board at all - just the dots. Not a card
+  // saying one is waiting: that gives away that there is something behind
+  // it before it has been earned, which is the opposite of the point.
+  assert.equal(await page.isVisible('#memo-feed-card'), false, 'no board until you have posted your own');
+  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'and nothing leaks through it');
 
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
   // The dot swaps from open to uploaded once the upload lands (see
@@ -1878,8 +1874,7 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   await bystanderPage.click('[data-tab="memo"]');
   // Same seal for the second guest, and posting is what breaks it - the
   // other guest's moment only appears on the far side of their own.
-  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.equal(await bystanderPage.getAttribute('#memo-feed-help', 'data-i18n'), 'memo_feed_locked');
+  assert.equal(await bystanderPage.isVisible('#memo-feed-card'), false, 'the second guest is sealed out the same way');
   await bystanderPage.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'theirs.png', mimeType: 'image/png', buffer: PNG_1X1 });
   await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
   const uploadId = await bystanderPage.getAttribute('[data-memo-react]', 'data-memo-react');

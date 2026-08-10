@@ -639,12 +639,16 @@ async function loadMemoFeed() {
 }
 
 function renderMemoFeed() {
-  // Locked is a state of its own, not an empty list: there is something to
-  // see and the card has to say so, otherwise posting looks optional.
-  $('memo-feed-card').classList.toggle('hidden', !memoFeedLocked && memoFeedCache.length === 0);
-  const helpKey = memoFeedLocked ? 'memo_feed_locked' : 'memo_feed_help';
-  $('memo-feed-help').dataset.i18n = helpKey;
-  $('memo-feed-help').textContent = t(helpKey);
+  // Nothing at all until you have posted - not even a card saying you have
+  // to. Open Memo mid-moment and all there is to see is the five dots and
+  // the live one waiting to be pressed; the moment's board appears only
+  // once you have put yours in, and then it holds everyone's, your own
+  // included. That is the whole shape of the feature (BeReal's), and a
+  // "yours first" placeholder standing where the board goes gave away that
+  // there was something behind it before it had been earned.
+  $('memo-feed-card').classList.toggle('hidden', memoFeedLocked || memoFeedCache.length === 0);
+  $('memo-feed-help').dataset.i18n = 'memo_feed_help';
+  $('memo-feed-help').textContent = t('memo_feed_help');
   if (memoFeedLocked || !memoFeedCache.length) {
     $('memo-feed').innerHTML = '';
     return;

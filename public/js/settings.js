@@ -900,6 +900,9 @@ let allContestants = [];
 async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
   allContestants = contestants;
+  // Whoever is entered has just changed (or the night has), so who is still
+  // free to be picked has too - see ensureAdminRegisterUsersCache().
+  invalidateAdminRegisterUsersCache();
   renderContestants();
 }
 
@@ -1027,14 +1030,25 @@ $('contestant-search').addEventListener('input', renderContestants);
 // admin-facing: an extra search-and-pick field up front for WHO this entry
 // is for, since (unlike the public form) there's no implicit "self" here.
 let adminRegisterUsersCache = null;
+let adminRegisterUsersNight = null;
 async function ensureAdminRegisterUsersCache() {
-  // /users/basic excludes the caller (see loadConsequences() for why) - the
-  // admin filling this in might be registering themselves, so add self back.
-  if (!adminRegisterUsersCache) {
-    const others = await api('/users/basic');
-    adminRegisterUsersCache = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  // ?freeFor drops anyone already entered that night, so the organiser
+  // cannot pick a name that registerContestant() is only going to refuse -
+  // the whole "already registered" error was reachable purely by choosing
+  // from a list this page had offered. Unlike the plain list it keeps the
+  // caller in: an admin filling this in may well be entering themselves.
+  const night = currentNight();
+  if (!adminRegisterUsersCache || adminRegisterUsersNight !== night) {
+    adminRegisterUsersCache = await api(`/users/basic?freeFor=${encodeURIComponent(night)}`);
+    adminRegisterUsersNight = night;
   }
   return adminRegisterUsersCache;
+}
+
+/** Someone entered or removed - the "who is still free" list is now stale. */
+function invalidateAdminRegisterUsersCache() {
+  adminRegisterUsersCache = null;
+  adminRegisterUsersNight = null;
 }
 
 // Wires a search input to a results container: type to filter
