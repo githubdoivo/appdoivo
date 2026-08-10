@@ -4,7 +4,7 @@
 // an actual iPhone (not Chromium) get caught here before a deploy.
 //
 // Run with: npm run test:ui (needs `npx playwright install webkit` once).
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
@@ -78,9 +78,34 @@ async function api(method, path, { token, body } = {}) {
 }
 
 /** New browser context using a real iPhone device profile (viewport, UA, touch, DPR). */
+// Every context this hands out is tracked, and afterEach closes whatever is
+// still open. The 63 `await context.close()` calls sit at the end of their
+// test bodies, which means they only run when the test *passes* - a test
+// that times out leaves its WebKit context and pages alive for the rest of
+// the run.
+//
+// That is what turns a slow CI runner into a red one. Locally nothing times
+// out, so nothing leaks and the suite is green; on a two-core runner the
+// first genuine timeout leaves a live browser behind, which makes the next
+// test slower, which leaks another. The published runs show the shape of it
+// - 57 of 77 UI tests failing, every one of them at the 25s ceiling inside
+// loginPage(), while the whole non-browser suite passes untouched.
+//
+// Closing twice is a no-op, so the existing explicit calls can stay.
+const openContexts = new Set();
+
 async function iphoneContext(deviceName) {
-  return browser.newContext({ ...devices[deviceName] });
+  const context = await browser.newContext({ ...devices[deviceName] });
+  openContexts.add(context);
+  return context;
 }
+
+afterEach(async () => {
+  for (const context of openContexts) {
+    try { await context.close(); } catch { /* already closed by the test */ }
+  }
+  openContexts.clear();
+});
 
 /** Logs in via localStorage (like the app itself does) and waits for the app shell. */
 async function loginPage(context, token, path = '/') {
