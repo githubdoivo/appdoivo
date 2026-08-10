@@ -1067,43 +1067,52 @@ $('suggest-form').addEventListener('submit', async (e) => {
 // until the party ends - people redraft these, and being told you already
 // used yours up would be a mean way to find that out.
 
-let dedicationMax = 1000;
+// Two states, one card. Written: the message sits in a highlight box, the
+// way the app shows anything it wants read rather than filled in, and the
+// button offers to edit. Editing: a plain box and a save button. No cap -
+// this is the one place someone might write at length, and a keepsake cut
+// off mid-sentence is worse than a long one.
+let dedicationEditing = false;
 
 async function loadDedication() {
   let data;
   try {
     data = await api('/dedications/mine');
   } catch {
-    return; // transient - the card simply stays as it was
+    return; // transient - the card stays as it was
   }
-  dedicationMax = data.maxChars ?? dedicationMax;
   const written = data.dedication?.text ?? '';
   const area = $('dedication-area');
-  area.innerHTML = `
-    <textarea id="dedication-text" rows="4" maxlength="${dedicationMax}"
-      placeholder="${esc(t('dedication_ph'))}">${esc(written)}</textarea>
-    <div class="actions-right">
-      <span id="dedication-count" class="muted char-count"></span>
-      <button type="button" id="dedication-save-btn" class="small">${esc(t(written ? 'dedication_update_btn' : 'dedication_save_btn'))}</button>
-    </div>
-    <p id="dedication-msg" class="muted" style="margin-top:8px">${written ? esc(t('dedication_saved_note')) : ''}</p>`;
+  const editing = dedicationEditing || !written;
 
-  const box = $('dedication-text');
-  const count = () => {
-    $('dedication-count').textContent = `${box.value.length}/${dedicationMax}`;
-    $('dedication-count').classList.toggle('at-limit', box.value.length >= dedicationMax);
-  };
-  box.addEventListener('input', count);
-  count();
+  area.innerHTML = editing
+    ? `<textarea id="dedication-text" rows="4" placeholder="${esc(t('dedication_ph'))}">${esc(written)}</textarea>
+       <div class="actions-right">
+         <button type="button" id="dedication-save-btn" class="small">${esc(t('dedication_save_btn'))}</button>
+       </div>
+       <p id="dedication-msg" class="muted" style="margin-top:8px"></p>`
+    : `<p class="highlight">${esc(written)}</p>
+       <div class="actions-right">
+         <button type="button" id="dedication-edit-btn" class="small ghost">${esc(t('dedication_update_btn'))}</button>
+       </div>
+       <p id="dedication-msg" class="muted" style="margin-top:8px">${esc(t('dedication_saved_note'))}</p>`;
+
+  if (!editing) {
+    $('dedication-edit-btn').addEventListener('click', () => {
+      dedicationEditing = true;
+      loadDedication();
+    });
+    return;
+  }
 
   $('dedication-save-btn').addEventListener('click', async () => {
-    const text = box.value.trim();
+    const text = $('dedication-text').value.trim();
     if (!text) return;
     const msg = $('dedication-msg');
     msg.classList.remove('error');
     try {
       await api('/dedications/mine', { method: 'PUT', body: { text } });
-      msg.textContent = t('dedication_done');
+      dedicationEditing = false;
       loadDedication();
     } catch (err) {
       msg.classList.add('error');

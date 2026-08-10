@@ -451,6 +451,13 @@ export function pendingVoteCount(night) {
  * myVoteForNight() per user rather than a raw count so a duo's non-
  * proposing half - whose vote lives under their partner's user_id, not
  * their own - correctly counts as having voted once confirmed. */
+/** How many accounts are expected to vote at all - the denominator for
+ *  "5 of 30 have voted". Same exclusion as usersWithoutVoteCount() below,
+ *  or the two numbers would disagree with each other. */
+export function eligibleVoterCount() {
+  return db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
+}
+
 export function usersWithoutVoteCount(night) {
   // Excludes admin/owner accounts - the organiser running the show very
   // often doesn't vote themselves, so counting them would make this fire

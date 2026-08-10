@@ -887,9 +887,14 @@ test('publishing a Snatch result to the Wall needs the podium revealed first, an
   assert.equal(tooEarly.status, 400);
   assert.equal(tooEarly.data.error, 'err_results_not_revealed', 'publishing before the reveal would spoil the countdown');
 
-  // hidden -> third -> second -> first
+  // hidden -> third -> second -> first: the winner is out, but the post
+  // carries all three, so it still refuses.
   for (let i = 0; i < 3; i++) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  const winnerOnly = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(winnerOnly.status, 400, 'publishing at "first" would freeze two blank places into the post');
 
+  // -> all
+  await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
   const published = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
   assert.equal(published.status, 201);
 
@@ -2273,6 +2278,9 @@ test('publishing the night to the Wall waits for both rounds, but not for a roun
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
   const listed = (await api('GET', `/votes/status?night=${night}`, { token: a.data.token })).data.contestants;
   await api('POST', '/votes', { token: a.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate B')).id } });
+  // Everyone eligible has to have voted before this can go out, so b votes
+  // too. The Wall keeps the post as a snapshot that cannot be rewritten.
+  await api('POST', '/votes', { token: b.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate A')).id } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
   for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
 
@@ -2355,8 +2363,11 @@ test('a dedication is private to the birthday person, one per guest, and comes o
   const blank = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: '   ' } });
   assert.equal(blank.status, 400);
   assert.equal(blank.data.error, 'err_dedication_empty');
-  const tooLong = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'x'.repeat(1001) } });
-  assert.equal(tooLong.data.error, 'err_dedication_too_long');
+  // Deliberately uncapped: this is the one place someone might write at
+  // length, and a keepsake cut off mid-sentence is worse than a long entry.
+  const long = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'x'.repeat(4000) } });
+  assert.equal(long.status, 200, 'a long message is allowed');
+  await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'pensei melhor: és enorme' } });
 
   // Nobody but the owner reads them - not even an admin, which is the point.
   const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Dedication Nosy Admin' } });

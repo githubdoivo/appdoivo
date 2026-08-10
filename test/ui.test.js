@@ -2030,18 +2030,26 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
 
   await page.fill('#dedication-text', 'que noite, obrigado por tudo');
   await page.click('#dedication-save-btn');
-  await page.waitForSelector('#dedication-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
 
-  // It comes back filled in, and offers to update rather than to write again -
-  // people redraft these, and being told the one shot is spent would be a
-  // mean way to find that out.
+  // Once written it reads as a message rather than as a form: the text sits
+  // in a highlight box and the button offers to edit it.
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+  assert.equal((await page.textContent('#dedication-area .highlight')).trim(), 'que noite, obrigado por tudo');
+  assert.equal(await page.isVisible('#dedication-text'), false, 'the editor should be put away');
+  assert.equal(await page.isVisible('#dedication-edit-btn'), true);
+
+  // And it comes back that way after a reload, not as an empty form.
   await page.reload();
   await page.click('[data-tab="chat"]');
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+
+  // Editing puts the box back with the text in it - people redraft these.
+  await page.click('#dedication-edit-btn');
   await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
   assert.equal(await page.inputValue('#dedication-text'), 'que noite, obrigado por tudo');
   await page.fill('#dedication-text', 'na verdade: a melhor noite');
   await page.click('#dedication-save-btn');
-  await page.waitForSelector('#dedication-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
   await context.close();
 
   const stored = await api('GET', '/admin/dedications', { token: ADMIN });

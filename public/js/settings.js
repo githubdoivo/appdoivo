@@ -851,6 +851,8 @@ wireSeedButton('outfit-seed-btn', 'outfit-wipe-msg', '/admin/contestants/seed-de
   loadVotes();
 });
 wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo', loadPlazaPosts);
+wireSeedButton('chat-seed-btn', 'chat-wipe-msg', '/admin/chat/seed-demo', () => {});
+wireSeedButton('memo-seed-btn', 'memo-wipe-msg', '/admin/memo/seed-demo', loadMemoDays);
 
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
@@ -1159,13 +1161,18 @@ async function loadVotes() {
   // is winning. Everyone running the night needs the first to decide when
   // to close; nobody running it needs the second, and not having it keeps
   // the result a surprise to the organisers too.
-  const congResultsForTally = votingStateCache[currentNight()]?.congenialityResults ?? [];
+  const state = votingStateCache[currentNight()];
+  const congResultsForTally = state?.congenialityResults ?? [];
   const cast = (rows) => rows.reduce((n, r) => n + r.votes, 0);
-  $('voting-tally').innerHTML = `
-    <p class="tally-line"><span>${esc(t('best_outfit_title'))}</span>
-      <b>${cast(results)}</b> <span class="muted">${t(cast(results) === 1 ? 'vote_one' : 'votes_short')}</span></p>
-    <p class="tally-line"><span>${esc(t('congeniality_title'))}</span>
-      <b>${cast(congResultsForTally)}</b> <span class="muted">${t(cast(congResultsForTally) === 1 ? 'vote_one' : 'votes_short')}</span></p>`;
+  // Out of how many, not a bare count: "5" tells you nothing without
+  // knowing whether 5 or 50 people were expected to vote.
+  const expected = state?.eligibleVoters ?? 0;
+  const line = (label, n) => `
+    <p class="tally-line"><span>${esc(label)}</span>
+      <b>${n}/${expected}</b>
+      <span class="muted">${t(n === 1 ? 'vote_one' : 'votes_short')}</span></p>`;
+  $('voting-tally').innerHTML = line(t('best_outfit_title'), cast(results))
+    + line(t('congeniality_title'), cast(congResultsForTally));
 
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
@@ -1249,9 +1256,14 @@ function renderCongenialityAdmin() {
   // finished. Disabled rather than left tappable to fail: the server
   // refuses it either way, and a button that only tells you no after you
   // press it is worse than one that shows it is not ready.
-  const podiumReady = state?.resultsPhase === 'first' || state?.resultsPhase === 'all';
-  const congBusy = status === 'open' || (status === 'closed' && hasVotes);
-  $('publish-podium-btn').disabled = !podiumReady || congBusy;
+  // Everything revealed, both rounds. Publishing freezes the night into a
+  // snapshot the Wall keeps, so it only goes out once nothing can still
+  // move. 'all' rather than 'first': the whole podium has to be out, not
+  // just the winner. Not gated on every guest having voted - voting is shut
+  // by this point anyway, and somebody always never gets round to it.
+  const podiumReady = state?.resultsPhase === 'all';
+  const congRevealed = status === 'revealed' || (status === 'closed' && !hasVotes);
+  $('publish-podium-btn').disabled = !podiumReady || !congRevealed;
 }
 
 $('congeniality-advance-btn').addEventListener('click', async () => {

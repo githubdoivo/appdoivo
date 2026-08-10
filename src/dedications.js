@@ -4,8 +4,6 @@
 // arrive.
 import db from './db.js';
 
-export const DEDICATION_MAX_CHARS = 1000;
-
 /** The caller's own message, or null if they have not written one yet. */
 export function myDedication(userId) {
   return db.prepare('SELECT text, updated_at FROM dedications WHERE user_id = ?').get(userId) ?? null;
@@ -18,8 +16,10 @@ export function myDedication(userId) {
  */
 export function saveDedication(userId, rawText) {
   const text = String(rawText ?? '').trim();
+  // No cap: this is the one place someone might want to write at length,
+  // and being cut off mid-sentence in a message meant as a keepsake is a
+  // worse outcome than a long entry in the PDF.
   if (!text) return { error: 'err_dedication_empty' };
-  if (text.length > DEDICATION_MAX_CHARS) return { error: 'err_dedication_too_long' };
 
   db.prepare(`
     INSERT INTO dedications (user_id, text) VALUES (?, ?)

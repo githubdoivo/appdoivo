@@ -37,6 +37,7 @@ import {
   cancelPendingVote,
   pendingVoteCount,
   usersWithoutVoteCount,
+  eligibleVoterCount,
   resultsForNight,
   visibleResultsForNight,
   resetResultsPhase,
@@ -64,9 +65,9 @@ import {
   notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
-import { seedDemoConsequences, seedDemoContestants, seedDemoWall } from './seedDemo.js';
+import { seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
-import { DEDICATION_MAX_CHARS, myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
+import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import PDFDocument from 'pdfkit';
 import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
@@ -756,6 +757,16 @@ router.post('/admin/plaza-posts/seed-demo', requireOwner, (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/admin/chat/seed-demo', requireOwner, (req, res) => {
+  seedDemoChat();
+  res.json({ ok: true });
+});
+
+router.post('/admin/memo/seed-demo', requireOwner, (req, res) => {
+  seedDemoMemo();
+  res.json({ ok: true });
+});
+
 router.post('/admin/consequences/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM consequences').run();
   res.json({ ok: true });
@@ -826,7 +837,7 @@ router.get('/admin/votes', (req, res) => {
 // Dedications: a private message to the birthday person. Writing one is
 // open to every guest; reading them is not, which is the entire point.
 router.get('/dedications/mine', (req, res) => {
-  res.json({ dedication: myDedication(req.user.id), maxChars: DEDICATION_MAX_CHARS });
+  res.json({ dedication: myDedication(req.user.id) });
 });
 
 router.put('/dedications/mine', (req, res) => {
@@ -1102,6 +1113,9 @@ router.get('/admin/voting', (req, res) => {
       // enforces it, since plenty of real nights close with some guests
       // never getting around to voting and that's fine.
       notVoted: usersWithoutVoteCount(night),
+      // The denominator, so the panel can say "5 of 30" rather than a bare
+      // count that means nothing without knowing how many were expected.
+      eligibleVoters: eligibleVoterCount(),
       // Lets the admin panel show "tie-breaker round in progress" - whether
       // there IS a tie worth breaking is for the panel to work out from the
       // results it already fetches via GET /admin/votes (rank 1 and 2
@@ -1161,10 +1175,18 @@ router.post('/admin/voting/:night/congeniality', async (req, res) => {
 router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  // The whole podium, not just the winner: the post carries all three, so
+  // publishing at 'first' would freeze two blanks into it.
   const phase = getResultsPhase(night);
-  if (phase !== 'first' && phase !== 'all') {
+  if (phase !== 'all') {
     return res.status(400).json({ error: 'err_results_not_revealed' });
   }
+  // Deliberately NOT "every eligible account has voted". Voting is closed
+  // by the time the podium is revealed, so nobody can change the standings
+  // any more - and on a real night somebody always never gets around to
+  // voting, which under that rule would make the post unpublishable
+  // forever. Closed plus fully revealed is the same guarantee without the
+  // trap: whatever is on screen is final.
   // Both rounds have to be finished, not just the outfit one: the post
   // carries the congeniality winner alongside the podium, so publishing
   // mid-round would either spoil it or freeze a half-counted result into a

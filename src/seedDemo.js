@@ -11,6 +11,10 @@ import { today } from './time.js';
 import { NIGHTS } from './nights.js';
 import { deflateSync } from 'node:zlib';
 import { createPlazaPost } from './plaza.js';
+import { postMessage } from './chat.js';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { MEMO_DIR, ensureTodaysSlots } from './memo.js';
 
 // Flat-colour stand-in photos for the seeded contestants, so QA shows what
 // the voting list, the results podium and the published Wall post actually
@@ -209,9 +213,58 @@ export function seedDemoWall(demoUsers = seedDemoUsers()) {
   }
 }
 
+export function seedDemoChat(demoUsers = seedDemoUsers()) {
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM messages').get().n;
+  if (existing > 0 || !demoUsers.length) return;
+  // Enough voices to see the pseudonyms differ, which is the whole point of
+  // this feed - the names are never the real ones.
+  const lines = [
+    'quem trouxe o gelo?',
+    'a playlist está a carregar demasiado nos anos 2000 e ninguém se queixa',
+    'alguém viu o meu casaco? preto, com um bolso rasgado',
+    'confirmo que a sobremesa vale a pena esperar',
+  ];
+  lines.forEach((text, i) => postMessage(demoUsers[i % demoUsers.length], text));
+  console.log(`[seed-demo] Added ${lines.length} Plaza messages.`);
+}
+
+export function seedDemoMemo(demoUsers = seedDemoUsers()) {
+  const day = today();
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM memo_uploads').get().n;
+  if (existing > 0 || !demoUsers.length) return;
+
+  // Needs slots to attach to, and needs them fired - an upload only makes
+  // sense against a moment that actually happened.
+  ensureTodaysSlots();
+  const slots = db.prepare(
+    'SELECT id FROM memo_slots WHERE day = ? ORDER BY scheduled_at LIMIT 2'
+  ).all(day);
+  if (!slots.length) return;
+  db.prepare("UPDATE memo_slots SET notified_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE id IN (" +
+    slots.map(() => '?').join(',') + ')').run(...slots.map((s) => s.id));
+
+  // Two moments from two different people, so the shared feed shows what it
+  // is actually for: several guests on the same prompt, not one person's
+  // roll. Real files on disk, because that is what the zip and the day
+  // video read from - rows alone would make both fail on demo data.
+  const ins = db.prepare(
+    'INSERT INTO memo_uploads (slot_id, user_id, day, kind, mime_type, file_path, file_size) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  slots.forEach((slot, i) => {
+    [demoUsers[i * 2 % demoUsers.length], demoUsers[(i * 2 + 1) % demoUsers.length]].forEach((userId, j) => {
+      const png = solidPhoto(DEMO_PHOTO_COLORS[(i * 2 + j) % DEMO_PHOTO_COLORS.length], 480, 640);
+      const name = `demo-${day}-${slot.id}-${userId}.png`;
+      writeFileSync(join(MEMO_DIR, name), png);
+      ins.run(slot.id, userId, day, 'photo', 'image/png', name, png.length);
+    });
+  });
+  console.log(`[seed-demo] Added ${slots.length * 2} Memo uploads across ${slots.length} moments.`);
+}
+
 export function seedDemo() {
   const demoUsers = seedDemoUsers();
   seedDemoConsequences(demoUsers);
   seedDemoContestants(demoUsers);
   seedDemoWall(demoUsers);
+  seedDemoChat(demoUsers);
 }

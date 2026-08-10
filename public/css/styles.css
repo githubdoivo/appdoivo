@@ -2334,6 +2334,19 @@ html.mode-light .chat-empty { color: var(--ink); }
    each one owns its whole card - full width so they read as the weight of
    the thing they do, not as a small action tucked in a corner. */
 button[id$="-wipe-btn"] { display: block; width: 100%; }
+/* Its pair, directly above: filling a feature and emptying it are the two
+   halves of the same job, so they read as one block rather than as a small
+   secondary control floating beside a bar. Not danger-styled - this one
+   only ever adds. */
+button.seed {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  background: var(--paper-3);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+button.seed:hover { background: var(--paper-3); opacity: 0.85; }
 
 /* Plain round dot, no stretching: the Furnished and Swamp backgrounds are
    both patterned with diamonds, so a diamond here read as a deliberate mark

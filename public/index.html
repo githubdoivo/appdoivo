@@ -230,16 +230,6 @@
     <!-- Chat efemero - now labeled "Plaza" (see nav above). -->
     <div id="tab-chat" class="tab-panel hidden">
       <p class="hero-line" data-i18n="chat_hero">Conversa aberta. Tudo some sozinho.</p>
-      <!-- A message to the birthday person, private to him. Sits on Plaza
-           because that is where people already say things to each other,
-           but unlike everything else here nobody reads it back - see the
-           owner-only routes behind /admin/dedications. -->
-      <div class="card" id="dedication-card">
-        <h2 data-i18n="dedication_title">Uma mensagem para o Ivo</h2>
-        <p class="help" data-i18n="dedication_help">Explicação</p>
-        <div id="dedication-area" style="margin-top:12px"></div>
-      </div>
-
       <div class="card">
         <h2 data-i18n="chat_title">Mensagens</h2>
         <p class="help" data-i18n="chat_help">Explicação</p>
@@ -248,6 +238,16 @@
           <input id="chat-text" type="text" maxlength="300" data-i18n-ph="chat_ph" placeholder="Escreve uma mensagem..." autocomplete="off" />
           <button type="submit" class="small" data-i18n="chat_send">Partilhar</button>
         </form>
+      </div>
+
+      <!-- A message to the birthday person, private to him. Sits on Plaza
+           because that is where people already say things to each other,
+           but unlike everything else here nobody reads it back - see the
+           owner-only routes behind /admin/dedications. -->
+      <div class="card" id="dedication-card">
+        <h2 data-i18n="dedication_title">Uma mensagem para o Ivo</h2>
+        <p class="help" data-i18n="dedication_help">Explicação</p>
+        <div id="dedication-area" style="margin-top:12px"></div>
       </div>
     </div>
 
