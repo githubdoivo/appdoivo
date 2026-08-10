@@ -83,15 +83,52 @@ async function boot() {
   // background - a region no child element (including #login's own white
   // background) can cover. Only apply it once the app itself is shown
   // (see showApp()), so the login screen never carries a night theme.
-  await registerServiceWorker().catch(() => {});
   const token = getToken();
-  if (!token) return showLogin();
-  try {
-    const me = await api('/me');
-    showApp(me);
-  } catch {
-    clearToken();
+  if (!token) {
     showLogin();
+    registerPushWorker();
+    return;
+  }
+  try {
+    showApp(await fetchMe());
+  } catch (err) {
+    // Only the server actually refusing the key ends the session. Anything
+    // else - a dropped request, the server unreachable for a moment - says
+    // nothing about whether the key is still good, and throwing it away
+    // costs someone the only way back into their account. Leaving it stored
+    // means a reload recovers on its own.
+    if (err?.status === 401) clearToken();
+    showLogin();
+  }
+  registerPushWorker();
+}
+
+/**
+ * Registration is only ever needed for push, and nothing on screen depends
+ * on it - so it runs after the first paint and is never awaited. boot() used
+ * to await it before doing anything else, which meant a registration that
+ * stalled left the app on a blank screen: no login form, no app, a valid
+ * session sitting behind it, and no way out but a reload. That is exactly
+ * what CI kept hitting - the app never appeared while /me answered 200.
+ */
+function registerPushWorker() {
+  registerServiceWorker().catch(() => {});
+}
+
+/**
+ * /me, with a couple of retries. The startup call is the one request whose
+ * failure the app cannot shrug off, so a single dropped one on a phone
+ * changing rooms should not read as "logged out". A refusal from the server
+ * is passed straight back - that is an answer, not a connectivity problem.
+ */
+async function fetchMe(attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await api('/me');
+    } catch (err) {
+      if (err?.status || attempt === attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
   }
 }
 

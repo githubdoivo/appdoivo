@@ -377,6 +377,62 @@ test('visiting /settings.html with no session redirects to the login page', asyn
   await context.close();
 });
 
+/* ------------------- Startup survives a bad worker/network --------------- */
+// Both of these are what turned CI red for weeks. boot() awaited service
+// worker registration before it did anything else, so a registration that
+// never settled left the app on a blank screen - no login form, no app, a
+// perfectly valid session behind it. The instrumented runs caught it exactly
+// that way: #app never appeared while /me answered 200 and the key was still
+// stored. And boot()'s catch treated any failure as "session over", so one
+// dropped request threw the key away and the screen fell back to login for
+// good. Neither needs a slow runner to happen - a phone moving between rooms
+// does the same thing.
+
+test('the app still opens when service worker registration never settles', async () => {
+  const context = await iphoneContext('iPhone 13');
+  await context.addInitScript(() => {
+    if (navigator.serviceWorker) navigator.serviceWorker.register = () => new Promise(() => {});
+  });
+
+  // loginPage() waits for #app itself - the app shell has to be up and
+  // usable, not merely un-hidden, so check the tab bar came with it.
+  const page = await loginPage(context, ADMIN, '/');
+  assert.ok(
+    await page.isVisible('[data-tab="rata"]'),
+    'push registration is not something the app should wait on before it can be used',
+  );
+  await context.close();
+});
+
+test('a request dropped at startup does not throw away the stored key', async () => {
+  const context = await iphoneContext('iPhone 13');
+  // Exactly one dropped /me per page load, then the network behaves - the
+  // phone-changing-rooms case, not a server refusing the key. Done by
+  // replacing fetch rather than with context.route(): once a service worker
+  // controls the page, WebKit routes its requests around Playwright's
+  // interception entirely and the handler never fires.
+  await context.addInitScript(() => {
+    const realFetch = window.fetch;
+    let dropped = false;
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!dropped && url.includes('/api/me')) {
+        dropped = true;
+        return Promise.reject(new TypeError('Load failed'));
+      }
+      return realFetch(input, init);
+    };
+  });
+
+  const page = await loginPage(context, ADMIN, '/');
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem('appivo_token')),
+    ADMIN,
+    'a dropped request says nothing about the key being valid - losing it costs the only way back in',
+  );
+  await context.close();
+});
+
 /* --------------------- First-time key retrieval (register) --------------- */
 
 test('a first-time user can find their name, claim their key, and get logged straight in', async () => {
