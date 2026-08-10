@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path';
 import { ZipFile } from 'yazl';
 import multer from 'multer';
 import db from './db.js';
-import { authenticate, findUserByToken, requireAdmin, requireOwner } from './auth.js';
+import { authenticate, findUserByToken, isDevLoginKey, requireAdmin, requireOwner } from './auth.js';
 import { loginRateLimit } from './rateLimit.js';
 import { generateUserToken, getSetting, setSetting } from './db.js';
 import { hashToken, encryptToken, decryptToken } from './tokens.js';
@@ -120,8 +120,13 @@ router.post('/auth/login', loginRateLimit, (req, res) => {
   if (!user) return res.status(401).json({ error: 'err_token_invalid' });
   // Proves they know their key - same claimed-key stamp authenticate()
   // applies (see auth.js), so they stop showing up in the first-time
-  // name-search flow (keyClaim.js) from here on.
-  db.prepare("UPDATE users SET key_claimed_at = COALESCE(key_claimed_at, strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE id = ?").run(user.id);
+  // name-search flow (keyClaim.js) from here on. The QA dev key proves no
+  // such thing, so it deliberately doesn't stamp: claiming the owner on
+  // their behalf is what quietly locked them out of "find my key" the first
+  // time round.
+  if (!isDevLoginKey(token)) {
+    db.prepare("UPDATE users SET key_claimed_at = COALESCE(key_claimed_at, strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE id = ?").run(user.id);
+  }
   res.json({ id: user.id, name: user.name, isAdmin: !!user.is_admin });
 });
 

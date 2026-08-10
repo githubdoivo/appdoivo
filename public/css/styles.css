@@ -519,7 +519,13 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   /* Cancels most of .cover's own 20px gap so it sits tight on the field. */
   margin-bottom: -16px;
 }
-.login-meta .instruction { text-align: center; }
+/* The instruction sat a line above the language toggle pinned to its right,
+   which read as two separate rows rather than one. Nudged down onto the
+   toggle's line - as a relative offset, not a margin, so the key field below
+   stays exactly where it was. The greeting takes the same offset so the gap
+   between the two lines is unchanged. */
+.login-meta .instruction { text-align: center; position: relative; top: 20px; }
+.greeting { position: relative; top: 20px; }
 .login-meta .login-lang-toggle {
   position: absolute;
   right: 0;

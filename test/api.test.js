@@ -155,20 +155,93 @@ test('login accepts the admin', async () => {
 // owner account. It was originally gated by NODE_ENV!=='production' alone
 // and was confirmed live on prod on 2026-08-08 despite fly.toml setting
 // NODE_ENV=production, letting anyone who read this repo's own docs log in
-// with full owner rights. It was then re-gated behind ENABLE_DEV_LOGIN and
-// has now been removed outright. This test locks that removal in: no env
-// var, in any environment, may bring it back.
-test('there is no magic dev token - "mossy" is rejected like any other wrong key, whatever the environment says', async () => {
-  const plain = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-  assert.equal(plain.status, 401);
-
-  // Even with the old escape hatch explicitly switched on.
-  process.env.ENABLE_DEV_LOGIN = 'true';
+// with full owner rights, in every environment. It is back, but only as a
+// QA convenience and only under two conditions at once - see devLoginOwner()
+// in auth.js. These tests pin both halves: that it works where it is meant
+// to, and that no single misconfiguration is enough to open it elsewhere.
+// Exercised against auth.js directly rather than over HTTP: every rejected
+// login spends one of a 10-per-IP budget shared with the rest of the file
+// (see rateLimit.js), and a matrix of environment combinations would empty
+// it and tip later tests into 429s. The HTTP wiring gets one happy path
+// below, which is the part a unit call can't prove.
+test('the QA dev key needs both of its conditions - neither one alone unlocks anything', async () => {
+  const { isDevLoginKey, findUserByToken } = await import('../src/auth.js');
+  const original = { key: process.env.DEV_LOGIN_KEY, env: process.env.APP_ENV };
   try {
-    const withOldFlag = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-    assert.equal(withOldFlag.status, 401, 'the removed dev-login flag must have no effect at all');
+    // Nothing set at all: the shape production ships in.
+    delete process.env.DEV_LOGIN_KEY;
+    delete process.env.APP_ENV;
+    assert.equal(isDevLoginKey('mossy'), false);
+    assert.ok(!findUserByToken('mossy'), 'no passphrase resolves to a user by default');
+
+    // The passphrase without the environment - a secret copied to the wrong
+    // Fly app by mistake has to stay inert.
+    process.env.DEV_LOGIN_KEY = 'mossy';
+    for (const env of [undefined, 'prod', 'production', 'QA', 'staging', '']) {
+      if (env === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = env;
+      assert.equal(isDevLoginKey('mossy'), false, `APP_ENV=${env} must not unlock the dev key`);
+    }
+
+    // The environment without the passphrase - QA before the secret is set.
+    process.env.APP_ENV = 'qa';
+    for (const key of [undefined, '']) {
+      if (key === undefined) delete process.env.DEV_LOGIN_KEY;
+      else process.env.DEV_LOGIN_KEY = key;
+      assert.equal(isDevLoginKey('mossy'), false, 'an unset key is not an empty-string key');
+      assert.equal(isDevLoginKey(''), false, 'and an empty guess never matches');
+    }
+
+    // Both together, and only the right word.
+    process.env.DEV_LOGIN_KEY = 'mossy';
+    assert.equal(isDevLoginKey('mossy'), true);
+    assert.equal(isDevLoginKey('MOSSY'), true, 'case-insensitive, like every other key');
+    assert.equal(isDevLoginKey('mossyy'), false);
+    assert.equal(isDevLoginKey('moss'), false);
+
+    // The old flag is dead and stays dead.
+    process.env.ENABLE_DEV_LOGIN = 'true';
+    delete process.env.DEV_LOGIN_KEY;
+    assert.equal(isDevLoginKey('mossy'), false, 'the removed dev-login flag must have no effect at all');
   } finally {
     delete process.env.ENABLE_DEV_LOGIN;
+    if (original.key === undefined) delete process.env.DEV_LOGIN_KEY;
+    else process.env.DEV_LOGIN_KEY = original.key;
+    if (original.env === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = original.env;
+  }
+});
+
+test('on QA the dev key carries a whole session, without ever becoming the owner\'s real key', async () => {
+  const { default: db } = await import('../src/db.js');
+  process.env.DEV_LOGIN_KEY = 'mossy';
+  process.env.APP_ENV = 'qa';
+  try {
+    const login = await api('POST', '/auth/login', { body: { token: 'MOSSY' } });
+    assert.equal(login.status, 200);
+    assert.equal(login.data.isAdmin, true);
+
+    // It has to carry real requests too, not just the login check - the
+    // client replays whatever was typed as its bearer token from here on.
+    const me = await api('GET', '/me', { token: 'mossy' });
+    assert.equal(me.status, 200);
+    assert.equal(me.data.isOwner, true);
+
+    // The owner's stored key is untouched, and is not this.
+    const owner = db.prepare('SELECT token_hash, key_claimed_at FROM users WHERE is_owner = 1').get();
+    const { hashToken } = await import('../src/tokens.js');
+    assert.notEqual(owner.token_hash, hashToken('mossy'), "the owner's real key must stay a generated one");
+
+    // And it must not claim the owner's key on their behalf: doing so drops
+    // them out of the first-time name-search flow, which is how the owner
+    // got locked out of QA once already.
+    db.prepare('UPDATE users SET key_claimed_at = NULL WHERE is_owner = 1').run();
+    await api('GET', '/me', { token: 'mossy' });
+    const after = db.prepare('SELECT key_claimed_at FROM users WHERE is_owner = 1').get();
+    assert.equal(after.key_claimed_at, null, 'the dev key proves nothing, so it must not stamp a claim');
+  } finally {
+    delete process.env.DEV_LOGIN_KEY;
+    delete process.env.APP_ENV;
   }
 });
 

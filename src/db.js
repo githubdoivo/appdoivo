@@ -552,11 +552,11 @@ export function seed({ adminName }) {
     // ADMIN_TOKEN override outside production, which defeated the whole
     // point on QA (its DB is ephemeral, so it reseeds - and re-pins the
     // owner's real key to ADMIN_TOKEN's literal value - on every deploy):
-    // the owner's actual stored key was silently "mossy" there, not a
-    // generated one. The "mossy" dev-only quick-login (see /auth/login in
-    // routes.js) is a separate, login-time-only shortcut that never
-    // touches what's actually stored here - the real key is always
-    // generated and never surfaced as "mossy" anywhere.
+    // the owner's actual stored key was silently the override's literal
+    // value there, not a generated one. The QA quick-login (see
+    // devLoginOwner() in auth.js) is a separate thing entirely: it resolves
+    // a typed passphrase to the owner at lookup time and never touches what
+    // is stored here, so the real key is always generated.
     const token = generateUserToken(adminName || 'Admin');
     // Left unclaimed, exactly like a guest, so the owner can pick their own
     // name out of the first-time key-retrieval flow (keyClaim.js) instead of
