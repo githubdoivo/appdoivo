@@ -610,7 +610,7 @@ test('voting closed by default blocks the vote', async () => {
 });
 
 test('admin opens the night and each user votes once', async () => {
-  const open = await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN });
+  const open = await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
   assert.equal(open.data.votingStatus, 'open');
 
   const v1 = await api('POST', '/votes', { token: userToken, body: { contestantId, night: NIGHT } });
@@ -631,7 +631,7 @@ test('GET /admin/voting reports how many non-admin accounts have not voted, excl
   // tests may have left their own never-voted accounts behind.
   const night = 'swamp';
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const nightsInfo = async () => {
     const r = await api('GET', '/admin/voting', { token: ADMIN });
@@ -678,7 +678,7 @@ test('nights are independent: voting in another night is possible', async () => 
   const other = 'swamp';
   const c = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Concorrente B', night: other } });
   assert.equal(c.status, 201);
-  await api('POST', `/admin/voting/${other}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${other}/open`, { token: ADMIN, body: { force: true } });
 
   const v = await api('POST', '/votes', { token: userToken, body: { contestantId: c.data.id, night: other } });
   assert.equal(v.status, 201); // already voted in 'furnished', but not yet in this night
@@ -922,7 +922,7 @@ test('a solo contestant cannot vote for their own entry', async () => {
   const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night, photoBase64: TEST_PHOTO } });
   assert.equal(reg.status, 201);
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const status = await api('GET', `/votes/status?night=${night}`, { token: solo.data.token });
   assert.equal(status.data.myContestant.id, reg.data.id, 'the frontend needs myContestant.id to filter this entry out of the vote list');
@@ -950,7 +950,7 @@ test('neither half of a duo can vote for their own shared entry', async () => {
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const voteA = await api('POST', '/votes', { token: a.data.token, body: { contestantId: reg.data.id, night } });
   assert.equal(voteA.status, 400);
@@ -978,7 +978,7 @@ test("a duo's vote only counts once the partner confirms it", async () => {
   // real contestant (see confirmContestant()) - these tests are about
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   // One partner proposes - accepted, but flagged pending and worth nothing yet.
   const proposal = await api('POST', '/votes', { token: a.data.token, body: { contestantId: rival.data.id, night } });
@@ -1026,7 +1026,7 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   // real contestant (see confirmContestant()) - these tests are about
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   await api('POST', '/votes', { token: a.data.token, body: { contestantId: first.data.id, night } });
   // The partner disagrees: dropping the proposal frees the pair to repick.
@@ -1090,7 +1090,7 @@ test('a duo entry is not in the running until the named partner confirms it', as
     'once confirmed the pair should appear as a real contestant');
 
   // ...and with nothing pending, opening no longer needs forcing.
-  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   assert.equal(opened.status, 200);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -1282,7 +1282,7 @@ test('either half of a duo can replace the entry photo before voting opens, not 
   assert.equal(noEntry.data.error, 'err_no_contestant_entry');
 
   // Opening voting locks the roster - the photo included.
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   const afterOpen = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
   assert.equal(afterOpen.status, 400);
   assert.equal(afterOpen.data.error, 'err_registration_not_open');
@@ -1309,7 +1309,7 @@ test('a contestant photo is visible to its own entrants and admins any time, but
   const earlyPeek = await api('GET', photoUrl, { token: rival.data.token });
   assert.equal(earlyPeek.status, 404);
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', '/votes', { token: rival.data.token, body: { contestantId: reg.data.id, night } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
 
@@ -2005,10 +2005,29 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
 
   const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Feed Bystander' } });
 
+  // Sealed until the viewer has posted their own for this moment.
+  const locked = await api('GET', '/memo/feed', { token: bystander.data.token });
+  assert.equal(locked.status, 200);
+  assert.equal(locked.data.locked, true, 'the feed stays locked until the viewer posts');
+  assert.deepEqual(locked.data.uploads, [], 'a locked feed hands back nothing at all');
+
+  const bystanderUpload = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'bystander.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(bystanderUpload.status, 201);
+
   const feed = await api('GET', '/memo/feed', { token: bystander.data.token });
   assert.equal(feed.status, 200);
+  assert.equal(feed.data.locked, false);
   const entry = feed.data.uploads.find((u) => u.id === uploadId);
   assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
+  assert.ok(
+    !feed.data.uploads.some((u) => u.id === bystanderUpload.data.id),
+    'the viewer\'s own upload is shown by their checklist dot, not repeated in the feed',
+  );
   assert.equal(entry.myReaction, null);
   assert.deepEqual(entry.reactions, {});
 
@@ -2032,6 +2051,76 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
   assert.equal(entryToggledOff.myReaction, null);
   assert.equal(entryToggledOff.reactions['💦'] || 0, 0);
+});
+
+// The reported bug: forcing a moment early left the previous one still
+// inside its 15-minute window, so two moments were open at once and you
+// could double back to the one you had already let slip.
+test('firing a new Memo moment closes the previous one on the spot', async () => {
+  // A fresh guest, so no earlier test's upload can turn one of these slots
+  // "uploaded" and mask what is being asserted. The day's five slots are
+  // shared by everyone and earlier tests have already fired several, so this
+  // picks by position and re-fires rather than hunting for untouched ones.
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Window Guest' } });
+  const userToken = guest.data.token;
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const [first, second] = data.slots;
+  markSlotNotified(first.id);
+
+  const oneOpen = await api('GET', '/memo/today', { token: userToken });
+  assert.equal(oneOpen.data.slots.find((s) => s.id === first.id).status, 'open');
+
+  markSlotNotified(second.id);
+  const afterSecond = await api('GET', '/memo/today', { token: userToken });
+  const openNow = afterSecond.data.slots.filter((s) => s.status === 'open');
+  assert.deepEqual(openNow.map((s) => s.id), [second.id], 'exactly one moment is ever open');
+  assert.equal(
+    afterSecond.data.slots.find((s) => s.id === first.id).status,
+    'missed',
+    'the older moment is gone the instant a newer one fires, not 15 minutes later',
+  );
+
+  // And the closed one really is closed - not just greyed out in the payload.
+  const late = await apiUpload(`/memo/slots/${first.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'too-late.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(late.status, 409);
+  assert.equal(late.data.error, 'err_memo_slot_not_open');
+});
+
+test('the Memo feed is scoped to the current moment - a new one clears what came before', async () => {
+  const viewer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Scope Viewer' } });
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Scope Poster' } });
+  const { data } = await api('GET', '/memo/today', { token: viewer.data.token });
+  const [older, newer] = data.slots;
+
+  markSlotNotified(older.id);
+  const posted = {};
+  for (const [who, key] of [[viewer, 'viewer'], [poster, 'poster']]) {
+    const up = await apiUpload(`/memo/slots/${older.id}/upload`, {
+      token: who.data.token,
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      filename: 'older.jpg',
+      mimeType: 'image/jpeg',
+    });
+    assert.equal(up.status, 201);
+    posted[key] = up.data.id;
+  }
+  // By id, not by count - this slot is shared, and earlier tests have put
+  // their own uploads on it.
+  const during = await api('GET', '/memo/feed', { token: viewer.data.token });
+  const ids = during.data.uploads.map((u) => u.id);
+  assert.ok(ids.includes(posted.poster), 'the other guest\'s upload for this moment');
+  assert.ok(!ids.includes(posted.viewer), 'not the viewer\'s own');
+
+  // A new moment starts everyone over, including the viewer's own unlock.
+  markSlotNotified(newer.id);
+  const after = await api('GET', '/memo/feed', { token: viewer.data.token });
+  assert.equal(after.data.locked, true, 'the previous moment does not keep the feed unlocked');
+  assert.deepEqual(after.data.uploads, [], 'last moment\'s photos are not carried forward');
 });
 
 // The client keeps its own copy of the reaction list (app.js renders the
@@ -2275,7 +2364,7 @@ test('publishing the night to the Wall waits for both rounds, but not for a roun
   for (const u of [a, b]) {
     await api('POST', '/admin/contestants/register', { token: ADMIN, body: { userId: u.data.id, name: `${u.data.name} look`, night } });
   }
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   const listed = (await api('GET', `/votes/status?night=${night}`, { token: a.data.token })).data.contestants;
   await api('POST', '/votes', { token: a.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate B')).id } });
   // Everyone eligible has to have voted before this can go out, so b votes
@@ -2392,4 +2481,36 @@ test('a dedication is private to the birthday person, one per guest, and comes o
   assert.equal(gone.status, 404, 'with nothing written there is no document to make');
 
   for (const u of [ana, rui, helper]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+});
+
+test('the owner can fill the whole app with demo data and clear it again, accounts included', async () => {
+  // The per-feature pairs each cover their own section; this one exists for
+  // setting the app up as a demo before a run-through and putting it back
+  // afterwards, which means it is the only switch that touches accounts.
+  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Helper' } });
+  await api('PATCH', `/admin/users/${helper.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Guest' } });
+
+  assert.equal((await api('POST', '/admin/wipe-everything', { token: helper.data.token })).status, 403,
+    'wiping the whole app belongs with the owner');
+  assert.equal((await api('POST', '/admin/seed-demo', { token: helper.data.token })).status, 403);
+
+  const wiped = await api('POST', '/admin/wipe-everything', { token: ADMIN });
+  assert.equal(wiped.status, 200);
+
+  const left = (await api('GET', '/admin/users', { token: ADMIN })).data;
+  assert.ok(left.some((u) => u.is_owner), 'the owner has to survive, or nobody can get back into the panel');
+  assert.ok(left.some((u) => u.id === helper.data.id), 'other admins stay - they are people, not demo data');
+  assert.ok(!left.some((u) => u.id === guest.data.id), 'guest accounts go');
+  assert.equal((await api('GET', '/admin/consequences', { token: ADMIN })).data.length, 0);
+  assert.equal((await api('GET', '/plaza-posts', { token: ADMIN })).data.posts.length, 0);
+
+  const seeded = await api('POST', '/admin/seed-demo', { token: ADMIN });
+  assert.equal(seeded.status, 200);
+  const after = (await api('GET', '/admin/users', { token: ADMIN })).data;
+  assert.ok(after.length > left.length, 'seeding brings the guest accounts back');
+  assert.ok((await api('GET', '/admin/consequences', { token: ADMIN })).data.length > 0);
+
+  await api('POST', '/admin/wipe-everything', { token: ADMIN });
+  await api('DELETE', `/admin/users/${helper.data.id}`, { token: ADMIN });
 });

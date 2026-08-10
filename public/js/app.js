@@ -506,6 +506,7 @@ let memoPollTimer = null;
 let memoTickTimer = null;
 let memoSlotsCache = [];
 let memoFeedCache = [];
+let memoFeedLocked = false;
 // Set while a slot's upload request is in flight - both the poll and the
 // ticker skip re-rendering while this is set, so a fetch already in
 // progress doesn't get its dot clobbered mid-upload.
@@ -605,20 +606,29 @@ function memoReactionIcon(emoji) {
   return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
 }
 
-// Today's shared feed - every guest's uploads so far, like BeReal's own
-// friends-feed, with a light row of quick-tap emoji reactions per photo
-// instead of a comment thread.
+// The current moment's feed - what everyone else posted for the slot that
+// is live now, with a light row of quick-tap emoji reactions per photo
+// instead of a comment thread. Sealed until this guest has posted theirs.
 async function loadMemoFeed() {
   try {
-    const { uploads } = await api('/memo/feed');
+    const { uploads, locked } = await api('/memo/feed');
     memoFeedCache = uploads;
+    memoFeedLocked = locked;
     renderMemoFeed();
   } catch { /* transient network hiccup - the next poll retries */ }
 }
 
 function renderMemoFeed() {
-  $('memo-feed-card').classList.toggle('hidden', memoFeedCache.length === 0);
-  if (!memoFeedCache.length) return;
+  // Locked is a state of its own, not an empty list: there is something to
+  // see and the card has to say so, otherwise posting looks optional.
+  $('memo-feed-card').classList.toggle('hidden', !memoFeedLocked && memoFeedCache.length === 0);
+  const helpKey = memoFeedLocked ? 'memo_feed_locked' : 'memo_feed_help';
+  $('memo-feed-help').dataset.i18n = helpKey;
+  $('memo-feed-help').textContent = t(helpKey);
+  if (memoFeedLocked || !memoFeedCache.length) {
+    $('memo-feed').innerHTML = '';
+    return;
+  }
   $('memo-feed').innerHTML = memoFeedCache.map((u) => {
     const preview = u.kind === 'video'
       ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`

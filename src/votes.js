@@ -454,6 +454,21 @@ export function pendingVoteCount(night) {
 /** How many accounts are expected to vote at all - the denominator for
  *  "5 of 30 have voted". Same exclusion as usersWithoutVoteCount() below,
  *  or the two numbers would disagree with each other. */
+/** How many people are on the roster for a night - a duo entry counts as
+ *  two, because two people are in it. Compared against the number expected
+ *  to vote before opening, so nobody is left out of their own night. */
+export function enteredPeopleCount(night) {
+  const rows = db.prepare(
+    'SELECT user_id, partner_user_id FROM contestants WHERE night = ? AND confirmed_at IS NOT NULL'
+  ).all(night);
+  const people = new Set();
+  for (const r of rows) {
+    if (r.user_id) people.add(r.user_id);
+    if (r.partner_user_id) people.add(r.partner_user_id);
+  }
+  return people.size;
+}
+
 export function eligibleVoterCount() {
   return db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
 }

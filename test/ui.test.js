@@ -453,6 +453,41 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
 });
 
+// "Pending" once chased contrast on its own - a bright yellow ground under
+// dark ink while its three neighbours were dark grounds under paper ink -
+// which read as one chip inverted rather than one chip yellow. None of the
+// four clears AA against paper ink (3.70-4.38:1), so contrast was never what
+// told them apart; matching construction is the whole job.
+test('the four rata status pills are built the same way - filled in their own colour, one shared ink', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  // Wait on the panel, not the pills: the pills are in the raw HTML from the
+  // first byte, so waiting on them races the tab actually being switched to
+  // and only shows up as flakiness under a loaded suite.
+  await page.waitForSelector('[data-atab="rata"]', { timeout: WAIT_TIMEOUT });
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('#rata-status-filter:visible', { timeout: WAIT_TIMEOUT });
+
+  const pills = await page.$$eval('#rata-status-filter .role-pill[data-status].active', (els) => els.map((el) => {
+    const cs = getComputedStyle(el);
+    return { status: el.dataset.status, bg: cs.backgroundColor, ink: cs.color };
+  }));
+  assert.equal(pills.length, 4, 'fila / atribuir / pendente / feita');
+
+  const inks = new Set(pills.map((p) => p.ink));
+  assert.equal(inks.size, 1, `every filled status pill takes the same ink, got ${[...inks].join(', ')}`);
+
+  // Each is filled with something of its own, and none of them is the
+  // transparent ground an outline pill would report.
+  const grounds = new Set(pills.map((p) => p.bg));
+  assert.equal(grounds.size, 4, 'four states, four distinguishable grounds');
+  for (const p of pills) {
+    assert.ok(!/rgba\(0, 0, 0, 0\)/.test(p.bg), `"${p.status}" should be a filled pill, not an outline`);
+  }
+
+  await context.close();
+});
+
 test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not exclusive', async () => {
   const created = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Role Filter Test User' } });
 
@@ -1222,7 +1257,7 @@ test('once results start revealing, "you voted for X" clears instead of sitting 
     token: contestantOwner.token,
     body: { name: 'Reveal Target', night, photoBase64: fakeJpeg },
   });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', '/votes', { token: voter.token, body: { contestantId: reg.id, night } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
 
@@ -1278,13 +1313,24 @@ test('the admin voting-advance button always confirms first - a misclick decline
   const afterDecline = await api('GET', '/admin/voting', { token: ADMIN });
   assert.equal(afterDecline.nights.find((n) => n.night === night).status, 'registration', 'declining the confirm should not have opened voting');
 
-  // Confirming should actually perform it.
+  // Confirming should actually perform it. Two prompts now, not one: the
+  // generic "are you sure", then the server's own refusal because nobody
+  // has entered this night - which is exactly the case that warning is for.
   await page.click('#voting-advance-btn');
   await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.click('.modal-actions button:not(.ghost)');
+  // A second prompt may follow - the server refuses to open a night nobody
+  // has entered, and whether that fires depends on how many accounts exist
+  // when this runs, which is not what this test is about. Confirm it if it
+  // shows up; carry on if it does not.
+  await page.waitForTimeout(300);
+  if (await page.isVisible('.modal-overlay:not(.hidden)')) {
+    await page.click('.modal-actions button:not(.ghost)');
+  }
   await page.waitForFunction(
     () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
-    { timeout: WAIT_TIMEOUT }
+    null,
+    { timeout: WAIT_TIMEOUT },
   );
   const afterConfirm = await api('GET', '/admin/voting', { token: ADMIN });
   assert.equal(afterConfirm.nights.find((n) => n.night === night).status, 'open', 'confirming should have opened voting');
@@ -1412,15 +1458,36 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   const plainDots = await page.$$eval('#memo-dots span.memo-dot', (els) => els.length);
   assert.ok(plainDots > 0, 'the moments you cannot act on stay plain, not pressable');
 
+  // Before posting, the feed is sealed rather than empty - the card is up and
+  // says so, so posting doesn't look optional.
+  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.getAttribute('#memo-feed-help', 'data-i18n'),
+    'memo_feed_locked',
+    'the feed should tell you it is waiting on your own moment',
+  );
+  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'nothing leaks through a locked feed');
+
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
   // The dot swaps from open to uploaded once the upload lands (see
   // renderMemoDots() in app.js) - waiting for the class change beats a
   // fixed sleep.
   await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
 
-  // It shows up in today's shared feed for everyone, not just the uploader.
-  await page.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
-  const uploadId = await page.getAttribute('[data-memo-react]', 'data-memo-react');
+  const bystanderPage = await loginPage(context, bystander.token);
+  await bystanderPage.click('[data-tab="memo"]');
+  // Same seal for the second guest, and posting is what breaks it - the
+  // other guest's moment only appears on the far side of their own.
+  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(await bystanderPage.getAttribute('#memo-feed-help', 'data-i18n'), 'memo_feed_locked');
+  await bystanderPage.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'theirs.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
+  const uploadId = await bystanderPage.getAttribute('[data-memo-react]', 'data-memo-react');
+
+  // Only the other guest's moment - your own is already the dot above.
+  const feedOwners = await bystanderPage.$$eval('.memo-feed-name', (els) => els.map((e) => e.textContent.trim()));
+  // Raw name: the all-lowercase look is text-transform, not the text itself.
+  assert.deepEqual(feedOwners, ['Memo UI Tester'], 'the feed is other people, not a mirror');
 
   // Regression: the reaction row rendered one button per entry in the
   // client's own emoji list, and that list was left at four after the
@@ -1428,7 +1495,7 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   // tapping either was rejected by the API. Asserting the count alone
   // wouldn't have caught a *renamed* emoji, so this also checks every
   // button actually drew an icon.
-  const reactionButtons = await page.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
+  const reactionButtons = await bystanderPage.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
     els.map((el) => ({ emoji: el.dataset.emoji, svgPaths: el.querySelectorAll('svg path').length }))
   );
   assert.equal(reactionButtons.length, MEMO_REACTION_EMOJI.length, 'one button per server-accepted reaction, no more');
@@ -1436,10 +1503,6 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   for (const b of reactionButtons) {
     assert.ok(b.svgPaths > 0, `the "${b.emoji}" reaction button rendered without an icon`);
   }
-
-  const bystanderPage = await loginPage(context, bystander.token);
-  await bystanderPage.click('[data-tab="memo"]');
-  await bystanderPage.waitForSelector(`[data-memo-react="${uploadId}"]`, { timeout: WAIT_TIMEOUT });
   await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="💦"]`);
   await bystanderPage.waitForFunction(
     (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="💦"]`)?.textContent.includes('1'),
@@ -1572,7 +1635,7 @@ test('an empty night gets a titled card of its own, and Best Outfit only speaks 
   assert.equal(await page.isVisible('#outfit-idle-card'), false, 'and it is not an empty night either');
   assert.equal(await page.isVisible('#theme-switch'), true, 'the switch survives every phase');
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await page.waitForSelector('#voting-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
   await context.close();
@@ -1862,7 +1925,7 @@ test('Miss Congeniality never offers you your own name, and its finished button 
       token: ADMIN, body: { userId: u.id, name: `${u.name} persona`, night },
     });
   }
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
 
   const context = await iphoneContext('iPhone 13');

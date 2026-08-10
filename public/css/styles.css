@@ -58,15 +58,16 @@
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
   --type-podium: #6b4a8a;
-  /* "Pending" is the one chip that has to look yellow rather than olive. As
-     an outline it can't: any yellow dark enough to pass as text on pale
-     paper reads as mustard, and every brighter option measured 2.4-3.8:1,
-     all failing AA. So it's a filled pill instead - a genuinely bright
-     yellow ground with dark ink on top, 8.1:1, and unmistakably yellow.
-     --status-pending stays for anything using it as a plain colour. */
+  /* Four status colours, all built the same way: an outline chip in the
+     list, a chip filled with that same colour under paper ink when it's an
+     active filter. "Pending" briefly broke that pattern - a bright yellow
+     ground with dark ink, chased for contrast - which made it the one chip
+     on the page reading as inverted next to its neighbours. It reads as
+     amber rather than lemon at this darkness, which is the price of
+     matching; the alternative was one odd chip out. Against the paper ink
+     these land at fila 4.37, atribuir 4.38, pending 3.70, done 3.74 - none
+     of them clear AA, so contrast was never what separated them. */
   --status-pending: #8a6a00;
-  --status-pending-fill: #f2c811;
-  --status-pending-ink:  #3d2f00;
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
@@ -187,7 +188,7 @@ body {
      the tint could triple - worst case now 5.0:1, measured across all six
      themes in both modes. --clay is redefined per theme, so this follows
      on its own. */
-  --on-solid: color-mix(in srgb, var(--clay) 22%, #fff);
+  --on-solid: color-mix(in srgb, var(--clay) 45%, #fff);
   /* The CTA buttons sit on a much deeper ground than the red ones, so they
      can carry far more of the accent before contrast bites - half, against
      the danger button's 22%. That is the difference between a label that is
@@ -735,15 +736,17 @@ button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.1
    strong ground with light text (5.1:1 light, 6.3:1 dark) without touching
    --danger itself, which is still needed as *text* elsewhere (.error). */
 button.danger {
-  /* Deepened 18% off --danger-fill so the label can carry the theme tint
-     and still clear AA - the raw fill was too light for it on Furnished. */
-  border: 1px solid color-mix(in srgb, var(--danger-fill) 82%, #000);
-  background: color-mix(in srgb, var(--danger-fill) 82%, #000);
+  /* Deepened 40% off --danger-fill so the label can carry as much of the
+     theme as the CTA buttons do. At the previous 18% the tint had to stay
+     at 22% to clear AA, and beside a CTA at 50% that read as plain white -
+     which is what "remover" kept being flagged for. Worst case 4.7:1. */
+  border: 1px solid color-mix(in srgb, var(--danger-fill) 60%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 60%, #000);
   color: var(--on-solid);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger-fill) 70%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 70%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 50%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
   color: var(--on-solid);
 }
 
@@ -924,14 +927,7 @@ button.danger:hover {
 .role-pill[data-status="feita"] { border-color: var(--status-done); color: var(--status-done); }
 .role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); color: var(--paper); }
 .role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); color: var(--paper); }
-/* Matches the filled chip the list renders for this state, ink included -
-   the filter and the thing it filters have to be the same yellow, and this
-   is the one that had to become a filled pill to read as yellow at all. */
-.role-pill[data-status="pendente"].active {
-  background: var(--status-pending-fill);
-  border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
-  color: var(--status-pending-ink);
-}
+.role-pill[data-status="pendente"].active { background: var(--status-pending); border-color: var(--status-pending); color: var(--paper); }
 .role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); color: var(--paper); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
@@ -1452,7 +1448,7 @@ body.theme-swamp {
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #bfc8a3;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M26 118 a13 13 0 1 1 -0.01 0 Z M26 131 L37.5 124.5 A13 13 0 0 0 26 118 Z'/%3E%3Cpath fill-opacity='0.13' d='M112 72 a9.5 9.5 0 1 1 -0.01 0 Z M112 81.5 L120.4 76.7 A9.5 9.5 0 0 0 112 72 Z'/%3E%3Cpath fill-opacity='0.13' d='M62 16 a7 7 0 1 1 -0.01 0 Z M62 23 L68.2 19.5 A7 7 0 0 0 62 16 Z'/%3E%3Cg fill-opacity='0.3'%3E%3Cellipse cx='48' cy='104' rx='2.2' ry='5'/%3E%3Cellipse cx='48' cy='104' rx='5' ry='2.2'/%3E%3Cellipse cx='48' cy='104' rx='4' ry='4' transform='rotate(45 48 104)' fill-opacity='0.35'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M30 112 L42.6 105.9 A14 14 0 1 0 42.6 118.1 Z'/%3E%3Cpath fill-opacity='0.13' d='M110 66 L119.0 61.6 A10 10 0 1 0 119.0 70.4 Z'/%3E%3Cpath fill-opacity='0.13' d='M66 22 L72.7 18.7 A7.5 7.5 0 1 0 72.7 25.3 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
@@ -1546,7 +1542,7 @@ html.mode-dark body.theme-swamp {
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23212912'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.30'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.46' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #141a0c;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23192010'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.18'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.32' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%238a9c52' fill-opacity='0.16'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%238a9c52'%3E%3Cpath fill-opacity='0.15' d='M26 118 a13 13 0 1 1 -0.01 0 Z M26 131 L37.5 124.5 A13 13 0 0 0 26 118 Z'/%3E%3Cpath fill-opacity='0.15' d='M112 72 a9.5 9.5 0 1 1 -0.01 0 Z M112 81.5 L120.4 76.7 A9.5 9.5 0 0 0 112 72 Z'/%3E%3Cpath fill-opacity='0.15' d='M62 16 a7 7 0 1 1 -0.01 0 Z M62 23 L68.2 19.5 A7 7 0 0 0 62 16 Z'/%3E%3Cg fill-opacity='0.32'%3E%3Cellipse cx='48' cy='104' rx='2.2' ry='5'/%3E%3Cellipse cx='48' cy='104' rx='5' ry='2.2'/%3E%3Cellipse cx='48' cy='104' rx='4' ry='4' transform='rotate(45 48 104)' fill-opacity='0.35'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23192010'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.18'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.32' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%238a9c52' fill-opacity='0.16'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%238a9c52'%3E%3Cpath fill-opacity='0.15' d='M30 112 L42.6 105.9 A14 14 0 1 0 42.6 118.1 Z'/%3E%3Cpath fill-opacity='0.15' d='M110 66 L119.0 61.6 A10 10 0 1 0 119.0 70.4 Z'/%3E%3Cpath fill-opacity='0.15' d='M66 22 L72.7 18.7 A7.5 7.5 0 1 0 72.7 25.3 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-furnished .card,
 html.mode-dark body.theme-swamp .card {

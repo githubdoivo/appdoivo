@@ -38,6 +38,7 @@ import {
   pendingVoteCount,
   usersWithoutVoteCount,
   eligibleVoterCount,
+  enteredPeopleCount,
   resultsForNight,
   visibleResultsForNight,
   resetResultsPhase,
@@ -65,7 +66,7 @@ import {
   notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
-import { seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
+import { seedDemo, seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import PDFDocument from 'pdfkit';
@@ -566,11 +567,13 @@ router.get('/memo/uploads/:id', (req, res) => {
   res.sendFile(join(MEMO_DIR, upload.file_path));
 });
 
-// Today's shared feed - everyone's uploads, newest first, with reaction
-// counts and the viewer's own reaction on each.
+// The current moment's feed - what everyone else posted for the slot that is
+// live now, newest first, with reaction counts and the viewer's own reaction
+// on each. `locked` means the viewer hasn't posted theirs yet, so there is
+// something to see but they haven't earned it.
 router.get('/memo/feed', (req, res) => {
   if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
-  res.json({ uploads: getTodayFeed(req.user.id) });
+  res.json(getTodayFeed(req.user.id));
 });
 
 router.post('/memo/uploads/:id/react', (req, res) => {
@@ -742,6 +745,35 @@ router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) =>
 // beside this one - rather than inventing entries by hand and picking them
 // back out afterwards. Owner-only, like every other switch in a danger
 // zone, and a no-op if that feature already holds anything.
+// Everything at once. Seeding covers the guest accounts too, which no
+// per-feature button does - the point is to set the whole app up as a demo
+// for a run-through and then put it back.
+router.post('/admin/seed-demo', requireOwner, (req, res) => {
+  seedDemo();
+  res.json({ ok: true });
+});
+
+// The only switch that removes accounts. The owner survives - deleting it
+// would lock everyone out of the admin panel with no way back in - and so
+// does every other admin, since those are people helping run the night
+// rather than demo data.
+router.post('/admin/wipe-everything', requireOwner, (req, res) => {
+  db.prepare('DELETE FROM consequences').run();
+  db.prepare('DELETE FROM contestants').run();
+  db.prepare('DELETE FROM plaza_posts').run();
+  db.prepare('DELETE FROM messages').run();
+  db.prepare('DELETE FROM wall_pseudonym_history').run();
+  wipeAllDedications();
+  wipeAllMemo();
+  for (const night of NIGHTS) {
+    setSetting(`voting_status_${night}`, 'closed');
+    setSetting(`voting_started_${night}`, '0');
+    resetCongeniality(night);
+  }
+  db.prepare('DELETE FROM users WHERE is_admin = 0').run();
+  res.json({ ok: true });
+});
+
 router.post('/admin/consequences/seed-demo', requireOwner, (req, res) => {
   seedDemoConsequences();
   res.json({ ok: true });
@@ -1265,6 +1297,17 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   const pendingEntries = pendingContestantCount(night);
   if (pendingEntries > 0 && !req.body?.force) {
     return res.status(409).json({ error: 'err_pending_duo_entries', pending: pendingEntries });
+  }
+  // Everyone who can vote should also be in the running - a guest left off
+  // the roster spends the night voting on other people's looks with none of
+  // their own in it, and by the time anyone notices the vote is under way.
+  // A duo counts as the two people in it. Warned rather than blocked, and
+  // overridable like the check above: some nights someone genuinely sits it
+  // out, and that is the organiser's call, not the app's.
+  const entered = enteredPeopleCount(night);
+  const expected = eligibleVoterCount();
+  if (entered < expected && !req.body?.force) {
+    return res.status(409).json({ error: 'err_not_everyone_entered', entered, expected });
   }
   setSetting(`voting_status_${night}`, 'open');
   setSetting(`voting_started_${night}`, '1');

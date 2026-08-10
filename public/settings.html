@@ -242,8 +242,8 @@
                registration form, so it sits after it rather than beside the
                "Criar" button where it used to be. -->
           <hr class="voting-divider" />
-          <div class="inline" style="justify-content:flex-end;margin-bottom:0">
-            <button type="button" id="download-photos-btn" class="small" data-i18n="download_photos_btn">descarregar fotos</button>
+          <div class="voting-controls">
+            <button type="button" id="download-photos-btn" class="small publish-wide" data-i18n="download_photos_btn">descarregar fotos</button>
           </div>
           <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
@@ -503,6 +503,19 @@
              mudar-chave (visivel a qualquer admin, mas a API so devolve mais
              do que a propria linha, e so aceita escrita, para o dono da
              conta - ver GET/POST/PATCH/DELETE /admin/users em routes.js) -->
+        <!-- Everything at once, for the owner alone. The per-feature pairs
+             each cover their own section; this is for setting the whole app
+             up as a demo before a run-through, and for clearing it after -
+             including the guest accounts, which no per-feature button
+             touches. -->
+        <div class="card hidden" id="global-data-card">
+          <h2 data-i18n="global_data_title">Dados de toda a app</h2>
+          <p class="help" data-i18n="global_data_help">Explicação</p>
+          <button id="global-seed-btn" type="button" class="seed" data-i18n="global_seed_btn">Popular tudo com dados de teste</button>
+          <button id="global-wipe-btn" type="button" class="danger" data-i18n="global_wipe_btn">Apagar todos os dados</button>
+          <span id="global-data-msg" class="muted wipe-msg"></span>
+        </div>
+
         <div id="users-management" class="hidden">
           <div class="card">
             <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>

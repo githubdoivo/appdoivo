@@ -166,6 +166,7 @@ async function boot() {
     // further down) - that's just a read-only duplicate of the account
     // card already at the top of this page, not a useful section.
     $('users-management').classList.toggle('hidden', !isOwner);
+    $('global-data-card').classList.toggle('hidden', !isOwner);
     // The Plaza admin tab (pseudonym mapping, internal id "wall") is
     // owner-only and no longer a normal tab bar entry at all (see the
     // permanently-hidden button in settings.html) - the only way in is the
@@ -439,7 +440,20 @@ $('voting-advance-btn').addEventListener('click', async () => {
       err_pending_duo_votes: ['confirm_close_pending_one', 'confirm_close_pending_other'],
     };
     const keys = PENDING_CONFIRM[err.data?.error];
-    if (err.status === 409 && keys) {
+    // Same shape as the two above, but the numbers it names are how many
+    // people are entered out of how many can vote, not a single count.
+    if (err.status === 409 && err.data?.error === 'err_not_everyone_entered') {
+      const ok = await showConfirm(t('confirm_open_not_everyone_entered', {
+        entered: err.data.entered, expected: err.data.expected,
+      }));
+      if (!ok) return;
+      try {
+        await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST', body: { force: true } });
+      } catch (forced) {
+        $('voting-msg').textContent = forced.message;
+        return;
+      }
+    } else if (err.status === 409 && keys) {
       const n = err.data.pending;
       const ok = await showConfirm(t(n === 1 ? keys[0] : keys[1], { n }));
       if (!ok) return;
@@ -853,6 +867,11 @@ wireSeedButton('outfit-seed-btn', 'outfit-wipe-msg', '/admin/contestants/seed-de
 wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo', loadPlazaPosts);
 wireSeedButton('chat-seed-btn', 'chat-wipe-msg', '/admin/chat/seed-demo', () => {});
 wireSeedButton('memo-seed-btn', 'memo-wipe-msg', '/admin/memo/seed-demo', loadMemoDays);
+
+// The whole app at once, owner-only (see boot() below for the card).
+wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/seed-demo', () => location.reload());
+wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/wipe-everything',
+  'confirm_global_wipe', 'global_wipe_done', () => location.reload());
 
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
