@@ -1766,6 +1766,10 @@ async function loadPlazaPosts() {
             return `<li><span>${esc(o.label)}</span> <strong>${o.votes}</strong>${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
           }).join('')}
         </ul>` : ''}
+        ${p.type === 'links' ? `
+        <ul class="admin-post-options">
+          ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
+        </ul>` : ''}
         <div class="row-actions">
           ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}

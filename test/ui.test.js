@@ -565,6 +565,16 @@ test('Wall admin can publish a list of links from Settings, and they open out of
     { timeout: WAIT_TIMEOUT },
   );
 
+  // The admin's own history has to show what was published, not just that
+  // something was. A links post rendered its intro line and stopped, so the
+  // one thing worth checking before the party - are these the right
+  // addresses - was the one thing the page would not tell you. A poll has
+  // listed its options here all along.
+  await adminPage.waitForSelector('#plaza-posts-list .admin-post-options', { timeout: WAIT_TIMEOUT });
+  const historyText = await adminPage.textContent('#plaza-posts-list');
+  assert.match(historyText, /Form/, 'the history should name each link');
+  assert.match(historyText, /example\.com\/form/, 'and show the address it actually points at');
+
   const guestPage = await loginPage(context, guest.token);
   await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
   const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
