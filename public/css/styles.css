@@ -561,11 +561,17 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   margin: 28px auto 0;
   padding: 10px;
   font-size: 0.8rem;
-  color: var(--ink-soft);
-  opacity: 0.18;
+  /* The accent, not --ink-soft: on Memo this dot sits on a ground already
+     scattered with dots, and a neutral grey one was the only mark on that
+     page not wearing the theme's blue. Taking --clay means each tab's
+     hidden dot belongs to its own section - the same rule the solid button
+     labels follow - and it stays just as easy to miss, because what hides
+     it is the opacity, not the colour. */
+  color: var(--clay);
+  opacity: 0.22;
   cursor: pointer;
 }
-.wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.5; }
+.wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.55; }
 .login-lang-toggle:hover { opacity: 0.9; }
 
 #find-key-results {
@@ -2498,11 +2504,23 @@ button.seed {
   display: block;
   width: 100%;
   margin-bottom: 8px;
-  background: var(--paper-3);
-  border: 1px solid var(--line);
-  color: var(--ink);
+  /* Was a pale --paper-3 tile with --ink text - a label that flipped from
+     dark to light with the mode, sitting directly above a danger twin whose
+     label never flipped at all. The pair read as two unrelated controls,
+     differently so in each mode. Both are solid on a dark ground now and
+     carry the same label colour, so filling a feature with test data and
+     emptying it look like the two halves of one job on every admin tab,
+     the hidden ones included. */
+  background: color-mix(in srgb, var(--clay) 50%, #000);
+  border: 1px solid color-mix(in srgb, var(--clay) 50%, #000);
+  color: var(--on-solid);
 }
-button.seed:hover { background: var(--paper-3); opacity: 0.85; }
+button.seed:hover {
+  background: color-mix(in srgb, var(--clay) 42%, #000);
+  border-color: color-mix(in srgb, var(--clay) 42%, #000);
+  color: var(--on-solid);
+  opacity: 1;
+}
 
 /* Plain round dot, no stretching: the Furnished and Swamp backgrounds are
    both patterned with diamonds, so a diamond here read as a deliberate mark

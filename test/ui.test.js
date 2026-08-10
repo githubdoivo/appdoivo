@@ -2284,6 +2284,40 @@ test('logging in through the real form lands in the app, and hands the password 
   await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
 });
 
+// Every admin tab carries the same pair: fill this feature with test data,
+// and empty it. They are the two halves of one job, so they have to look
+// like it - and they did not: the seed button was a pale tile whose label
+// flipped dark/light with the mode, directly above a danger twin whose
+// label never flipped. Reading the computed colour off every pair on the
+// page covers the hidden tabs too (wall, votelog), since a panel behind
+// .hidden still resolves its styles - which is the point, because those are
+// exactly the ones nobody checks by eye.
+test('the populate and delete buttons carry one label colour, on every admin tab and in both modes', async () => {
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/settings.html');
+    await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+    await page.reload();
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+    const colours = await page.evaluate(() => {
+      const seen = (sel) => [...document.querySelectorAll(sel)].map((el) => getComputedStyle(el).color);
+      return { seed: seen('button.seed'), danger: seen('button.danger') };
+    });
+
+    assert.ok(colours.seed.length >= 5, `expected a populate button on every feature tab, found ${colours.seed.length}`);
+    assert.ok(colours.danger.length >= 5, `expected a delete button on every feature tab, found ${colours.danger.length}`);
+    assert.equal(new Set(colours.seed).size, 1, `populate labels disagree in ${mode} mode: ${[...new Set(colours.seed)].join(' vs ')}`);
+    assert.equal(new Set(colours.danger).size, 1, `delete labels disagree in ${mode} mode: ${[...new Set(colours.danger)].join(' vs ')}`);
+    assert.equal(
+      colours.seed[0],
+      colours.danger[0],
+      `populate and delete should read as a pair, got ${colours.seed[0]} and ${colours.danger[0]} in ${mode} mode`,
+    );
+    await context.close();
+  }
+});
+
 test('every solid button keeps its label readable, on the login screen and in both modes', async () => {
   // A real regression, shipped to QA: the login button paints --ink as its
   // ground and its label with the token the generic button rule names.

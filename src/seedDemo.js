@@ -64,6 +64,11 @@ function crc32(buf) {
 }
 
 
+// These are the actual guest list, so seeding QA gives the same room the
+// party will have rather than a cast of strangers. Anyone not on the guest
+// list does not belong here: "who is Tomás Vieira and why is he on the user
+// list" is the only thing an invented name ever produces.
+//
 // Never include "Ivo Lopes" (or any name matching the real owner) here -
 // a demo account sharing the owner's name showed up in the unclaimed-user
 // search on QA, which is confusing/alarming even though it's just a
@@ -71,7 +76,7 @@ function crc32(buf) {
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Tomás Vieira', 'Nádia Barros',
+  'Leonor Matos', 'Marta Freitas', 'Nádia Barros',
   'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
