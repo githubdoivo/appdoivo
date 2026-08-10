@@ -653,16 +653,20 @@ function renderMemoFeed() {
     const preview = u.kind === 'video'
       ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`
       : `<img class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" alt="" />`;
-    const reactionBar = MEMO_REACTION_EMOJI.map((emoji) => {
+    // Your own moment is here so you can see what you captured, but the
+    // reaction row is not: reacting to your own photo is not a thing, and
+    // the counts on it are other people's business anyway.
+    const reactionBar = u.mine ? '' : MEMO_REACTION_EMOJI.map((emoji) => {
       const count = u.reactions[emoji] || 0;
       const mine = u.myReaction === emoji;
       return `<button type="button" class="memo-reaction${mine ? ' active' : ''}" data-memo-react="${u.id}" data-emoji="${emoji}">${memoReactionIcon(emoji)}${count ? `<span>${count}</span>` : ''}</button>`;
     }).join('');
+    const name = u.mine ? t('memo_feed_mine') : esc(u.userName);
     return `
-      <div class="memo-feed-item">
+      <div class="memo-feed-item${u.mine ? ' memo-feed-item-mine' : ''}">
         ${preview}
         <div class="memo-feed-meta">
-          <span class="memo-feed-name">${esc(u.userName)}</span>
+          <span class="memo-feed-name">${name}</span>
           <div class="memo-reaction-bar">${reactionBar}</div>
         </div>
       </div>`;

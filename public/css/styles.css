@@ -1402,6 +1402,17 @@ body { transition: background-color 0.45s ease; }
    admin panel and shows up in front of everyone, so it gets the full width
    rather than sharing a row with the phase controls. */
 .publish-wide { grid-column: 1 / -1; width: 100%; }
+/* The two exports share a line at half width each; publishing to the Wall
+   gets its own full-width row below, the way every other commit-style
+   action in the app is shaped. Three equal buttons crammed on one line read
+   as three equal choices, when one of them is the one that goes public. */
+.memo-day-exports {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.memo-day-exports > button { flex: 1 1 50%; min-width: 0; }
+.memo-day-exports + .publish-wide { margin-top: 8px; }
 .voting-state { font-family: var(--serif); font-size: 1.2rem; }
 /* One line per round: what it is on the left, how many votes are in on the
    right. Tabular figures so the numbers line up as they climb. */
@@ -1978,7 +1989,7 @@ button.memo-dot-open { cursor: pointer; }
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links) { border-top: none; padding-top: 0; }
 /* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
    an announcement/poll post is its own self-contained "boxed" card (see
    the comment on .plaza-post above), so its type label is that card's
@@ -2051,14 +2062,20 @@ html.mode-dark .plaza-post-type { color: #fff; }
   margin-bottom: 8px;
 }
 
-.plaza-post-poll {
+/* Boxed like every other post type. A links post was the one kind left
+   sitting straight on the page background, so in a mixed feed it read as
+   loose furniture between the cards rather than as a post of its own. */
+.plaza-post-poll,
+.plaza-post-links {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-poll.plaza-post:first-child { margin-top: 0; }
+.plaza-post-poll.plaza-post:first-child,
+.plaza-post-links.plaza-post:first-child { margin-top: 0; }
+.plaza-post-links.pinned { border-color: var(--clay); }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */
@@ -2100,9 +2117,28 @@ html.mode-dark .plaza-post-type { color: #fff; }
    masquerade as a second name field. */
 .plaza-link-row { display: flex; gap: 8px; margin-top: 8px; }
 .plaza-link-row > input { min-width: 0; flex: 1 1 50%; }
-.plaza-link-row > .plaza-link-emoji-input { flex: 0 0 3.2em; text-align: center; }
+/* The emoji box wraps its input so a drawn smiley can sit behind it as the
+   hint - a typed placeholder would be the phone's emoji font, the one thing
+   on screen this app didn't draw. The hint hides as soon as there is a
+   value, the way a placeholder would. */
+.plaza-link-emoji-field { position: relative; flex: 0 0 3.2em; display: block; }
+.plaza-link-emoji-field > .plaza-link-emoji-input { width: 100%; text-align: center; }
+.plaza-link-emoji-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  color: var(--ink-soft);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.plaza-link-emoji-input:not(:placeholder-shown) ~ .plaza-link-emoji-hint,
+.plaza-link-emoji-field:focus-within > .plaza-link-emoji-hint { opacity: 0; }
 @media (max-width: 380px) {
   .plaza-link-row { flex-direction: column; gap: 6px; }
+  .plaza-link-emoji-field { flex: 0 0 auto; }
 }
 
 .plaza-poll-option {
@@ -2200,6 +2236,20 @@ html.mode-dark .plaza-post-type { color: #fff; }
    it was a pale block in dark mode against publicar's deep one - the two
    read as unrelated controls depending which mode you were in. */
 [data-pin-post],
+/* Everything below joined this family after a QA pass on a dark-mode
+   phone: on the default style they invert to a near-white block, which
+   is the one surface on the page carrying no theme at all - "guardar"
+   sitting beside chat's deep "partilhar", and Memo's two export buttons
+   floating over a dark blue card as bright white slabs. Same reasoning as
+   [data-pin-post] above: buttons doing the same kind of job have to look
+   related in both modes, and a white ground belongs to no theme. */
+#dedication-save-btn,
+#dedications-pdf-btn,
+#download-photos-btn,
+#publish-podium-btn,
+[data-memo-download-day],
+[data-memo-download-video],
+[data-memo-publish-day],
 [data-reveal-next] {
   /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
      --ink text. Even at 35% it read as a washed-out, half-transparent
@@ -2222,6 +2272,13 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #plaza-post-form button[type="submit"]:hover,
 #admin-register-form button[type="submit"]:hover,
 [data-pin-post]:hover,
+#dedication-save-btn:hover,
+#dedications-pdf-btn:hover,
+#download-photos-btn:hover,
+#publish-podium-btn:hover,
+[data-memo-download-day]:hover,
+[data-memo-download-video]:hover,
+[data-memo-publish-day]:hover,
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 42%, #000);
   border-color: color-mix(in srgb, var(--clay) 42%, #000);

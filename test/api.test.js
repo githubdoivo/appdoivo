@@ -2150,10 +2150,14 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   assert.equal(feed.data.locked, false);
   const entry = feed.data.uploads.find((u) => u.id === uploadId);
   assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
-  assert.ok(
-    !feed.data.uploads.some((u) => u.id === bystanderUpload.data.id),
-    'the viewer\'s own upload is shown by their checklist dot, not repeated in the feed',
-  );
+  assert.equal(entry.mine, false, "someone else's upload is not flagged as the viewer's");
+  // The viewer's own is in the feed too, flagged. A filled checklist dot is
+  // not the same as seeing the photo you just took: shooting the first
+  // moment of a party left the feed empty, so the card hid itself and
+  // capturing looked like it had done nothing.
+  const own = feed.data.uploads.find((u) => u.id === bystanderUpload.data.id);
+  assert.ok(own, 'the viewer has to be able to see the moment they just captured');
+  assert.equal(own.mine, true, "the viewer's own upload is flagged so the UI can label it");
   assert.equal(entry.myReaction, null);
   assert.deepEqual(entry.reactions, {});
 
@@ -2240,7 +2244,7 @@ test('the Memo feed is scoped to the current moment - a new one clears what came
   const during = await api('GET', '/memo/feed', { token: viewer.data.token });
   const ids = during.data.uploads.map((u) => u.id);
   assert.ok(ids.includes(posted.poster), 'the other guest\'s upload for this moment');
-  assert.ok(!ids.includes(posted.viewer), 'not the viewer\'s own');
+  assert.ok(ids.includes(posted.viewer), 'and the viewer\'s own, so they can see what they captured');
 
   // A new moment starts everyone over, including the viewer's own unlock.
   markSlotNotified(newer.id);

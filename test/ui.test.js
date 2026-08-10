@@ -1862,6 +1862,18 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   // fixed sleep.
   await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
 
+  // Alone at this point - and the moment just captured still has to be on
+  // screen. The feed used to leave your own upload out, so shooting the
+  // first moment of a party left it empty, which hid the whole card: the
+  // dot filled in and nothing else happened, so capturing read as broken.
+  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('.memo-feed-item-mine img.memo-feed-thumb', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.$$eval('.memo-feed-item-mine [data-memo-react]', (els) => els.length),
+    0,
+    'reacting to your own moment is not a thing',
+  );
+
   const bystanderPage = await loginPage(context, bystander.token);
   await bystanderPage.click('[data-tab="memo"]');
   // Same seal for the second guest, and posting is what breaks it - the
@@ -1872,10 +1884,14 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
   const uploadId = await bystanderPage.getAttribute('[data-memo-react]', 'data-memo-react');
 
-  // Only the other guest's moment - your own is already the dot above.
+  // Everyone's moment for this slot, the viewer's own included and labelled
+  // as theirs - newest first, so the one just posted leads. It used to show
+  // only other people, on the grounds that the dot above already stood for
+  // your own; shooting the first moment of a party then left the feed empty
+  // and hid the card, so capturing looked like it had failed.
   const feedOwners = await bystanderPage.$$eval('.memo-feed-name', (els) => els.map((e) => e.textContent.trim()));
   // Raw name: the all-lowercase look is text-transform, not the text itself.
-  assert.deepEqual(feedOwners, ['Memo UI Tester'], 'the feed is other people, not a mirror');
+  assert.deepEqual(feedOwners, ['o teu', 'Memo UI Tester'], 'your own moment belongs in the feed, marked as yours');
 
   // Regression: the reaction row rendered one button per entry in the
   // client's own emoji list, and that list was left at four after the
@@ -2556,12 +2572,12 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   assert.ok(listed.toLowerCase().includes('dedication writer'), 'signed with who wrote it');
   assert.equal(await ownerPage.isDisabled('#dedications-pdf-btn'), false, 'and there is something to download');
 
-  // These go live before the party, so testers will write real ones and
-  // clearing them has to be reachable from the same place they are read.
-  // What the button does is covered server-side; what matters here is that
-  // it is there at all, next to the collection rather than off in a danger
-  // zone on another tab.
-  assert.equal(await ownerPage.isVisible('#dedications-wipe-btn'), true, 'there has to be a way to clear them');
+  // No wipe button here: the whole-app data card already clears these along
+  // with everything else, and a second delete-everything control sitting
+  // next to the messages themselves was one more way to lose them by
+  // accident. The endpoint stays (covered server-side) - only the button
+  // that nobody needed is gone.
+  assert.equal(await ownerPage.isVisible('#dedications-wipe-btn'), false, 'the redundant wipe button should be gone');
   await ownerCtx.close();
 
   await api('POST', '/admin/dedications/wipe', { token: ADMIN });

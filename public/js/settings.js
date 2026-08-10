@@ -1382,9 +1382,6 @@ async function loadDedications() {
     : `<p class="muted">${t('dedications_admin_empty')}</p>`;
 }
 
-wireWipeButton('dedications-wipe-btn', 'dedications-msg', '/admin/dedications/wipe',
-  'confirm_dedications_wipe', 'dedications_wipe_done', loadDedications);
-
 $('dedications-pdf-btn').addEventListener('click', async () => {
   const msg = $('dedications-msg');
   msg.classList.remove('error');
@@ -1668,11 +1665,22 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   if (rows.length >= MAX_LINK_ITEMS) return;
   const row = document.createElement('div');
   row.className = 'plaza-link-row';
+  // Same drawn-smiley field as the first row in settings.html - a typed 🙂
+  // placeholder would render as the phone's own emoji, the one thing on
+  // screen not drawn by this app.
+  const emojiField = document.createElement('span');
+  emojiField.className = 'plaza-link-emoji-field';
   const emoji = document.createElement('input');
   emoji.type = 'text';
   emoji.className = 'plaza-link-emoji-input';
-  emoji.placeholder = t('plaza_link_emoji_ph');
+  emoji.placeholder = ' ';
   emoji.maxLength = 16;
+  emoji.setAttribute('aria-label', 'emoji');
+  emojiField.append(emoji);
+  // The hint is cloned from the row already on the page rather than having
+  // a second copy of the path data live here.
+  const hint = document.querySelector('.plaza-link-emoji-hint');
+  if (hint) emojiField.append(hint.cloneNode(true));
   const label = document.createElement('input');
   label.type = 'text';
   label.className = 'plaza-link-label-input';
@@ -1688,7 +1696,7 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   url.className = 'plaza-link-url-input';
   url.placeholder = t('plaza_link_url_ph');
   url.maxLength = 500;
-  row.append(emoji, label, url);
+  row.append(emojiField, label, url);
   $('plaza-add-link-btn').before(row);
 });
 
@@ -1831,11 +1839,11 @@ async function loadMemoDays() {
           </div>
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           ${d.uploadedCount > 0 ? `
-          <div class="row-actions">
+          <div class="memo-day-exports">
             <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
-            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
-          </div>` : ''}
+          </div>
+          <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>` : ''}
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
       : `<p class="muted">${t('memo_admin_no_days')}</p>`;
