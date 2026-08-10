@@ -7,6 +7,7 @@
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
@@ -52,8 +53,24 @@ let server;
 let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
 let browser;
 
+// Every request the app answers with an error, kept so a failing test can
+// say *why* it failed instead of only that it waited 25s. A login that never
+// completes is indistinguishable from a slow one at the Playwright level -
+// the answer is always in the status the page got back from /api/me, which
+// nothing was recording. Cheap enough to leave on permanently: one push per
+// error response, nothing at all on the happy path.
+const errorResponses = [];
+
 before(async () => {
-  server = app.listen(0);
+  server = createServer((req, res) => {
+    res.on('finish', () => {
+      if (res.statusCode >= 400) {
+        errorResponses.push(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode}`);
+      }
+    });
+    app(req, res);
+  });
+  server.listen(0);
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
   browser = await webkit.launch();
@@ -115,11 +132,57 @@ async function loginPage(context, token, path = '/') {
   // the API up front instead of clicking through every step.
   await api('POST', '/me/tutorial-seen', { token });
   const page = await context.newPage();
+  const consoleErrors = [];
+  page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(`console: ${msg.text()}`); });
+  page.on('requestfailed', (req) => consoleErrors.push(`requestfailed: ${req.url()} ${req.failure()?.errorText}`));
+
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
   await page.goto(base + path);
-  await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const selector = path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)';
+  try {
+    await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
+  } catch (timeout) {
+    throw new Error(`${timeout.message}\n${await loginDiagnostics(page, consoleErrors)}`);
+  }
   return page;
+}
+
+/**
+ * Why a login never completed. boot() in app.js hides #app and falls back to
+ * the login screen whenever /me does not answer 200, so every one of these
+ * timeouts is really an HTTP status nobody was printing - a 401 (the token
+ * the suite created is not the one the server has) and a 429 (the shared
+ * per-IP brute-force budget in rateLimit.js, spent by an earlier test) look
+ * identical from the outside, and they need opposite fixes.
+ */
+async function loginDiagnostics(page, consoleErrors) {
+  const state = await page.evaluate(async () => {
+    const token = localStorage.getItem('appivo_token');
+    const out = { token: token ? `${token.slice(0, 4)}…(${token.length} chars)` : '(none)' };
+    out.loginVisible = !document.getElementById('login')?.classList.contains('hidden');
+    out.appVisible = !document.getElementById('app')?.classList.contains('hidden');
+    try {
+      const res = await fetch('/api/me', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      out.meStatus = res.status;
+      out.meBody = (await res.text()).slice(0, 200);
+      out.retryAfter = res.headers.get('Retry-After');
+    } catch (e) {
+      out.meStatus = `fetch threw: ${e.message}`;
+    }
+    return out;
+  }).catch((e) => ({ meStatus: `could not evaluate in page: ${e.message}` }));
+
+  return [
+    `  /api/me from inside the page: ${state.meStatus}${state.retryAfter ? ` (Retry-After: ${state.retryAfter})` : ''}`,
+    `  body: ${state.meBody ?? '(none)'}`,
+    `  token in localStorage: ${state.token}`,
+    `  #login visible: ${state.loginVisible}, #app visible: ${state.appVisible}`,
+    `  last error responses from the server:`,
+    ...(errorResponses.slice(-15).map((l) => `    ${l}`)),
+    ...(consoleErrors.length ? ['  page errors:', ...consoleErrors.slice(-10).map((l) => `    ${l}`)] : []),
+  ].join('\n');
 }
 
 /** scrollWidth beyond the viewport means something is overflowing horizontally. */
