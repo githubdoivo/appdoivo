@@ -13,6 +13,12 @@ import { rmSync } from 'node:fs';
 import { webkit, devices } from 'playwright';
 
 const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`);
+// Pinned rather than left to the ambient .env: without it the suite falls
+// back to a per-initialisation random secret (see tokens.js), so any part of
+// a run that re-initialises the module graph gets a secret that cannot read
+// the tokens the rest of the run created. Locally a developer's .env hides
+// that; CI, which has no .env, does not.
+process.env.TOKEN_SECRET ||= 'test-secret-not-used-anywhere-real';
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
