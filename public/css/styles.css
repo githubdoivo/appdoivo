@@ -1128,8 +1128,11 @@ body.theme-memo .highlight::before {
   mask-repeat: repeat-y;
   -webkit-mask-position: center top;
   mask-position: center top;
-  -webkit-mask-size: 16px 40px;
-  mask-size: 16px 40px;
+  /* Each theme's tile is its own height - Plaza's bunting repeats every
+     72px where the others repeat every 40 - so the size comes from the
+     theme rather than being fixed here. */
+  -webkit-mask-size: 16px var(--highlight-motif-h, 40px);
+  mask-size: 16px var(--highlight-motif-h, 40px);
   -webkit-mask-image: var(--highlight-motif);
   mask-image: var(--highlight-motif);
 }
@@ -1701,11 +1704,12 @@ body.theme-plaza {
   background-color: #e8c97a;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='170'%3E%3Cg fill='%23262220' fill-opacity='0.035'%3E%3Crect x='6' y='100' width='30' height='40'/%3E%3Cpolygon points='6,100 21,84 36,100'/%3E%3Crect x='13' y='110' width='5' height='7'/%3E%3Crect x='24' y='110' width='5' height='7'/%3E%3Crect x='54' y='76' width='26' height='64'/%3E%3Crect x='61' y='86' width='5' height='7'/%3E%3Crect x='72' y='86' width='5' height='7'/%3E%3Crect x='61' y='102' width='5' height='7'/%3E%3Crect x='72' y='102' width='5' height='7'/%3E%3Crect x='61' y='118' width='5' height='7'/%3E%3Crect x='72' y='118' width='5' height='7'/%3E%3Crect x='100' y='90' width='28' height='50'/%3E%3Cpolygon points='100,90 114,76 128,90'/%3E%3Crect x='108' y='102' width='5' height='7'/%3E%3Crect x='118' y='102' width='5' height='7'/%3E%3Crect x='192' y='96' width='30' height='44'/%3E%3Crect x='200' y='106' width='5' height='7'/%3E%3Crect x='210' y='106' width='5' height='7'/%3E%3Crect x='200' y='122' width='5' height='7'/%3E%3Crect x='210' y='122' width='5' height='7'/%3E%3C/g%3E%3Cg fill='none' stroke='%23262220' stroke-opacity='0.045' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M160 140 V128 M153 134 H167 M150 126 Q160 116 170 126'/%3E%3Cpath d='M0 152 Q6.5 148 13 152 T26 152 T39 152 T52 152 T65 152 T78 152 T91 152 T104 152 T117 152 T130 152 T143 152 T156 152 T169 152 T182 152 T195 152 T208 152 T221 152 T234 152 T247 152 T260 152'/%3E%3C/g%3E%3C/svg%3E");
-  /* Drawn and approved, but nothing uses it yet: .highlight only exists on
-     Rata and Snatch (see index.html), so this waits here for the day one of
-     these tabs gains a highlight box rather than being redrawn from
-     scratch then. azulejo com losango, sobre a linha de sombra. */
-  --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cg fill='none' stroke='%23000' stroke-width='1' stroke-opacity='0.5'%3E%3Crect x='2.5' y='2.5' width='11' height='15' rx='1'/%3E%3Crect x='2.5' y='22.5' width='11' height='15' rx='1'/%3E%3C/g%3E%3Cg fill='%23000' fill-opacity='0.7'%3E%3Cpath d='M8 6 L11 10 L8 14 L5 10 Z'/%3E%3Cpath d='M8 26 L11 30 L8 34 L5 30 Z'/%3E%3C/g%3E%3Cg fill='none' stroke='%23000' stroke-opacity='0.35' stroke-width='0.9'%3E%3Cpath d='M0 20H16'/%3E%3Cpath d='M0 40H16'/%3E%3C/g%3E%3C/svg%3E");
+  /* Bunting: a cord down the edge with pennants pointing in at the text,
+     alternating in tone so a tall box reads as a run of flags rather than
+     as the same arrow repeated. Taller tile than the other themes on
+     purpose - fewer, larger flags was the call. */
+  --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='72'%3E%3Cpath d='M3 0 V72' stroke='%23000' stroke-opacity='0.65' stroke-width='1.4'/%3E%3Cpath d='M3.9 4 L3.9 18 L15 11 Z' fill='%23000' fill-opacity='0.85'/%3E%3Cpath d='M3.9 40 L3.9 54 L15 47 Z' fill='%23000' fill-opacity='0.45'/%3E%3C/svg%3E");
+  --highlight-motif-h: 72px;
 }
 /* Every other night theme tints its own .hero-line with its accent
    (furnished/swamp -> --ot-2, rata/mural -> --clay-2) - plaza was missing
