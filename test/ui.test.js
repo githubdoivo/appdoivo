@@ -63,9 +63,20 @@ const errorResponses = [];
 
 before(async () => {
   server = createServer((req, res) => {
+    // The error code matters as much as the status: a /me answered 401
+    // err_token_missing (the browser sent no key) and one answered 401
+    // err_token_invalid (it sent a key the server does not know) point at
+    // completely different bugs, and the status alone cannot tell them apart.
+    let body = '';
+    const end = res.end.bind(res);
+    res.end = (chunk, ...rest) => {
+      if (chunk && res.statusCode >= 400) body = String(chunk).slice(0, 80);
+      return end(chunk, ...rest);
+    };
     res.on('finish', () => {
       if (res.statusCode >= 400) {
-        errorResponses.push(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode}`);
+        const sent = req.headers.authorization ? 'with a key' : 'no auth header';
+        errorResponses.push(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode} ${body} (${sent})`);
       }
     });
     app(req, res);
@@ -137,14 +148,30 @@ async function loginPage(context, token, path = '/') {
   page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(`console: ${msg.text()}`); });
   page.on('requestfailed', (req) => consoleErrors.push(`requestfailed: ${req.url()} ${req.failure()?.errorText}`));
 
+  // What the browser itself sent and got for the one request the login turns
+  // on. The server-side record cannot tell an answered 401 apart from a
+  // request that never arrived, and those are different bugs: the first is
+  // the token being rejected, the second is the request dying in flight.
+  const meExchanges = [];
+  page.on('response', (res) => {
+    if (!res.url().includes('/api/me')) return;
+    const sent = res.request().headers()['authorization'];
+    meExchanges.push(`${res.status()} (sent: ${sent ? `${sent.slice(0, 14)}…` : 'no auth header'})`);
+  });
+
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
+  const storedBefore = await page.evaluate(() => localStorage.getItem('appivo_token'));
   await page.goto(base + path);
   const selector = path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)';
   try {
     await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
   } catch (timeout) {
-    throw new Error(`${timeout.message}\n${await loginDiagnostics(page, consoleErrors)}`);
+    const detail = [
+      `  token written before navigating: ${storedBefore ? `${storedBefore.slice(0, 4)}…(${storedBefore.length} chars)` : '(nothing was written)'}`,
+      `  /api/me exchanges the browser actually made: ${meExchanges.length ? meExchanges.join(', ') : '(none - the request never completed)'}`,
+    ].join('\n');
+    throw new Error(`${timeout.message}\n${detail}\n${await loginDiagnostics(page, consoleErrors)}`);
   }
   return page;
 }
