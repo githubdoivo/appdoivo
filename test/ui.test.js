@@ -328,13 +328,15 @@ test('Wall admin can publish a list of links from Settings, and they open out of
   assert.equal(await adminPage.isVisible('#plaza-poll-options'), false, 'poll fields belong to polls');
 
   await adminPage.fill('#plaza-post-text', 'useful links 🔗');
-  await adminPage.fill('.plaza-link-row .plaza-link-label-input', '📃 Form');
+  await adminPage.fill('.plaza-link-row .plaza-link-emoji-input', '📃');
+  await adminPage.fill('.plaza-link-row .plaza-link-label-input', 'Form');
   await adminPage.fill('.plaza-link-row .plaza-link-url-input', 'example.com/form');
 
   // "Add link" grows the list the way "add option" grows a poll.
   await adminPage.click('#plaza-add-link-btn');
   const rows = adminPage.locator('.plaza-link-row');
-  await rows.nth(1).locator('.plaza-link-label-input').fill('🎹 Playlist');
+  await rows.nth(1).locator('.plaza-link-emoji-input').fill('🎹');
+  await rows.nth(1).locator('.plaza-link-label-input').fill('Playlist');
   await rows.nth(1).locator('.plaza-link-url-input').fill('https://open.spotify.com/playlist/x');
 
   // Regression: this used to be type="url", and a scheme-less address like
@@ -351,12 +353,16 @@ test('Wall admin can publish a list of links from Settings, and they open out of
   await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
   const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
     els.map((el) => ({
+      emoji: el.querySelector('.plaza-link-emoji')?.textContent.trim() || '',
       label: el.querySelector('.plaza-link-label').textContent.trim(),
       href: el.getAttribute('href'),
       target: el.getAttribute('target'),
       rel: el.getAttribute('rel') || '',
+      hasArrow: !!el.querySelector('.plaza-link-arrow'),
     })));
-  assert.deepEqual(links.map((l) => l.label), ['📃 Form', '🎹 Playlist']);
+  assert.deepEqual(links.map((l) => l.label), ['Form', 'Playlist']);
+  assert.deepEqual(links.map((l) => l.emoji), ['📃', '🎹'], 'the emoji is its own field beside the name');
+  assert.ok(links.every((l) => !l.hasArrow), 'the name is what you tap, not an arrow parked at the far edge');
   assert.equal(links[0].href, 'https://example.com/form', 'the missing scheme is filled in before it is stored');
   assert.equal(links[1].href, 'https://open.spotify.com/playlist/x');
   for (const l of links) {

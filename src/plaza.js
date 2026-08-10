@@ -1,7 +1,7 @@
 import db from './db.js';
 
 const linkItemsStmt = db.prepare(`
-  SELECT id, label, url FROM plaza_link_items
+  SELECT id, emoji, label, url FROM plaza_link_items
   WHERE post_id = ?
   ORDER BY position ASC, id ASC
 `);
@@ -11,6 +11,9 @@ const MAX_OPTION_LENGTH = 60;
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 const MAX_LINK_LABEL_LENGTH = 60;
+// Room for a multi-codepoint emoji (skin tone, ZWJ sequence) without being
+// a second label field in disguise.
+const MAX_LINK_EMOJI_LENGTH = 16;
 const MAX_LINK_URL_LENGTH = 500;
 const MIN_LINKS = 1;
 const MAX_LINKS = 12;
@@ -137,13 +140,18 @@ export function createPlazaPost(authorId, { type, text, options, links }) {
     // mistake worth naming rather than quietly dropping - except a wholly
     // empty row, which is just the spare input nobody typed into.
     const rows = (Array.isArray(links) ? links : [])
-      .map((l) => ({ label: String(l?.label ?? '').trim(), url: String(l?.url ?? '').trim() }))
-      .filter((l) => l.label || l.url);
+      .map((l) => ({
+        emoji: String(l?.emoji ?? '').trim(),
+        label: String(l?.label ?? '').trim(),
+        url: String(l?.url ?? '').trim(),
+      }))
+      .filter((l) => l.emoji || l.label || l.url);
     if (rows.some((l) => !l.label || !l.url)) return { error: 'err_link_incomplete' };
     if (rows.length < MIN_LINKS) return { error: 'err_link_min_items' };
     if (rows.length > MAX_LINKS) return { error: 'err_link_max_items' };
     if (rows.some((l) => l.label.length > MAX_LINK_LABEL_LENGTH)) return { error: 'err_link_label_too_long' };
-    cleanLinks = rows.map((l) => ({ label: l.label, url: normaliseUrl(l.url) }));
+    if (rows.some((l) => [...l.emoji].length > MAX_LINK_EMOJI_LENGTH)) return { error: 'err_link_emoji_too_long' };
+    cleanLinks = rows.map((l) => ({ emoji: l.emoji, label: l.label, url: normaliseUrl(l.url) }));
     if (cleanLinks.some((l) => !l.url)) return { error: 'err_link_invalid_url' };
   }
 
@@ -157,8 +165,8 @@ export function createPlazaPost(authorId, { type, text, options, links }) {
   }
 
   if (type === 'links') {
-    const insLink = db.prepare('INSERT INTO plaza_link_items (post_id, label, url, position) VALUES (?, ?, ?, ?)');
-    cleanLinks.forEach((l, i) => insLink.run(postId, l.label, l.url, i));
+    const insLink = db.prepare('INSERT INTO plaza_link_items (post_id, emoji, label, url, position) VALUES (?, ?, ?, ?, ?)');
+    cleanLinks.forEach((l, i) => insLink.run(postId, l.emoji, l.label, l.url, i));
   }
 
   return { ok: true, id: postId };

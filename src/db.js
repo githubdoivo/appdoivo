@@ -111,6 +111,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS plaza_link_items (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id  INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
+    emoji    TEXT NOT NULL DEFAULT '',
     label    TEXT NOT NULL,
     url      TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0
@@ -361,6 +362,12 @@ if (!columnExists('contestants', 'photo')) {
 // multiple pins by most-recently-pinned first.
 if (!columnExists('plaza_posts', 'pinned_at')) {
   db.exec('ALTER TABLE plaza_posts ADD COLUMN pinned_at TEXT');
+}
+
+// The emoji started out typed into the label; it is its own field now, so
+// the picker can offer one and the name stays plain text.
+if (!columnExists('plaza_link_items', 'emoji')) {
+  db.exec("ALTER TABLE plaza_link_items ADD COLUMN emoji TEXT NOT NULL DEFAULT ''");
 }
 
 // Migration: who's actually holding the rata for a given consequence, set

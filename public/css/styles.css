@@ -2033,7 +2033,6 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .plaza-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px 14px;
   border: 1px solid var(--line);
@@ -2042,15 +2041,20 @@ html.mode-dark .plaza-post-type { color: #fff; }
   color: var(--ink);
   text-decoration: none;
 }
-.plaza-link-label { font-family: var(--body); }
-.plaza-link-arrow { color: var(--clay); flex: none; }
+.plaza-link-emoji { flex: none; font-size: 1.1em; line-height: 1; }
+/* The name carries the underline, so what is tappable is the thing you read
+   rather than the whole strip it sits in. */
+.plaza-link-label { font-family: var(--body); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
 .plaza-link:active { background: var(--paper-2); }
 
 /* Name and address side by side while there is room, stacked on the
    narrowest phones - two full-width inputs per row would push the add
    button off the bottom of a short admin card. */
+/* emoji / name / address. The emoji box is sized for one glyph so it cannot
+   masquerade as a second name field. */
 .plaza-link-row { display: flex; gap: 8px; margin-top: 8px; }
 .plaza-link-row > input { min-width: 0; flex: 1 1 50%; }
+.plaza-link-row > .plaza-link-emoji-input { flex: 0 0 3.2em; text-align: center; }
 @media (max-width: 380px) {
   .plaza-link-row { flex-direction: column; gap: 6px; }
 }

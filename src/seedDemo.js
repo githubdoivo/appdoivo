@@ -215,13 +215,13 @@ export function seedDemoWall(demoUsers = seedDemoUsers()) {
       type: 'links',
       text: 'useful links 🔗',
       links: [
-        { label: '📃 Form', url: 'example.com/form' },
-        { label: '🏠 Location', url: 'maps.google.com/?q=Braga' },
-        { label: '🎩 Themes', url: 'example.com/themes' },
-        { label: '🎹 Playlist', url: 'example.com/playlist' },
-        { label: '📷 Album', url: 'example.com/album' },
-        { label: '🎞️ POV', url: 'example.com/pov' },
-        { label: '💸 Splitwise', url: 'example.com/split' },
+        { emoji: '📃', label: 'Form', url: 'example.com/form' },
+        { emoji: '🏠', label: 'Location', url: 'maps.google.com/?q=Braga' },
+        { emoji: '🎩', label: 'Themes', url: 'example.com/themes' },
+        { emoji: '🎹', label: 'Playlist', url: 'example.com/playlist' },
+        { emoji: '📷', label: 'Album', url: 'example.com/album' },
+        { emoji: '🎞️', label: 'POV', url: 'example.com/pov' },
+        { emoji: '💸', label: 'Splitwise', url: 'example.com/split' },
       ],
     });
     console.log('[seed-demo] Added 1 Wall announcement, 1 poll and 1 links post.');

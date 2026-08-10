@@ -1660,6 +1660,11 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   if (rows.length >= MAX_LINK_ITEMS) return;
   const row = document.createElement('div');
   row.className = 'plaza-link-row';
+  const emoji = document.createElement('input');
+  emoji.type = 'text';
+  emoji.className = 'plaza-link-emoji-input';
+  emoji.placeholder = t('plaza_link_emoji_ph');
+  emoji.maxLength = 16;
   const label = document.createElement('input');
   label.type = 'text';
   label.className = 'plaza-link-label-input';
@@ -1675,7 +1680,7 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   url.className = 'plaza-link-url-input';
   url.placeholder = t('plaza_link_url_ph');
   url.maxLength = 500;
-  row.append(label, url);
+  row.append(emoji, label, url);
   $('plaza-add-link-btn').before(row);
 });
 
@@ -1776,6 +1781,7 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
     : undefined;
   const links = plazaPostType === 'links'
     ? [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].map((row) => ({
+        emoji: row.querySelector('.plaza-link-emoji-input').value,
         label: row.querySelector('.plaza-link-label-input').value,
         url: row.querySelector('.plaza-link-url-input').value,
       }))

@@ -850,14 +850,16 @@ function renderPlazaPost(post) {
   }
 
   // A list of pointers out of the app - the form, the playlist, the album.
-  // rel="noopener" on every one: these open in a new tab, and without it the
-  // page opened gets a handle back on this one.
+  // The name itself is the link, with its emoji beside it; there is no
+  // trailing arrow, because a row where only the far edge looks tappable
+  // invites aiming at the edge. rel="noopener" on every one: these open in a
+  // new tab, and without it the page opened gets a handle back on this one.
   if (post.type === 'links') {
     const rows = (post.links ?? []).map((l) => `
       <li>
         <a class="plaza-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+          ${l.emoji ? `<span class="plaza-link-emoji" aria-hidden="true">${esc(l.emoji)}</span>` : ''}
           <span class="plaza-link-label">${esc(l.label)}</span>
-          <span class="plaza-link-arrow" aria-hidden="true">&rarr;</span>
         </a>
       </li>`).join('');
     return `

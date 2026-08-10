@@ -1671,10 +1671,10 @@ test('Wall links posts: pairs of label and URL, scheme filled in, and anything t
       type: 'links',
       text: 'useful links 🔗',
       links: [
-        { label: '📃 Form', url: 'example.com/form' },
-        { label: '🎹 Playlist', url: 'https://open.spotify.com/playlist/x' },
+        { emoji: '📃', label: 'Form', url: 'example.com/form' },
+        { emoji: '🎹', label: 'Playlist', url: 'https://open.spotify.com/playlist/x' },
         // A wholly empty row is the spare input nobody typed into, not an error.
-        { label: '', url: '' },
+        { emoji: '', label: '', url: '' },
       ],
     },
   });
@@ -1683,7 +1683,8 @@ test('Wall links posts: pairs of label and URL, scheme filled in, and anything t
   const feed = await api('GET', '/plaza-posts', { token: ADMIN });
   const post = feed.data.posts.find((p) => p.id === created.data.id);
   assert.equal(post.type, 'links');
-  assert.deepEqual(post.links.map((l) => l.label), ['📃 Form', '🎹 Playlist']);
+  assert.deepEqual(post.links.map((l) => l.label), ['Form', 'Playlist']);
+  assert.deepEqual(post.links.map((l) => l.emoji), ['📃', '🎹'], 'the emoji is its own field, not part of the name');
   assert.equal(post.links[0].url, 'https://example.com/form', 'a scheme-less link is assumed https, not rejected');
   assert.equal(post.links[1].url, 'https://open.spotify.com/playlist/x', 'an explicit scheme is left alone');
 
