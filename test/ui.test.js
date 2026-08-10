@@ -4,15 +4,22 @@
 // an actual iPhone (not Chromium) get caught here before a deploy.
 //
 // Run with: npm run test:ui (needs `npx playwright install webkit` once).
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
 import { webkit, devices } from 'playwright';
 
 const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`);
+// Pinned rather than left to the ambient .env: without it the suite falls
+// back to a per-initialisation random secret (see tokens.js), so any part of
+// a run that re-initialises the module graph gets a secret that cannot read
+// the tokens the rest of the run created. Locally a developer's .env hides
+// that; CI, which has no .env, does not.
+process.env.TOKEN_SECRET ||= 'test-secret-not-used-anywhere-real';
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'UI Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
@@ -46,8 +53,35 @@ let server;
 let base; // e.g. http://127.0.0.1:PORT (no /api - that's for page navigation)
 let browser;
 
+// Every request the app answers with an error, kept so a failing test can
+// say *why* it failed instead of only that it waited 25s. A login that never
+// completes is indistinguishable from a slow one at the Playwright level -
+// the answer is always in the status the page got back from /api/me, which
+// nothing was recording. Cheap enough to leave on permanently: one push per
+// error response, nothing at all on the happy path.
+const errorResponses = [];
+
 before(async () => {
-  server = app.listen(0);
+  server = createServer((req, res) => {
+    // The error code matters as much as the status: a /me answered 401
+    // err_token_missing (the browser sent no key) and one answered 401
+    // err_token_invalid (it sent a key the server does not know) point at
+    // completely different bugs, and the status alone cannot tell them apart.
+    let body = '';
+    const end = res.end.bind(res);
+    res.end = (chunk, ...rest) => {
+      if (chunk && res.statusCode >= 400) body = String(chunk).slice(0, 80);
+      return end(chunk, ...rest);
+    };
+    res.on('finish', () => {
+      if (res.statusCode >= 400) {
+        const sent = req.headers.authorization ? 'with a key' : 'no auth header';
+        errorResponses.push(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode} ${body} (${sent})`);
+      }
+    });
+    app(req, res);
+  });
+  server.listen(0);
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
   browser = await webkit.launch();
@@ -72,9 +106,34 @@ async function api(method, path, { token, body } = {}) {
 }
 
 /** New browser context using a real iPhone device profile (viewport, UA, touch, DPR). */
+// Every context this hands out is tracked, and afterEach closes whatever is
+// still open. The 63 `await context.close()` calls sit at the end of their
+// test bodies, which means they only run when the test *passes* - a test
+// that times out leaves its WebKit context and pages alive for the rest of
+// the run.
+//
+// That is what turns a slow CI runner into a red one. Locally nothing times
+// out, so nothing leaks and the suite is green; on a two-core runner the
+// first genuine timeout leaves a live browser behind, which makes the next
+// test slower, which leaks another. The published runs show the shape of it
+// - 57 of 77 UI tests failing, every one of them at the 25s ceiling inside
+// loginPage(), while the whole non-browser suite passes untouched.
+//
+// Closing twice is a no-op, so the existing explicit calls can stay.
+const openContexts = new Set();
+
 async function iphoneContext(deviceName) {
-  return browser.newContext({ ...devices[deviceName] });
+  const context = await browser.newContext({ ...devices[deviceName] });
+  openContexts.add(context);
+  return context;
 }
+
+afterEach(async () => {
+  for (const context of openContexts) {
+    try { await context.close(); } catch { /* already closed by the test */ }
+  }
+  openContexts.clear();
+});
 
 /** Logs in via localStorage (like the app itself does) and waits for the app shell. */
 async function loginPage(context, token, path = '/') {
@@ -84,11 +143,95 @@ async function loginPage(context, token, path = '/') {
   // the API up front instead of clicking through every step.
   await api('POST', '/me/tutorial-seen', { token });
   const page = await context.newPage();
+  const consoleErrors = [];
+  page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(`console: ${msg.text()}`); });
+  page.on('requestfailed', (req) => consoleErrors.push(`requestfailed: ${req.url()} ${req.failure()?.errorText}`));
+
+  // What the browser itself sent and got for the one request the login turns
+  // on. The server-side record cannot tell an answered 401 apart from a
+  // request that never arrived, and those are different bugs: the first is
+  // the token being rejected, the second is the request dying in flight.
+  const meExchanges = [];
+  page.on('response', (res) => {
+    if (!res.url().includes('/api/me')) return;
+    const sent = res.request().headers()['authorization'];
+    meExchanges.push(`${res.status()} (sent: ${sent ? `${sent.slice(0, 14)}…` : 'no auth header'})`);
+  });
+
   await page.goto(base + '/');
   await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), token);
+  const storedBefore = await page.evaluate(() => localStorage.getItem('appivo_token'));
   await page.goto(base + path);
-  await page.waitForSelector(path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  const selector = path === '/settings.html' ? '#admin-content:not(.hidden)' : '#app:not(.hidden)';
+  try {
+    await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
+  } catch (timeout) {
+    const detail = [
+      `  token written before navigating: ${storedBefore ? `${storedBefore.slice(0, 4)}…(${storedBefore.length} chars)` : '(nothing was written)'}`,
+      `  /api/me exchanges the browser actually made: ${meExchanges.length ? meExchanges.join(', ') : '(none - the request never completed)'}`,
+    ].join('\n');
+    throw new Error(`${timeout.message}\n${detail}\n${await loginDiagnostics(page, consoleErrors)}`);
+  }
   return page;
+}
+
+/**
+ * waitForSelector, but a timeout says what the server was answering and
+ * whether the app had put a modal on screen. Anything the app refuses shows
+ * up as an alert rather than as a missing element, so "the element never
+ * appeared" is almost never the actual failure.
+ */
+async function waitOrExplain(page, selector, timeout = WAIT_TIMEOUT) {
+  try {
+    return await page.waitForSelector(selector, { timeout });
+  } catch (missing) {
+    const modal = await page
+      .evaluate(() => document.querySelector('.modal-overlay:not(.hidden) .modal-message')?.textContent.trim() || null)
+      .catch(() => null);
+    throw new Error([
+      missing.message,
+      `  modal on screen: ${modal ?? '(none)'}`,
+      '  last error responses from the server:',
+      ...errorResponses.slice(-10).map((l) => `    ${l}`),
+    ].join('\n'));
+  }
+}
+
+/**
+ * Why a login never completed. boot() in app.js hides #app and falls back to
+ * the login screen whenever /me does not answer 200, so every one of these
+ * timeouts is really an HTTP status nobody was printing - a 401 (the token
+ * the suite created is not the one the server has) and a 429 (the shared
+ * per-IP brute-force budget in rateLimit.js, spent by an earlier test) look
+ * identical from the outside, and they need opposite fixes.
+ */
+async function loginDiagnostics(page, consoleErrors) {
+  const state = await page.evaluate(async () => {
+    const token = localStorage.getItem('appivo_token');
+    const out = { token: token ? `${token.slice(0, 4)}…(${token.length} chars)` : '(none)' };
+    out.loginVisible = !document.getElementById('login')?.classList.contains('hidden');
+    out.appVisible = !document.getElementById('app')?.classList.contains('hidden');
+    try {
+      const res = await fetch('/api/me', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      out.meStatus = res.status;
+      out.meBody = (await res.text()).slice(0, 200);
+      out.retryAfter = res.headers.get('Retry-After');
+    } catch (e) {
+      out.meStatus = `fetch threw: ${e.message}`;
+    }
+    return out;
+  }).catch((e) => ({ meStatus: `could not evaluate in page: ${e.message}` }));
+
+  return [
+    `  /api/me from inside the page: ${state.meStatus}${state.retryAfter ? ` (Retry-After: ${state.retryAfter})` : ''}`,
+    `  body: ${state.meBody ?? '(none)'}`,
+    `  token in localStorage: ${state.token}`,
+    `  #login visible: ${state.loginVisible}, #app visible: ${state.appVisible}`,
+    `  last error responses from the server:`,
+    ...(errorResponses.slice(-15).map((l) => `    ${l}`)),
+    ...(consoleErrors.length ? ['  page errors:', ...consoleErrors.slice(-10).map((l) => `    ${l}`)] : []),
+  ].join('\n');
 }
 
 /** scrollWidth beyond the viewport means something is overflowing horizontally. */
@@ -234,6 +377,79 @@ test('visiting /settings.html with no session redirects to the login page', asyn
   await context.close();
 });
 
+/* ------------------- Startup survives a bad worker/network --------------- */
+// Both of these are what turned CI red for weeks. boot() awaited service
+// worker registration before it did anything else, so a registration that
+// never settled left the app on a blank screen - no login form, no app, a
+// perfectly valid session behind it. The instrumented runs caught it exactly
+// that way: #app never appeared while /me answered 200 and the key was still
+// stored. And boot()'s catch treated any failure as "session over", so one
+// dropped request threw the key away and the screen fell back to login for
+// good. Neither needs a slow runner to happen - a phone moving between rooms
+// does the same thing.
+
+test('the app still opens when service worker registration never settles', async () => {
+  const context = await iphoneContext('iPhone 13');
+  await context.addInitScript(() => {
+    if (navigator.serviceWorker) navigator.serviceWorker.register = () => new Promise(() => {});
+  });
+
+  // loginPage() waits for #app itself - the app shell has to be up and
+  // usable, not merely un-hidden, so check the tab bar came with it.
+  const page = await loginPage(context, ADMIN, '/');
+  assert.ok(
+    await page.isVisible('[data-tab="rata"]'),
+    'push registration is not something the app should wait on before it can be used',
+  );
+
+  // Settings has its own boot() with its own copy of this, and it was the
+  // half that stayed broken after the main app's was fixed.
+  const settings = await loginPage(context, ADMIN, '/settings.html');
+  assert.ok(
+    await settings.isVisible('#admin-tabs'),
+    'the admin page waits on push registration the same way the main app did',
+  );
+  await context.close();
+});
+
+test('a request dropped at startup does not throw away the stored key', async () => {
+  const context = await iphoneContext('iPhone 13');
+  // Exactly one dropped /me per page load, then the network behaves - the
+  // phone-changing-rooms case, not a server refusing the key. Done by
+  // replacing fetch rather than with context.route(): once a service worker
+  // controls the page, WebKit routes its requests around Playwright's
+  // interception entirely and the handler never fires.
+  await context.addInitScript(() => {
+    const realFetch = window.fetch;
+    let dropped = false;
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!dropped && url.includes('/api/me')) {
+        dropped = true;
+        return Promise.reject(new TypeError('Load failed'));
+      }
+      return realFetch(input, init);
+    };
+  });
+
+  const page = await loginPage(context, ADMIN, '/');
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem('appivo_token')),
+    ADMIN,
+    'a dropped request says nothing about the key being valid - losing it costs the only way back in',
+  );
+
+  // Settings threw the key away on any failure too, and bounced to the
+  // login page - so the same dropped request logged an admin out for good.
+  const settings = await loginPage(context, ADMIN, '/settings.html');
+  assert.equal(
+    await settings.evaluate(() => localStorage.getItem('appivo_token')),
+    ADMIN,
+    'the admin page must not throw the key away over a request that never arrived',
+  );
+  await context.close();
+});
+
 /* --------------------- First-time key retrieval (register) --------------- */
 
 test('a first-time user can find their name, claim their key, and get logged straight in', async () => {
@@ -311,6 +527,66 @@ test('Wall admin can pin an announcement (owner-only), and it floats to the top 
   await context.close();
   await api('DELETE', `/admin/plaza-posts/${older.id}`, { token: ADMIN });
   await api('DELETE', `/admin/plaza-posts/${newer.id}`, { token: ADMIN });
+});
+
+test('Wall admin can publish a list of links from Settings, and they open out of the app from the feed', async () => {
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Links Reader' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(context, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="plaza"]');
+  await adminPage.waitForSelector('#plaza-post-form', { timeout: WAIT_TIMEOUT });
+
+  // Picking "links" swaps the builder over: the poll fields go away and the
+  // label+URL rows appear.
+  await adminPage.click('#plaza-post-type [data-post-type="links"]');
+  await adminPage.waitForSelector('#plaza-link-items:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(await adminPage.isVisible('#plaza-poll-options'), false, 'poll fields belong to polls');
+
+  await adminPage.fill('#plaza-post-text', 'useful links 🔗');
+  await adminPage.fill('.plaza-link-row .plaza-link-emoji-input', '📃');
+  await adminPage.fill('.plaza-link-row .plaza-link-label-input', 'Form');
+  await adminPage.fill('.plaza-link-row .plaza-link-url-input', 'example.com/form');
+
+  // "Add link" grows the list the way "add option" grows a poll.
+  await adminPage.click('#plaza-add-link-btn');
+  const rows = adminPage.locator('.plaza-link-row');
+  await rows.nth(1).locator('.plaza-link-emoji-input').fill('🎹');
+  await rows.nth(1).locator('.plaza-link-label-input').fill('Playlist');
+  await rows.nth(1).locator('.plaza-link-url-input').fill('https://open.spotify.com/playlist/x');
+
+  // Regression: this used to be type="url", and a scheme-less address like
+  // the one above failed native validation - the form silently never
+  // submitted, so nothing reached the server that would have added https://.
+  await adminPage.click('#plaza-post-form button[type="submit"]');
+  await adminPage.waitForFunction(
+    () => document.getElementById('plaza-post-msg')?.textContent.trim().length > 0,
+    undefined,
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  const guestPage = await loginPage(context, guest.token);
+  await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
+  const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
+    els.map((el) => ({
+      emoji: el.querySelector('.plaza-link-emoji')?.textContent.trim() || '',
+      label: el.querySelector('.plaza-link-label').textContent.trim(),
+      href: el.getAttribute('href'),
+      target: el.getAttribute('target'),
+      rel: el.getAttribute('rel') || '',
+      hasArrow: !!el.querySelector('.plaza-link-arrow'),
+    })));
+  assert.deepEqual(links.map((l) => l.label), ['Form', 'Playlist']);
+  assert.deepEqual(links.map((l) => l.emoji), ['📃', '🎹'], 'the emoji is its own field beside the name');
+  assert.ok(links.every((l) => !l.hasArrow), 'the name is what you tap, not an arrow parked at the far edge');
+  assert.equal(links[0].href, 'https://example.com/form', 'the missing scheme is filled in before it is stored');
+  assert.equal(links[1].href, 'https://open.spotify.com/playlist/x');
+  for (const l of links) {
+    assert.equal(l.target, '_blank', 'these leave the app, so they open in their own tab');
+    assert.ok(l.rel.includes('noopener'), 'a new tab without noopener keeps a handle on this one');
+  }
+
+  await context.close();
 });
 
 test('Wall admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
@@ -451,6 +727,41 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
 
   await context.close();
   await api('DELETE', `/admin/users/${created.id}`, { token: ADMIN });
+});
+
+// "Pending" once chased contrast on its own - a bright yellow ground under
+// dark ink while its three neighbours were dark grounds under paper ink -
+// which read as one chip inverted rather than one chip yellow. None of the
+// four clears AA against paper ink (3.70-4.38:1), so contrast was never what
+// told them apart; matching construction is the whole job.
+test('the four rata status pills are built the same way - filled in their own colour, one shared ink', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  // Wait on the panel, not the pills: the pills are in the raw HTML from the
+  // first byte, so waiting on them races the tab actually being switched to
+  // and only shows up as flakiness under a loaded suite.
+  await page.waitForSelector('[data-atab="rata"]', { timeout: WAIT_TIMEOUT });
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('#rata-status-filter:visible', { timeout: WAIT_TIMEOUT });
+
+  const pills = await page.$$eval('#rata-status-filter .role-pill[data-status].active', (els) => els.map((el) => {
+    const cs = getComputedStyle(el);
+    return { status: el.dataset.status, bg: cs.backgroundColor, ink: cs.color };
+  }));
+  assert.equal(pills.length, 4, 'fila / atribuir / pendente / feita');
+
+  const inks = new Set(pills.map((p) => p.ink));
+  assert.equal(inks.size, 1, `every filled status pill takes the same ink, got ${[...inks].join(', ')}`);
+
+  // Each is filled with something of its own, and none of them is the
+  // transparent ground an outline pill would report.
+  const grounds = new Set(pills.map((p) => p.bg));
+  assert.equal(grounds.size, 4, 'four states, four distinguishable grounds');
+  for (const p of pills) {
+    assert.ok(!/rgba\(0, 0, 0, 0\)/.test(p.bg), `"${p.status}" should be a filled pill, not an outline`);
+  }
+
+  await context.close();
 });
 
 test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not exclusive', async () => {
@@ -888,6 +1199,74 @@ test('with ENABLE_PLAZA disabled, Wall is hidden in both the main app and Settin
 // A render-blocking CSS @import caused a visible reflow on font swap; fonts
 // must load via a <link> in <head> instead, in parallel with styles.css.
 
+test('a dropped connection says so, instead of the screen quietly going still', async () => {
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Offline Tester' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await page.click('[data-tab="chat"]');
+
+  assert.equal(await page.isVisible('#offline-banner'), false, 'nothing to say while it is working');
+
+  // Every poller swallows its own failures, so before this a real outage and
+  // a quiet party looked identical - the screen simply stopped changing.
+  await context.setOffline(true);
+  // Two consecutive failures before it speaks up (see api.js), and the chat
+  // poller runs every 3s - so this legitimately needs longer than the
+  // suite's default wait, which is shorter than one round trip of that.
+  await page.waitForSelector('#offline-banner:not(.hidden)', { timeout: Math.max(WAIT_TIMEOUT, 12000) });
+  const text = (await page.textContent('#offline-banner')).trim();
+  assert.ok(text.length > 0, 'the banner has to actually say something');
+  assert.equal(text, text.toLowerCase(), 'lowercase, like the rest of the app');
+
+  // And it clears itself when the connection returns - no tap required.
+  await context.setOffline(false);
+  // state:'hidden', not a '.hidden' selector - the default waits for the
+  // element to become *visible*, which a hidden one never does.
+  await page.waitForSelector('#offline-banner', { state: 'hidden', timeout: Math.max(WAIT_TIMEOUT, 12000) });
+
+  await context.close();
+});
+
+test('every tab clears the 44px minimum, and no two of their hit areas overlap', async () => {
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN);
+
+  // Tabs only. The topbar icons sit at 38px on purpose - see the note by
+  // .icon-btn in styles.css for why widening them was reverted.
+  const targets = await page.$$eval('.tab', (els) => els.map((e) => {
+    const b = e.getBoundingClientRect();
+    const a = getComputedStyle(e, '::after');
+    const grow = (v) => Math.abs(parseFloat(v) || 0);
+    return {
+      name: (e.textContent || e.getAttribute('aria-label') || e.title || '?').trim().slice(0, 14),
+      w: b.width + grow(a.left) + grow(a.right),
+      h: b.height + grow(a.top) + grow(a.bottom),
+      left: b.left - grow(a.left),
+      right: b.right + grow(a.right),
+    };
+  }));
+  assert.ok(targets.length >= 5, 'expected the whole tab row');
+  for (const t of targets) {
+    assert.ok(t.w >= 44, `"${t.name}" is only ${Math.round(t.w)}px wide`);
+    assert.ok(t.h >= 44, `"${t.name}" is only ${Math.round(t.h)}px tall`);
+  }
+
+  // A hit area that reaches into its neighbour is worse than a small one:
+  // the tap lands on the wrong control instead of on nothing.
+  const tabs = await page.$$eval('.tab', (els) => els.map((e) => {
+    const b = e.getBoundingClientRect();
+    const a = getComputedStyle(e, '::after');
+    const grow = (v) => Math.abs(parseFloat(v) || 0);
+    return { left: b.left - grow(a.left), right: b.right + grow(a.right) };
+  }));
+  for (let i = 1; i < tabs.length; i += 1) {
+    assert.ok(tabs[i].left >= tabs[i - 1].right - 0.5,
+      `tab ${i} starts at ${tabs[i].left} but the one before it ends at ${tabs[i - 1].right}`);
+  }
+
+  await context.close();
+});
+
 test('fonts load via a <link> in <head>, not a render-blocking @import', async () => {
   const html = await (await fetch(base + '/')).text();
   assert.match(html, /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com/, 'no font <link> found in <head>');
@@ -1139,7 +1518,7 @@ test('Snatch registration warns on a missing name, requires a photo, previews it
   assert.ok(/photo|foto/i.test(previewText), 'attaching a photo should say so in text, not just show a thumbnail');
 
   await page.click('#register-form button[type="submit"]');
-  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  await waitOrExplain(page, '#register-area .highlight');
   const entryText = await page.textContent('#register-area .highlight');
   assert.ok(entryText.includes('Ghost of Photos Past'), 'entry should register once a photo is attached');
 
@@ -1201,9 +1580,53 @@ test('a Best Look poll tick landing while a photo is picked does not wipe the in
   );
 
   await page.click('#register-form button[type="submit"]');
-  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  await waitOrExplain(page, '#register-area .highlight');
   const entryText = await page.textContent('#register-area .highlight');
   assert.ok(entryText.includes('Surviving The Poll'), 'the entry should register with the name/photo that survived the poll');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
+// Regression: renderRegistration() skipped its whole re-render whenever
+// focus sat anywhere inside #register-area - and the submit button is
+// inside it. On any engine that leaves a clicked button focused (CI's
+// Linux WebKit does; macOS Safari does not, which is why this only ever
+// showed up on CI) a registration the server had already accepted was
+// never shown: the blank form stayed exactly as it was, every 4s poll
+// skipped by that same focus, with no way back short of a reload. The
+// guard now covers only the blank form, which is the thing that can
+// actually be typed into.
+//
+// Focus is forced here rather than left to whatever the engine does on a
+// click, so this asserts the behaviour on every platform instead of only
+// the ones that reproduce it by accident.
+test('a submitted entry is shown even when the submit button keeps focus after the tap', async () => {
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Focused Submit Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  await page.fill('#register-name', 'Focus Survivor');
+  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+
+  await page.evaluate(() => {
+    const submit = document.querySelector('#register-form button[type="submit"]');
+    submit.click();
+    submit.focus();
+  });
+
+  const entry = await waitOrExplain(page, '#register-area .highlight');
+  assert.match(
+    await entry.textContent(),
+    /Focus Survivor/,
+    'an entry the server has stored must be on screen, not hidden behind a form that still looks empty',
+  );
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   await context.close();
@@ -1222,7 +1645,7 @@ test('once results start revealing, "you voted for X" clears instead of sitting 
     token: contestantOwner.token,
     body: { name: 'Reveal Target', night, photoBase64: fakeJpeg },
   });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', '/votes', { token: voter.token, body: { contestantId: reg.id, night } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
 
@@ -1278,13 +1701,24 @@ test('the admin voting-advance button always confirms first - a misclick decline
   const afterDecline = await api('GET', '/admin/voting', { token: ADMIN });
   assert.equal(afterDecline.nights.find((n) => n.night === night).status, 'registration', 'declining the confirm should not have opened voting');
 
-  // Confirming should actually perform it.
+  // Confirming should actually perform it. Two prompts now, not one: the
+  // generic "are you sure", then the server's own refusal because nobody
+  // has entered this night - which is exactly the case that warning is for.
   await page.click('#voting-advance-btn');
   await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.click('.modal-actions button:not(.ghost)');
+  // A second prompt may follow - the server refuses to open a night nobody
+  // has entered, and whether that fires depends on how many accounts exist
+  // when this runs, which is not what this test is about. Confirm it if it
+  // shows up; carry on if it does not.
+  await page.waitForTimeout(300);
+  if (await page.isVisible('.modal-overlay:not(.hidden)')) {
+    await page.click('.modal-actions button:not(.ghost)');
+  }
   await page.waitForFunction(
     () => document.getElementById('voting-state-label')?.classList.contains('is-open'),
-    { timeout: WAIT_TIMEOUT }
+    null,
+    { timeout: WAIT_TIMEOUT },
   );
   const afterConfirm = await api('GET', '/admin/voting', { token: ADMIN });
   assert.equal(afterConfirm.nights.find((n) => n.night === night).status, 'open', 'confirming should have opened voting');
@@ -1412,15 +1846,36 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   const plainDots = await page.$$eval('#memo-dots span.memo-dot', (els) => els.length);
   assert.ok(plainDots > 0, 'the moments you cannot act on stay plain, not pressable');
 
+  // Before posting, the feed is sealed rather than empty - the card is up and
+  // says so, so posting doesn't look optional.
+  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.getAttribute('#memo-feed-help', 'data-i18n'),
+    'memo_feed_locked',
+    'the feed should tell you it is waiting on your own moment',
+  );
+  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'nothing leaks through a locked feed');
+
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
   // The dot swaps from open to uploaded once the upload lands (see
   // renderMemoDots() in app.js) - waiting for the class change beats a
   // fixed sleep.
   await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
 
-  // It shows up in today's shared feed for everyone, not just the uploader.
-  await page.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
-  const uploadId = await page.getAttribute('[data-memo-react]', 'data-memo-react');
+  const bystanderPage = await loginPage(context, bystander.token);
+  await bystanderPage.click('[data-tab="memo"]');
+  // Same seal for the second guest, and posting is what breaks it - the
+  // other guest's moment only appears on the far side of their own.
+  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(await bystanderPage.getAttribute('#memo-feed-help', 'data-i18n'), 'memo_feed_locked');
+  await bystanderPage.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'theirs.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
+  const uploadId = await bystanderPage.getAttribute('[data-memo-react]', 'data-memo-react');
+
+  // Only the other guest's moment - your own is already the dot above.
+  const feedOwners = await bystanderPage.$$eval('.memo-feed-name', (els) => els.map((e) => e.textContent.trim()));
+  // Raw name: the all-lowercase look is text-transform, not the text itself.
+  assert.deepEqual(feedOwners, ['Memo UI Tester'], 'the feed is other people, not a mirror');
 
   // Regression: the reaction row rendered one button per entry in the
   // client's own emoji list, and that list was left at four after the
@@ -1428,7 +1883,7 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   // tapping either was rejected by the API. Asserting the count alone
   // wouldn't have caught a *renamed* emoji, so this also checks every
   // button actually drew an icon.
-  const reactionButtons = await page.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
+  const reactionButtons = await bystanderPage.$$eval(`[data-memo-react="${uploadId}"]`, (els) =>
     els.map((el) => ({ emoji: el.dataset.emoji, svgPaths: el.querySelectorAll('svg path').length }))
   );
   assert.equal(reactionButtons.length, MEMO_REACTION_EMOJI.length, 'one button per server-accepted reaction, no more');
@@ -1436,10 +1891,6 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   for (const b of reactionButtons) {
     assert.ok(b.svgPaths > 0, `the "${b.emoji}" reaction button rendered without an icon`);
   }
-
-  const bystanderPage = await loginPage(context, bystander.token);
-  await bystanderPage.click('[data-tab="memo"]');
-  await bystanderPage.waitForSelector(`[data-memo-react="${uploadId}"]`, { timeout: WAIT_TIMEOUT });
   await bystanderPage.click(`[data-memo-react="${uploadId}"][data-emoji="💦"]`);
   await bystanderPage.waitForFunction(
     (id) => document.querySelector(`[data-memo-react="${id}"][data-emoji="💦"]`)?.textContent.includes('1'),
@@ -1572,7 +2023,7 @@ test('an empty night gets a titled card of its own, and Best Outfit only speaks 
   assert.equal(await page.isVisible('#outfit-idle-card'), false, 'and it is not an empty night either');
   assert.equal(await page.isVisible('#theme-switch'), true, 'the switch survives every phase');
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await page.waitForSelector('#voting-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
   await context.close();
@@ -1862,7 +2313,7 @@ test('Miss Congeniality never offers you your own name, and its finished button 
       token: ADMIN, body: { userId: u.id, name: `${u.name} persona`, night },
     });
   }
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
 
   const context = await iphoneContext('iPhone 13');
@@ -2049,6 +2500,35 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   // And it comes back that way after a reload, not as an empty form.
   await page.reload();
   await page.click('[data-tab="chat"]');
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+
+  // A dedication laid out over several lines comes back laid out that way -
+  // HTML would collapse the blank line and the run of spaces otherwise, and
+  // in a message like this the shape is half the meaning.
+  await page.click('#dedication-edit-btn');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+  const shaped = 'primeira linha\n\nsegunda,   com  espaços\nterceira';
+  await page.fill('#dedication-text', shaped);
+  await page.click('#dedication-save-btn');
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.evaluate(() => getComputedStyle(document.querySelector('#dedication-area .highlight')).whiteSpace),
+    'pre-wrap',
+    'the written dedication has to preserve its own line breaks and spacing',
+  );
+  assert.equal(await page.textContent('#dedication-area .highlight'), shaped);
+  // Two lines of text really do occupy two lines on screen.
+  const lineCount = await page.evaluate(() => {
+    const el = document.querySelector('#dedication-area .highlight');
+    const cs = getComputedStyle(el);
+    return Math.round(el.getBoundingClientRect().height / parseFloat(cs.lineHeight));
+  });
+  assert.ok(lineCount >= 4, `a four-line dedication should render on four lines, got ${lineCount}`);
+
+  await page.click('#dedication-edit-btn');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+  await page.fill('#dedication-text', 'que noite, obrigado por tudo');
+  await page.click('#dedication-save-btn');
   await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
 
   // Editing puts the box back with the text in it - people redraft these.

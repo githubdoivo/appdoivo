@@ -104,6 +104,19 @@ db.exec(`
     position INTEGER NOT NULL DEFAULT 0
   );
 
+  -- A "links" post is a titled list of pointers out of the app - the form,
+  -- the playlist, the shared album. Its own table rather than reusing
+  -- plaza_poll_options: an option is a thing you vote for and a link is a
+  -- thing you follow, and only one of the two needs a URL.
+  CREATE TABLE IF NOT EXISTS plaza_link_items (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id  INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
+    emoji    TEXT NOT NULL DEFAULT '',
+    label    TEXT NOT NULL,
+    url      TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+  );
+
   -- One row per (user, post), enforced below - a vote is final, so
   -- castPlazaVote() in plaza.js rejects any second attempt rather than
   -- moving this row to a new option.
@@ -351,6 +364,12 @@ if (!columnExists('plaza_posts', 'pinned_at')) {
   db.exec('ALTER TABLE plaza_posts ADD COLUMN pinned_at TEXT');
 }
 
+// The emoji started out typed into the label; it is its own field now, so
+// the picker can offer one and the name stays plain text.
+if (!columnExists('plaza_link_items', 'emoji')) {
+  db.exec("ALTER TABLE plaza_link_items ADD COLUMN emoji TEXT NOT NULL DEFAULT ''");
+}
+
 // Migration: who's actually holding the rata for a given consequence, set
 // by the owner after the fact (they have to look around the party and see
 // who has it at the moment it's revealed - nothing about this can be
@@ -533,11 +552,11 @@ export function seed({ adminName }) {
     // ADMIN_TOKEN override outside production, which defeated the whole
     // point on QA (its DB is ephemeral, so it reseeds - and re-pins the
     // owner's real key to ADMIN_TOKEN's literal value - on every deploy):
-    // the owner's actual stored key was silently "mossy" there, not a
-    // generated one. The "mossy" dev-only quick-login (see /auth/login in
-    // routes.js) is a separate, login-time-only shortcut that never
-    // touches what's actually stored here - the real key is always
-    // generated and never surfaced as "mossy" anywhere.
+    // the owner's actual stored key was silently the override's literal
+    // value there, not a generated one. The QA quick-login (see
+    // devLoginOwner() in auth.js) is a separate thing entirely: it resolves
+    // a typed passphrase to the owner at lookup time and never touches what
+    // is stored here, so the real key is always generated.
     const token = generateUserToken(adminName || 'Admin');
     // Left unclaimed, exactly like a guest, so the owner can pick their own
     // name out of the first-time key-retrieval flow (keyClaim.js) instead of

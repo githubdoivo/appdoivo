@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "version": "1.9.50",
+  "version": "1.5.21",
   "description": "Party web app with four features: wall, rata, snatch and plaza.",
   "type": "module",
   "main": "src/server.js",
@@ -10,7 +10,7 @@
     "genkeys": "node scripts/generate-vapid.js",
     "admin-token": "node --disable-warning=ExperimentalWarning scripts/print-admin-token.js",
     "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
-    "test": "node --disable-warning=ExperimentalWarning --test",
+    "test": "node scripts/run-tests.js",
     "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js",
     "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },

@@ -116,11 +116,18 @@ lost too - not just vulnerability reports.
 
 ## Version numbering
 
-Step the patch by **5** (`1.9.50`, `1.9.55`, ... `1.9.95`, then bump the
+Step the patch by **5** (`1.5.0`, `1.5.5`, ... `1.5.95`, then bump the
 minor). Briefly tried stepping by 1 and reverted - the gaps are the point,
 they make one build obviously different from the next at a glance in the
 badge, which is all the number is for. Prod and QA carry the same version
 for a given release: bump once, deploy both.
+
+**The number was wound back from `1.9.50` to `1.5.0` on 10 August 2026** -
+stepping by 5 was eating the minor far faster than the app was actually
+changing, and 2.0 was going to arrive for no reason. Nothing reads the
+version except the badge and `/api/version` (this package is never
+published, and no client checks it), so going backwards costs nothing.
+Carry on from `1.5.0`; don't "correct" it back up to the 1.9.x line.
 
 ## Secrets
 

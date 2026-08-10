@@ -27,7 +27,7 @@
   <section class="view">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-name">appdoivo</span>
+        <h1 class="brand-name">appdoivo</h1>
       </div>
       <div class="topbar-actions">
         <button id="theme-toggle" class="icon-btn" title="Tema" aria-label="Tema">
@@ -86,6 +86,7 @@
             <div class="role-pills" id="plaza-post-type">
               <button type="button" class="role-pill active" data-post-type="announcement" data-i18n="plaza_type_announcement">Regular</button>
               <button type="button" class="role-pill" data-post-type="poll" data-i18n="plaza_type_poll">Poll</button>
+              <button type="button" class="role-pill" data-post-type="links" data-i18n="plaza_type_links">Links</button>
             </div>
             <textarea id="plaza-post-text" rows="3" maxlength="500" data-i18n-ph="plaza_post_text_ph" placeholder="Mensagem..." style="margin-top:12px"></textarea>
             <div id="plaza-poll-options" class="hidden" style="margin-top:12px">
@@ -93,6 +94,17 @@
               <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
               <input type="text" class="plaza-poll-option-input" data-i18n-ph="plaza_option_ph" placeholder="Opção..." maxlength="60" style="margin-top:8px" />
               <button type="button" id="plaza-add-option-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_option">Adicionar opção</button>
+            </div>
+            <div id="plaza-link-items" class="hidden" style="margin-top:12px">
+              <div class="plaza-link-row">
+                <input type="text" class="plaza-link-emoji-input" data-i18n-ph="plaza_link_emoji_ph" placeholder="🙂" maxlength="16" />
+                <input type="text" class="plaza-link-label-input" data-i18n-ph="plaza_link_label_ph" placeholder="Nome..." maxlength="60" />
+                <!-- type="text", not "url": a pasted "shorturl.at/x" has no scheme and
+                   native validation would block the form before the server could
+                   add one (see normaliseUrl() in plaza.js). -->
+                <input type="text" inputmode="url" class="plaza-link-url-input" data-i18n-ph="plaza_link_url_ph" placeholder="Link..." maxlength="500" />
+              </div>
+              <button type="button" id="plaza-add-link-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_link">Adicionar link</button>
             </div>
             <div style="text-align:right;margin-top:12px">
               <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
@@ -242,8 +254,8 @@
                registration form, so it sits after it rather than beside the
                "Criar" button where it used to be. -->
           <hr class="voting-divider" />
-          <div class="inline" style="justify-content:flex-end;margin-bottom:0">
-            <button type="button" id="download-photos-btn" class="small" data-i18n="download_photos_btn">descarregar fotos</button>
+          <div class="voting-controls">
+            <button type="button" id="download-photos-btn" class="small publish-wide" data-i18n="download_photos_btn">descarregar fotos</button>
           </div>
           <div style="text-align:right"><span id="download-photos-msg" class="muted"></span></div>
         </div>
@@ -503,6 +515,19 @@
              mudar-chave (visivel a qualquer admin, mas a API so devolve mais
              do que a propria linha, e so aceita escrita, para o dono da
              conta - ver GET/POST/PATCH/DELETE /admin/users em routes.js) -->
+        <!-- Everything at once, for the owner alone. The per-feature pairs
+             each cover their own section; this is for setting the whole app
+             up as a demo before a run-through, and for clearing it after -
+             including the guest accounts, which no per-feature button
+             touches. -->
+        <div class="card hidden" id="global-data-card">
+          <h2 data-i18n="global_data_title">Dados de toda a app</h2>
+          <p class="help" data-i18n="global_data_help">Explicação</p>
+          <button id="global-seed-btn" type="button" class="seed" data-i18n="global_seed_btn">Popular tudo com dados de teste</button>
+          <button id="global-wipe-btn" type="button" class="danger" data-i18n="global_wipe_btn">Apagar todos os dados</button>
+          <span id="global-data-msg" class="muted wipe-msg"></span>
+        </div>
+
         <div id="users-management" class="hidden">
           <div class="card">
             <h2 data-i18n="user_control_title">Controlo dos utilizadores</h2>
@@ -537,6 +562,11 @@
     </div>
   </section>
 
+  <!-- Reachability, surfaced once instead of in every poller - see
+       onConnectionChange() in api.js. role="status" so it is announced
+       without stealing focus mid-tap. -->
+  <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite"
+       data-i18n="offline_banner">Sem ligação</div>
   <span id="version-badge" class="version-badge" aria-hidden="true"></span>
 
   <script type="module" src="/js/settings.js"></script>

@@ -58,15 +58,16 @@
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
   --type-podium: #6b4a8a;
-  /* "Pending" is the one chip that has to look yellow rather than olive. As
-     an outline it can't: any yellow dark enough to pass as text on pale
-     paper reads as mustard, and every brighter option measured 2.4-3.8:1,
-     all failing AA. So it's a filled pill instead - a genuinely bright
-     yellow ground with dark ink on top, 8.1:1, and unmistakably yellow.
-     --status-pending stays for anything using it as a plain colour. */
+  /* Four status colours, all built the same way: an outline chip in the
+     list, a chip filled with that same colour under paper ink when it's an
+     active filter. "Pending" briefly broke that pattern - a bright yellow
+     ground with dark ink, chased for contrast - which made it the one chip
+     on the page reading as inverted next to its neighbours. It reads as
+     amber rather than lemon at this darkness, which is the price of
+     matching; the alternative was one odd chip out. Against the paper ink
+     these land at fila 4.37, atribuir 4.38, pending 3.70, done 3.74 - none
+     of them clear AA, so contrast was never what separated them. */
   --status-pending: #8a6a00;
-  --status-pending-fill: #f2c811;
-  --status-pending-ink:  #3d2f00;
   --status-done: #2f7d32;
   --status-fila: #5b6472;
   --status-atribuir: #a3406b;
@@ -187,7 +188,7 @@ body {
      the tint could triple - worst case now 5.0:1, measured across all six
      themes in both modes. --clay is redefined per theme, so this follows
      on its own. */
-  --on-solid: color-mix(in srgb, var(--clay) 22%, #fff);
+  --on-solid: color-mix(in srgb, var(--clay) 45%, #fff);
   /* The CTA buttons sit on a much deeper ground than the red ones, so they
      can carry far more of the accent before contrast bites - half, against
      the danger button's 22%. That is the difference between a label that is
@@ -518,12 +519,27 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   /* Cancels most of .cover's own 20px gap so it sits tight on the field. */
   margin-bottom: -16px;
 }
-.login-meta .instruction { text-align: center; }
+/* The instruction sat a line above the language toggle pinned to its right,
+   which read as two separate rows rather than one. Nudged down onto the
+   toggle's line - as a relative offset, not a margin, so the key field below
+   stays exactly where it was. The greeting takes the same offset so the gap
+   between the two lines is unchanged. */
+.login-meta .instruction { text-align: center; position: relative; top: 20px; }
+.greeting { position: relative; top: 20px; }
 .login-meta .login-lang-toggle {
   position: absolute;
   right: 0;
   bottom: 0;
 }
+/* "pt" renders at 12x16 - by some distance the smallest thing anyone is
+   asked to hit, and it sits at the very edge of the screen. Nothing else is
+   nearby, so the hit area can grow generously without stealing taps. */
+.login-lang-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+}
+.login-lang-toggle { position: relative; }
 .login-lang-toggle {
   flex: none;
   font-size: 0.68rem;
@@ -735,15 +751,17 @@ button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.1
    strong ground with light text (5.1:1 light, 6.3:1 dark) without touching
    --danger itself, which is still needed as *text* elsewhere (.error). */
 button.danger {
-  /* Deepened 18% off --danger-fill so the label can carry the theme tint
-     and still clear AA - the raw fill was too light for it on Furnished. */
-  border: 1px solid color-mix(in srgb, var(--danger-fill) 82%, #000);
-  background: color-mix(in srgb, var(--danger-fill) 82%, #000);
+  /* Deepened 40% off --danger-fill so the label can carry as much of the
+     theme as the CTA buttons do. At the previous 18% the tint had to stay
+     at 22% to clear AA, and beside a CTA at 50% that read as plain white -
+     which is what "remover" kept being flagged for. Worst case 4.7:1. */
+  border: 1px solid color-mix(in srgb, var(--danger-fill) 60%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 60%, #000);
   color: var(--on-solid);
 }
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger-fill) 70%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 70%, #000);
+  background: color-mix(in srgb, var(--danger-fill) 50%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
   color: var(--on-solid);
 }
 
@@ -924,14 +942,7 @@ button.danger:hover {
 .role-pill[data-status="feita"] { border-color: var(--status-done); color: var(--status-done); }
 .role-pill[data-status="fila"].active { background: var(--status-fila); border-color: var(--status-fila); color: var(--paper); }
 .role-pill[data-status="atribuir"].active { background: var(--status-atribuir); border-color: var(--status-atribuir); color: var(--paper); }
-/* Matches the filled chip the list renders for this state, ink included -
-   the filter and the thing it filters have to be the same yellow, and this
-   is the one that had to become a filled pill to read as yellow at all. */
-.role-pill[data-status="pendente"].active {
-  background: var(--status-pending-fill);
-  border-color: color-mix(in srgb, var(--status-pending-fill) 78%, #000);
-  color: var(--status-pending-ink);
-}
+.role-pill[data-status="pendente"].active { background: var(--status-pending); border-color: var(--status-pending); color: var(--paper); }
 .role-pill[data-status="feita"].active { background: var(--status-done); border-color: var(--status-done); color: var(--paper); }
 /* margin-left: auto keeps this pinned to the right even when it wraps onto
    its own line below the brand (a lone flex item ignores justify-content). */
@@ -940,6 +951,13 @@ button.danger:hover {
 /* Botoes de icone (tema, notificacoes, idioma, gerir, sair) na topbar -
    todos a mesma caixa quadrada. Auto-suficiente (nao depende de .ghost)
    para nao entrar em conflito de especificidade com "button.ghost". */
+/* 38px: 6px under the 44px minimum, and knowingly left there. The topbar has
+   12px of spare width on an iPhone SE, so the boxes cannot grow; an overlay
+   that widened only the hit area was tried and made the Manage Users row
+   toggle intermittently unclickable (1 run in 3), for reasons never pinned
+   down. Six pixels on four rarely-used controls is not worth reintroducing a
+   flake in a test that was green - the tab row, which was the real problem
+   at 34px with five neighbours, is widened below instead. */
 button.icon-btn,
 a.icon-btn {
   width: 38px;
@@ -1025,8 +1043,32 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    tab (all four sides) even though only the bottom border is actually
    visible - overriding both to zero/none removes it, leaving just the
    underline. */
-.tab { -webkit-appearance: none; appearance: none; border-radius: 0; }
-.tab:focus, .tab:focus-visible { outline: none; }
+.tab { -webkit-appearance: none; appearance: none; border-radius: 0; position: relative; }
+/* The label is only 34-36px wide at its narrowest ("rata", "wall"), well
+   under the 44px a thumb needs, and five of them sit in a row - a miss lands
+   on the neighbouring tab, not on nothing. Widened as an overlay rather than
+   as padding: the row is already 4px wider than an iPhone SE and real
+   padding would push it further. The tabs sit 20px apart, so +10 per side
+   exactly meets the neighbour without ever overlapping it. */
+.tab::after {
+  content: '';
+  position: absolute;
+  /* The row measures 43.x tall, a hair under the minimum; nothing sits
+     directly above or below a tab, so the vertical growth is free. */
+  top: -3px;
+  bottom: -3px;
+  left: -10px;
+  right: -10px;
+}
+/* outline:none used to be here with nothing in its place, so a keyboard or
+   VoiceOver user got no indication of where they were. The ring is drawn on
+   the label rather than the widened hit area, which would look detached. */
+.tab:focus { outline: none; }
+.tab:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 .tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
 /* Fallback only - reachable when no content theme is active (admin never
    sets one, see settings.js), where the plain light-mode --clay reads
@@ -1452,7 +1494,7 @@ body.theme-swamp {
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #bfc8a3;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M26 118 a13 13 0 1 1 -0.01 0 Z M26 131 L37.5 124.5 A13 13 0 0 0 26 118 Z'/%3E%3Cpath fill-opacity='0.13' d='M112 72 a9.5 9.5 0 1 1 -0.01 0 Z M112 81.5 L120.4 76.7 A9.5 9.5 0 0 0 112 72 Z'/%3E%3Cpath fill-opacity='0.13' d='M62 16 a7 7 0 1 1 -0.01 0 Z M62 23 L68.2 19.5 A7 7 0 0 0 62 16 Z'/%3E%3Cg fill-opacity='0.3'%3E%3Cellipse cx='48' cy='104' rx='2.2' ry='5'/%3E%3Cellipse cx='48' cy='104' rx='5' ry='2.2'/%3E%3Cellipse cx='48' cy='104' rx='4' ry='4' transform='rotate(45 48 104)' fill-opacity='0.35'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 42 Q50 34 100 42 T200 42'/%3E%3Cpath d='M0 62 Q50 54 100 62 T200 62'/%3E%3Cpath d='M0 158 Q50 150 100 158 T200 158'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M34 132 V92'/%3E%3Cpath d='M41 132 V100'/%3E%3Cpath d='M148 138 V96'/%3E%3Cpath d='M155 138 V104'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='88' cy='120' rx='16' ry='6'/%3E%3Cellipse cx='166' cy='178' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M44 150 L57.7 152.8 A14 14 0 1 0 56.3 156.7 Z'/%3E%3Cpath fill-opacity='0.13' d='M150 60 L141.5 54.8 A10 10 0 1 0 143.4 52.5 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
@@ -1546,7 +1588,7 @@ html.mode-dark body.theme-swamp {
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23212912'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.30'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.46' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #141a0c;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23192010'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.18'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.32' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%238a9c52' fill-opacity='0.16'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%238a9c52'%3E%3Cpath fill-opacity='0.15' d='M26 118 a13 13 0 1 1 -0.01 0 Z M26 131 L37.5 124.5 A13 13 0 0 0 26 118 Z'/%3E%3Cpath fill-opacity='0.15' d='M112 72 a9.5 9.5 0 1 1 -0.01 0 Z M112 81.5 L120.4 76.7 A9.5 9.5 0 0 0 112 72 Z'/%3E%3Cpath fill-opacity='0.15' d='M62 16 a7 7 0 1 1 -0.01 0 Z M62 23 L68.2 19.5 A7 7 0 0 0 62 16 Z'/%3E%3Cg fill-opacity='0.32'%3E%3Cellipse cx='48' cy='104' rx='2.2' ry='5'/%3E%3Cellipse cx='48' cy='104' rx='5' ry='2.2'/%3E%3Cellipse cx='48' cy='104' rx='4' ry='4' transform='rotate(45 48 104)' fill-opacity='0.35'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23192010'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.18'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.32' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%238a9c52' fill-opacity='0.16'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%238a9c52'%3E%3Cpath fill-opacity='0.15' d='M30 112 L42.6 105.9 A14 14 0 1 0 42.6 118.1 Z'/%3E%3Cpath fill-opacity='0.15' d='M110 66 L119.0 61.6 A10 10 0 1 0 119.0 70.4 Z'/%3E%3Cpath fill-opacity='0.15' d='M66 22 L72.7 18.7 A7.5 7.5 0 1 0 72.7 25.3 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-furnished .card,
 html.mode-dark body.theme-swamp .card {
@@ -2023,6 +2065,46 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .plaza-post-poll.pinned { border-color: var(--clay); }
 
 .plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+/* A links post: the same bordered row as a poll option, minus the tally
+   fill, so the two list shapes read as siblings rather than two different
+   ideas of what a row is. The arrow is the only affordance - these leave
+   the app, and nothing else in the feed does. */
+/* Whatever someone typed comes back the way they typed it - HTML would
+   otherwise collapse the blank lines and runs of spaces people use to give
+   a message its shape, and a dedication is exactly the kind of text where
+   that shape is the point. */
+.dedication-written { white-space: pre-wrap; }
+
+.plaza-links { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.plaza-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  color: var(--ink);
+  text-decoration: none;
+}
+.plaza-link-emoji { flex: none; font-size: 1.1em; line-height: 1; }
+/* The name carries the underline, so what is tappable is the thing you read
+   rather than the whole strip it sits in. */
+.plaza-link-label { font-family: var(--body); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.plaza-link:active { background: var(--paper-2); }
+
+/* Name and address side by side while there is room, stacked on the
+   narrowest phones - two full-width inputs per row would push the add
+   button off the bottom of a short admin card. */
+/* emoji / name / address. The emoji box is sized for one glyph so it cannot
+   masquerade as a second name field. */
+.plaza-link-row { display: flex; gap: 8px; margin-top: 8px; }
+.plaza-link-row > input { min-width: 0; flex: 1 1 50%; }
+.plaza-link-row > .plaza-link-emoji-input { flex: 0 0 3.2em; text-align: center; }
+@media (max-width: 380px) {
+  .plaza-link-row { flex-direction: column; gap: 6px; }
+}
+
 .plaza-poll-option {
   position: relative;
   display: flex;
@@ -2378,3 +2460,61 @@ button.seed:hover { background: var(--paper-3); opacity: 0.85; }
   text-align: center;
   margin: 18px 0 4px;
 }
+
+
+/* Keyboard focus, everywhere it was missing. The app is phone-first, but the
+   owner runs it from an iPad with a keyboard, and VoiceOver needs the same
+   cue. :focus-visible rather than :focus, so a thumb tap never draws a ring
+   nobody asked for. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 2px;
+}
+
+/* Only the Memo dot honoured this before, out of ten animated properties -
+   and the one that matters most is the theme cross-fade on the night switch,
+   which is the largest movement in the app. transitionend still fires at
+   0.01ms, so theme.js's colour sync is unaffected (see the listener there). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* Deliberately a strip at the bottom rather than a modal or a toast: it is
+   a background condition, not an event, and it must not cover anything or
+   demand a dismissal. It stays put until the connection comes back on its
+   own. */
+.offline-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  max-width: calc(100% - 24px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger-fill) 60%, #000);
+  color: var(--on-solid);
+  border: 1px solid color-mix(in srgb, var(--danger-fill) 40%, #000);
+  font-family: var(--body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+
+/* .brand-name is the page's h1 - every document needs one, and the wordmark
+   is genuinely what this page is called. It is an h1 purely for structure;
+   it must not pick up the default heading margins or size. */
+h1.brand-name { margin: 0; font-size: inherit; font-weight: inherit; }

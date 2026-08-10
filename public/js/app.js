@@ -1,4 +1,4 @@
-import { api, getToken, setToken, clearToken } from './api.js';
+import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
@@ -83,16 +83,36 @@ async function boot() {
   // background - a region no child element (including #login's own white
   // background) can cover. Only apply it once the app itself is shown
   // (see showApp()), so the login screen never carries a night theme.
-  await registerServiceWorker().catch(() => {});
   const token = getToken();
-  if (!token) return showLogin();
+  if (!token) {
+    showLogin();
+    registerPushWorker();
+    return;
+  }
   try {
-    const me = await api('/me');
-    showApp(me);
-  } catch {
-    clearToken();
+    showApp(await fetchMe());
+  } catch (err) {
+    // Only the server actually refusing the key ends the session. Anything
+    // else - a dropped request, the server unreachable for a moment - says
+    // nothing about whether the key is still good, and throwing it away
+    // costs someone the only way back into their account. Leaving it stored
+    // means a reload recovers on its own.
+    if (err?.status === 401) clearToken();
     showLogin();
   }
+  registerPushWorker();
+}
+
+/**
+ * Registration is only ever needed for push, and nothing on screen depends
+ * on it - so it runs after the first paint and is never awaited. boot() used
+ * to await it before doing anything else, which meant a registration that
+ * stalled left the app on a blank screen: no login form, no app, a valid
+ * session sitting behind it, and no way out but a reload. That is exactly
+ * what CI kept hitting - the app never appeared while /me answered 200.
+ */
+function registerPushWorker() {
+  registerServiceWorker().catch(() => {});
 }
 
 function showLogin() {
@@ -506,6 +526,7 @@ let memoPollTimer = null;
 let memoTickTimer = null;
 let memoSlotsCache = [];
 let memoFeedCache = [];
+let memoFeedLocked = false;
 // Set while a slot's upload request is in flight - both the poll and the
 // ticker skip re-rendering while this is set, so a fetch already in
 // progress doesn't get its dot clobbered mid-upload.
@@ -605,20 +626,29 @@ function memoReactionIcon(emoji) {
   return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${MEMO_REACTION_ICON[emoji]}</svg>`;
 }
 
-// Today's shared feed - every guest's uploads so far, like BeReal's own
-// friends-feed, with a light row of quick-tap emoji reactions per photo
-// instead of a comment thread.
+// The current moment's feed - what everyone else posted for the slot that
+// is live now, with a light row of quick-tap emoji reactions per photo
+// instead of a comment thread. Sealed until this guest has posted theirs.
 async function loadMemoFeed() {
   try {
-    const { uploads } = await api('/memo/feed');
+    const { uploads, locked } = await api('/memo/feed');
     memoFeedCache = uploads;
+    memoFeedLocked = locked;
     renderMemoFeed();
   } catch { /* transient network hiccup - the next poll retries */ }
 }
 
 function renderMemoFeed() {
-  $('memo-feed-card').classList.toggle('hidden', memoFeedCache.length === 0);
-  if (!memoFeedCache.length) return;
+  // Locked is a state of its own, not an empty list: there is something to
+  // see and the card has to say so, otherwise posting looks optional.
+  $('memo-feed-card').classList.toggle('hidden', !memoFeedLocked && memoFeedCache.length === 0);
+  const helpKey = memoFeedLocked ? 'memo_feed_locked' : 'memo_feed_help';
+  $('memo-feed-help').dataset.i18n = helpKey;
+  $('memo-feed-help').textContent = t(helpKey);
+  if (memoFeedLocked || !memoFeedCache.length) {
+    $('memo-feed').innerHTML = '';
+    return;
+  }
   $('memo-feed').innerHTML = memoFeedCache.map((u) => {
     const preview = u.kind === 'video'
       ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`
@@ -781,6 +811,7 @@ function timeAgo(dbTimestamp) {
 // the feed.
 const PLAZA_TYPE_LABEL = {
   poll: 'plaza_type_poll',
+  links: 'plaza_type_links',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
   video: 'plaza_type_video',
@@ -834,6 +865,29 @@ function renderPlazaPost(post) {
         ${pinnedBadge}
         <p class="podium-night">${esc(formatEuDate(post.text))}</p>
         <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(post.text)}"></video>
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
+
+  // A list of pointers out of the app - the form, the playlist, the album.
+  // The name itself is the link, with its emoji beside it; there is no
+  // trailing arrow, because a row where only the far edge looks tappable
+  // invites aiming at the edge. rel="noopener" on every one: these open in a
+  // new tab, and without it the page opened gets a handle back on this one.
+  if (post.type === 'links') {
+    const rows = (post.links ?? []).map((l) => `
+      <li>
+        <a class="plaza-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+          ${l.emoji ? `<span class="plaza-link-emoji" aria-hidden="true">${esc(l.emoji)}</span>` : ''}
+          <span class="plaza-link-label">${esc(l.label)}</span>
+        </a>
+      </li>`).join('');
+    return `
+      <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
+        ${pinnedBadge}
+        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
+        <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -1097,7 +1151,7 @@ async function loadDedication() {
          <button type="button" id="dedication-save-btn" class="small">${esc(t('dedication_save_btn'))}</button>
        </div>
        <p id="dedication-msg" class="muted" style="margin-top:8px"></p>`
-    : `<p class="highlight">${esc(written)}</p>
+    : `<p class="highlight dedication-written">${esc(written)}</p>
        <div class="actions-right">
          <button type="button" id="dedication-edit-btn" class="small ghost">${esc(t('dedication_update_btn'))}</button>
        </div>
@@ -1262,13 +1316,10 @@ function renderRegistration(data) {
   }
   card.classList.remove('hidden');
 
-  // Now that Best Look polls for updates (see startOutfitPolling()), a
-  // refresh landing mid-keystroke would otherwise wipe out whatever the
-  // user is typing into the name/partner-search fields below - skip the
-  // re-render entirely while focus is inside this form or a native photo
-  // picker is open (see photoPickerOpen above), nothing about their own
-  // not-yet-submitted entry could have changed anyway.
-  if (area.contains(document.activeElement) || photoPickerOpen) return;
+  // A native photo picker is open over this area (see photoPickerOpen
+  // above) - rebuilding the controls underneath it would pull the file
+  // input out from under the pick in progress, whatever is being shown.
+  if (photoPickerOpen) return;
 
   if (data.myContestant) {
     registerFormReady = false;
@@ -1314,6 +1365,17 @@ function renderRegistration(data) {
     wireChangePhotoInput();
     return;
   }
+
+  // Below here only the blank entry form gets built, so this is where the
+  // mid-keystroke guard belongs: a poll landing while someone is typing
+  // their name would wipe the field. It deliberately does NOT cover the
+  // entry above - the submit button lives inside this area, and on any
+  // platform that leaves a clicked button focused (Linux/CI WebKit does,
+  // macOS does not) guarding the whole function meant a successful
+  // registration was stored server-side and never shown: the form just sat
+  // there, every 4s poll skipped by the same focus, with no way back short
+  // of a reload.
+  if (area.contains(document.activeElement)) return;
 
   // Already showing the blank form and nothing external could have changed
   // about it - skip rebuilding (see registerFormReady above). Without this,
@@ -1775,3 +1837,9 @@ async function changeVote() {
 }
 
 boot();
+
+// One subscriber for the whole page - see onConnectionChange() in api.js for
+// why the signal is centralised there rather than in each poller.
+onConnectionChange((isOffline) => {
+  document.getElementById('offline-banner')?.classList.toggle('hidden', !isOffline);
+});

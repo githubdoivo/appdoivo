@@ -10,17 +10,52 @@ import { checkAuthAttempt } from './rateLimit.js';
  * what counts as valid, or a login works once and then 401s on the very
  * next request.
  *
- * There is deliberately no magic/dev token here. A "mossy" shortcut used to
- * resolve to the owner whenever ENABLE_DEV_LOGIN was set (QA only), after an
- * earlier NODE_ENV-based version of it was found live on prod on 2026-08-08.
- * Removed outright rather than re-gated: a documented magic string that
- * authenticates as the account with full control over everyone's keys is not
- * worth any amount of QA convenience, and every environment now takes the
- * same path - the real, generated key or nothing.
+ * There is a QA-only shortcut here - see devLoginOwner() below - and its
+ * history is the reason it is shaped the way it is. An earlier NODE_ENV-based
+ * version of the same idea was found live on prod on 2026-08-08: a single
+ * environment variable being wrong was enough to leave a documented magic
+ * string authenticating as the account with full control over everyone's
+ * keys. It was then re-gated behind ENABLE_DEV_LOGIN, then removed outright.
+ *
+ * Brought back on 2026-08-10 because QA's database is wiped by every deploy
+ * and the owner's key changes several times an afternoon. What is different
+ * this time: no passphrase in the repo (it comes from an env var that only
+ * QA sets), and two independent conditions instead of one, so the same
+ * single-variable mistake cannot repeat.
  */
+const USER_COLUMNS = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
+
+/**
+ * A QA-only quick login for the owner, because QA has no volume: its database
+ * is wiped by every deploy, so the owner's real key changes underneath whoever
+ * is testing, several times an afternoon.
+ *
+ * Two conditions, deliberately both required:
+ *
+ *  - DEV_LOGIN_KEY is set to something. The word itself lives in QA's Fly
+ *    secrets, never in this repo - production cannot leak a passphrase it
+ *    was never given, and there is no constant here for anyone to read.
+ *  - APP_ENV is exactly 'qa'. Production doesn't set APP_ENV at all, so even
+ *    if the secret were one day copied to the wrong app by mistake, it stays
+ *    inert there. One misconfiguration is not enough to open this.
+ *
+ * It resolves to the owner and never touches what is actually stored: the
+ * owner's real key stays generated, and this is not it.
+ */
+export function isDevLoginKey(token) {
+  const key = process.env.DEV_LOGIN_KEY;
+  if (!key || process.env.APP_ENV !== 'qa') return false;
+  return String(token).trim().toLowerCase() === String(key).trim().toLowerCase();
+}
+
+function devLoginOwner(token) {
+  if (!isDevLoginKey(token)) return null;
+  return db.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE is_owner = 1`).get() || null;
+}
+
 export function findUserByToken(token) {
-  const columns = 'id, name, is_admin, is_owner, tutorial_seen, lang, key_claimed_at, logo_customized';
-  return db.prepare(`SELECT ${columns} FROM users WHERE token_hash = ?`).get(hashToken(token));
+  const real = db.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE token_hash = ?`).get(hashToken(token));
+  return real || devLoginOwner(token);
 }
 
 /**
@@ -52,8 +87,11 @@ export function authenticate(req, res, next) {
 
   // Any successful authenticated request proves this user already has
   // their key - closes the first-time name-search retrieval flow for them
-  // for good (see keyClaim.js), even if they never used it themselves.
-  if (!user.key_claimed_at) {
+  // for good (see keyClaim.js), even if they never used it themselves. The
+  // QA dev key proves nothing of the sort, so it must not stamp: doing so
+  // silently removes the owner from "find my key", which is exactly how the
+  // owner got locked out of QA once already.
+  if (!user.key_claimed_at && !isDevLoginKey(String(token).trim().toLowerCase())) {
     db.prepare("UPDATE users SET key_claimed_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(user.id);
   }
 

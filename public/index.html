@@ -81,7 +81,7 @@
   <section id="app" class="view hidden">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-name">appdoivo</span>
+        <h1 class="brand-name">appdoivo</h1>
       </div>
       <div class="topbar-actions">
         <button id="theme-toggle" class="icon-btn" title="Tema" aria-label="Tema">
@@ -266,7 +266,7 @@
       </div>
       <div class="card hidden" id="memo-feed-card">
         <h2 data-i18n="memo_feed_title">O dia de hoje</h2>
-        <p class="help" data-i18n="memo_feed_help">Explicação</p>
+        <p class="help" id="memo-feed-help" data-i18n="memo_feed_help">Explicação</p>
         <div id="memo-feed" style="margin-top:12px"></div>
       </div>
     </div>
@@ -295,6 +295,11 @@
     </div>
   </div>
 
+  <!-- Reachability, surfaced once instead of in every poller - see
+       onConnectionChange() in api.js. role="status" so it is announced
+       without stealing focus mid-tap. -->
+  <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite"
+       data-i18n="offline_banner">Sem ligação</div>
   <span id="version-badge" class="version-badge" aria-hidden="true"></span>
 
   <script type="module" src="/js/app.js"></script>

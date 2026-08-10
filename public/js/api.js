@@ -40,16 +40,78 @@ let sessionEnded = false;
 // out for mistyping it would be absurd.
 const KEEPS_SESSION_ON_401 = ['/me/change-token', '/auth/login', '/auth/claim-key'];
 
+// Every poller in app.js swallows its own failures - deliberately, because
+// one dropped request during a party on house wifi is not worth a message.
+// The cost was that a *sustained* outage looked identical to nothing
+// happening: the screen simply stopped changing, with no way to tell a quiet
+// party from a broken connection. So the reachability signal lives here, at
+// the single point every request already passes through, rather than in nine
+// separate catch blocks.
+//
+// Two in a row, not one: a single failure is genuinely common on a phone
+// moving between rooms, and flashing a warning at it would cry wolf all
+// night.
+const FAILURES_BEFORE_OFFLINE = 2;
+let consecutiveFailures = 0;
+let offline = false;
+const offlineListeners = new Set();
+
+/** Notified with true/false whenever the connection state actually changes. */
+export function onConnectionChange(fn) {
+  offlineListeners.add(fn);
+  fn(offline);
+  return () => offlineListeners.delete(fn);
+}
+
+function setOffline(next) {
+  if (next === offline) return;
+  offline = next;
+  for (const fn of offlineListeners) fn(offline);
+}
+
+/**
+ * /me, with a couple of retries - shared by both pages' boot().
+ *
+ * The startup call is the one request whose failure the app cannot shrug
+ * off: it decides between "you are logged in" and "you are not", so a
+ * single dropped one on a phone changing rooms used to read as "logged
+ * out" and take the stored key with it. A refusal from the server is
+ * passed straight back untouched - that is an answer, not a connectivity
+ * problem, and only it should end a session.
+ */
+export async function fetchMe(attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await api('/me');
+    } catch (err) {
+      if (err?.status || attempt === attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkError) {
+    // Only a genuine transport failure lands here. An HTTP error means the
+    // server answered, so it says nothing about reachability and must not
+    // count towards it.
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= FAILURES_BEFORE_OFFLINE) setOffline(true);
+    throw networkError;
+  }
+  consecutiveFailures = 0;
+  setOffline(false);
 
   if (res.status === 401 && token && !sessionEnded
       && !KEEPS_SESSION_ON_401.some((p) => path.startsWith(p))) {

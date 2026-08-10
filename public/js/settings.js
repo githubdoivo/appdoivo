@@ -1,4 +1,4 @@
-import { api, getToken, setToken, clearToken } from './api.js';
+import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
 import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
@@ -105,7 +105,6 @@ async function boot() {
   applyI18n();
   updateLangUI();
   wireVersionBadge();
-  await registerServiceWorker().catch(() => {});
   // Not authenticated (no token, or one the server no longer accepts) -
   // land on the actual login page, same as the main app does on a failed
   // /me (see boot() in app.js). This used to just print an error message
@@ -117,7 +116,7 @@ async function boot() {
   }
   let me;
   try {
-    me = await api('/me');
+    me = await fetchMe();
     adminPromotionEnabled = !!me.adminPromotionEnabled;
     isOwner = !!me.isOwner;
     isAdmin = !!me.isAdmin;
@@ -132,8 +131,12 @@ async function boot() {
     $('change-key-username').value = me.name;
     wireLogoEasterEgg(me.name, me.logo_customized);
     renderAccountCard();
-  } catch {
-    clearToken();
+  } catch (err) {
+    // Same rule as the main app's boot(): only the server actually refusing
+    // the key ends the session. A request that never made it says nothing
+    // about whether the key is good, and clearing it here cost someone the
+    // only way back into their account.
+    if (err?.status === 401) clearToken();
     location.href = '/';
     return;
   }
@@ -166,6 +169,7 @@ async function boot() {
     // further down) - that's just a read-only duplicate of the account
     // card already at the top of this page, not a useful section.
     $('users-management').classList.toggle('hidden', !isOwner);
+    $('global-data-card').classList.toggle('hidden', !isOwner);
     // The Plaza admin tab (pseudonym mapping, internal id "wall") is
     // owner-only and no longer a normal tab bar entry at all (see the
     // permanently-hidden button in settings.html) - the only way in is the
@@ -205,6 +209,11 @@ async function boot() {
   wireChangeKeyForm();
   if (isAdmin) reloadAll();
   startRoleWatcher();
+  // Last, and deliberately not awaited: registration is only needed for
+  // push, and nothing on this page depends on it. It used to run first,
+  // which meant a registration that never settled left the admin page
+  // blank - see the same fix in app.js's boot().
+  registerServiceWorker().catch(() => {});
 }
 
 // Polls /me every 30s for a role change (promoted, demoted, or removed
@@ -439,7 +448,20 @@ $('voting-advance-btn').addEventListener('click', async () => {
       err_pending_duo_votes: ['confirm_close_pending_one', 'confirm_close_pending_other'],
     };
     const keys = PENDING_CONFIRM[err.data?.error];
-    if (err.status === 409 && keys) {
+    // Same shape as the two above, but the numbers it names are how many
+    // people are entered out of how many can vote, not a single count.
+    if (err.status === 409 && err.data?.error === 'err_not_everyone_entered') {
+      const ok = await showConfirm(t('confirm_open_not_everyone_entered', {
+        entered: err.data.entered, expected: err.data.expected,
+      }));
+      if (!ok) return;
+      try {
+        await api(`/admin/voting/${currentNight()}/${action}`, { method: 'POST', body: { force: true } });
+      } catch (forced) {
+        $('voting-msg').textContent = forced.message;
+        return;
+      }
+    } else if (err.status === 409 && keys) {
       const n = err.data.pending;
       const ok = await showConfirm(t(n === 1 ? keys[0] : keys[1], { n }));
       if (!ok) return;
@@ -853,6 +875,11 @@ wireSeedButton('outfit-seed-btn', 'outfit-wipe-msg', '/admin/contestants/seed-de
 wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo', loadPlazaPosts);
 wireSeedButton('chat-seed-btn', 'chat-wipe-msg', '/admin/chat/seed-demo', () => {});
 wireSeedButton('memo-seed-btn', 'memo-wipe-msg', '/admin/memo/seed-demo', loadMemoDays);
+
+// The whole app at once, owner-only (see boot() below for the card).
+wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/seed-demo', () => location.reload());
+wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/wipe-everything',
+  'confirm_global_wipe', 'global_wipe_done', () => location.reload());
 
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
@@ -1605,15 +1632,18 @@ async function loadWallPseudonyms() {
 // either type (owner-only), floats it to the top of the feed for everyone.
 
 const MAX_POLL_OPTIONS = 6;
+const MAX_LINK_ITEMS = 12;
 let plazaPostType = 'announcement';
 
 $('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
     plazaPostType = btn.dataset.postType;
     $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
-    // Poll mode shows only poll-building tools (question + options) - the
-    // plain message field is announcement-only, not shared with polls.
+    // Each mode shows only its own builder. The plain message field belongs
+    // to announcements and to the links list (where it is the heading above
+    // them), but not to polls, which have their own question field.
     $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+    $('plaza-link-items').classList.toggle('hidden', plazaPostType !== 'links');
     $('plaza-post-text').classList.toggle('hidden', plazaPostType === 'poll');
   });
 });
@@ -1630,8 +1660,41 @@ $('plaza-add-option-btn').addEventListener('click', () => {
   $('plaza-add-option-btn').before(input);
 });
 
+// Adds one more label+URL pair, the same way the poll builder grows its
+// options - a spare empty row is left behind on submit, so there is always
+// somewhere to type the next one without pressing this first.
+$('plaza-add-link-btn').addEventListener('click', () => {
+  const rows = $('plaza-link-items').querySelectorAll('.plaza-link-row');
+  if (rows.length >= MAX_LINK_ITEMS) return;
+  const row = document.createElement('div');
+  row.className = 'plaza-link-row';
+  const emoji = document.createElement('input');
+  emoji.type = 'text';
+  emoji.className = 'plaza-link-emoji-input';
+  emoji.placeholder = t('plaza_link_emoji_ph');
+  emoji.maxLength = 16;
+  const label = document.createElement('input');
+  label.type = 'text';
+  label.className = 'plaza-link-label-input';
+  label.placeholder = t('plaza_link_label_ph');
+  label.maxLength = 60;
+  const url = document.createElement('input');
+  // Deliberately type="text", not type="url": people paste "shorturl.at/x"
+  // without a scheme, and native URL validation refuses that outright - the
+  // form never submits, so the server never gets to fill the https:// in.
+  // inputmode still gets them the URL keyboard.
+  url.type = 'text';
+  url.inputMode = 'url';
+  url.className = 'plaza-link-url-input';
+  url.placeholder = t('plaza_link_url_ph');
+  url.maxLength = 500;
+  row.append(emoji, label, url);
+  $('plaza-add-link-btn').before(row);
+});
+
 const PLAZA_ADMIN_LABEL = {
   poll: 'plaza_type_poll',
+  links: 'plaza_type_links',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
   video: 'plaza_type_video',
@@ -1724,11 +1787,25 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
   const options = plazaPostType === 'poll'
     ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
     : undefined;
+  const links = plazaPostType === 'links'
+    ? [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].map((row) => ({
+        emoji: row.querySelector('.plaza-link-emoji-input').value,
+        label: row.querySelector('.plaza-link-label-input').value,
+        url: row.querySelector('.plaza-link-url-input').value,
+      }))
+    : undefined;
   try {
-    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
+    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
     $('plaza-post-text').value = '';
     $('plaza-poll-question').value = '';
     $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
+    // Drop the rows that were added on the fly, and blank the first one -
+    // leaving eight filled rows behind after publishing invites republishing
+    // them by accident.
+    [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].forEach((row, i) => {
+      if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
+      else row.remove();
+    });
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
     loadPlazaPosts();
@@ -1927,3 +2004,9 @@ function wireChangeKeyForm() {
 
 boot();
 
+
+// One subscriber for the whole page - see onConnectionChange() in api.js for
+// why the signal is centralised there rather than in each poller.
+onConnectionChange((isOffline) => {
+  document.getElementById('offline-banner')?.classList.toggle('hidden', !isOffline);
+});

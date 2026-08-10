@@ -209,7 +209,22 @@ export function seedDemoWall(demoUsers = seedDemoUsers()) {
       text: 'Qual foi o melhor momento da noite até agora?',
       options: ['A Rata', 'Best Look', 'A Plaza', 'Ainda não sei'],
     });
-    console.log('[seed-demo] Added 1 Wall announcement and 1 poll.');
+    // The real party links, so a demo build is actually usable as one -
+    // shortened at source, which is how they were handed over.
+    createPlazaPost(demoUsers[0], {
+      type: 'links',
+      text: 'useful links 🔗',
+      links: [
+        { emoji: '📃', label: 'Form', url: 'example.com/form' },
+        { emoji: '🏠', label: 'Location', url: 'maps.google.com/?q=Braga' },
+        { emoji: '🎩', label: 'Themes', url: 'example.com/themes' },
+        { emoji: '🎹', label: 'Playlist', url: 'example.com/playlist' },
+        { emoji: '📷', label: 'Album', url: 'example.com/album' },
+        { emoji: '🎞️', label: 'POV', url: 'example.com/pov' },
+        { emoji: '💸', label: 'Splitwise', url: 'example.com/split' },
+      ],
+    });
+    console.log('[seed-demo] Added 1 Wall announcement, 1 poll and 1 links post.');
   }
 }
 

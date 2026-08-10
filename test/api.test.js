@@ -18,6 +18,12 @@ const DB = join(tmpdir(), `appdoivo-test-${process.pid}-${Date.now()}.sqlite`);
 // (not a timestamp captured locally inside that one test) is what the
 // invariant actually means regardless of test order.
 const TEST_RUN_STARTED_AT = Date.now();
+// Pinned rather than left to the ambient .env: without it the suite falls
+// back to a per-initialisation random secret (see tokens.js), so any part of
+// a run that re-initialises the module graph gets a secret that cannot read
+// the tokens the rest of the run created. Locally a developer's .env hides
+// that; CI, which has no .env, does not.
+process.env.TOKEN_SECRET ||= 'test-secret-not-used-anywhere-real';
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'Test Admin';
 process.env.ENABLE_ADMIN_PROMOTION = 'true';
@@ -155,20 +161,93 @@ test('login accepts the admin', async () => {
 // owner account. It was originally gated by NODE_ENV!=='production' alone
 // and was confirmed live on prod on 2026-08-08 despite fly.toml setting
 // NODE_ENV=production, letting anyone who read this repo's own docs log in
-// with full owner rights. It was then re-gated behind ENABLE_DEV_LOGIN and
-// has now been removed outright. This test locks that removal in: no env
-// var, in any environment, may bring it back.
-test('there is no magic dev token - "mossy" is rejected like any other wrong key, whatever the environment says', async () => {
-  const plain = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-  assert.equal(plain.status, 401);
-
-  // Even with the old escape hatch explicitly switched on.
-  process.env.ENABLE_DEV_LOGIN = 'true';
+// with full owner rights, in every environment. It is back, but only as a
+// QA convenience and only under two conditions at once - see devLoginOwner()
+// in auth.js. These tests pin both halves: that it works where it is meant
+// to, and that no single misconfiguration is enough to open it elsewhere.
+// Exercised against auth.js directly rather than over HTTP: every rejected
+// login spends one of a 10-per-IP budget shared with the rest of the file
+// (see rateLimit.js), and a matrix of environment combinations would empty
+// it and tip later tests into 429s. The HTTP wiring gets one happy path
+// below, which is the part a unit call can't prove.
+test('the QA dev key needs both of its conditions - neither one alone unlocks anything', async () => {
+  const { isDevLoginKey, findUserByToken } = await import('../src/auth.js');
+  const original = { key: process.env.DEV_LOGIN_KEY, env: process.env.APP_ENV };
   try {
-    const withOldFlag = await api('POST', '/auth/login', { body: { token: 'mossy' } });
-    assert.equal(withOldFlag.status, 401, 'the removed dev-login flag must have no effect at all');
+    // Nothing set at all: the shape production ships in.
+    delete process.env.DEV_LOGIN_KEY;
+    delete process.env.APP_ENV;
+    assert.equal(isDevLoginKey('mossy'), false);
+    assert.ok(!findUserByToken('mossy'), 'no passphrase resolves to a user by default');
+
+    // The passphrase without the environment - a secret copied to the wrong
+    // Fly app by mistake has to stay inert.
+    process.env.DEV_LOGIN_KEY = 'mossy';
+    for (const env of [undefined, 'prod', 'production', 'QA', 'staging', '']) {
+      if (env === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = env;
+      assert.equal(isDevLoginKey('mossy'), false, `APP_ENV=${env} must not unlock the dev key`);
+    }
+
+    // The environment without the passphrase - QA before the secret is set.
+    process.env.APP_ENV = 'qa';
+    for (const key of [undefined, '']) {
+      if (key === undefined) delete process.env.DEV_LOGIN_KEY;
+      else process.env.DEV_LOGIN_KEY = key;
+      assert.equal(isDevLoginKey('mossy'), false, 'an unset key is not an empty-string key');
+      assert.equal(isDevLoginKey(''), false, 'and an empty guess never matches');
+    }
+
+    // Both together, and only the right word.
+    process.env.DEV_LOGIN_KEY = 'mossy';
+    assert.equal(isDevLoginKey('mossy'), true);
+    assert.equal(isDevLoginKey('MOSSY'), true, 'case-insensitive, like every other key');
+    assert.equal(isDevLoginKey('mossyy'), false);
+    assert.equal(isDevLoginKey('moss'), false);
+
+    // The old flag is dead and stays dead.
+    process.env.ENABLE_DEV_LOGIN = 'true';
+    delete process.env.DEV_LOGIN_KEY;
+    assert.equal(isDevLoginKey('mossy'), false, 'the removed dev-login flag must have no effect at all');
   } finally {
     delete process.env.ENABLE_DEV_LOGIN;
+    if (original.key === undefined) delete process.env.DEV_LOGIN_KEY;
+    else process.env.DEV_LOGIN_KEY = original.key;
+    if (original.env === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = original.env;
+  }
+});
+
+test('on QA the dev key carries a whole session, without ever becoming the owner\'s real key', async () => {
+  const { default: db } = await import('../src/db.js');
+  process.env.DEV_LOGIN_KEY = 'mossy';
+  process.env.APP_ENV = 'qa';
+  try {
+    const login = await api('POST', '/auth/login', { body: { token: 'MOSSY' } });
+    assert.equal(login.status, 200);
+    assert.equal(login.data.isAdmin, true);
+
+    // It has to carry real requests too, not just the login check - the
+    // client replays whatever was typed as its bearer token from here on.
+    const me = await api('GET', '/me', { token: 'mossy' });
+    assert.equal(me.status, 200);
+    assert.equal(me.data.isOwner, true);
+
+    // The owner's stored key is untouched, and is not this.
+    const owner = db.prepare('SELECT token_hash, key_claimed_at FROM users WHERE is_owner = 1').get();
+    const { hashToken } = await import('../src/tokens.js');
+    assert.notEqual(owner.token_hash, hashToken('mossy'), "the owner's real key must stay a generated one");
+
+    // And it must not claim the owner's key on their behalf: doing so drops
+    // them out of the first-time name-search flow, which is how the owner
+    // got locked out of QA once already.
+    db.prepare('UPDATE users SET key_claimed_at = NULL WHERE is_owner = 1').run();
+    await api('GET', '/me', { token: 'mossy' });
+    const after = db.prepare('SELECT key_claimed_at FROM users WHERE is_owner = 1').get();
+    assert.equal(after.key_claimed_at, null, 'the dev key proves nothing, so it must not stamp a claim');
+  } finally {
+    delete process.env.DEV_LOGIN_KEY;
+    delete process.env.APP_ENV;
   }
 });
 
@@ -610,7 +689,7 @@ test('voting closed by default blocks the vote', async () => {
 });
 
 test('admin opens the night and each user votes once', async () => {
-  const open = await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN });
+  const open = await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
   assert.equal(open.data.votingStatus, 'open');
 
   const v1 = await api('POST', '/votes', { token: userToken, body: { contestantId, night: NIGHT } });
@@ -631,7 +710,7 @@ test('GET /admin/voting reports how many non-admin accounts have not voted, excl
   // tests may have left their own never-voted accounts behind.
   const night = 'swamp';
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const nightsInfo = async () => {
     const r = await api('GET', '/admin/voting', { token: ADMIN });
@@ -678,7 +757,7 @@ test('nights are independent: voting in another night is possible', async () => 
   const other = 'swamp';
   const c = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Concorrente B', night: other } });
   assert.equal(c.status, 201);
-  await api('POST', `/admin/voting/${other}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${other}/open`, { token: ADMIN, body: { force: true } });
 
   const v = await api('POST', '/votes', { token: userToken, body: { contestantId: c.data.id, night: other } });
   assert.equal(v.status, 201); // already voted in 'furnished', but not yet in this night
@@ -922,7 +1001,7 @@ test('a solo contestant cannot vote for their own entry', async () => {
   const reg = await api('POST', '/outfit/register', { token: solo.data.token, body: { name: 'Solo Persona', night, photoBase64: TEST_PHOTO } });
   assert.equal(reg.status, 201);
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const status = await api('GET', `/votes/status?night=${night}`, { token: solo.data.token });
   assert.equal(status.data.myContestant.id, reg.data.id, 'the frontend needs myContestant.id to filter this entry out of the vote list');
@@ -950,7 +1029,7 @@ test('neither half of a duo can vote for their own shared entry', async () => {
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   const voteA = await api('POST', '/votes', { token: a.data.token, body: { contestantId: reg.data.id, night } });
   assert.equal(voteA.status, 400);
@@ -978,7 +1057,7 @@ test("a duo's vote only counts once the partner confirms it", async () => {
   // real contestant (see confirmContestant()) - these tests are about
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   // One partner proposes - accepted, but flagged pending and worth nothing yet.
   const proposal = await api('POST', '/votes', { token: a.data.token, body: { contestantId: rival.data.id, night } });
@@ -1026,7 +1105,7 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   // real contestant (see confirmContestant()) - these tests are about
   // voting, so get the pair on the roster first.
   await api('POST', '/outfit/register/confirm', { token: b.data.token, body: { night } });
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
 
   await api('POST', '/votes', { token: a.data.token, body: { contestantId: first.data.id, night } });
   // The partner disagrees: dropping the proposal frees the pair to repick.
@@ -1090,7 +1169,7 @@ test('a duo entry is not in the running until the named partner confirms it', as
     'once confirmed the pair should appear as a real contestant');
 
   // ...and with nothing pending, opening no longer needs forcing.
-  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   assert.equal(opened.status, 200);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
@@ -1282,7 +1361,7 @@ test('either half of a duo can replace the entry photo before voting opens, not 
   assert.equal(noEntry.data.error, 'err_no_contestant_entry');
 
   // Opening voting locks the roster - the photo included.
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   const afterOpen = await api('PUT', '/outfit/register/photo', { token: a.data.token, body: { night, photoBase64: TEST_PHOTO } });
   assert.equal(afterOpen.status, 400);
   assert.equal(afterOpen.data.error, 'err_registration_not_open');
@@ -1309,7 +1388,7 @@ test('a contestant photo is visible to its own entrants and admins any time, but
   const earlyPeek = await api('GET', photoUrl, { token: rival.data.token });
   assert.equal(earlyPeek.status, 404);
 
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   await api('POST', '/votes', { token: rival.data.token, body: { contestantId: reg.data.id, night } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
 
@@ -1664,6 +1743,53 @@ test('Plaza pinning: owner-only, either post type, pinned ones sort first (most-
   await api('DELETE', `/admin/plaza-posts/${unpinned.data.id}`, { token: ADMIN });
 });
 
+test('Wall links posts: pairs of label and URL, scheme filled in, and anything that is not http(s) refused', async () => {
+  const created = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: {
+      type: 'links',
+      text: 'useful links 🔗',
+      links: [
+        { emoji: '📃', label: 'Form', url: 'example.com/form' },
+        { emoji: '🎹', label: 'Playlist', url: 'https://open.spotify.com/playlist/x' },
+        // A wholly empty row is the spare input nobody typed into, not an error.
+        { emoji: '', label: '', url: '' },
+      ],
+    },
+  });
+  assert.equal(created.status, 200);
+
+  const feed = await api('GET', '/plaza-posts', { token: ADMIN });
+  const post = feed.data.posts.find((p) => p.id === created.data.id);
+  assert.equal(post.type, 'links');
+  assert.deepEqual(post.links.map((l) => l.label), ['Form', 'Playlist']);
+  assert.deepEqual(post.links.map((l) => l.emoji), ['📃', '🎹'], 'the emoji is its own field, not part of the name');
+  assert.equal(post.links[0].url, 'https://example.com/form', 'a scheme-less link is assumed https, not rejected');
+  assert.equal(post.links[1].url, 'https://open.spotify.com/playlist/x', 'an explicit scheme is left alone');
+
+  // Half a row is a mistake worth naming rather than silently dropping.
+  const halfRow = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'links', text: 'x', links: [{ label: 'no address', url: '' }] },
+  });
+  assert.equal(halfRow.status, 400);
+  assert.equal(halfRow.data.error, 'err_link_incomplete');
+
+  const noRows = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN, body: { type: 'links', text: 'x', links: [] },
+  });
+  assert.equal(noRows.data.error, 'err_link_min_items');
+
+  // An href the whole party can tap is not the place to allow javascript:.
+  for (const bad of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'file:///etc/passwd']) {
+    const res = await api('POST', '/admin/plaza-posts', {
+      token: ADMIN, body: { type: 'links', text: 'x', links: [{ label: 'bad', url: bad }] },
+    });
+    assert.equal(res.status, 400, `${bad} should be refused`);
+    assert.equal(res.data.error, 'err_link_invalid_url', `${bad} should be refused`);
+  }
+});
+
 test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote is rejected rather than moving it', async () => {
   const bad = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Only one'] } });
   assert.equal(bad.status, 400);
@@ -2005,10 +2131,29 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
 
   const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Feed Bystander' } });
 
+  // Sealed until the viewer has posted their own for this moment.
+  const locked = await api('GET', '/memo/feed', { token: bystander.data.token });
+  assert.equal(locked.status, 200);
+  assert.equal(locked.data.locked, true, 'the feed stays locked until the viewer posts');
+  assert.deepEqual(locked.data.uploads, [], 'a locked feed hands back nothing at all');
+
+  const bystanderUpload = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: bystander.data.token,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'bystander.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(bystanderUpload.status, 201);
+
   const feed = await api('GET', '/memo/feed', { token: bystander.data.token });
   assert.equal(feed.status, 200);
+  assert.equal(feed.data.locked, false);
   const entry = feed.data.uploads.find((u) => u.id === uploadId);
   assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
+  assert.ok(
+    !feed.data.uploads.some((u) => u.id === bystanderUpload.data.id),
+    'the viewer\'s own upload is shown by their checklist dot, not repeated in the feed',
+  );
   assert.equal(entry.myReaction, null);
   assert.deepEqual(entry.reactions, {});
 
@@ -2032,6 +2177,76 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   const entryToggledOff = afterToggleOff.data.uploads.find((u) => u.id === uploadId);
   assert.equal(entryToggledOff.myReaction, null);
   assert.equal(entryToggledOff.reactions['💦'] || 0, 0);
+});
+
+// The reported bug: forcing a moment early left the previous one still
+// inside its 15-minute window, so two moments were open at once and you
+// could double back to the one you had already let slip.
+test('firing a new Memo moment closes the previous one on the spot', async () => {
+  // A fresh guest, so no earlier test's upload can turn one of these slots
+  // "uploaded" and mask what is being asserted. The day's five slots are
+  // shared by everyone and earlier tests have already fired several, so this
+  // picks by position and re-fires rather than hunting for untouched ones.
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Window Guest' } });
+  const userToken = guest.data.token;
+  const { data } = await api('GET', '/memo/today', { token: userToken });
+  const [first, second] = data.slots;
+  markSlotNotified(first.id);
+
+  const oneOpen = await api('GET', '/memo/today', { token: userToken });
+  assert.equal(oneOpen.data.slots.find((s) => s.id === first.id).status, 'open');
+
+  markSlotNotified(second.id);
+  const afterSecond = await api('GET', '/memo/today', { token: userToken });
+  const openNow = afterSecond.data.slots.filter((s) => s.status === 'open');
+  assert.deepEqual(openNow.map((s) => s.id), [second.id], 'exactly one moment is ever open');
+  assert.equal(
+    afterSecond.data.slots.find((s) => s.id === first.id).status,
+    'missed',
+    'the older moment is gone the instant a newer one fires, not 15 minutes later',
+  );
+
+  // And the closed one really is closed - not just greyed out in the payload.
+  const late = await apiUpload(`/memo/slots/${first.id}/upload`, {
+    token: userToken,
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+    filename: 'too-late.jpg',
+    mimeType: 'image/jpeg',
+  });
+  assert.equal(late.status, 409);
+  assert.equal(late.data.error, 'err_memo_slot_not_open');
+});
+
+test('the Memo feed is scoped to the current moment - a new one clears what came before', async () => {
+  const viewer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Scope Viewer' } });
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Scope Poster' } });
+  const { data } = await api('GET', '/memo/today', { token: viewer.data.token });
+  const [older, newer] = data.slots;
+
+  markSlotNotified(older.id);
+  const posted = {};
+  for (const [who, key] of [[viewer, 'viewer'], [poster, 'poster']]) {
+    const up = await apiUpload(`/memo/slots/${older.id}/upload`, {
+      token: who.data.token,
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      filename: 'older.jpg',
+      mimeType: 'image/jpeg',
+    });
+    assert.equal(up.status, 201);
+    posted[key] = up.data.id;
+  }
+  // By id, not by count - this slot is shared, and earlier tests have put
+  // their own uploads on it.
+  const during = await api('GET', '/memo/feed', { token: viewer.data.token });
+  const ids = during.data.uploads.map((u) => u.id);
+  assert.ok(ids.includes(posted.poster), 'the other guest\'s upload for this moment');
+  assert.ok(!ids.includes(posted.viewer), 'not the viewer\'s own');
+
+  // A new moment starts everyone over, including the viewer's own unlock.
+  markSlotNotified(newer.id);
+  const after = await api('GET', '/memo/feed', { token: viewer.data.token });
+  assert.equal(after.data.locked, true, 'the previous moment does not keep the feed unlocked');
+  assert.deepEqual(after.data.uploads, [], 'last moment\'s photos are not carried forward');
 });
 
 // The client keeps its own copy of the reaction list (app.js renders the
@@ -2275,7 +2490,7 @@ test('publishing the night to the Wall waits for both rounds, but not for a roun
   for (const u of [a, b]) {
     await api('POST', '/admin/contestants/register', { token: ADMIN, body: { userId: u.data.id, name: `${u.data.name} look`, night } });
   }
-  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   const listed = (await api('GET', `/votes/status?night=${night}`, { token: a.data.token })).data.contestants;
   await api('POST', '/votes', { token: a.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate B')).id } });
   // Everyone eligible has to have voted before this can go out, so b votes
@@ -2392,4 +2607,36 @@ test('a dedication is private to the birthday person, one per guest, and comes o
   assert.equal(gone.status, 404, 'with nothing written there is no document to make');
 
   for (const u of [ana, rui, helper]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+});
+
+test('the owner can fill the whole app with demo data and clear it again, accounts included', async () => {
+  // The per-feature pairs each cover their own section; this one exists for
+  // setting the app up as a demo before a run-through and putting it back
+  // afterwards, which means it is the only switch that touches accounts.
+  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Helper' } });
+  await api('PATCH', `/admin/users/${helper.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Guest' } });
+
+  assert.equal((await api('POST', '/admin/wipe-everything', { token: helper.data.token })).status, 403,
+    'wiping the whole app belongs with the owner');
+  assert.equal((await api('POST', '/admin/seed-demo', { token: helper.data.token })).status, 403);
+
+  const wiped = await api('POST', '/admin/wipe-everything', { token: ADMIN });
+  assert.equal(wiped.status, 200);
+
+  const left = (await api('GET', '/admin/users', { token: ADMIN })).data;
+  assert.ok(left.some((u) => u.is_owner), 'the owner has to survive, or nobody can get back into the panel');
+  assert.ok(left.some((u) => u.id === helper.data.id), 'other admins stay - they are people, not demo data');
+  assert.ok(!left.some((u) => u.id === guest.data.id), 'guest accounts go');
+  assert.equal((await api('GET', '/admin/consequences', { token: ADMIN })).data.length, 0);
+  assert.equal((await api('GET', '/plaza-posts', { token: ADMIN })).data.posts.length, 0);
+
+  const seeded = await api('POST', '/admin/seed-demo', { token: ADMIN });
+  assert.equal(seeded.status, 200);
+  const after = (await api('GET', '/admin/users', { token: ADMIN })).data;
+  assert.ok(after.length > left.length, 'seeding brings the guest accounts back');
+  assert.ok((await api('GET', '/admin/consequences', { token: ADMIN })).data.length > 0);
+
+  await api('POST', '/admin/wipe-everything', { token: ADMIN });
+  await api('DELETE', `/admin/users/${helper.data.id}`, { token: ADMIN });
 });

@@ -168,10 +168,29 @@ export function triggerNextSlot() {
   return { ok: true, slotIndex: slot.slot_index };
 }
 
+/**
+ * The one moment that counts right now: the most recently fired slot of the
+ * day. Exactly one moment is ever live, which the 15-minute window alone
+ * doesn't guarantee - the owner can trigger the next slot early, and two
+ * random times can land within a quarter hour of each other. Either way the
+ * older one closes the instant a newer one fires: a moment you were too slow
+ * for is gone, not something you can double back to once the next one opens.
+ */
+function currentSlotId(day) {
+  const row = db.prepare(`
+    SELECT id FROM memo_slots
+    WHERE day = ? AND notified_at IS NOT NULL
+    ORDER BY notified_at DESC, slot_index DESC
+    LIMIT 1
+  `).get(day);
+  return row ? row.id : null;
+}
+
 /** A slot's derived status for display: waiting / open (+ secondsLeft) / uploaded / missed. */
-function deriveStatus(slot, upload) {
+function deriveStatus(slot, upload, currentId) {
   if (upload) return { status: 'uploaded', uploadId: upload.id, kind: upload.kind };
   if (!slot.notified_at) return { status: 'waiting' };
+  if (slot.id !== currentId) return { status: 'missed' };
   const notifiedMs = new Date(`${slot.notified_at.replace(' ', 'T')}Z`).getTime();
   const deadlineMs = notifiedMs + MEMO_WINDOW_OPEN_MINUTES * 60 * 1000;
   const remainingMs = deadlineMs - Date.now();
@@ -186,7 +205,8 @@ export function getTodayForUser(userId) {
   const slots = db.prepare('SELECT * FROM memo_slots WHERE day = ? ORDER BY slot_index').all(day);
   const uploads = db.prepare('SELECT * FROM memo_uploads WHERE user_id = ? AND day = ?').all(userId, day);
   const uploadBySlot = new Map(uploads.map((u) => [u.slot_id, u]));
-  return slots.map((s) => ({ id: s.id, slotIndex: s.slot_index, ...deriveStatus(s, uploadBySlot.get(s.id)) }));
+  const currentId = currentSlotId(day);
+  return slots.map((s) => ({ id: s.id, slotIndex: s.slot_index, ...deriveStatus(s, uploadBySlot.get(s.id), currentId) }));
 }
 
 const EXT_BY_MIME = {
@@ -206,7 +226,11 @@ export function recordUpload(slotId, userId, { mimeType, filePath, fileSize }) {
     err.status = 404;
     throw err;
   }
-  const derived = deriveStatus(slot, db.prepare('SELECT * FROM memo_uploads WHERE slot_id = ? AND user_id = ?').get(slotId, userId));
+  const derived = deriveStatus(
+    slot,
+    db.prepare('SELECT * FROM memo_uploads WHERE slot_id = ? AND user_id = ?').get(slotId, userId),
+    currentSlotId(slot.day),
+  );
   if (derived.status !== 'open') {
     const err = new Error(derived.status === 'uploaded' ? 'err_memo_already_uploaded' : 'err_memo_slot_not_open');
     err.status = 409;
@@ -229,17 +253,32 @@ export function getUpload(uploadId) {
 // reaction weight (a glance, not a comment thread).
 export const MEMO_REACTION_EMOJI = ['❤️', '💦'];
 
-/** Today's feed: every guest's uploads, newest first, with reaction counts
- * and this viewer's own reaction (if any) on each. */
+/**
+ * The current moment's feed: what everyone else posted for the slot that is
+ * live right now, newest first, with reaction counts and this viewer's own
+ * reaction on each.
+ *
+ * Two deliberate limits, both the point of the feature rather than
+ * incidental. It is scoped to the current moment, so a new one wipes the
+ * slate instead of the day turning into an ever-growing gallery. And it
+ * stays sealed until the viewer has posted their own - `locked` says which
+ * of the two empties this is, so the UI can promise something is behind it
+ * rather than showing a bare "nothing here yet". Own upload is excluded:
+ * the checklist dot above already shows it back.
+ */
 export function getTodayFeed(viewerUserId) {
   const day = today();
+  const currentId = currentSlotId(day);
+  if (!currentId) return { locked: false, uploads: [] };
+  const mine = db.prepare('SELECT id FROM memo_uploads WHERE slot_id = ? AND user_id = ?').get(currentId, viewerUserId);
+  if (!mine) return { locked: true, uploads: [] };
   const uploads = db.prepare(`
     SELECT u.*, us.name AS user_name
     FROM memo_uploads u
     JOIN users us ON us.id = u.user_id
-    WHERE u.day = ?
+    WHERE u.day = ? AND u.slot_id = ? AND u.user_id <> ?
     ORDER BY u.uploaded_at DESC
-  `).all(day);
+  `).all(day, currentId, viewerUserId);
   const reactionRows = db.prepare(`
     SELECT r.upload_id, r.emoji, r.user_id, COUNT(*) AS n
     FROM memo_reactions r
@@ -259,15 +298,18 @@ export function getTodayFeed(viewerUserId) {
     if (!countsByUpload.has(row.upload_id)) countsByUpload.set(row.upload_id, {});
     countsByUpload.get(row.upload_id)[row.emoji] = row.n;
   }
-  return uploads.map((u) => ({
-    id: u.id,
-    userId: u.user_id,
-    userName: u.user_name,
-    kind: u.kind,
-    uploadedAt: u.uploaded_at,
-    reactions: countsByUpload.get(u.id) || {},
-    myReaction: myReactionByUpload.get(u.id) || null,
-  }));
+  return {
+    locked: false,
+    uploads: uploads.map((u) => ({
+      id: u.id,
+      userId: u.user_id,
+      userName: u.user_name,
+      kind: u.kind,
+      uploadedAt: u.uploaded_at,
+      reactions: countsByUpload.get(u.id) || {},
+      myReaction: myReactionByUpload.get(u.id) || null,
+    })),
+  };
 }
 
 /** Reacting again with the same emoji clears it (toggle); a different one replaces it. */
