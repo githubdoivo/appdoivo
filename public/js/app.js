@@ -553,9 +553,11 @@ const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 
 // Demure by design: 5 small dots instead of a detailed row-per-slot list -
 // filled in as they're completed, no times or countdowns cluttering it.
 // The dots are read-only status, never controls: tapping a circle to open a
-// camera was never obvious, and made the four non-actionable states look
-// pressable too. Shooting now has its own real button below them, shown
-// only while a moment is actually open.
+// The open moment IS the button. A separate "shoot" control below five
+// dots asked you to read the dots, work out which one was live, and then
+// press something else - when the live one is already the thing pulsing at
+// you. The other four stay plain spans, so only the actionable one is
+// pressable and the row still reads as progress rather than as a toolbar.
 function renderMemoDots() {
   // Fixed left-to-right chronological order (slot_index, as returned by the
   // API) - not reordered by status. The dots are meant to read like a
@@ -563,15 +565,19 @@ function renderMemoDots() {
   // means something stable instead of shuffling completed ones around.
   $('memo-dots').innerHTML = memoSlotsCache.map((s) => {
     const label = t('memo_slot_label', { n: ROMAN_NUMERALS[s.slotIndex] ?? s.slotIndex + 1 });
-    return `<span class="memo-dot memo-dot-${s.status}" role="img" aria-label="${esc(label)}"></span>`;
+    if (s.status !== 'open') {
+      return `<span class="memo-dot memo-dot-${s.status}" role="img" aria-label="${esc(label)}"></span>`;
+    }
+    return `<button type="button" class="memo-dot memo-dot-open" data-memo-upload-btn="${s.id}"
+              aria-label="${esc(t('memo_shoot_btn'))}"></button>
+            <input type="file" accept="image/*" capture="environment"
+              class="file-input-visually-hidden" data-memo-file-input="${s.id}" />`;
   }).join('');
 
-  const open = memoSlotsCache.find((s) => s.status === 'open');
-  $('memo-shoot').innerHTML = open
-    ? `<button type="button" id="memo-shoot-btn" data-memo-upload-btn="${open.id}">${esc(t('memo_shoot_btn'))}</button>
-       <input type="file" accept="image/*" capture="environment" class="file-input-visually-hidden" data-memo-file-input="${open.id}" />`
-    : '';
-  $('memo-shoot').classList.toggle('hidden', !open);
+  // Kept as the place the per-slot message lands, but it no longer carries
+  // a button of its own.
+  $('memo-shoot').innerHTML = '';
+  $('memo-shoot').classList.add('hidden');
 }
 
 // Must stay in step with MEMO_REACTION_EMOJI in src/memo.js, which is what
@@ -637,13 +643,13 @@ function renderMemoFeed() {
 // every render - a tap just forwards to its own hidden file input, same
 // pattern as the outfit registration photo picker (see #register-photo-btn
 // in settings.js) but scoped to this container.
-$('memo-shoot').addEventListener('click', (e) => {
+$('memo-dots').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-memo-upload-btn]');
   if (!btn) return;
-  $('memo-shoot').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
+  $('memo-dots').querySelector(`[data-memo-file-input="${btn.dataset.memoUploadBtn}"]`)?.click();
 });
 
-$('memo-shoot').addEventListener('change', async (e) => {
+$('memo-dots').addEventListener('change', async (e) => {
   const input = e.target.closest('[data-memo-file-input]');
   const file = input?.files?.[0];
   if (!file) return;

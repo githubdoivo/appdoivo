@@ -1403,7 +1403,15 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   await page.click('[data-tab="memo"]');
   await page.waitForSelector('#memo-dots', { timeout: WAIT_TIMEOUT });
 
-  await page.waitForSelector(`[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+  // The live dot is the trigger. There used to be a separate button below
+  // the row, which asked you to read five dots, work out which was open,
+  // and then press something else - when the open one is already the thing
+  // pulsing at you.
+  await page.waitForSelector(`button.memo-dot.memo-dot-open[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+  assert.equal(await page.isVisible('#memo-shoot-btn'), false, 'the separate shoot button should be gone');
+  const plainDots = await page.$$eval('#memo-dots span.memo-dot', (els) => els.length);
+  assert.ok(plainDots > 0, 'the moments you cannot act on stay plain, not pressable');
+
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
   // The dot swaps from open to uploaded once the upload lands (see
   // renderMemoDots() in app.js) - waiting for the class change beats a

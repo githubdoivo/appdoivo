@@ -114,6 +114,14 @@ not a real mailbox. Two things about that:
 The same address receives DMARC aggregate reports, so if it breaks, those are
 lost too - not just vulnerability reports.
 
+## Version numbering
+
+Step the patch by **1** (`1.9.46`, `1.9.47`, ...). It used to step by 5,
+which ran through a minor every twenty deploys and made the number look
+like it meant more than it does - it only exists so a build can be
+identified at a glance from the badge. Prod and QA carry the same version
+for a given release: bump once, deploy both.
+
 ## Secrets
 
 - `.env` (local) and `fly secrets` (per app) are the only place secrets

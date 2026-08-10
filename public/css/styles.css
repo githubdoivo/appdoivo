@@ -1096,55 +1096,34 @@ html.mode-light .hero-line { color: var(--ink); }
    coloured images: the shape is painted in the theme's accent via
    background, so a single SVG tracks --rata/--ot across every theme and
    both light and dark, which a fill baked into the data URI could not. */
-/* Rata: a tail dragging down the edge with paw marks either side of it -
-   an animal that passed through. Replaces an earlier zigzag "snapped
-   mousetrap spring", which read as a graphic device rather than as
-   anything alive. The 40px tile's curve leaves and re-enters on the same
-   tangent, so it repeats as one continuous line at any box height. */
-#tab-rata .highlight {
+/* The side motif, for every themed page. Listed theme by theme rather than
+   applied to .highlight outright: an unthemed page defines no
+   --highlight-motif, and a mask that resolves to nothing paints the whole
+   16px block solid instead of nothing at all. Each theme's own token is
+   drawn from its world - see the body.theme-* blocks. */
+body.theme-rata .highlight,
+body.theme-furnished .highlight,
+body.theme-swamp .highlight,
+body.theme-mural .highlight,
+body.theme-plaza .highlight,
+body.theme-memo .highlight {
   position: relative;
   border-left: none;
   padding-left: 34px;
 }
-#tab-rata .highlight::before {
+body.theme-rata .highlight::before,
+body.theme-furnished .highlight::before,
+body.theme-swamp .highlight::before,
+body.theme-mural .highlight::before,
+body.theme-plaza .highlight::before,
+body.theme-memo .highlight::before {
   content: '';
   position: absolute;
   left: 7px;
   top: 8px;
   bottom: 8px;
   width: 16px;
-  background: var(--rata);
-  -webkit-mask-repeat: repeat-y;
-  mask-repeat: repeat-y;
-  -webkit-mask-position: center top;
-  mask-position: center top;
-  -webkit-mask-size: 16px 40px;
-  mask-size: 16px 40px;
-  -webkit-mask-image: var(--rata-trail);
-  mask-image: var(--rata-trail);
-}
-#tab-outfit .highlight {
-  border-left-color: var(--outfit);
-  background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
-}
-/* Scoped to the two night themes rather than to #tab-outfit alone: only
-   Furnished and Swamp define --highlight-motif, and an undefined mask
-   would leave the ::before painting as a solid 16px block. */
-body.theme-furnished #tab-outfit .highlight,
-body.theme-swamp #tab-outfit .highlight {
-  position: relative;
-  border-left: none;
-  padding-left: 34px;
-}
-body.theme-furnished #tab-outfit .highlight::before,
-body.theme-swamp #tab-outfit .highlight::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: 8px;
-  bottom: 8px;
-  width: 16px;
-  background: var(--ot);
+  background: var(--clay);
   -webkit-mask-repeat: repeat-y;
   mask-repeat: repeat-y;
   -webkit-mask-position: center top;
@@ -1153,6 +1132,11 @@ body.theme-swamp #tab-outfit .highlight::before {
   mask-size: 16px 40px;
   -webkit-mask-image: var(--highlight-motif);
   mask-image: var(--highlight-motif);
+}
+
+#tab-outfit .highlight {
+  border-left-color: var(--outfit);
+  background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
 }
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
@@ -1510,6 +1494,7 @@ body.theme-rata {
   background-color: #190f13;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%231a1216'/%3E%3Cg fill='%23705f63' fill-opacity='0.30'%3E%3Cg transform='translate(28,176) rotate(-20)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(58,148) rotate(-10)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(96,168) rotate(15)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3Cg transform='translate(150,60) rotate(160)'%3E%3Cellipse rx='11' ry='8.5'/%3E%3Cellipse cx='-9' cy='-14' rx='4.2' ry='5.4'/%3E%3Cellipse cy='-17' rx='4.2' ry='6'/%3E%3Cellipse cx='9' cy='-14' rx='4.2' ry='5.4'/%3E%3C/g%3E%3Cg transform='translate(172,30) rotate(150)'%3E%3Cellipse rx='9' ry='7'/%3E%3Cellipse cx='-8' cy='-12' rx='3.6' ry='4.6'/%3E%3Cellipse cy='-15' rx='3.6' ry='5'/%3E%3Cellipse cx='8' cy='-12' rx='3.6' ry='4.6'/%3E%3C/g%3E%3C/g%3E%3Cg fill='none' stroke='%23705f63' stroke-opacity='0.25' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M160 110 Q145 95 155 80 Q165 68 152 62'/%3E%3C/g%3E%3C/svg%3E");
+  --highlight-motif: var(--rata-trail);
 }
 body.theme-rata .hero-line { color: var(--clay-2); }
 body.theme-rata .card {
@@ -1834,7 +1819,12 @@ html.mode-light body.theme-memo .card {
 .memo-shoot { margin-top: 16px; }
 .memo-shoot button { width: 100%; }
 /* A plain indicator, not a control - see renderMemoDots() in app.js. */
+/* Both a span (the four you cannot act on) and a button (the live one), so
+   the button's native chrome has to go or it would sit in a grey rounded
+   rectangle of its own. */
 .memo-dot {
+  -webkit-appearance: none;
+  appearance: none;
   display: block;
   width: 34px;
   height: 34px;
@@ -1858,6 +1848,7 @@ html.mode-light body.theme-memo .card {
    between waiting and uploaded so the three stay tellable apart - 2.4
    against waiting, 1.8 against uploaded, both of which they need since
    they line up in a row. */
+button.memo-dot-open { cursor: pointer; }
 .memo-dot-open {
   background: #1f8ca8;
   border-color: #1f8ca8;
