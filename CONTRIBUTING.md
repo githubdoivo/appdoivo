@@ -116,10 +116,10 @@ lost too - not just vulnerability reports.
 
 ## Version numbering
 
-Step the patch by **1** (`1.9.46`, `1.9.47`, ...). It used to step by 5,
-which ran through a minor every twenty deploys and made the number look
-like it meant more than it does - it only exists so a build can be
-identified at a glance from the badge. Prod and QA carry the same version
+Step the patch by **5** (`1.9.50`, `1.9.55`, ... `1.9.95`, then bump the
+minor). Briefly tried stepping by 1 and reverted - the gaps are the point,
+they make one build obviously different from the next at a glance in the
+badge, which is all the number is for. Prod and QA carry the same version
 for a given release: bump once, deploy both.
 
 ## Secrets
