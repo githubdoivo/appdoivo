@@ -523,18 +523,60 @@ $('voting-reset-all-btn').addEventListener('click', async () => {
 
 let allUsers = [];
 
+// Row expansion is wired once, on the container, rather than per row on
+// every render - the same delegation the memo dots use, and for the same
+// reason: this list is rebuilt constantly, and a listener attached to a
+// node that has since been replaced is a listener on nothing. That was the
+// other half of the flakiest test in the suite (the click landed on a row
+// whose handler had been thrown away with the previous render), and on a
+// phone it is a tap that simply does nothing.
+function wireUsersListOnce() {
+  const list = $('users-list');
+  const toggleRow = (row) => {
+    const details = row.nextElementSibling;
+    const nowOpen = details.classList.toggle('hidden') === false;
+    row.setAttribute('aria-expanded', String(nowOpen));
+    const id = Number(row.dataset.rowToggle);
+    if (nowOpen) expandedUsers.add(id);
+    else expandedUsers.delete(id);
+  };
+  list.addEventListener('click', (e) => {
+    // Not when the tap was really meant for something inside the row -
+    // renaming, or any of the buttons in the details below.
+    if (e.target.closest('[data-rename-user], button, [data-reveal-token]')) return;
+    const row = e.target.closest('[data-row-toggle]');
+    if (row && list.contains(row)) toggleRow(row);
+  });
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest('[data-row-toggle]');
+    if (!row || !list.contains(row)) return;
+    e.preventDefault();
+    toggleRow(row);
+  });
+}
+
+// Which rows are open, by user id. Lives here rather than in the DOM
+// because the list is rebuilt from scratch on every render - a poll tick, a
+// role change, a keystroke in the search box - and reading the open state
+// off the markup meant every one of those snapped every open row shut. On
+// screen that is a key you were halfway through copying disappearing on
+// its own; in the suite it was the single flakiest test, for the same
+// reason and with nothing wrong with the test.
+const expandedUsers = new Set();
+
 function renderUsersList(users) {
   $('users-list').innerHTML = users.length
     ? users.map((u) => `
       <div class="user-row">
-        <div class="user-row-top" data-row-toggle role="button" tabindex="0" aria-expanded="false">
+        <div class="user-row-top" data-row-toggle="${u.id}" role="button" tabindex="0" aria-expanded="${expandedUsers.has(u.id)}">
           <div class="user-row-name">
             <span class="user-row-name-text${isOwner ? ' name-edit' : ''}"${isOwner ? ` data-rename-user="${u.id}" data-current-name="${esc(u.name)}" role="button" tabindex="0"` : ''}>${esc(u.name)}</span>
             ${u.is_owner ? '<span class="badge role-owner">owner</span>' : u.is_admin ? '<span class="badge role-admin">admin</span>' : '<span class="badge role-user">user</span>'}
           </div>
           <span class="user-row-chevron">›</span>
         </div>
-        <div class="user-row-details hidden">
+        <div class="user-row-details${expandedUsers.has(u.id) ? '' : ' hidden'}">
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
           ${isOwner ? `
           <div class="row-actions">
@@ -545,23 +587,6 @@ function renderUsersList(users) {
         </div>
       </div>`).join('')
     : `<p class="muted">${t('no_users')}</p>`;
-
-  // Collapsed to just name+role by default - with a real guest list (not
-  // 24 demo accounts), showing every key/action for every single row at
-  // once made the whole tab one very long, mostly-irrelevant scroll. Tap
-  // the row to reveal its key and actions instead of dumping everyone's
-  // open at once.
-  $('users-list').querySelectorAll('[data-row-toggle]').forEach((row) => {
-    const toggle = () => {
-      const details = row.nextElementSibling;
-      const nowOpen = details.classList.toggle('hidden') === false;
-      row.setAttribute('aria-expanded', String(nowOpen));
-    };
-    row.addEventListener('click', toggle);
-    row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-    });
-  });
 
   // Keys are censored by default (someone glancing at a screen share
   // shouldn't see everyone's access keys) - click to reveal/hide. Every
@@ -785,6 +810,7 @@ async function loadUsers() {
 }
 
 syncRolePills();
+wireUsersListOnce();
 $('user-name-input').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
