@@ -469,15 +469,17 @@ export function enteredPeopleCount(night) {
   return people.size;
 }
 
+// Everyone with an account, admins and the owner included. They are at the
+// party and they vote like anyone else, so leaving them out made "5 of 30"
+// count a smaller room than the one actually voting - and the two numbers
+// only agree with each other if both are drawn from the same set.
 export function eligibleVoterCount() {
-  return db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0').get().n;
+  return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
 }
 
 export function usersWithoutVoteCount(night) {
-  // Excludes admin/owner accounts - the organiser running the show very
-  // often doesn't vote themselves, so counting them would make this fire
-  // on nearly every night regardless of how many guests actually voted.
-  const userIds = db.prepare('SELECT id FROM users WHERE is_admin = 0').all().map((r) => r.id);
+  // Same set as eligibleVoterCount() above - every account, no exclusions.
+  const userIds = db.prepare('SELECT id FROM users').all().map((r) => r.id);
   return userIds.filter((id) => {
     const vote = myVoteForNight(id, night);
     return !vote || !vote.confirmed;

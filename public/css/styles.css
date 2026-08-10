@@ -1402,6 +1402,17 @@ body { transition: background-color 0.45s ease; }
    admin panel and shows up in front of everyone, so it gets the full width
    rather than sharing a row with the phase controls. */
 .publish-wide { grid-column: 1 / -1; width: 100%; }
+/* The two exports share a line at half width each; publishing to the Wall
+   gets its own full-width row below, the way every other commit-style
+   action in the app is shaped. Three equal buttons crammed on one line read
+   as three equal choices, when one of them is the one that goes public. */
+.memo-day-exports {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.memo-day-exports > button { flex: 1 1 50%; min-width: 0; }
+.memo-day-exports + .publish-wide { margin-top: 8px; }
 .voting-state { font-family: var(--serif); font-size: 1.2rem; }
 /* One line per round: what it is on the left, how many votes are in on the
    right. Tabular figures so the numbers line up as they climb. */
@@ -1493,8 +1504,13 @@ body.theme-swamp {
   --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='40'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round'%3E%3Cpath d='M6 40 C6 30 4.5 22 5.5 15' stroke-opacity='0.9' stroke-width='1.5'/%3E%3Cpath d='M11.5 40 C11.5 33 12.5 28 11.5 23' stroke-opacity='0.5' stroke-width='1.2'/%3E%3Cpath d='M0.5 34 Q8 31 15.5 34' stroke-opacity='0.5' stroke-width='1.1'/%3E%3Cpath d='M0.5 38.5 Q8 35.5 15.5 38.5' stroke-opacity='0.32' stroke-width='1'/%3E%3C/g%3E%3Crect x='3.4' y='4' width='4.2' height='11' rx='2.1' fill='%23000' fill-opacity='0.85'/%3E%3Cg stroke='%23000' stroke-opacity='0.55' stroke-width='0.8' fill='none'%3E%3Cpath d='M11.5 21 q2 -1.6 3.5 0.4'/%3E%3Cpath d='M11.5 21 q2 1.6 3.5 -0.4'/%3E%3Cpath d='M11.5 21 V25'/%3E%3C/g%3E%3C/svg%3E");
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #bfc8a3;
+  /* Lily pads on open water: four pads at different sizes with one bloom,
+     and two ripple lines behind them. The notch cut out of each pad is 6
+     degrees - the previous version used about 30, which is what made them
+     read as pac-man rather than as pads, and was the actual complaint
+     behind "that is not the background you showed me". */
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 42 Q50 34 100 42 T200 42'/%3E%3Cpath d='M0 62 Q50 54 100 62 T200 62'/%3E%3Cpath d='M0 158 Q50 150 100 158 T200 158'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M34 132 V92'/%3E%3Cpath d='M41 132 V100'/%3E%3Cpath d='M148 138 V96'/%3E%3Cpath d='M155 138 V104'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='88' cy='120' rx='16' ry='6'/%3E%3Cellipse cx='166' cy='178' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M44 150 L57.7 152.8 A14 14 0 1 0 56.3 156.7 Z'/%3E%3Cpath fill-opacity='0.13' d='M150 60 L141.5 54.8 A10 10 0 1 0 143.4 52.5 Z'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='200'>%20<rect%20width='200'%20height='200'%20fill='%23c5cea8'/>%20<g%20fill='none'%20stroke='%2355632c'%20stroke-opacity='0.11'>%20<path%20d='M0%2046%20Q50%2038%20100%2046%20T200%2046'/><path%20d='M0%20150%20Q50%20142%20100%20150%20T200%20150'/>%20</g>%20<g%20fill='%2355632c'>%20<path%20fill-opacity='0.17'%20transform='rotate%28-24%2063%2074%29'%20d='M63%2074%20L77.9%2072.4%20A15%2015%200%201%200%2077.9%2075.6%20Z'/>%20<path%20fill-opacity='0.13'%20transform='rotate%28130%20150%20120%29'%20d='M150%20120%20L161.9%20118.7%20A12%2012%200%201%200%20161.9%20121.3%20Z'/>%20<path%20fill-opacity='0.15'%20transform='rotate%2872%20104%20168%29'%20d='M104%20168%20L113.9%20166.9%20A10%2010%200%201%200%20113.9%20169.1%20Z'/>%20<path%20fill-opacity='0.11'%20transform='rotate%28-140%2028%20140%29'%20d='M28%20140%20L36.9%20139.1%20A9%209%200%201%200%2036.9%20140.9%20Z'/>%20<circle%20cx='150'%20cy='58'%20r='3.4'%20fill-opacity='0.26'/>%20<circle%20cx='150'%20cy='58'%20r='6.5'%20fill-opacity='0.10'/>%20</g></svg>");
 }
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
@@ -1587,8 +1603,9 @@ html.mode-dark body.theme-swamp {
   --ot-tint:  #212912;
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23212912'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.30'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.46' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #141a0c;
+  /* Same pads as light, on the dark water - see the note there. */
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23192010'/%3E%3Cg fill='none' stroke='%238a9c52' stroke-opacity='0.18'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%238a9c52' stroke-opacity='0.32' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%238a9c52' fill-opacity='0.16'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%238a9c52'%3E%3Cpath fill-opacity='0.15' d='M30 112 L42.6 105.9 A14 14 0 1 0 42.6 118.1 Z'/%3E%3Cpath fill-opacity='0.15' d='M110 66 L119.0 61.6 A10 10 0 1 0 119.0 70.4 Z'/%3E%3Cpath fill-opacity='0.15' d='M66 22 L72.7 18.7 A7.5 7.5 0 1 0 72.7 25.3 Z'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='200'>%20<rect%20width='200'%20height='200'%20fill='%23192010'/>%20<g%20fill='none'%20stroke='%238a9c52'%20stroke-opacity='0.11'>%20<path%20d='M0%2046%20Q50%2038%20100%2046%20T200%2046'/><path%20d='M0%20150%20Q50%20142%20100%20150%20T200%20150'/>%20</g>%20<g%20fill='%238a9c52'>%20<path%20fill-opacity='0.17'%20transform='rotate%28-24%2063%2074%29'%20d='M63%2074%20L77.9%2072.4%20A15%2015%200%201%200%2077.9%2075.6%20Z'/>%20<path%20fill-opacity='0.13'%20transform='rotate%28130%20150%20120%29'%20d='M150%20120%20L161.9%20118.7%20A12%2012%200%201%200%20161.9%20121.3%20Z'/>%20<path%20fill-opacity='0.15'%20transform='rotate%2872%20104%20168%29'%20d='M104%20168%20L113.9%20166.9%20A10%2010%200%201%200%20113.9%20169.1%20Z'/>%20<path%20fill-opacity='0.11'%20transform='rotate%28-140%2028%20140%29'%20d='M28%20140%20L36.9%20139.1%20A9%209%200%201%200%2036.9%20140.9%20Z'/>%20<circle%20cx='150'%20cy='58'%20r='3.4'%20fill-opacity='0.26'/>%20<circle%20cx='150'%20cy='58'%20r='6.5'%20fill-opacity='0.10'/>%20</g></svg>");
 }
 html.mode-dark body.theme-furnished .card,
 html.mode-dark body.theme-swamp .card {
@@ -1978,7 +1995,7 @@ button.memo-dot-open { cursor: pointer; }
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links) { border-top: none; padding-top: 0; }
 /* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
    an announcement/poll post is its own self-contained "boxed" card (see
    the comment on .plaza-post above), so its type label is that card's
@@ -2051,14 +2068,20 @@ html.mode-dark .plaza-post-type { color: #fff; }
   margin-bottom: 8px;
 }
 
-.plaza-post-poll {
+/* Boxed like every other post type. A links post was the one kind left
+   sitting straight on the page background, so in a mixed feed it read as
+   loose furniture between the cards rather than as a post of its own. */
+.plaza-post-poll,
+.plaza-post-links {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin: 10px 0;
 }
-.plaza-post-poll.plaza-post:first-child { margin-top: 0; }
+.plaza-post-poll.plaza-post:first-child,
+.plaza-post-links.plaza-post:first-child { margin-top: 0; }
+.plaza-post-links.pinned { border-color: var(--clay); }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */
@@ -2100,9 +2123,28 @@ html.mode-dark .plaza-post-type { color: #fff; }
    masquerade as a second name field. */
 .plaza-link-row { display: flex; gap: 8px; margin-top: 8px; }
 .plaza-link-row > input { min-width: 0; flex: 1 1 50%; }
-.plaza-link-row > .plaza-link-emoji-input { flex: 0 0 3.2em; text-align: center; }
+/* The emoji box wraps its input so a drawn smiley can sit behind it as the
+   hint - a typed placeholder would be the phone's emoji font, the one thing
+   on screen this app didn't draw. The hint hides as soon as there is a
+   value, the way a placeholder would. */
+.plaza-link-emoji-field { position: relative; flex: 0 0 3.2em; display: block; }
+.plaza-link-emoji-field > .plaza-link-emoji-input { width: 100%; text-align: center; }
+.plaza-link-emoji-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  color: var(--ink-soft);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.plaza-link-emoji-input:not(:placeholder-shown) ~ .plaza-link-emoji-hint,
+.plaza-link-emoji-field:focus-within > .plaza-link-emoji-hint { opacity: 0; }
 @media (max-width: 380px) {
   .plaza-link-row { flex-direction: column; gap: 6px; }
+  .plaza-link-emoji-field { flex: 0 0 auto; }
 }
 
 .plaza-poll-option {
@@ -2200,6 +2242,20 @@ html.mode-dark .plaza-post-type { color: #fff; }
    it was a pale block in dark mode against publicar's deep one - the two
    read as unrelated controls depending which mode you were in. */
 [data-pin-post],
+/* Everything below joined this family after a QA pass on a dark-mode
+   phone: on the default style they invert to a near-white block, which
+   is the one surface on the page carrying no theme at all - "guardar"
+   sitting beside chat's deep "partilhar", and Memo's two export buttons
+   floating over a dark blue card as bright white slabs. Same reasoning as
+   [data-pin-post] above: buttons doing the same kind of job have to look
+   related in both modes, and a white ground belongs to no theme. */
+#dedication-save-btn,
+#dedications-pdf-btn,
+#download-photos-btn,
+#publish-podium-btn,
+[data-memo-download-day],
+[data-memo-download-video],
+[data-memo-publish-day],
 [data-reveal-next] {
   /* Was a tint of --clay into --paper-2 (22%, then 30%, then 35%) with
      --ink text. Even at 35% it read as a washed-out, half-transparent
@@ -2222,6 +2278,13 @@ html.mode-dark .plaza-post-type { color: #fff; }
 #plaza-post-form button[type="submit"]:hover,
 #admin-register-form button[type="submit"]:hover,
 [data-pin-post]:hover,
+#dedication-save-btn:hover,
+#dedications-pdf-btn:hover,
+#download-photos-btn:hover,
+#publish-podium-btn:hover,
+[data-memo-download-day]:hover,
+[data-memo-download-video]:hover,
+[data-memo-publish-day]:hover,
 [data-reveal-next]:hover {
   background: color-mix(in srgb, var(--clay) 42%, #000);
   border-color: color-mix(in srgb, var(--clay) 42%, #000);

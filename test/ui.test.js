@@ -565,6 +565,16 @@ test('Wall admin can publish a list of links from Settings, and they open out of
     { timeout: WAIT_TIMEOUT },
   );
 
+  // The admin's own history has to show what was published, not just that
+  // something was. A links post rendered its intro line and stopped, so the
+  // one thing worth checking before the party - are these the right
+  // addresses - was the one thing the page would not tell you. A poll has
+  // listed its options here all along.
+  await adminPage.waitForSelector('#plaza-posts-list .admin-post-options', { timeout: WAIT_TIMEOUT });
+  const historyText = await adminPage.textContent('#plaza-posts-list');
+  assert.match(historyText, /Form/, 'the history should name each link');
+  assert.match(historyText, /example\.com\/form/, 'and show the address it actually points at');
+
   const guestPage = await loginPage(context, guest.token);
   await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
   const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
@@ -1846,15 +1856,11 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   const plainDots = await page.$$eval('#memo-dots span.memo-dot', (els) => els.length);
   assert.ok(plainDots > 0, 'the moments you cannot act on stay plain, not pressable');
 
-  // Before posting, the feed is sealed rather than empty - the card is up and
-  // says so, so posting doesn't look optional.
-  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.equal(
-    await page.getAttribute('#memo-feed-help', 'data-i18n'),
-    'memo_feed_locked',
-    'the feed should tell you it is waiting on your own moment',
-  );
-  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'nothing leaks through a locked feed');
+  // Before posting there is no board at all - just the dots. Not a card
+  // saying one is waiting: that gives away that there is something behind
+  // it before it has been earned, which is the opposite of the point.
+  assert.equal(await page.isVisible('#memo-feed-card'), false, 'no board until you have posted your own');
+  assert.equal(await page.$$eval('[data-memo-react]', (els) => els.length), 0, 'and nothing leaks through it');
 
   await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'moment.png', mimeType: 'image/png', buffer: PNG_1X1 });
   // The dot swaps from open to uploaded once the upload lands (see
@@ -1862,20 +1868,35 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   // fixed sleep.
   await page.waitForSelector(`.memo-dot-uploaded`, { timeout: WAIT_TIMEOUT });
 
+  // Alone at this point - and the moment just captured still has to be on
+  // screen. The feed used to leave your own upload out, so shooting the
+  // first moment of a party left it empty, which hid the whole card: the
+  // dot filled in and nothing else happened, so capturing read as broken.
+  await page.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('.memo-feed-item-mine img.memo-feed-thumb', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.$$eval('.memo-feed-item-mine [data-memo-react]', (els) => els.length),
+    0,
+    'reacting to your own moment is not a thing',
+  );
+
   const bystanderPage = await loginPage(context, bystander.token);
   await bystanderPage.click('[data-tab="memo"]');
   // Same seal for the second guest, and posting is what breaks it - the
   // other guest's moment only appears on the far side of their own.
-  await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden)', { timeout: WAIT_TIMEOUT });
-  assert.equal(await bystanderPage.getAttribute('#memo-feed-help', 'data-i18n'), 'memo_feed_locked');
+  assert.equal(await bystanderPage.isVisible('#memo-feed-card'), false, 'the second guest is sealed out the same way');
   await bystanderPage.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'theirs.png', mimeType: 'image/png', buffer: PNG_1X1 });
   await bystanderPage.waitForSelector('#memo-feed-card:not(.hidden) [data-memo-react]', { timeout: WAIT_TIMEOUT });
   const uploadId = await bystanderPage.getAttribute('[data-memo-react]', 'data-memo-react');
 
-  // Only the other guest's moment - your own is already the dot above.
+  // Everyone's moment for this slot, the viewer's own included and labelled
+  // as theirs - newest first, so the one just posted leads. It used to show
+  // only other people, on the grounds that the dot above already stood for
+  // your own; shooting the first moment of a party then left the feed empty
+  // and hid the card, so capturing looked like it had failed.
   const feedOwners = await bystanderPage.$$eval('.memo-feed-name', (els) => els.map((e) => e.textContent.trim()));
   // Raw name: the all-lowercase look is text-transform, not the text itself.
-  assert.deepEqual(feedOwners, ['Memo UI Tester'], 'the feed is other people, not a mirror');
+  assert.deepEqual(feedOwners, ['o teu', 'Memo UI Tester'], 'your own moment belongs in the feed, marked as yours');
 
   // Regression: the reaction row rendered one button per entry in the
   // client's own emoji list, and that list was left at four after the
@@ -2556,12 +2577,12 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   assert.ok(listed.toLowerCase().includes('dedication writer'), 'signed with who wrote it');
   assert.equal(await ownerPage.isDisabled('#dedications-pdf-btn'), false, 'and there is something to download');
 
-  // These go live before the party, so testers will write real ones and
-  // clearing them has to be reachable from the same place they are read.
-  // What the button does is covered server-side; what matters here is that
-  // it is there at all, next to the collection rather than off in a danger
-  // zone on another tab.
-  assert.equal(await ownerPage.isVisible('#dedications-wipe-btn'), true, 'there has to be a way to clear them');
+  // No wipe button here: the whole-app data card already clears these along
+  // with everything else, and a second delete-everything control sitting
+  // next to the messages themselves was one more way to lose them by
+  // accident. The endpoint stays (covered server-side) - only the button
+  // that nobody needed is gone.
+  assert.equal(await ownerPage.isVisible('#dedications-wipe-btn'), false, 'the redundant wipe button should be gone');
   await ownerCtx.close();
 
   await api('POST', '/admin/dedications/wipe', { token: ADMIN });

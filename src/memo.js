@@ -263,8 +263,13 @@ export const MEMO_REACTION_EMOJI = ['❤️', '💦'];
  * slate instead of the day turning into an ever-growing gallery. And it
  * stays sealed until the viewer has posted their own - `locked` says which
  * of the two empties this is, so the UI can promise something is behind it
- * rather than showing a bare "nothing here yet". Own upload is excluded:
- * the checklist dot above already shows it back.
+ * rather than showing a bare "nothing here yet".
+ *
+ * The viewer's own upload is included, flagged `mine`. It used to be left
+ * out on the grounds that the checklist dot above already showed it back,
+ * but a dot filling in is not the same as seeing the photo you just took:
+ * shoot the first moment of a party and the feed had nothing in it, so the
+ * whole card hid itself and capturing appeared to have done nothing at all.
  */
 export function getTodayFeed(viewerUserId) {
   const day = today();
@@ -276,9 +281,9 @@ export function getTodayFeed(viewerUserId) {
     SELECT u.*, us.name AS user_name
     FROM memo_uploads u
     JOIN users us ON us.id = u.user_id
-    WHERE u.day = ? AND u.slot_id = ? AND u.user_id <> ?
+    WHERE u.day = ? AND u.slot_id = ?
     ORDER BY u.uploaded_at DESC
-  `).all(day, currentId, viewerUserId);
+  `).all(day, currentId);
   const reactionRows = db.prepare(`
     SELECT r.upload_id, r.emoji, r.user_id, COUNT(*) AS n
     FROM memo_reactions r
@@ -304,6 +309,7 @@ export function getTodayFeed(viewerUserId) {
       id: u.id,
       userId: u.user_id,
       userName: u.user_name,
+      mine: u.user_id === viewerUserId,
       kind: u.kind,
       uploadedAt: u.uploaded_at,
       reactions: countsByUpload.get(u.id) || {},

@@ -703,7 +703,7 @@ test('admin opens the night and each user votes once', async () => {
   assert.equal(night.started, true, 'once a night has been opened, it should never look "unstarted" again');
 });
 
-test('GET /admin/voting reports how many non-admin accounts have not voted, excluding admins from the count', async () => {
+test('GET /admin/voting counts every account that has not voted, admins and owner included', async () => {
   // A separate night from NIGHT/'furnished' (heavily reused by neighboring
   // tests) - and asserting deltas off a baseline rather than an absolute
   // number, since this file shares one DB across the whole run and earlier
@@ -718,21 +718,26 @@ test('GET /admin/voting reports how many non-admin accounts have not voted, excl
   };
   const baseline = (await nightsInfo()).notVoted;
 
-  // A fresh admin should never raise the count - the organiser running the
-  // show very often doesn't vote themselves.
+  // An admin raises it like anyone else. They are at the party and they
+  // vote, so leaving them out counted a smaller room than the one actually
+  // voting - "5 of 30" against a 30 that was never the real number.
   const freshAdmin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Fresh Admin For NotVoted' } });
   await api('PATCH', `/admin/users/${freshAdmin.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  assert.equal((await nightsInfo()).notVoted, baseline, 'a new admin account should not raise the count');
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'an admin who has not voted is still someone who has not voted');
 
   // Two fresh regular accounts should raise it by exactly two.
   const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest A' } });
   await api('POST', '/admin/users', { token: ADMIN, body: { name: 'NotVoted Guest B' } });
   const contestant = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'NotVoted Target', night } });
-  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'two fresh non-admin accounts should each raise the count by one');
+  assert.equal((await nightsInfo()).notVoted, baseline + 3, 'each new account raises it by one, whatever its role');
 
   // One of them voting should drop it back by one.
   await api('POST', '/votes', { token: a.data.token, body: { contestantId: contestant.data.id, night } });
-  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'voting should remove that account from the count');
+  assert.equal((await nightsInfo()).notVoted, baseline + 2, 'voting should remove that account from the count');
+
+  // And an admin voting counts the same way.
+  await api('POST', '/votes', { token: freshAdmin.data.token, body: { contestantId: contestant.data.id, night } });
+  assert.equal((await nightsInfo()).notVoted, baseline + 1, 'an admin voting counts like anyone else voting');
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
 });
@@ -1246,6 +1251,37 @@ test('either half of a pending duo can cancel it themselves, but not once it is 
   assert.equal(lateCancel.data.error, 'err_you_already_registered');
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('the contestant picker only offers people who are still free that night', async () => {
+  const night = 'swamp';
+  const entered = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Already In Duo' } });
+  const partner = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Already In Partner' } });
+  const free = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Still Free Person' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', '/admin/contestants/register', {
+    token: ADMIN,
+    body: { userId: entered.data.id, partnerUserId: partner.data.id, name: 'Taken Pair', night },
+  });
+
+  const plain = await api('GET', '/users/basic', { token: ADMIN });
+  assert.ok(plain.data.some((u) => u.id === entered.data.id), 'the unfiltered list is unchanged - the guest picker still wants everyone');
+
+  const freeOnly = await api('GET', `/users/basic?freeFor=${night}`, { token: ADMIN });
+  const ids = freeOnly.data.map((u) => u.id);
+  assert.ok(!ids.includes(entered.data.id), 'whoever entered is not offered again');
+  assert.ok(!ids.includes(partner.data.id), 'nor the partner named on their entry');
+  assert.ok(ids.includes(free.data.id), 'anyone still free is');
+  // Unlike the plain list, this one keeps the caller: an organiser filling
+  // the form in may be entering themselves.
+  assert.ok(ids.includes(1), 'the caller is offered too, as long as they are free');
+
+  // A night nobody has entered is untouched by the filter.
+  const otherNight = await api('GET', '/users/basic?freeFor=furnished', { token: ADMIN });
+  assert.ok(otherNight.data.some((u) => u.id === entered.data.id), 'being entered for one night says nothing about another');
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const u of [entered, partner, free]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
 });
 
 test('an admin entering a pair on their behalf does not need a confirmation', async () => {
@@ -2150,10 +2186,14 @@ test('the shared Memo feed shows every guest\'s uploads for today with reaction 
   assert.equal(feed.data.locked, false);
   const entry = feed.data.uploads.find((u) => u.id === uploadId);
   assert.ok(entry, 'the feed should include every guest\'s upload, not just the viewer\'s own');
-  assert.ok(
-    !feed.data.uploads.some((u) => u.id === bystanderUpload.data.id),
-    'the viewer\'s own upload is shown by their checklist dot, not repeated in the feed',
-  );
+  assert.equal(entry.mine, false, "someone else's upload is not flagged as the viewer's");
+  // The viewer's own is in the feed too, flagged. A filled checklist dot is
+  // not the same as seeing the photo you just took: shooting the first
+  // moment of a party left the feed empty, so the card hid itself and
+  // capturing looked like it had done nothing.
+  const own = feed.data.uploads.find((u) => u.id === bystanderUpload.data.id);
+  assert.ok(own, 'the viewer has to be able to see the moment they just captured');
+  assert.equal(own.mine, true, "the viewer's own upload is flagged so the UI can label it");
   assert.equal(entry.myReaction, null);
   assert.deepEqual(entry.reactions, {});
 
@@ -2240,7 +2280,7 @@ test('the Memo feed is scoped to the current moment - a new one clears what came
   const during = await api('GET', '/memo/feed', { token: viewer.data.token });
   const ids = during.data.uploads.map((u) => u.id);
   assert.ok(ids.includes(posted.poster), 'the other guest\'s upload for this moment');
-  assert.ok(!ids.includes(posted.viewer), 'not the viewer\'s own');
+  assert.ok(ids.includes(posted.viewer), 'and the viewer\'s own, so they can see what they captured');
 
   // A new moment starts everyone over, including the viewer's own unlock.
   markSlotNotified(newer.id);

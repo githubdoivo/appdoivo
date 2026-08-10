@@ -434,7 +434,30 @@ router.get('/outfit/contestants/:id/photo', (req, res) => {
 
 // Minimal user list (id + name only, no tokens/roles) for the "team up with"
 // picker on Best Look registration - every logged-in user can see it.
+//
+// ?freeFor=<night> drops anyone who already has an entry that night, either
+// as the entrant or as the named partner. registerContestant() refuses those
+// anyway (err_you_already_registered), so offering them up could only ever
+// end in an error message - the organiser picks a name off the list and is
+// told off for it. Not filtering by default: the guest-facing duo picker
+// wants everyone, and refusing there is the honest answer, since who is
+// already entered is not something to publish to the whole party.
 router.get('/users/basic', (req, res) => {
+  const freeFor = req.query.freeFor;
+  if (isNight(freeFor)) {
+    // Keeps the caller, unlike the plain list below: the organiser filling
+    // in the admin form may well be entering themselves, and this list is
+    // "who is still free", not "everyone but you".
+    const rows = db.prepare(`
+      SELECT u.id, u.name FROM users u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contestants c
+        WHERE c.night = ? AND (c.user_id = u.id OR c.partner_user_id = u.id)
+      )
+      ORDER BY u.name COLLATE NOCASE
+    `).all(freeFor);
+    return res.json(rows);
+  }
   const rows = db.prepare(
     'SELECT id, name FROM users WHERE id != ? ORDER BY name COLLATE NOCASE'
   ).all(req.user.id);
@@ -896,55 +919,90 @@ router.post('/admin/dedications/wipe', requireOwner, (req, res) => {
   res.json({ ok: true });
 });
 
-// The collection as a document, meant to be taken out once at the end.
-// Helvetica rather than an embedded font: pdfkit's built-in encoding covers
-// Latin-1, which is every accent Portuguese needs, and embedding a face
-// would add a megabyte to the repo for nothing.
+// The collection as a document, meant to be taken out once at the end - a
+// book you read straight through, which is what a pile of messages from
+// your friends actually is.
+//
+// It borrows the landing page's own palette rather than inventing one for
+// print: cream paper, warm ink, the terracotta accent, and the same faint
+// speckle the app lays over its background. Times rather than the app's
+// Garamond/Italianno: pdfkit's built-ins cover every accent Portuguese
+// needs at zero cost, and embedding two faces would put a megabyte of font
+// binaries in the repo to set about forty words.
+const PDF_PAPER = '#e7e3d6';
+const PDF_INK = '#2b2721';
+const PDF_SOFT = '#635d4f';
+const PDF_CLAY = '#a96b4b';
+
+/** The paper itself: the ground, plus the speckle that keeps it from
+ *  reading as flat white-ish nothing. Deterministic, so two exports of the
+ *  same collection are byte-identical rather than gratuitously different. */
+function drawDedicationPaper(doc) {
+  doc.save().rect(0, 0, doc.page.width, doc.page.height).fill(PDF_PAPER).restore();
+  doc.save().fillColor(PDF_INK).fillOpacity(0.035);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let i = 0; i < 260; i++) {
+    doc.circle(rnd() * doc.page.width, rnd() * doc.page.height, rnd() * 0.9 + 0.25).fill();
+  }
+  doc.restore();
+}
+
+/** A small drawn ornament - a rule with a dot at its centre. Stands between
+ *  messages so the collection reads as separate notes rather than one long
+ *  letter, in the spirit of the app's per-theme motifs. */
+function drawSprig(doc, cx, cy, width) {
+  doc.save().strokeColor(PDF_CLAY).lineWidth(0.7).opacity(0.75);
+  doc.moveTo(cx - width / 2, cy).lineTo(cx + width / 2, cy).stroke();
+  doc.circle(cx, cy, 2.2).fillColor(PDF_CLAY).fillOpacity(0.75).fill();
+  doc.restore();
+}
+
 router.get('/admin/dedications.pdf', requireOwner, (req, res) => {
   const rows = allDedications();
   if (rows.length === 0) return res.status(404).json({ error: 'err_no_dedications' });
 
-  const doc = new PDFDocument({ size: 'A4', margins: { top: 72, bottom: 72, left: 64, right: 64 } });
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 76, bottom: 76, left: 66, right: 66 } });
   res.set('Content-Type', 'application/pdf');
   res.set('Content-Disposition', 'attachment; filename="dedicatorias.pdf"');
   doc.pipe(res);
+  // Every new page needs its own ground - pdfkit draws on a blank sheet.
+  doc.on('pageAdded', () => {
+    drawDedicationPaper(doc);
+    doc.x = doc.page.margins.left;
+    doc.y = doc.page.margins.top;
+  });
+  drawDedicationPaper(doc);
 
   // The owner's actual name, not a hardcoded one - this is their book.
   const owner = db.prepare('SELECT name FROM users WHERE is_owner = 1').get();
   const firstName = String(owner?.name ?? '').trim().split(/\s+/)[0].toLowerCase();
 
-  doc.font('Helvetica-Bold').fontSize(28).text(`para o ${firstName}`, { align: 'center' });
-  doc.moveDown(0.4);
-  doc.font('Helvetica-Oblique').fontSize(11).fillColor('#777')
-    .text(`${rows.length} ${rows.length === 1 ? 'mensagem' : 'mensagens'}`, { align: 'center' });
-  doc.fillColor('#000');
+  doc.font('Times-Italic').fontSize(40).fillColor(PDF_INK).text(`para o ${firstName}`, { align: 'center' });
+  doc.moveDown(0.25);
+  drawSprig(doc, doc.page.width / 2, doc.y + 4, 70);
+  doc.moveDown(0.9);
+  doc.font('Times-Roman').fontSize(10.5).fillColor(PDF_SOFT)
+    .text(`${rows.length} ${rows.length === 1 ? 'mensagem' : 'mensagens'}`, { align: 'center', characterSpacing: 1.6 });
 
   const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   rows.forEach((row, i) => {
-    doc.moveDown(i === 0 ? 2.2 : 1.6);
+    doc.moveDown(i === 0 ? 2 : 1.4);
     // A message and its signature stay on one page: a name stranded at the
     // top of the next reads as somebody else's message.
-    const needed = doc.heightOfString(row.text, { width: contentWidth, lineGap: 4 }) + 60;
+    const needed = doc.font('Times-Roman').fontSize(13.5)
+      .heightOfString(row.text, { width: contentWidth, lineGap: 5 }) + 60;
     if (doc.y + needed > doc.page.height - doc.page.margins.bottom) doc.addPage();
-
-    if (i > 0) {
-      // A hairline rather than blank space: at this length the messages run
-      // together otherwise, and it should read as a collection of separate
-      // notes rather than one long letter.
-      const y = doc.y;
-      doc.save().strokeColor('#ddd').lineWidth(0.5)
-        .moveTo(doc.page.margins.left + contentWidth * 0.35, y)
-        .lineTo(doc.page.margins.left + contentWidth * 0.65, y)
-        .stroke().restore();
-      doc.moveDown(1.6);
+    else if (i > 0) {
+      drawSprig(doc, doc.page.width / 2, doc.y, 40);
+      doc.moveDown(1.4);
     }
 
-    doc.font('Helvetica').fontSize(13).fillColor('#111')
-      .text(row.text, { align: 'left', lineGap: 4 });
-    doc.moveDown(0.6);
-    doc.font('Helvetica-Oblique').fontSize(11).fillColor('#777')
+    doc.font('Times-Roman').fontSize(13.5).fillColor(PDF_INK)
+      .text(row.text, { align: 'left', lineGap: 5 });
+    doc.moveDown(0.5);
+    doc.font('Times-Italic').fontSize(11).fillColor(PDF_CLAY)
       .text(`— ${row.author}`, { align: 'right' });
-    doc.fillColor('#000');
   });
 
   doc.end();

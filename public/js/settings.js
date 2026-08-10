@@ -900,6 +900,9 @@ let allContestants = [];
 async function loadContestants() {
   const { contestants } = await api(`/admin/contestants?night=${encodeURIComponent(currentNight())}`);
   allContestants = contestants;
+  // Whoever is entered has just changed (or the night has), so who is still
+  // free to be picked has too - see ensureAdminRegisterUsersCache().
+  invalidateAdminRegisterUsersCache();
   renderContestants();
 }
 
@@ -1027,14 +1030,25 @@ $('contestant-search').addEventListener('input', renderContestants);
 // admin-facing: an extra search-and-pick field up front for WHO this entry
 // is for, since (unlike the public form) there's no implicit "self" here.
 let adminRegisterUsersCache = null;
+let adminRegisterUsersNight = null;
 async function ensureAdminRegisterUsersCache() {
-  // /users/basic excludes the caller (see loadConsequences() for why) - the
-  // admin filling this in might be registering themselves, so add self back.
-  if (!adminRegisterUsersCache) {
-    const others = await api('/users/basic');
-    adminRegisterUsersCache = [...others, { id: myUserId, name: myName }].sort((a, b) => a.name.localeCompare(b.name));
+  // ?freeFor drops anyone already entered that night, so the organiser
+  // cannot pick a name that registerContestant() is only going to refuse -
+  // the whole "already registered" error was reachable purely by choosing
+  // from a list this page had offered. Unlike the plain list it keeps the
+  // caller in: an admin filling this in may well be entering themselves.
+  const night = currentNight();
+  if (!adminRegisterUsersCache || adminRegisterUsersNight !== night) {
+    adminRegisterUsersCache = await api(`/users/basic?freeFor=${encodeURIComponent(night)}`);
+    adminRegisterUsersNight = night;
   }
   return adminRegisterUsersCache;
+}
+
+/** Someone entered or removed - the "who is still free" list is now stale. */
+function invalidateAdminRegisterUsersCache() {
+  adminRegisterUsersCache = null;
+  adminRegisterUsersNight = null;
 }
 
 // Wires a search input to a results container: type to filter
@@ -1382,9 +1396,6 @@ async function loadDedications() {
     : `<p class="muted">${t('dedications_admin_empty')}</p>`;
 }
 
-wireWipeButton('dedications-wipe-btn', 'dedications-msg', '/admin/dedications/wipe',
-  'confirm_dedications_wipe', 'dedications_wipe_done', loadDedications);
-
 $('dedications-pdf-btn').addEventListener('click', async () => {
   const msg = $('dedications-msg');
   msg.classList.remove('error');
@@ -1668,11 +1679,22 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   if (rows.length >= MAX_LINK_ITEMS) return;
   const row = document.createElement('div');
   row.className = 'plaza-link-row';
+  // Same drawn-smiley field as the first row in settings.html - a typed 🙂
+  // placeholder would render as the phone's own emoji, the one thing on
+  // screen not drawn by this app.
+  const emojiField = document.createElement('span');
+  emojiField.className = 'plaza-link-emoji-field';
   const emoji = document.createElement('input');
   emoji.type = 'text';
   emoji.className = 'plaza-link-emoji-input';
-  emoji.placeholder = t('plaza_link_emoji_ph');
+  emoji.placeholder = ' ';
   emoji.maxLength = 16;
+  emoji.setAttribute('aria-label', 'emoji');
+  emojiField.append(emoji);
+  // The hint is cloned from the row already on the page rather than having
+  // a second copy of the path data live here.
+  const hint = document.querySelector('.plaza-link-emoji-hint');
+  if (hint) emojiField.append(hint.cloneNode(true));
   const label = document.createElement('input');
   label.type = 'text';
   label.className = 'plaza-link-label-input';
@@ -1688,7 +1710,7 @@ $('plaza-add-link-btn').addEventListener('click', () => {
   url.className = 'plaza-link-url-input';
   url.placeholder = t('plaza_link_url_ph');
   url.maxLength = 500;
-  row.append(emoji, label, url);
+  row.append(emojiField, label, url);
   $('plaza-add-link-btn').before(row);
 });
 
@@ -1743,6 +1765,10 @@ async function loadPlazaPosts() {
             const names = p.voters.filter((v) => v.option === o.label).map((v) => esc(v.name));
             return `<li><span>${esc(o.label)}</span> <strong>${o.votes}</strong>${names.length ? ` <span class="muted">(${names.join(', ')})</span>` : ''}</li>`;
           }).join('')}
+        </ul>` : ''}
+        ${p.type === 'links' ? `
+        <ul class="admin-post-options">
+          ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
         </ul>` : ''}
         <div class="row-actions">
           ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
@@ -1831,11 +1857,11 @@ async function loadMemoDays() {
           </div>
           <p class="muted" style="margin:6px 0 0">${d.uploadedCount}/${d.totalSlots} · ${d.hasRecap ? t('memo_admin_has_recap') : t('memo_admin_no_recap')}</p>
           ${d.uploadedCount > 0 ? `
-          <div class="row-actions">
+          <div class="memo-day-exports">
             <button type="button" class="small" data-memo-download-day="${esc(d.day)}">${esc(t('memo_admin_download_btn'))}</button>
             ${d.hasRecap ? `<button type="button" class="small" data-memo-download-video="${esc(d.day)}">${esc(t('memo_admin_download_video_btn'))}</button>` : ''}
-            <button type="button" class="small" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>
-          </div>` : ''}
+          </div>
+          <button type="button" class="small publish-wide" data-memo-publish-day="${esc(d.day)}">${esc(t('memo_admin_publish_btn'))}</button>` : ''}
           <span class="muted" data-memo-day-msg="${esc(d.day)}"></span>
         </div>`).join('')
       : `<p class="muted">${t('memo_admin_no_days')}</p>`;
