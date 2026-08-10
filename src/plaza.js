@@ -1,9 +1,38 @@
 import db from './db.js';
 
+const linkItemsStmt = db.prepare(`
+  SELECT id, label, url FROM plaza_link_items
+  WHERE post_id = ?
+  ORDER BY position ASC, id ASC
+`);
+
 const MAX_TEXT_LENGTH = 500;
 const MAX_OPTION_LENGTH = 60;
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
+const MAX_LINK_LABEL_LENGTH = 60;
+const MAX_LINK_URL_LENGTH = 500;
+const MIN_LINKS = 1;
+const MAX_LINKS = 12;
+
+/**
+ * Links are typed in by hand, so they arrive the way people write them -
+ * "shorturl.at/abc", no scheme. Assume https rather than rejecting: http is
+ * the only other thing that would work and nobody means it on purpose.
+ * Anything that still won't parse, or isn't http(s) once it does, is
+ * refused - `javascript:` in an href the whole party can tap is not a
+ * theoretical worry.
+ */
+function normaliseUrl(raw) {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_LINK_URL_LENGTH) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let parsed;
+  try { parsed = new URL(candidate); } catch { return null; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}
 
 /**
  * The full Plaza feed. Pinned announcements come first (most-recently-
@@ -32,6 +61,7 @@ export function listPlazaPosts(userId) {
   const myVoteStmt = db.prepare('SELECT option_id FROM plaza_poll_votes WHERE post_id = ? AND user_id = ?');
 
   return posts.map((p) => {
+    if (p.type === 'links') return { ...p, links: linkItemsStmt.all(p.id) };
     if (p.type !== 'poll') return p;
     const options = optionsStmt.all(p.id);
     const myVote = myVoteStmt.get(p.id, userId);
@@ -71,21 +101,25 @@ export function listPlazaPostsForAdmin() {
   `);
 
   return posts.map((p) => {
+    if (p.type === 'links') return { ...p, links: linkItemsStmt.all(p.id) };
     if (p.type !== 'poll') return p;
     return { ...p, options: optionsStmt.all(p.id), voters: votersStmt.all(p.id) };
   });
 }
 
+const POST_TYPES = ['announcement', 'poll', 'links'];
+
 /**
- * Creates an announcement or a poll. Announcements ignore `options`; polls
- * require 2-6 non-empty option labels. Returns { ok, post } or { error }.
+ * Creates an announcement, a poll, or a list of links. Announcements ignore
+ * both extras; polls require 2-6 non-empty option labels; links require at
+ * least one label+URL pair. Returns { ok, id } or { error }.
  */
-export function createPlazaPost(authorId, { type, text, options }) {
+export function createPlazaPost(authorId, { type, text, options, links }) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText) return { error: 'err_post_text_required' };
   if (trimmedText.length > MAX_TEXT_LENGTH) return { error: 'err_post_too_long' };
 
-  if (type !== 'announcement' && type !== 'poll') return { error: 'err_invalid_post_type' };
+  if (!POST_TYPES.includes(type)) return { error: 'err_invalid_post_type' };
 
   let cleanOptions = [];
   if (type === 'poll') {
@@ -97,6 +131,22 @@ export function createPlazaPost(authorId, { type, text, options }) {
     if (cleanOptions.some((o) => o.length > MAX_OPTION_LENGTH)) return { error: 'err_poll_option_too_long' };
   }
 
+  let cleanLinks = [];
+  if (type === 'links') {
+    // A row needs both halves to mean anything, so a half-filled one is a
+    // mistake worth naming rather than quietly dropping - except a wholly
+    // empty row, which is just the spare input nobody typed into.
+    const rows = (Array.isArray(links) ? links : [])
+      .map((l) => ({ label: String(l?.label ?? '').trim(), url: String(l?.url ?? '').trim() }))
+      .filter((l) => l.label || l.url);
+    if (rows.some((l) => !l.label || !l.url)) return { error: 'err_link_incomplete' };
+    if (rows.length < MIN_LINKS) return { error: 'err_link_min_items' };
+    if (rows.length > MAX_LINKS) return { error: 'err_link_max_items' };
+    if (rows.some((l) => l.label.length > MAX_LINK_LABEL_LENGTH)) return { error: 'err_link_label_too_long' };
+    cleanLinks = rows.map((l) => ({ label: l.label, url: normaliseUrl(l.url) }));
+    if (cleanLinks.some((l) => !l.url)) return { error: 'err_link_invalid_url' };
+  }
+
   const info = db.prepare('INSERT INTO plaza_posts (type, author_id, text) VALUES (?, ?, ?)')
     .run(type, authorId, trimmedText);
   const postId = info.lastInsertRowid;
@@ -104,6 +154,11 @@ export function createPlazaPost(authorId, { type, text, options }) {
   if (type === 'poll') {
     const insOption = db.prepare('INSERT INTO plaza_poll_options (post_id, label, position) VALUES (?, ?, ?)');
     cleanOptions.forEach((label, i) => insOption.run(postId, label, i));
+  }
+
+  if (type === 'links') {
+    const insLink = db.prepare('INSERT INTO plaza_link_items (post_id, label, url, position) VALUES (?, ?, ?, ?)');
+    cleanLinks.forEach((l, i) => insLink.run(postId, l.label, l.url, i));
   }
 
   return { ok: true, id: postId };

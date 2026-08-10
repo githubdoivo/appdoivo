@@ -791,6 +791,7 @@ function timeAgo(dbTimestamp) {
 // the feed.
 const PLAZA_TYPE_LABEL = {
   poll: 'plaza_type_poll',
+  links: 'plaza_type_links',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
   video: 'plaza_type_video',
@@ -844,6 +845,27 @@ function renderPlazaPost(post) {
         ${pinnedBadge}
         <p class="podium-night">${esc(formatEuDate(post.text))}</p>
         <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(post.text)}"></video>
+        <p class="plaza-byline">${esc(byline)}</p>
+      </article>`;
+  }
+
+  // A list of pointers out of the app - the form, the playlist, the album.
+  // rel="noopener" on every one: these open in a new tab, and without it the
+  // page opened gets a handle back on this one.
+  if (post.type === 'links') {
+    const rows = (post.links ?? []).map((l) => `
+      <li>
+        <a class="plaza-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+          <span class="plaza-link-label">${esc(l.label)}</span>
+          <span class="plaza-link-arrow" aria-hidden="true">&rarr;</span>
+        </a>
+      </li>`).join('');
+    return `
+      <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
+        ${typeLabel}
+        ${pinnedBadge}
+        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
+        <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -1107,7 +1129,7 @@ async function loadDedication() {
          <button type="button" id="dedication-save-btn" class="small">${esc(t('dedication_save_btn'))}</button>
        </div>
        <p id="dedication-msg" class="muted" style="margin-top:8px"></p>`
-    : `<p class="highlight">${esc(written)}</p>
+    : `<p class="highlight dedication-written">${esc(written)}</p>
        <div class="actions-right">
          <button type="button" id="dedication-edit-btn" class="small ghost">${esc(t('dedication_update_btn'))}</button>
        </div>

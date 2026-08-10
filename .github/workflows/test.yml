@@ -36,4 +36,9 @@ jobs:
       # package.
       - run: npx playwright install --with-deps webkit chromium
 
-      - run: npm test
+      # --test-concurrency=1 (see the test:ci script): node's default runs
+      # the api and ui files in parallel, and a 2-core runner driving the
+      # full WebKit matrix at the same time starves the browser badly enough
+      # that loginPage() times out even at the 25s CI timeout. Locally, with
+      # cores to spare, the parallel default stays.
+      - run: npm run test:ci

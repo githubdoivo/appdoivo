@@ -104,6 +104,18 @@ db.exec(`
     position INTEGER NOT NULL DEFAULT 0
   );
 
+  -- A "links" post is a titled list of pointers out of the app - the form,
+  -- the playlist, the shared album. Its own table rather than reusing
+  -- plaza_poll_options: an option is a thing you vote for and a link is a
+  -- thing you follow, and only one of the two needs a URL.
+  CREATE TABLE IF NOT EXISTS plaza_link_items (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id  INTEGER NOT NULL REFERENCES plaza_posts(id) ON DELETE CASCADE,
+    label    TEXT NOT NULL,
+    url      TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+  );
+
   -- One row per (user, post), enforced below - a vote is final, so
   -- castPlazaVote() in plaza.js rejects any second attempt rather than
   -- moving this row to a new option.

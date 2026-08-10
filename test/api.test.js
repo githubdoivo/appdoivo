@@ -1664,6 +1664,52 @@ test('Plaza pinning: owner-only, either post type, pinned ones sort first (most-
   await api('DELETE', `/admin/plaza-posts/${unpinned.data.id}`, { token: ADMIN });
 });
 
+test('Wall links posts: pairs of label and URL, scheme filled in, and anything that is not http(s) refused', async () => {
+  const created = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: {
+      type: 'links',
+      text: 'useful links 🔗',
+      links: [
+        { label: '📃 Form', url: 'example.com/form' },
+        { label: '🎹 Playlist', url: 'https://open.spotify.com/playlist/x' },
+        // A wholly empty row is the spare input nobody typed into, not an error.
+        { label: '', url: '' },
+      ],
+    },
+  });
+  assert.equal(created.status, 200);
+
+  const feed = await api('GET', '/plaza-posts', { token: ADMIN });
+  const post = feed.data.posts.find((p) => p.id === created.data.id);
+  assert.equal(post.type, 'links');
+  assert.deepEqual(post.links.map((l) => l.label), ['📃 Form', '🎹 Playlist']);
+  assert.equal(post.links[0].url, 'https://example.com/form', 'a scheme-less link is assumed https, not rejected');
+  assert.equal(post.links[1].url, 'https://open.spotify.com/playlist/x', 'an explicit scheme is left alone');
+
+  // Half a row is a mistake worth naming rather than silently dropping.
+  const halfRow = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'links', text: 'x', links: [{ label: 'no address', url: '' }] },
+  });
+  assert.equal(halfRow.status, 400);
+  assert.equal(halfRow.data.error, 'err_link_incomplete');
+
+  const noRows = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN, body: { type: 'links', text: 'x', links: [] },
+  });
+  assert.equal(noRows.data.error, 'err_link_min_items');
+
+  // An href the whole party can tap is not the place to allow javascript:.
+  for (const bad of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'file:///etc/passwd']) {
+    const res = await api('POST', '/admin/plaza-posts', {
+      token: ADMIN, body: { type: 'links', text: 'x', links: [{ label: 'bad', url: bad }] },
+    });
+    assert.equal(res.status, 400, `${bad} should be refused`);
+    assert.equal(res.data.error, 'err_link_invalid_url', `${bad} should be refused`);
+  }
+});
+
 test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, and a second vote is rejected rather than moving it', async () => {
   const bad = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'Dinner?', options: ['Only one'] } });
   assert.equal(bad.status, 400);

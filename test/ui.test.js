@@ -313,6 +313,60 @@ test('Wall admin can pin an announcement (owner-only), and it floats to the top 
   await api('DELETE', `/admin/plaza-posts/${newer.id}`, { token: ADMIN });
 });
 
+test('Wall admin can publish a list of links from Settings, and they open out of the app from the feed', async () => {
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Links Reader' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(context, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="plaza"]');
+  await adminPage.waitForSelector('#plaza-post-form', { timeout: WAIT_TIMEOUT });
+
+  // Picking "links" swaps the builder over: the poll fields go away and the
+  // label+URL rows appear.
+  await adminPage.click('#plaza-post-type [data-post-type="links"]');
+  await adminPage.waitForSelector('#plaza-link-items:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.equal(await adminPage.isVisible('#plaza-poll-options'), false, 'poll fields belong to polls');
+
+  await adminPage.fill('#plaza-post-text', 'useful links 🔗');
+  await adminPage.fill('.plaza-link-row .plaza-link-label-input', '📃 Form');
+  await adminPage.fill('.plaza-link-row .plaza-link-url-input', 'example.com/form');
+
+  // "Add link" grows the list the way "add option" grows a poll.
+  await adminPage.click('#plaza-add-link-btn');
+  const rows = adminPage.locator('.plaza-link-row');
+  await rows.nth(1).locator('.plaza-link-label-input').fill('🎹 Playlist');
+  await rows.nth(1).locator('.plaza-link-url-input').fill('https://open.spotify.com/playlist/x');
+
+  // Regression: this used to be type="url", and a scheme-less address like
+  // the one above failed native validation - the form silently never
+  // submitted, so nothing reached the server that would have added https://.
+  await adminPage.click('#plaza-post-form button[type="submit"]');
+  await adminPage.waitForFunction(
+    () => document.getElementById('plaza-post-msg')?.textContent.trim().length > 0,
+    undefined,
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  const guestPage = await loginPage(context, guest.token);
+  await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
+  const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
+    els.map((el) => ({
+      label: el.querySelector('.plaza-link-label').textContent.trim(),
+      href: el.getAttribute('href'),
+      target: el.getAttribute('target'),
+      rel: el.getAttribute('rel') || '',
+    })));
+  assert.deepEqual(links.map((l) => l.label), ['📃 Form', '🎹 Playlist']);
+  assert.equal(links[0].href, 'https://example.com/form', 'the missing scheme is filled in before it is stored');
+  assert.equal(links[1].href, 'https://open.spotify.com/playlist/x');
+  for (const l of links) {
+    assert.equal(l.target, '_blank', 'these leave the app, so they open in their own tab');
+    assert.ok(l.rel.includes('noopener'), 'a new tab without noopener keeps a handle on this one');
+  }
+
+  await context.close();
+});
+
 test('Wall admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
@@ -2112,6 +2166,35 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   // And it comes back that way after a reload, not as an empty form.
   await page.reload();
   await page.click('[data-tab="chat"]');
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+
+  // A dedication laid out over several lines comes back laid out that way -
+  // HTML would collapse the blank line and the run of spaces otherwise, and
+  // in a message like this the shape is half the meaning.
+  await page.click('#dedication-edit-btn');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+  const shaped = 'primeira linha\n\nsegunda,   com  espaços\nterceira';
+  await page.fill('#dedication-text', shaped);
+  await page.click('#dedication-save-btn');
+  await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
+  assert.equal(
+    await page.evaluate(() => getComputedStyle(document.querySelector('#dedication-area .highlight')).whiteSpace),
+    'pre-wrap',
+    'the written dedication has to preserve its own line breaks and spacing',
+  );
+  assert.equal(await page.textContent('#dedication-area .highlight'), shaped);
+  // Two lines of text really do occupy two lines on screen.
+  const lineCount = await page.evaluate(() => {
+    const el = document.querySelector('#dedication-area .highlight');
+    const cs = getComputedStyle(el);
+    return Math.round(el.getBoundingClientRect().height / parseFloat(cs.lineHeight));
+  });
+  assert.ok(lineCount >= 4, `a four-line dedication should render on four lines, got ${lineCount}`);
+
+  await page.click('#dedication-edit-btn');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+  await page.fill('#dedication-text', 'que noite, obrigado por tudo');
+  await page.click('#dedication-save-btn');
   await page.waitForSelector('#dedication-area .highlight', { timeout: WAIT_TIMEOUT });
 
   // Editing puts the box back with the text in it - people redraft these.

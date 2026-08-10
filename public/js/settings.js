@@ -1624,15 +1624,18 @@ async function loadWallPseudonyms() {
 // either type (owner-only), floats it to the top of the feed for everyone.
 
 const MAX_POLL_OPTIONS = 6;
+const MAX_LINK_ITEMS = 12;
 let plazaPostType = 'announcement';
 
 $('plaza-post-type').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
     plazaPostType = btn.dataset.postType;
     $('plaza-post-type').querySelectorAll('.role-pill').forEach((b) => b.classList.toggle('active', b === btn));
-    // Poll mode shows only poll-building tools (question + options) - the
-    // plain message field is announcement-only, not shared with polls.
+    // Each mode shows only its own builder. The plain message field belongs
+    // to announcements and to the links list (where it is the heading above
+    // them), but not to polls, which have their own question field.
     $('plaza-poll-options').classList.toggle('hidden', plazaPostType !== 'poll');
+    $('plaza-link-items').classList.toggle('hidden', plazaPostType !== 'links');
     $('plaza-post-text').classList.toggle('hidden', plazaPostType === 'poll');
   });
 });
@@ -1649,8 +1652,36 @@ $('plaza-add-option-btn').addEventListener('click', () => {
   $('plaza-add-option-btn').before(input);
 });
 
+// Adds one more label+URL pair, the same way the poll builder grows its
+// options - a spare empty row is left behind on submit, so there is always
+// somewhere to type the next one without pressing this first.
+$('plaza-add-link-btn').addEventListener('click', () => {
+  const rows = $('plaza-link-items').querySelectorAll('.plaza-link-row');
+  if (rows.length >= MAX_LINK_ITEMS) return;
+  const row = document.createElement('div');
+  row.className = 'plaza-link-row';
+  const label = document.createElement('input');
+  label.type = 'text';
+  label.className = 'plaza-link-label-input';
+  label.placeholder = t('plaza_link_label_ph');
+  label.maxLength = 60;
+  const url = document.createElement('input');
+  // Deliberately type="text", not type="url": people paste "shorturl.at/x"
+  // without a scheme, and native URL validation refuses that outright - the
+  // form never submits, so the server never gets to fill the https:// in.
+  // inputmode still gets them the URL keyboard.
+  url.type = 'text';
+  url.inputMode = 'url';
+  url.className = 'plaza-link-url-input';
+  url.placeholder = t('plaza_link_url_ph');
+  url.maxLength = 500;
+  row.append(label, url);
+  $('plaza-add-link-btn').before(row);
+});
+
 const PLAZA_ADMIN_LABEL = {
   poll: 'plaza_type_poll',
+  links: 'plaza_type_links',
   announcement: 'plaza_type_announcement',
   podium: 'plaza_type_podium',
   video: 'plaza_type_video',
@@ -1743,11 +1774,24 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
   const options = plazaPostType === 'poll'
     ? [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')].map((i) => i.value)
     : undefined;
+  const links = plazaPostType === 'links'
+    ? [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].map((row) => ({
+        label: row.querySelector('.plaza-link-label-input').value,
+        url: row.querySelector('.plaza-link-url-input').value,
+      }))
+    : undefined;
   try {
-    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options } });
+    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
     $('plaza-post-text').value = '';
     $('plaza-poll-question').value = '';
     $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
+    // Drop the rows that were added on the fly, and blank the first one -
+    // leaving eight filled rows behind after publishing invites republishing
+    // them by accident.
+    [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].forEach((row, i) => {
+      if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
+      else row.remove();
+    });
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
     loadPlazaPosts();

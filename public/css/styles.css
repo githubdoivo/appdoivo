@@ -1448,7 +1448,7 @@ body.theme-swamp {
   --ot-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60'%3E%3Crect width='80' height='60' fill='%23d7dcc0'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.26'%3E%3Cpath d='M0 45 Q20 38 40 45 T80 45'/%3E%3Cpath d='M0 54 Q20 47 40 54 T80 54'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.42' stroke-width='1.4'%3E%3Cpath d='M18 42 V18'/%3E%3Cpath d='M24 42 V24'/%3E%3Cpath d='M58 42 V20'/%3E%3Cpath d='M64 42 V26'/%3E%3C/g%3E%3C/svg%3E");
   background-color: #bfc8a3;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Crect width='140' height='140' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 30 Q35 22 70 30 T140 30'/%3E%3Cpath d='M0 44 Q35 36 70 44 T140 44'/%3E%3Cpath d='M0 110 Q35 102 70 110 T140 110'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M24 92 V58'/%3E%3Cpath d='M31 92 V66'/%3E%3Cpath d='M104 96 V62'/%3E%3Cpath d='M111 96 V70'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='62' cy='84' rx='16' ry='6'/%3E%3Cellipse cx='116' cy='120' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M30 112 L42.6 105.9 A14 14 0 1 0 42.6 118.1 Z'/%3E%3Cpath fill-opacity='0.13' d='M110 66 L119.0 61.6 A10 10 0 1 0 119.0 70.4 Z'/%3E%3Cpath fill-opacity='0.13' d='M66 22 L72.7 18.7 A7.5 7.5 0 1 0 72.7 25.3 Z'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23c5cea8'/%3E%3Cg fill='none' stroke='%2355632c' stroke-opacity='0.15'%3E%3Cpath d='M0 42 Q50 34 100 42 T200 42'/%3E%3Cpath d='M0 62 Q50 54 100 62 T200 62'/%3E%3Cpath d='M0 158 Q50 150 100 158 T200 158'/%3E%3C/g%3E%3Cg stroke='%2355632c' stroke-opacity='0.28' stroke-width='1.6' fill='none'%3E%3Cpath d='M34 132 V92'/%3E%3Cpath d='M41 132 V100'/%3E%3Cpath d='M148 138 V96'/%3E%3Cpath d='M155 138 V104'/%3E%3C/g%3E%3Cg fill='%2355632c' fill-opacity='0.12'%3E%3Cellipse cx='88' cy='120' rx='16' ry='6'/%3E%3Cellipse cx='166' cy='178' rx='13' ry='5'/%3E%3C/g%3E%3Cg fill='%2355632c'%3E%3Cpath fill-opacity='0.13' d='M44 150 L57.7 152.8 A14 14 0 1 0 56.3 156.7 Z'/%3E%3Cpath fill-opacity='0.13' d='M150 60 L141.5 54.8 A10 10 0 1 0 143.4 52.5 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* Flourishes tematicos aplicados a pagina inteira quando ha tema */
@@ -2019,6 +2019,42 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .plaza-post-poll.pinned { border-color: var(--clay); }
 
 .plaza-poll-options { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+/* A links post: the same bordered row as a poll option, minus the tally
+   fill, so the two list shapes read as siblings rather than two different
+   ideas of what a row is. The arrow is the only affordance - these leave
+   the app, and nothing else in the feed does. */
+/* Whatever someone typed comes back the way they typed it - HTML would
+   otherwise collapse the blank lines and runs of spaces people use to give
+   a message its shape, and a dedication is exactly the kind of text where
+   that shape is the point. */
+.dedication-written { white-space: pre-wrap; }
+
+.plaza-links { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.plaza-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  color: var(--ink);
+  text-decoration: none;
+}
+.plaza-link-label { font-family: var(--body); }
+.plaza-link-arrow { color: var(--clay); flex: none; }
+.plaza-link:active { background: var(--paper-2); }
+
+/* Name and address side by side while there is room, stacked on the
+   narrowest phones - two full-width inputs per row would push the add
+   button off the bottom of a short admin card. */
+.plaza-link-row { display: flex; gap: 8px; margin-top: 8px; }
+.plaza-link-row > input { min-width: 0; flex: 1 1 50%; }
+@media (max-width: 380px) {
+  .plaza-link-row { flex-direction: column; gap: 6px; }
+}
+
 .plaza-poll-option {
   position: relative;
   display: flex;

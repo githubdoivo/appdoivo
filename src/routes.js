@@ -230,12 +230,14 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   const result = createPlazaPost(req.user.id, req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
-  const isPoll = req.body?.type === 'poll';
+  const bodyByType = {
+    poll: { pt: 'nova sondagem na wall - vem votar.', en: 'new poll on the wall - come vote.' },
+    links: { pt: 'links novos na wall - tudo num sítio.', en: 'new links on the wall - everything in one place.' },
+    announcement: { pt: 'o anfitrião deixou um novo anúncio na wall.', en: 'your host left a new announcement on the wall.' },
+  };
   await broadcast({
     title: { pt: 'wall', en: 'wall' },
-    body: isPoll
-      ? { pt: 'nova sondagem na wall - vem votar.', en: 'new poll on the wall - come vote.' }
-      : { pt: 'o anfitrião deixou um novo anúncio na wall.', en: 'your host left a new announcement on the wall.' },
+    body: bodyByType[req.body?.type] || bodyByType.announcement,
     tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
