@@ -829,6 +829,38 @@ test('Manage Users role filter: owner/admin/user pills are cumulative (OR), not 
 
 /* --------------- Manage Users key layout (regression) --------------- */
 
+// Regression: which rows were open lived only in the DOM, so every render
+// of the list - a poll tick, a role change, a keystroke in the search box -
+// collapsed all of them. On screen that is the key you were copying
+// vanishing on its own. It was also the suite's flakiest test by a distance
+// (this one, below): the click landed, a reload rebuilt the list, and the
+// row it had just opened was shut again before anything could read it.
+test('an expanded user row stays open when the list re-renders under it', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  await page.locator('#users-list [data-row-toggle]').first().click();
+  await page.waitForSelector('#users-list .user-row-details:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  // Exactly what a poll tick does - rebuild the list from the same data.
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await page.locator('#user-name-input').fill('');
+  await page.waitForTimeout(400);
+
+  assert.equal(
+    await page.isVisible('#users-list .user-row-details:not(.hidden)'),
+    true,
+    'the row you opened has to still be open after the list redraws',
+  );
+  assert.equal(
+    await page.getAttribute('#users-list [data-row-toggle]', 'aria-expanded'),
+    'true',
+    'and it has to say so, for anyone not looking at the screen',
+  );
+  await context.close();
+});
+
 test('Manage Users row keeps the access key visible with no overflow, once expanded', async () => {
   const context = await iphoneContext('iPhone SE');
   const page = await loginPage(context, ADMIN, '/settings.html');
@@ -836,17 +868,21 @@ test('Manage Users row keeps the access key visible with no overflow, once expan
 
   // Rows are collapsed to just name+role by default (see renderUsersList()
   // in settings.js) - the key only renders once its row is expanded.
-  // A locator, re-resolved on each attempt, rather than a one-shot click:
-  // the list re-renders while it loads, so under load the click could land
-  // on a node that was replaced a moment later and simply be lost. Reading
-  // the width in the same tick as the click had the same problem from the
-  // other end. Between them, this was the suite's most frequent
-  // intermittent failure - and never a fault in the app.
+  //
+  // The measurement is scoped to the row that is actually open, not to the
+  // first .user-row-token in the document. Those are not the same element:
+  // the list sorts recently-touched accounts to the top, so a reload landing
+  // between the click and the read could put a different, collapsed row
+  // first - and a collapsed row's key measures zero wide. That is what made
+  // this the suite's most frequent intermittent failure. Rows staying open
+  // across a re-render at all is the separate fix above.
   const firstRow = page.locator('#users-list [data-row-toggle]').first();
   await firstRow.click();
+  const openKey = page.locator('#users-list .user-row-details:not(.hidden) .user-row-token').first();
+  await openKey.waitFor({ state: 'visible', timeout: WAIT_TIMEOUT });
   await page.waitForFunction(
     () => {
-      const el = document.querySelector('.user-row-token');
+      const el = document.querySelector('.user-row-details:not(.hidden) .user-row-token');
       return !!el && el.getBoundingClientRect().width > 0;
     },
     null,
