@@ -420,6 +420,19 @@ if (columnExists('memo_slots', 'user_id')) {
   db.exec('DROP TABLE IF EXISTS memo_uploads; DROP TABLE IF EXISTS memo_slots;');
 }
 db.exec(`
+  -- One message per guest to the birthday person, private to them: nobody
+  -- else sees these, not other guests and not other admins, which is the
+  -- whole point of writing one. UNIQUE on user_id because it is a message
+  -- rather than a thread - people rewrite theirs rather than adding a
+  -- second, and one each is what makes the printed collection readable.
+  CREATE TABLE IF NOT EXISTS dedications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+
   CREATE TABLE IF NOT EXISTS memo_slots (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     day          TEXT NOT NULL,

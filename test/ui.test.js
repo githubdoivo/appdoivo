@@ -2018,3 +2018,49 @@ test('filtering the user list does not yank the page out from under you', async 
 
   await context.close();
 });
+
+test('a guest writes their message on Plaza and can rewrite it; only the owner sees the collection', async () => {
+  await api('POST', '/admin/dedications/wipe', { token: ADMIN });
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Dedication Writer' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+
+  await page.fill('#dedication-text', 'que noite, obrigado por tudo');
+  await page.click('#dedication-save-btn');
+  await page.waitForSelector('#dedication-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+
+  // It comes back filled in, and offers to update rather than to write again -
+  // people redraft these, and being told the one shot is spent would be a
+  // mean way to find that out.
+  await page.reload();
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('#dedication-text', { timeout: WAIT_TIMEOUT });
+  assert.equal(await page.inputValue('#dedication-text'), 'que noite, obrigado por tudo');
+  await page.fill('#dedication-text', 'na verdade: a melhor noite');
+  await page.click('#dedication-save-btn');
+  await page.waitForSelector('#dedication-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+  await context.close();
+
+  const stored = await api('GET', '/admin/dedications', { token: ADMIN });
+  assert.equal(stored.dedications.length, 1, 'rewriting replaces, it does not add a second');
+  assert.equal(stored.dedications[0].text, 'na verdade: a melhor noite');
+
+  // The owner reads them behind the same hidden dot as the rest of that tab.
+  const ownerCtx = await iphoneContext('iPhone 13');
+  const ownerPage = await loginPage(ownerCtx, ADMIN, '/settings.html');
+  await ownerPage.click('[data-atab="memo"]');
+  await ownerPage.waitForSelector('#wall-secret-btn:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await ownerPage.click('#wall-secret-btn');
+  await ownerPage.waitForSelector('#dedications-card', { timeout: WAIT_TIMEOUT });
+  const listed = await ownerPage.textContent('#dedications-list');
+  assert.ok(listed.includes('na verdade: a melhor noite'), 'the message should be there');
+  assert.ok(listed.toLowerCase().includes('dedication writer'), 'signed with who wrote it');
+  assert.equal(await ownerPage.isDisabled('#dedications-pdf-btn'), false, 'and there is something to download');
+  await ownerCtx.close();
+
+  await api('POST', '/admin/dedications/wipe', { token: ADMIN });
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});

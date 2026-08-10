@@ -8,25 +8,6 @@ Anything actively in progress belongs in a branch and a PR, not here.
 Process lives in [CONTRIBUTING.md](CONTRIBUTING.md); this is only the
 list of what is still owed, and by whom.
 
-## Ready to build - nothing needed from Ivo
-
-### Plaza: private birthday messages, with a PDF at the end
-
-Guests write a message to the birthday person from a dedicated box on
-Plaza. Nobody else can read them - not other guests, and not other
-admins either, since the whole point is that they stay private until
-opened. A card on the Plaza admin page lets the owner read the
-collection and download it as a nicely formatted PDF, meant to be done
-once, at the end of the party.
-
-**The guests populate it.** Ivo writes nothing and supplies nothing; the
-only thing he does is press download. This is pure development work and
-can start whenever.
-
-Needs: its own table, the guest-facing form, an owner-only read route
-and PDF export, pt/en copy, and test coverage across the branch (see the
-testing rules in CLAUDE.md - a passing suite is not the same as a
-covered feature).
 
 ## Waiting on Ivo
 

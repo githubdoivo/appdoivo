@@ -1323,6 +1323,51 @@ $('publish-podium-btn').addEventListener('click', async () => {
   }
 });
 
+/* ------------------ Mensagens para o aniversariante ---------------------- */
+// Owner-only, behind the same hidden dot as the rest of this tab. Read once,
+// at the end - so the list is plain and the PDF is the point.
+async function loadDedications() {
+  let rows;
+  try {
+    ({ dedications: rows } = await api('/admin/dedications'));
+  } catch {
+    return;
+  }
+  $('dedications-pdf-btn').disabled = rows.length === 0;
+  $('dedications-list').innerHTML = rows.length
+    ? rows.map((d) => `
+      <div class="user-row">
+        <p style="margin:0 0 6px">${esc(d.text)}</p>
+        <p class="muted" style="margin:0">${esc(d.author)} · ${esc(formatEuDateTime(d.updated_at))}</p>
+      </div>`).join('')
+    : `<p class="muted">${t('dedications_admin_empty')}</p>`;
+}
+
+$('dedications-pdf-btn').addEventListener('click', async () => {
+  const msg = $('dedications-msg');
+  msg.classList.remove('error');
+  msg.textContent = t('dedications_pdf_working');
+  try {
+    const res = await fetch('/api/admin/dedications.pdf', {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) throw new Error(t('dedications_admin_empty'));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dedicatorias.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msg.textContent = '';
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
 /* ------------------------------ Rata Game -------------------------------- */
 
 // Fixed position next to the status filter, above the (filtered) list -
@@ -1815,7 +1860,7 @@ function selectAdminTab(tab) {
     $(`atab-${name}`).classList.toggle('hidden', name !== tab);
   });
   applyAdminTheme(tab);
-  if (tab === 'wall' && isOwner) loadWallPseudonyms();
+  if (tab === 'wall' && isOwner) { loadWallPseudonyms(); loadDedications(); }
   if (tab === 'plaza' && isAdmin) loadPlazaPosts();
   if (tab === 'memo' && isAdmin) loadMemoDays();
   if (tab === 'votelog' && isOwner) loadVotes();

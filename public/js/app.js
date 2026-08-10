@@ -413,7 +413,7 @@ function selectTab(tab) {
   if (currentTab === 'plaza') startPlazaPolling(); else stopPlazaPolling();
   if (currentTab === 'rata') startRataPolling(); else stopRataPolling();
   if (currentTab === 'outfit') startOutfitPolling(); else stopOutfitPolling();
-  if (currentTab === 'chat') startChatPolling(); else stopChatPolling();
+  if (currentTab === 'chat') { startChatPolling(); loadDedication(); } else stopChatPolling();
   if (currentTab === 'memo') startMemoPolling(); else stopMemoPolling();
 }
 
@@ -1051,6 +1051,56 @@ $('suggest-form').addEventListener('submit', async (e) => {
     $('suggest-msg').textContent = err.message;
   }
 });
+
+/* ----------------------- Mensagem para o aniversariante ------------------ */
+// Written on Plaza, read only by the person it is for. One each, rewritable
+// until the party ends - people redraft these, and being told you already
+// used yours up would be a mean way to find that out.
+
+let dedicationMax = 1000;
+
+async function loadDedication() {
+  let data;
+  try {
+    data = await api('/dedications/mine');
+  } catch {
+    return; // transient - the card simply stays as it was
+  }
+  dedicationMax = data.maxChars ?? dedicationMax;
+  const written = data.dedication?.text ?? '';
+  const area = $('dedication-area');
+  area.innerHTML = `
+    <textarea id="dedication-text" rows="4" maxlength="${dedicationMax}"
+      placeholder="${esc(t('dedication_ph'))}">${esc(written)}</textarea>
+    <div class="actions-right">
+      <span id="dedication-count" class="muted char-count"></span>
+      <button type="button" id="dedication-save-btn" class="small">${esc(t(written ? 'dedication_update_btn' : 'dedication_save_btn'))}</button>
+    </div>
+    <p id="dedication-msg" class="muted" style="margin-top:8px">${written ? esc(t('dedication_saved_note')) : ''}</p>`;
+
+  const box = $('dedication-text');
+  const count = () => {
+    $('dedication-count').textContent = `${box.value.length}/${dedicationMax}`;
+    $('dedication-count').classList.toggle('at-limit', box.value.length >= dedicationMax);
+  };
+  box.addEventListener('input', count);
+  count();
+
+  $('dedication-save-btn').addEventListener('click', async () => {
+    const text = box.value.trim();
+    if (!text) return;
+    const msg = $('dedication-msg');
+    msg.classList.remove('error');
+    try {
+      await api('/dedications/mine', { method: 'PUT', body: { text } });
+      msg.textContent = t('dedication_done');
+      loadDedication();
+    } catch (err) {
+      msg.classList.add('error');
+      msg.textContent = err.message;
+    }
+  });
+}
 
 /* ------------------------------ Best Look ------------------------------- */
 

@@ -328,6 +328,19 @@
         <!-- Owner-only kill switch, scoped to just this feature (see
              POST /admin/chat/wipe). This whole tab is already owner-only,
              so no extra hiding needed here beyond that. -->
+        <!-- Owner-only, and behind the hidden dot like the rest of this tab:
+             the messages are private until he opens them, which is the whole
+             reason people write one. -->
+        <div class="card" id="dedications-card">
+          <h2 data-i18n="dedications_admin_title">Mensagens para ti</h2>
+          <p class="help" data-i18n="dedications_admin_help">Explicação</p>
+          <div class="actions-right">
+            <span id="dedications-msg" class="muted"></span>
+            <button type="button" id="dedications-pdf-btn" class="small" data-i18n="dedications_pdf_btn">Descarregar pdf</button>
+          </div>
+          <div id="dedications-list" style="margin-top:14px"></div>
+        </div>
+
         <div class="card" id="chat-wipe-card">
           <h2 data-i18n="wipe_title">Zona perigosa</h2>
           <p class="help" data-i18n="chat_wipe_help">Explicação</p>

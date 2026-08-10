@@ -66,6 +66,8 @@ import {
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { seedDemoConsequences, seedDemoContestants, seedDemoWall } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
+import { DEDICATION_MAX_CHARS, myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
+import PDFDocument from 'pdfkit';
 import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
   MEMO_DIR,
@@ -819,6 +821,83 @@ router.get('/admin/votes', (req, res) => {
     ORDER BY cv.created_at
   `).all(night);
   res.json({ night, votes: rows, congenialityVotes, results });
+});
+
+// Dedications: a private message to the birthday person. Writing one is
+// open to every guest; reading them is not, which is the entire point.
+router.get('/dedications/mine', (req, res) => {
+  res.json({ dedication: myDedication(req.user.id), maxChars: DEDICATION_MAX_CHARS });
+});
+
+router.put('/dedications/mine', (req, res) => {
+  const result = saveDedication(req.user.id, req.body?.text);
+  if (result.error) return res.status(400).json(result);
+  res.json({ ok: true, dedication: myDedication(req.user.id) });
+});
+
+// Owner-only from here down. Not requireAdmin: an admin helping run the
+// night has no more business reading these than any other guest.
+router.get('/admin/dedications', requireOwner, (req, res) => {
+  res.json({ dedications: allDedications() });
+});
+
+router.post('/admin/dedications/wipe', requireOwner, (req, res) => {
+  wipeAllDedications();
+  res.json({ ok: true });
+});
+
+// The collection as a document, meant to be taken out once at the end.
+// Helvetica rather than an embedded font: pdfkit's built-in encoding covers
+// Latin-1, which is every accent Portuguese needs, and embedding a face
+// would add a megabyte to the repo for nothing.
+router.get('/admin/dedications.pdf', requireOwner, (req, res) => {
+  const rows = allDedications();
+  if (rows.length === 0) return res.status(404).json({ error: 'err_no_dedications' });
+
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 72, bottom: 72, left: 64, right: 64 } });
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', 'attachment; filename="dedicatorias.pdf"');
+  doc.pipe(res);
+
+  // The owner's actual name, not a hardcoded one - this is their book.
+  const owner = db.prepare('SELECT name FROM users WHERE is_owner = 1').get();
+  const firstName = String(owner?.name ?? '').trim().split(/\s+/)[0].toLowerCase();
+
+  doc.font('Helvetica-Bold').fontSize(28).text(`para o ${firstName}`, { align: 'center' });
+  doc.moveDown(0.4);
+  doc.font('Helvetica-Oblique').fontSize(11).fillColor('#777')
+    .text(`${rows.length} ${rows.length === 1 ? 'mensagem' : 'mensagens'}`, { align: 'center' });
+  doc.fillColor('#000');
+
+  const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  rows.forEach((row, i) => {
+    doc.moveDown(i === 0 ? 2.2 : 1.6);
+    // A message and its signature stay on one page: a name stranded at the
+    // top of the next reads as somebody else's message.
+    const needed = doc.heightOfString(row.text, { width: contentWidth, lineGap: 4 }) + 60;
+    if (doc.y + needed > doc.page.height - doc.page.margins.bottom) doc.addPage();
+
+    if (i > 0) {
+      // A hairline rather than blank space: at this length the messages run
+      // together otherwise, and it should read as a collection of separate
+      // notes rather than one long letter.
+      const y = doc.y;
+      doc.save().strokeColor('#ddd').lineWidth(0.5)
+        .moveTo(doc.page.margins.left + contentWidth * 0.35, y)
+        .lineTo(doc.page.margins.left + contentWidth * 0.65, y)
+        .stroke().restore();
+      doc.moveDown(1.6);
+    }
+
+    doc.font('Helvetica').fontSize(13).fillColor('#111')
+      .text(row.text, { align: 'left', lineGap: 4 });
+    doc.moveDown(0.6);
+    doc.font('Helvetica-Oblique').fontSize(11).fillColor('#777')
+      .text(`— ${row.author}`, { align: 'right' });
+    doc.fillColor('#000');
+  });
+
+  doc.end();
 });
 
 // Consequences (full view)

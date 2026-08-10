@@ -2330,3 +2330,55 @@ test('a feature can be filled with demo data and cleared again, owner-only', asy
   const cleared = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
   assert.equal(cleared.length, 0, 'and the wipe beside it takes it all back out');
 });
+
+test('a dedication is private to the birthday person, one per guest, and comes out as a PDF', async () => {
+  await api('POST', '/admin/dedications/wipe', { token: ADMIN });
+  const ana = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Dedication Ana' } });
+  const rui = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Dedication Rui' } });
+
+  // Nothing written yet.
+  const empty = await api('GET', '/dedications/mine', { token: ana.data.token });
+  assert.equal(empty.status, 200);
+  assert.equal(empty.data.dedication, null);
+
+  const written = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'parabéns, és o maior' } });
+  assert.equal(written.status, 200);
+  assert.equal(written.data.dedication.text, 'parabéns, és o maior');
+
+  // One each: writing again replaces, it does not add a second.
+  await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'pensei melhor: és enorme' } });
+  await api('PUT', '/dedications/mine', { token: rui.data.token, body: { text: 'obrigado por tudo' } });
+  const all = await api('GET', '/admin/dedications', { token: ADMIN });
+  assert.equal(all.data.dedications.length, 2, 'two people wrote, so there are two messages');
+  assert.equal(all.data.dedications.find((d) => d.author === 'Dedication Ana').text, 'pensei melhor: és enorme');
+
+  const blank = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: '   ' } });
+  assert.equal(blank.status, 400);
+  assert.equal(blank.data.error, 'err_dedication_empty');
+  const tooLong = await api('PUT', '/dedications/mine', { token: ana.data.token, body: { text: 'x'.repeat(1001) } });
+  assert.equal(tooLong.data.error, 'err_dedication_too_long');
+
+  // Nobody but the owner reads them - not even an admin, which is the point.
+  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Dedication Nosy Admin' } });
+  await api('PATCH', `/admin/users/${helper.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+  const peek = await api('GET', '/admin/dedications', { token: helper.data.token });
+  assert.equal(peek.status, 403, 'an admin has no more business reading these than any other guest');
+  const peekPdf = await api('GET', '/admin/dedications.pdf', { token: helper.data.token });
+  assert.equal(peekPdf.status, 403);
+  // And a guest cannot read even their own back through the admin route.
+  assert.equal((await api('GET', '/admin/dedications', { token: rui.data.token })).status, 403);
+
+  // The PDF is a real one, and carries both messages.
+  const pdfRes = await fetch(`${base}/admin/dedications.pdf`, { headers: { Authorization: `Bearer ${ADMIN}` } });
+  assert.equal(pdfRes.status, 200);
+  assert.match(pdfRes.headers.get('content-type'), /application\/pdf/);
+  const bytes = Buffer.from(await pdfRes.arrayBuffer());
+  assert.equal(bytes.subarray(0, 4).toString(), '%PDF', 'it has to actually be a PDF, not an error page');
+  assert.ok(bytes.length > 800, 'and have something in it');
+
+  await api('POST', '/admin/dedications/wipe', { token: ADMIN });
+  const gone = await api('GET', '/admin/dedications.pdf', { token: ADMIN });
+  assert.equal(gone.status, 404, 'with nothing written there is no document to make');
+
+  for (const u of [ana, rui, helper]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+});
