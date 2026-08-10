@@ -1343,6 +1343,9 @@ async function loadDedications() {
     : `<p class="muted">${t('dedications_admin_empty')}</p>`;
 }
 
+wireWipeButton('dedications-wipe-btn', 'dedications-msg', '/admin/dedications/wipe',
+  'confirm_dedications_wipe', 'dedications_wipe_done', loadDedications);
+
 $('dedications-pdf-btn').addEventListener('click', async () => {
   const msg = $('dedications-msg');
   msg.classList.remove('error');

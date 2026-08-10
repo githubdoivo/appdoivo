@@ -336,6 +336,11 @@
           <p class="help" data-i18n="dedications_admin_help">Explicação</p>
           <div class="actions-right">
             <span id="dedications-msg" class="muted"></span>
+            <!-- The wipe lives with them rather than in a separate danger
+                 zone: these go live before the party so testers will write
+                 real ones, and clearing those has to be as easy to find as
+                 reading them. -->
+            <button type="button" id="dedications-wipe-btn" class="small danger" data-i18n="dedications_wipe_btn">Apagar todas</button>
             <button type="button" id="dedications-pdf-btn" class="small" data-i18n="dedications_pdf_btn">Descarregar pdf</button>
           </div>
           <div id="dedications-list" style="margin-top:14px"></div>

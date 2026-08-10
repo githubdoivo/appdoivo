@@ -2059,6 +2059,13 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
   assert.ok(listed.includes('na verdade: a melhor noite'), 'the message should be there');
   assert.ok(listed.toLowerCase().includes('dedication writer'), 'signed with who wrote it');
   assert.equal(await ownerPage.isDisabled('#dedications-pdf-btn'), false, 'and there is something to download');
+
+  // These go live before the party, so testers will write real ones and
+  // clearing them has to be reachable from the same place they are read.
+  // What the button does is covered server-side; what matters here is that
+  // it is there at all, next to the collection rather than off in a danger
+  // zone on another tab.
+  assert.equal(await ownerPage.isVisible('#dedications-wipe-btn'), true, 'there has to be a way to clear them');
   await ownerCtx.close();
 
   await api('POST', '/admin/dedications/wipe', { token: ADMIN });
