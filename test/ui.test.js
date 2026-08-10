@@ -177,6 +177,28 @@ async function loginPage(context, token, path = '/') {
 }
 
 /**
+ * waitForSelector, but a timeout says what the server was answering and
+ * whether the app had put a modal on screen. Anything the app refuses shows
+ * up as an alert rather than as a missing element, so "the element never
+ * appeared" is almost never the actual failure.
+ */
+async function waitOrExplain(page, selector, timeout = WAIT_TIMEOUT) {
+  try {
+    return await page.waitForSelector(selector, { timeout });
+  } catch (missing) {
+    const modal = await page
+      .evaluate(() => document.querySelector('.modal-overlay:not(.hidden) .modal-message')?.textContent.trim() || null)
+      .catch(() => null);
+    throw new Error([
+      missing.message,
+      `  modal on screen: ${modal ?? '(none)'}`,
+      '  last error responses from the server:',
+      ...errorResponses.slice(-10).map((l) => `    ${l}`),
+    ].join('\n'));
+  }
+}
+
+/**
  * Why a login never completed. boot() in app.js hides #app and falls back to
  * the login screen whenever /me does not answer 200, so every one of these
  * timeouts is really an HTTP status nobody was printing - a 401 (the token
@@ -1423,7 +1445,7 @@ test('Snatch registration warns on a missing name, requires a photo, previews it
   assert.ok(/photo|foto/i.test(previewText), 'attaching a photo should say so in text, not just show a thumbnail');
 
   await page.click('#register-form button[type="submit"]');
-  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  await waitOrExplain(page, '#register-area .highlight');
   const entryText = await page.textContent('#register-area .highlight');
   assert.ok(entryText.includes('Ghost of Photos Past'), 'entry should register once a photo is attached');
 
@@ -1485,7 +1507,7 @@ test('a Best Look poll tick landing while a photo is picked does not wipe the in
   );
 
   await page.click('#register-form button[type="submit"]');
-  await page.waitForSelector('#register-area .highlight', { timeout: WAIT_TIMEOUT });
+  await waitOrExplain(page, '#register-area .highlight');
   const entryText = await page.textContent('#register-area .highlight');
   assert.ok(entryText.includes('Surviving The Poll'), 'the entry should register with the name/photo that survived the poll');
 
