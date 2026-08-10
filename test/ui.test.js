@@ -1515,6 +1515,50 @@ test('a Best Look poll tick landing while a photo is picked does not wipe the in
   await context.close();
 });
 
+// Regression: renderRegistration() skipped its whole re-render whenever
+// focus sat anywhere inside #register-area - and the submit button is
+// inside it. On any engine that leaves a clicked button focused (CI's
+// Linux WebKit does; macOS Safari does not, which is why this only ever
+// showed up on CI) a registration the server had already accepted was
+// never shown: the blank form stayed exactly as it was, every 4s poll
+// skipped by that same focus, with no way back short of a reload. The
+// guard now covers only the blank form, which is the thing that can
+// actually be typed into.
+//
+// Focus is forced here rather than left to whatever the engine does on a
+// click, so this asserts the behaviour on every platform instead of only
+// the ones that reproduce it by accident.
+test('a submitted entry is shown even when the submit button keeps focus after the tap', async () => {
+  const night = 'furnished';
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Focused Submit Tester' } });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, user.token);
+  await page.click('[data-tab="outfit"]');
+  await page.waitForSelector('#register-form', { timeout: WAIT_TIMEOUT });
+
+  await page.fill('#register-name', 'Focus Survivor');
+  await page.setInputFiles('#register-photo-input', { name: 'outfit.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await page.waitForSelector('#register-photo-preview:not(.hidden) img[src^="data:image/jpeg"]', { timeout: WAIT_TIMEOUT });
+
+  await page.evaluate(() => {
+    const submit = document.querySelector('#register-form button[type="submit"]');
+    submit.click();
+    submit.focus();
+  });
+
+  const entry = await waitOrExplain(page, '#register-area .highlight');
+  assert.match(
+    await entry.textContent(),
+    /Focus Survivor/,
+    'an entry the server has stored must be on screen, not hidden behind a form that still looks empty',
+  );
+
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await context.close();
+});
+
 test('once results start revealing, "you voted for X" clears instead of sitting on top of the results list', async () => {
   const night = 'furnished';
   const voter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Reveal Vote Tester' } });

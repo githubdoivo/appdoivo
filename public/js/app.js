@@ -1296,13 +1296,10 @@ function renderRegistration(data) {
   }
   card.classList.remove('hidden');
 
-  // Now that Best Look polls for updates (see startOutfitPolling()), a
-  // refresh landing mid-keystroke would otherwise wipe out whatever the
-  // user is typing into the name/partner-search fields below - skip the
-  // re-render entirely while focus is inside this form or a native photo
-  // picker is open (see photoPickerOpen above), nothing about their own
-  // not-yet-submitted entry could have changed anyway.
-  if (area.contains(document.activeElement) || photoPickerOpen) return;
+  // A native photo picker is open over this area (see photoPickerOpen
+  // above) - rebuilding the controls underneath it would pull the file
+  // input out from under the pick in progress, whatever is being shown.
+  if (photoPickerOpen) return;
 
   if (data.myContestant) {
     registerFormReady = false;
@@ -1348,6 +1345,17 @@ function renderRegistration(data) {
     wireChangePhotoInput();
     return;
   }
+
+  // Below here only the blank entry form gets built, so this is where the
+  // mid-keystroke guard belongs: a poll landing while someone is typing
+  // their name would wipe the field. It deliberately does NOT cover the
+  // entry above - the submit button lives inside this area, and on any
+  // platform that leaves a clicked button focused (Linux/CI WebKit does,
+  // macOS does not) guarding the whole function meant a successful
+  // registration was stored server-side and never shown: the form just sat
+  // there, every 4s poll skipped by the same focus, with no way back short
+  // of a reload.
+  if (area.contains(document.activeElement)) return;
 
   // Already showing the blank form and nothing external could have changed
   // about it - skip rebuilding (see registerFormReady above). Without this,
