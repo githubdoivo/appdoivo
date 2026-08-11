@@ -64,10 +64,13 @@ function crc32(buf) {
 }
 
 
-// These are the actual guest list, so seeding QA gives the same room the
-// party will have rather than a cast of strangers. Anyone not on the guest
-// list does not belong here: "who is Tomás Vieira and why is he on the user
-// list" is the only thing an invented name ever produces.
+// The actual guest list, confirmed by Ivo on 2026-08-11, so seeding QA gives
+// the same room the party will have rather than a cast of strangers. Anyone
+// not on the guest list does not belong here: "who is Tomás Vieira and why
+// is he on the user list" is the only thing an invented name ever produces.
+// The list is 21 here and 22 in Ivo's own copy of it - the difference is
+// Ivo himself, who is the seeded owner account and must not appear as a
+// guest too (see the note below).
 //
 // Never include "Ivo Lopes" (or any name matching the real owner) here -
 // a demo account sharing the owner's name showed up in the unclaimed-user
@@ -76,9 +79,9 @@ function crc32(buf) {
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Nádia Barros',
+  'Leonor Matos', 'Marta Freitas', 'Nádia Barros', 'Óscar Lima',
   'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
-  'Vera Lobo', 'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
+  'Vera Lobo', 'Xavier Salgado', 'Inácio Pires', 'Simão Valente',
 ];
 
 // The one demo user pre-promoted to admin on every fresh seed, so there's
