@@ -1,7 +1,7 @@
 import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
-import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
+import { registerServiceWorker, refreshNotifButton, wireNotifButton, wireDeepLinks, consumePendingDeepLink } from './push.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
@@ -66,16 +66,18 @@ let plazaEnabled = false;
 let memoEnabled = false;
 let myUserId = null;
 let myName = '';
+let myKey = '';
 
 // Your own name, role and access key, click-to-reveal/copy same as a row
-// in Manage Users below - the token itself never needs a server round-trip,
-// it's already what's in localStorage (see getToken() in api.js).
+// in Manage Users below. The key comes from /me rather than from
+// localStorage: what's stored there is whatever was typed at login, which
+// for the owner on QA is the short dev word, not the account's real key.
 function renderAccountCard() {
   $('account-name').textContent = myName;
   $('account-role-badge').className = `badge ${isOwner ? 'role-owner' : isAdmin ? 'role-admin' : 'role-user'}`;
   $('account-role-badge').textContent = isOwner ? 'owner' : isAdmin ? 'admin' : 'user';
   const tokenEl = $('account-token');
-  tokenEl.dataset.token = getToken();
+  tokenEl.dataset.token = myKey;
   const toggle = async () => {
     const revealed = tokenEl.classList.toggle('censored') === false;
     tokenEl.textContent = revealed ? tokenEl.dataset.token : '••••••••••••';
@@ -93,10 +95,17 @@ function renderAccountCard() {
 // account card kept showing/copying the OLD key after a self-service
 // change (see wireChangeKeyForm()) - one that no longer even works to log
 // in - until a full page reload synced it back up.
-function refreshAccountToken() {
+//
+// Manage Users reads its keys from the server and had the same problem the
+// other way round: it kept listing the old key for whoever had just changed
+// theirs, because nothing asked for the list again. Both are refreshed here,
+// so the two places can never disagree about someone's key.
+function refreshAccountToken(newKey) {
+  myKey = newKey;
   const tokenEl = $('account-token');
-  tokenEl.dataset.token = getToken();
+  tokenEl.dataset.token = myKey;
   if (!tokenEl.classList.contains('censored')) tokenEl.textContent = tokenEl.dataset.token;
+  if (isOwner) loadUsers();
 }
 
 async function boot() {
@@ -124,6 +133,7 @@ async function boot() {
     memoEnabled = !!me.memoEnabled;
     myUserId = me.id;
     myName = me.name;
+    myKey = me.key || getToken();
     // Feeds the off-screen autocomplete="username" anchor in the change-key
     // form (see settings.html) - Safari needs a username to pair with the
     // saved password, and giving it one here is what keeps it off the
@@ -1772,8 +1782,60 @@ function adminPodiumSummary(p) {
     <ul class="admin-post-options">${rows}${cong}</ul>`;
 }
 
+// The Wall history mixes five kinds of post, and by the party there will be
+// a lot of them - the same reason Manage Users has its role pills. Same
+// behaviour too: cumulative (OR), and unselecting the last one means "show
+// everything" rather than showing nothing at all.
+const PLAZA_TYPE_ORDER = ['announcement', 'poll', 'links', 'podium', 'video'];
+const plazaTypeFilter = new Set();
+let allPlazaPosts = [];
+
+function renderPlazaTypeFilter() {
+  // Only the types this history actually holds: a "day's video" chip on a
+  // Wall that has never published one is a filter that can only empty the
+  // list.
+  const present = PLAZA_TYPE_ORDER.filter((type) => allPlazaPosts.some((p) => p.type === type));
+  for (const type of [...plazaTypeFilter]) {
+    if (!present.includes(type)) plazaTypeFilter.delete(type);
+  }
+  // One kind of post left is not a filter, it's a label - hide the row.
+  $('plaza-type-filter').classList.toggle('hidden', present.length < 2);
+  $('plaza-type-filter').innerHTML = present.map((type) => `
+    <button type="button" class="role-pill${plazaTypeFilter.size === 0 || plazaTypeFilter.has(type) ? ' active' : ''}"
+            data-post-type="${type}">${t(PLAZA_ADMIN_LABEL[type])}</button>`).join('');
+
+  $('plaza-type-filter').querySelectorAll('[data-post-type]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.postType;
+      // An empty set means "everything", which is also what a full one
+      // means - fill it in first so the tap below reads as switching this
+      // one off, the way the role pills behave.
+      if (plazaTypeFilter.size === 0) present.forEach((p) => plazaTypeFilter.add(p));
+      if (plazaTypeFilter.has(type)) plazaTypeFilter.delete(type);
+      else plazaTypeFilter.add(type);
+      if (plazaTypeFilter.size === 0) present.forEach((p) => plazaTypeFilter.add(p));
+      renderPlazaPostsList();
+    });
+  });
+}
+
 async function loadPlazaPosts() {
   const { posts } = await api('/admin/plaza-posts');
+  allPlazaPosts = posts;
+  renderPlazaPostsList();
+}
+
+function renderPlazaPostsList() {
+  const present = PLAZA_TYPE_ORDER.filter((type) => allPlazaPosts.some((p) => p.type === type));
+  const filtered = plazaTypeFilter.size > 0 && plazaTypeFilter.size < present.length;
+  const posts = plazaTypeFilter.size === 0
+    ? allPlazaPosts
+    : allPlazaPosts.filter((p) => plazaTypeFilter.has(p.type));
+  renderKeepingPlace($('plaza-posts-list'), () => renderPlazaPosts(posts), filtered);
+  renderPlazaTypeFilter();
+}
+
+function renderPlazaPosts(posts) {
   $('plaza-posts-list').innerHTML = posts.length
     ? posts.map((p) => `
       <div class="user-row">
@@ -2127,7 +2189,7 @@ function wireChangeKeyForm() {
     try {
       await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
       setToken(newToken);
-      refreshAccountToken();
+      refreshAccountToken(newToken);
       $('current-key-input').value = '';
       $('new-key-input').value = '';
       $('change-key-msg').textContent = t('key_changed_msg');
@@ -2137,7 +2199,13 @@ function wireChangeKeyForm() {
   });
 }
 
-boot();
+// Settings has no tabs a notification ever points at, so every deep link
+// that reaches this page is somewhere else and wireDeepLinks() navigates
+// there. Before this, a notification tapped while Settings was open simply
+// did nothing at all.
+const followDeepLink = wireDeepLinks();
+
+boot().then(() => consumePendingDeepLink(followDeepLink));
 
 
 // One subscriber for the whole page - see onConnectionChange() in api.js for

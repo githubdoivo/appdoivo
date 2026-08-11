@@ -152,8 +152,17 @@ router.post('/auth/claim-key', loginRateLimit, (req, res) => {
 router.use(authenticate);
 
 router.get('/me', (req, res) => {
+  // The account card used to show whatever was typed at login, straight out
+  // of localStorage. That is the same string as the real key for everyone
+  // except the owner on QA, who signs in with the short dev word (see
+  // isDevLoginKey() in auth.js) - so the card showed that word while
+  // Manage Users showed the generated key, and the two disagreed about what
+  // the account's key even was. This is the account's own key, decrypted
+  // from its own row, so both read from the same place.
+  const row = db.prepare('SELECT token_enc FROM users WHERE id = ?').get(req.user.id);
   res.json({
     ...req.user,
+    key: row ? decryptToken(row.token_enc) : null,
     adminPromotionEnabled: process.env.ENABLE_ADMIN_PROMOTION === 'true',
     plazaEnabled: process.env.ENABLE_PLAZA === 'true',
     // Hidden from guests until MEMO_START_DATE; admins always see it.

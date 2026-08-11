@@ -145,6 +145,10 @@
 
         <div class="card">
           <h2 data-i18n="plaza_posts_list_title">Publicações</h2>
+          <!-- Built from the types actually present in the history, so the
+               row never offers a filter that would empty the list - see
+               renderPlazaTypeFilter() in settings.js. -->
+          <div class="role-pills" id="plaza-type-filter" style="margin-top:8px"></div>
           <div id="plaza-posts-list" style="margin-top:12px"></div>
         </div>
 

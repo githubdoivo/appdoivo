@@ -79,7 +79,7 @@ function crc32(buf) {
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Nádia Barros', 'Óscar Lima',
+  'Joana Correia', 'Leonor Matos', 'Marta Freitas', 'Nádia Barros', 'Óscar Lima',
   'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
   'Vera Lobo', 'Xavier Salgado', 'Inácio Pires', 'Simão Valente',
 ];

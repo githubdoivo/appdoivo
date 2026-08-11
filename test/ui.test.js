@@ -1132,6 +1132,93 @@ test('the account card\'s key updates immediately after a self-service key chang
   await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
 });
 
+test('changing your own key updates Manage Users too, not just the account card', async () => {
+  // The two places that show a key disagreed after a self-service change:
+  // the account card was patched in place, the list below it was not asked
+  // for again, so it went on listing a key that no longer worked.
+  const restoreKey = 'ownerkeyrestored1';
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  const ownerRowKey = async () => page.$eval(
+    '#users-list .user-row',
+    (row) => row.querySelector('[data-token]')?.dataset.token,
+  );
+  assert.equal(await ownerRowKey(), ADMIN, 'the owner is the first row, showing their current key');
+
+  try {
+    await page.fill('#current-key-input', ADMIN);
+    await page.fill('#new-key-input', restoreKey);
+    await page.click('#change-key-form button[type="submit"]');
+    await page.waitForSelector('#change-key-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+
+    await page.waitForFunction(
+      (expected) => document.querySelector('#users-list .user-row [data-token]')?.dataset.token === expected,
+      restoreKey,
+      { timeout: WAIT_TIMEOUT },
+    );
+    assert.equal(
+      await page.$eval('#account-token', (el) => el.dataset.token),
+      restoreKey,
+      'and the account card agrees with it',
+    );
+  } finally {
+    // Every other test in this file authenticates as ADMIN - put it back
+    // even if the assertions above never got there.
+    await api('POST', '/me/change-token', {
+      token: restoreKey,
+      body: { currentToken: restoreKey, newToken: ADMIN },
+    }).catch(() => {});
+    await context.close();
+  }
+});
+
+test('the Wall history can be filtered down to one kind of post', async () => {
+  // By the party this list is the whole Wall in one column. Same pills as
+  // Manage Users' roles, and the same rule: cumulative, and switching the
+  // last one off means "show everything" rather than showing nothing.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso da casa' } });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'que noite preferes?', options: ['furnished', 'swamp'] },
+  });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'links', text: 'onde e', links: [{ emoji: '📍', label: 'mapa', url: 'https://maps.example' }] },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  const rows = () => page.$$eval('#plaza-posts-list .user-row', (els) => els.length);
+  const chips = () => page.$$eval('#plaza-type-filter .role-pill', (els) => els.map((e) => e.dataset.postType));
+  assert.deepEqual(await chips(), ['announcement', 'poll', 'links'], 'one chip per kind of post on the Wall');
+  assert.equal(await rows(), 3, 'everything shows before anything is filtered');
+
+  // Switch two off, leaving polls.
+  await page.click('#plaza-type-filter [data-post-type="announcement"]');
+  await page.click('#plaza-type-filter [data-post-type="links"]');
+  await page.waitForTimeout(200);
+  assert.equal(await rows(), 1, 'only the poll should be left');
+  assert.equal(
+    await page.$eval('#plaza-posts-list .user-row .badge', (el) => el.className.includes('type-poll')),
+    true,
+    'and the one left is the poll',
+  );
+
+  // Switching the last one off would leave an empty list - it means "all".
+  await page.click('#plaza-type-filter [data-post-type="poll"]');
+  await page.waitForTimeout(200);
+  assert.equal(await rows(), 3, 'no chip selected shows everything, never nothing');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
 /* -------------- Golden rule: non-owner admin UI (regression) ------------- */
 
 test('a non-owner admin gets voting control, reveal-consequence, and a self-only Users view', async () => {
@@ -1357,6 +1444,39 @@ test('a notification click while the app is already open switches tabs via postM
   const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
   assert.ok(rataActive, 'the simulated postMessage should have switched to the Rata tab without a page reload');
   assert.equal(page.url(), `${base}/`, 'this path must not navigate/reload - only the in-page tab should change');
+  await context.close();
+});
+
+test('a notification tapped from another page takes you to the page it is about', async () => {
+  // Two dead ends, both real: sw.js hands the deep link to whichever window
+  // is open and lets that page act on it, but only the main app was
+  // listening - so a Rata notification tapped while Settings was open did
+  // nothing at all. And the app, which was listening, only ever read ?tab=
+  // out of the url, so a role-change notification pointing at
+  // /settings.html found nothing to apply and also did nothing. Neither tap
+  // moved you an inch.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  await page.evaluate(() => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'deep-link', url: '/?tab=rata' } })
+    );
+  });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.ok(
+    await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active')),
+    'a Rata notification tapped on Settings should land on the Rata tab',
+  );
+
+  // And the other direction: this one carries no ?tab= at all.
+  await page.evaluate(() => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'deep-link', url: '/settings.html' } })
+    );
+  });
+  await page.waitForURL(`${base}/settings.html`, { timeout: WAIT_TIMEOUT });
+
   await context.close();
 });
 

@@ -1,5 +1,5 @@
 import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
-import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
+import { registerServiceWorker, refreshNotifButton, wireNotifButton, wireDeepLinks, consumePendingDeepLink } from './push.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
@@ -167,7 +167,7 @@ function showApp(me) {
   // notification's own ?tab= (handled right after) is the only thing
   // allowed to land somewhere else.
   applyDeepLinkParams();
-  consumePendingDeepLink();
+  consumePendingDeepLink(followDeepLink);
   if (!me.tutorialSeen) startTutorial();
   startSessionWatcher();
 }
@@ -757,39 +757,9 @@ function applyDeepLinkParams() {
   history.replaceState({}, '', location.pathname);
 }
 
-// The other half of the iOS cold-start case described in sw.js: the query
-// string never survived the launch, so ask the service worker whether a
-// notification tap left a destination waiting. Only ever returns something
-// straight after a tap - a normal app open finds nothing and this is a
-// no-op. Times out rather than hanging if the worker is slow to wake.
-async function consumePendingDeepLink() {
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (!reg?.active) return;
-    const url = await new Promise((resolve) => {
-      const channel = new MessageChannel();
-      channel.port1.onmessage = (event) => resolve(event.data?.url || null);
-      reg.active.postMessage({ type: 'take-pending-deep-link' }, [channel.port2]);
-      setTimeout(() => resolve(null), 1500);
-    });
-    if (url) applyTabAndNight(new URL(url, location.origin).searchParams);
-  } catch {
-    // Nothing to recover here - the app is already on its landing tab,
-    // which is exactly where it would have been without this.
-  }
-}
-
-// iOS Safari's service worker Client.navigate() often silently fails when
-// the PWA is already open in the foreground (falls back to just focusing
-// the existing window - see sw.js) - a real, documented WebKit limitation,
-// not something fixable from the service worker side. Have the already-
-// open page apply the deep link itself instead of depending on navigate()
-// to reload it.
-navigator.serviceWorker?.addEventListener('message', (event) => {
-  if (event.data?.type !== 'deep-link' || !event.data.url) return;
-  const url = new URL(event.data.url, location.origin);
-  applyTabAndNight(url.searchParams);
-});
+// Taps that arrive while this page is already open, and the cold-start
+// leftovers - both shared with Settings, see wireDeepLinks() in push.js.
+const followDeepLink = wireDeepLinks(applyTabAndNight);
 
 /* ----------------------------- Notificacoes ------------------------------ */
 

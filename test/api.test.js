@@ -238,6 +238,12 @@ test('on QA the dev key carries a whole session, without ever becoming the owner
     const { hashToken } = await import('../src/tokens.js');
     assert.notEqual(owner.token_hash, hashToken('mossy'), "the owner's real key must stay a generated one");
 
+    // /me reports that generated key, not the word that was typed - the
+    // account card reads this, and used to show "mossy" while Manage Users
+    // showed the real one, so the two disagreed about the same account.
+    assert.notEqual(me.data.key, 'mossy', 'the dev word is a way in, not the account key');
+    assert.equal(hashToken(me.data.key), owner.token_hash, "/me should report the owner's own stored key");
+
     // And it must not claim the owner's key on their behalf: doing so drops
     // them out of the first-time name-search flow, which is how the owner
     // got locked out of QA once already.
