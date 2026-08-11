@@ -508,6 +508,41 @@ test('a first-time user can find their name, claim their key, and get logged str
 // Internal id/routes/CSS classes stay "plaza" (see tab_plaza in i18n.js for
 // the displayed-vs-internal mapping) - only the label changed to "Wall".
 
+// The highlight is the night's motif tiled behind the words, not a rail
+// beside them and not a tinted box. Three things have to hold together or
+// it stops being that: the motif covers the whole block, nothing paints a
+// ground behind it, and it stays faint enough to read over.
+test('a highlight is the night motif behind the text, with no tinted box', async () => {
+  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'a rata abre às 22h' } });
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/');
+  await page.waitForSelector('.plaza-post-text.highlight', { timeout: WAIT_TIMEOUT });
+
+  const style = await page.evaluate(() => {
+    const el = document.querySelector('.plaza-post-text.highlight');
+    const before = getComputedStyle(el, '::before');
+    const own = getComputedStyle(el);
+    return {
+      maskImage: before.maskImage || before.webkitMaskImage,
+      maskRepeat: before.maskRepeat || before.webkitMaskRepeat,
+      opacity: Number(before.opacity),
+      width: before.width,
+      background: own.backgroundColor,
+      borderLeft: own.borderLeftWidth,
+    };
+  });
+
+  assert.match(style.maskImage, /svg/, 'the motif should be the mask on the ::before');
+  assert.match(style.maskRepeat, /repeat/, 'and it should tile');
+  assert.ok(!/repeat-y/.test(style.maskRepeat), 'in both directions - repeat-y is the old rail');
+  assert.ok(style.opacity > 0.15 && style.opacity <= 0.4, `faint but visible, got ${style.opacity}`);
+  assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(style.background), `no tinted ground behind it, got ${style.background}`);
+  assert.equal(style.borderLeft, '0px', 'and no accent bar down the side');
+
+  await context.close();
+  await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+});
+
 test('Wall opens by default and shows a posted announcement in the feed', async () => {
   const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
 
