@@ -14,6 +14,25 @@ list of what is still owed, and by whom.
 These cannot start until he hands something over. Listing them is not a
 nudge; they sit here until they don't.
 
+### Reconcile the production guest accounts
+
+Ivo's guest list (confirmed 11 Aug 2026) and the accounts on production
+disagree in three places. `src/seedDemo.js` was corrected to match the
+list; production was deliberately left untouched, because creating and
+deleting accounts there is real people's access, and removing one
+destroys their key.
+
+- **Óscar Lima** — on the guest list, has no production account, so
+  cannot log in.
+- **Rebeca Campos** — same.
+- **Zé Monteiro** — has a production account but is not on the guest
+  list. Delete, or keep if he is coming after all and the list was
+  incomplete.
+
+Needs one word from Ivo before anything is created or removed. Not
+urgent in itself, but it wants doing before invitations go out, since
+two guests currently have no way in. The party is 18–20 Sept 2026.
+
 ### High-resolution vectorised login background
 
 The login background is still the placeholder noted in `styles.css`
