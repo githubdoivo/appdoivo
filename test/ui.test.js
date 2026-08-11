@@ -342,6 +342,27 @@ for (const deviceName of IOS_DEVICES) {
 // #login used to be visible by default, so an authenticated user briefly saw
 // the login form before the session check resolved. It must ship hidden.
 
+// Regression: settings.html declared no apple-touch-icon, so adding it to
+// an iPhone home screen - which Ivo does, to keep the admin page beside the
+// app - produced a grey square with the first letter of the title in it
+// rather than the app icon. index.html had the tags all along; nobody had
+// looked at the other page. Reads the served HTML rather than the file, so
+// it also covers the version stamping in between.
+test('both pages give iOS an icon to use on the home screen', async () => {
+  for (const path of ['/', '/settings.html']) {
+    const res = await fetch(base + path);
+    const html = await res.text();
+    assert.match(html, /rel="apple-touch-icon"[^>]*icon-180\.png/, `${path} has no apple-touch-icon`);
+    assert.match(html, /apple-mobile-web-app-capable/, `${path} does not declare itself installable`);
+
+    const title = html.match(/apple-mobile-web-app-title" content="([^"]*)"/)?.[1];
+    assert.ok(title, `${path} has no home screen name`);
+    // The OS draws that label itself, so text-transform cannot reach it -
+    // same reason the push copy is checked for capitals.
+    assert.equal(title, title.toLowerCase(), `the home screen name for ${path} carries a capital: "${title}"`);
+  }
+});
+
 test('#login ships hidden in the raw HTML (no flash before auth check resolves)', async () => {
   const html = await (await fetch(base + '/')).text();
   const match = html.match(/<section id="login" class="([^"]*)"/);
