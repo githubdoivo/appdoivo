@@ -933,7 +933,9 @@ test('an expanded user row stays open when the list re-renders under it', async 
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.locator('#users-list [data-row-toggle]').first().click();
+  // The chevron, for the same reason as the test below: a click landing on
+  // the name starts a rename instead of expanding.
+  await page.locator('#users-list .user-row-chevron').first().click();
   await page.waitForSelector('#users-list .user-row-details:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
   // Exactly what a poll tick does - rebuild the list from the same data.
@@ -969,10 +971,27 @@ test('Manage Users row keeps the access key visible with no overflow, once expan
   // first - and a collapsed row's key measures zero wide. That is what made
   // this the suite's most frequent intermittent failure. Rows staying open
   // across a re-render at all is the separate fix above.
-  const firstRow = page.locator('#users-list [data-row-toggle]').first();
+  // The chevron, not the middle of the row: tapping the name is how a
+  // rename starts (see the rename test below), so the toggle handler
+  // deliberately ignores clicks that land on it. Playwright clicks an
+  // element's centre, and whether that centre falls on the name or beside
+  // it depends on how long the name happens to be - which is what made
+  // this test look flaky for so long. The chevron means one thing only.
+  const firstRow = page.locator('#users-list .user-row-chevron').first();
   await firstRow.click();
   const openKey = page.locator('#users-list .user-row-details:not(.hidden) .user-row-token').first();
-  await openKey.waitFor({ state: 'visible', timeout: WAIT_TIMEOUT });
+  await openKey.waitFor({ state: 'visible', timeout: WAIT_TIMEOUT }).catch(async (err) => {
+    const state = await page.evaluate(() => ({
+      rows: document.querySelectorAll('#users-list .user-row').length,
+      toggles: document.querySelectorAll('#users-list [data-row-toggle]').length,
+      expanded: document.querySelectorAll('#users-list .user-row-details:not(.hidden)').length,
+      ariaOpen: [...document.querySelectorAll('#users-list [data-row-toggle]')]
+        .filter((r) => r.getAttribute('aria-expanded') === 'true').length,
+      tokenBoxes: [...document.querySelectorAll('#users-list .user-row-details:not(.hidden) .user-row-token')]
+        .map((el) => { const r = el.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; }),
+    }));
+    throw new Error(`${err.message}\n  state: ${JSON.stringify(state)}`);
+  });
   await page.waitForFunction(
     () => {
       const el = document.querySelector('.user-row-details:not(.hidden) .user-row-token');

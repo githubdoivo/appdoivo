@@ -715,30 +715,26 @@ button, .btn {
   text-align: center;
 }
 
-/* DEFAULT: the section's own accent, darkened, with a label tinted from
-   that same accent. This used to be --ink on --paper, which inverts with
-   the mode: in dark mode every ordinary button became a near-white block,
-   the one surface on the page carrying no theme at all - "publicar" beside
-   chat's deep "partilhar", two controls doing the same job and looking
-   unrelated depending which mode you were in.
-   It is now the treatment the Wall's publish/save buttons already had,
-   applied everywhere, so a button looks the same wherever it is and takes
-   its colour from the page it is on: terracotta on the Wall, olive on
-   Swamp, cyan on Memo. .ghost, .seed and .danger keep their own looks
-   below - a secondary, a "fill this", and a destructive are meant to read
-   differently. */
+/* DEFAULT: Primary solid dark button (submit, create, send, save).
+   Briefly made this the deep-accent CTA treatment for every button on
+   every page and reverted it - see the CTA family further down, which is
+   still an explicit list. The blanket version changed far more than the
+   handful of buttons it was meant to, and looked wrong. */
 button, .btn {
-  border: 1px solid color-mix(in srgb, var(--clay) 50%, #000);
+  border: 1px solid var(--ink);
   padding: 12px 20px;
   font-size: 0.78rem;
-  background: color-mix(in srgb, var(--clay) 50%, #000);
-  color: var(--on-cta);
+  background: var(--ink);
+  /* --paper, not --paper-3: the palest step reads as plain white against a
+     dark ground, which is what these labels were being flagged for. The
+     base paper carries the theme's hue visibly and still clears AA (6:1 at
+     worst, on Wall). */
+  color: var(--paper);
 }
 button:hover, .btn:hover {
-  background: color-mix(in srgb, var(--clay) 42%, #000);
-  border-color: color-mix(in srgb, var(--clay) 42%, #000);
-  color: var(--on-cta);
-  opacity: 1;
+  background: var(--ink);
+  color: var(--paper);
+  opacity: 0.8;
 }
 button:disabled {
   opacity: 0.45;
@@ -1031,7 +1027,7 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
      instead, so the tabs fit and there is nothing to drag; the overflow
      scroll below stays as the floor for anything genuinely too wide (a
      longer label, another tab, a large accessibility text size). */
-  gap: clamp(5px, 2.4vw, 26px);
+  gap: clamp(5px, 1.7vw, 26px);
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
@@ -1055,14 +1051,11 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   color: var(--ink-soft);
   padding: 4px 0 12px;
   font-family: var(--serif);
-  /* Scales with the viewport so five tabs fit a narrow phone. At a flat
-     size the row was a few pixels too wide and slid under a thumb - a
-     navigation bar that moves when you touch it reads as broken, and it
-     was worst on the admin page where the labels are longest.
-     The padding below compensates: shrinking the type would otherwise take
-     the tap target down with it, and 44px is the floor a thumb needs (see
-     the tab-size test). Narrower type, same height. */
-  font-size: clamp(0.84rem, 4.4vw, 1.35rem);
+  /* Full size, as it was. Shrinking the type to make the row fit was the
+     wrong lever - it made the labels small to solve a spacing problem.
+     The gap gives way instead (see .tabs above); the type only steps down
+     on a genuinely narrow phone, and even there barely. */
+  font-size: clamp(1.1rem, 3.6vw + 0.4rem, 1.35rem);
   /* The tab's own box is the tap target: 44px each way, label centred in
      it. "rata" and "wall" only draw 34-36px of text, and five of them in a
      row means a miss lands on the neighbour rather than on nothing. Sizing
