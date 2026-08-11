@@ -70,7 +70,8 @@ import { seedDemo, seedDemoConsequences, seedDemoContestants, seedDemoWall, seed
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import PDFDocument from 'pdfkit';
-import { listPlazaPosts, listPlazaPostsForAdmin, createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
+import { listPlazaPosts, listPlazaPostsForAdmin, updatePlazaPost,
+  createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
   MEMO_DIR,
   MEMO_MAX_FILE_BYTES,
@@ -246,6 +247,19 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
     tag: 'plaza-announcement',
     url: '/?tab=plaza',
   });
+});
+
+// Editing what is already up - a typo in an announcement, a wrong address,
+// an option nobody understood. Any admin, same as publishing: whoever can
+// put a post on the Wall can fix it. Deleting stays owner-only, because
+// that is the one that cannot be undone.
+router.patch('/admin/plaza-posts/:id', requireAdmin, (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const result = updatePlazaPost(Number(req.params.id), req.body || {});
+  if (result.error) {
+    return res.status(result.error === 'err_post_not_found' ? 404 : 400).json({ error: result.error });
+  }
+  res.json(result);
 });
 
 router.delete('/admin/plaza-posts/:id', requireOwner, (req, res) => {
@@ -744,6 +758,22 @@ router.patch('/admin/users/:id/admin', (req, res) => {
 
   db.prepare("UPDATE users SET is_admin = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?").run(isAdmin ? 1 : 0, id);
   res.json({ ok: true, is_admin: isAdmin });
+
+  // Tell the person whose role it is. Their open session already changes
+  // under them within 30s (see startRoleWatcher() in app.js/settings.js) -
+  // buttons appearing or vanishing with no explanation is unsettling, and
+  // someone who is not looking at the app finds out only by accident. Sent
+  // after the response so a push failure cannot fail the role change, which
+  // is the part that matters.
+  notifyUser(id, {
+    title: { pt: 'appdoivo', en: 'appdoivo' },
+    body: isAdmin
+      ? { pt: 'passaste a organizador - tens acesso ao painel de administração.',
+          en: 'you are an organiser now - the admin panel is yours.' }
+      : { pt: 'já não és organizador. continuas com tudo o resto, como qualquer convidado.',
+          en: 'you are no longer an organiser. everything else stays, like any guest.' },
+    url: '/settings.html',
+  }).catch((err) => console.error('[push] role-change notify failed:', err));
 });
 
 /* ---------------------------------- Wall ---------------------------------- */

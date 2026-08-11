@@ -57,6 +57,11 @@
   --role-user:  #2a6ca6;
   --type-announcement: #5c3a1f;
   --type-poll: #a35a1a;
+  /* Links needed a hue of their own: without one they fell back to the
+     announcement chip and the two post types were indistinguishable in the
+     history. Kept in the app's own earth palette (this is --rata's family)
+     rather than introducing a colour from nowhere. */
+  --type-links: #3f6b5f;
   --type-podium: #6b4a8a;
   /* Four status colours, all built the same way: an outline chip in the
      list, a chip filled with that same colour under paper ink when it's an
@@ -158,6 +163,7 @@ html.mode-dark {
   --role-user:  #6badde;
   --type-announcement: #c9a07a;
   --type-poll: #e08a4a;
+  --type-links: #6fb3a0;
   --type-podium: #b294d6;
   --status-pending: #d4b04a;
   --status-pending-fill: #f2c811;
@@ -709,22 +715,30 @@ button, .btn {
   text-align: center;
 }
 
-/* DEFAULT: Primary solid dark button (submit, create, send, save). */
+/* DEFAULT: the section's own accent, darkened, with a label tinted from
+   that same accent. This used to be --ink on --paper, which inverts with
+   the mode: in dark mode every ordinary button became a near-white block,
+   the one surface on the page carrying no theme at all - "publicar" beside
+   chat's deep "partilhar", two controls doing the same job and looking
+   unrelated depending which mode you were in.
+   It is now the treatment the Wall's publish/save buttons already had,
+   applied everywhere, so a button looks the same wherever it is and takes
+   its colour from the page it is on: terracotta on the Wall, olive on
+   Swamp, cyan on Memo. .ghost, .seed and .danger keep their own looks
+   below - a secondary, a "fill this", and a destructive are meant to read
+   differently. */
 button, .btn {
-  border: 1px solid var(--ink);
+  border: 1px solid color-mix(in srgb, var(--clay) 50%, #000);
   padding: 12px 20px;
   font-size: 0.78rem;
-  background: var(--ink);
-  /* --paper, not --paper-3: the palest step reads as plain white against a
-     dark ground, which is what these labels were being flagged for. The
-     base paper carries the theme's hue visibly and still clears AA (6:1 at
-     worst, on Wall). */
-  color: var(--paper);
+  background: color-mix(in srgb, var(--clay) 50%, #000);
+  color: var(--on-cta);
 }
 button:hover, .btn:hover {
-  background: var(--ink);
-  color: var(--paper);
-  opacity: 0.8;
+  background: color-mix(in srgb, var(--clay) 42%, #000);
+  border-color: color-mix(in srgb, var(--clay) 42%, #000);
+  color: var(--on-cta);
+  opacity: 1;
 }
 button:disabled {
   opacity: 0.45;
@@ -857,9 +871,10 @@ button.danger:hover {
    shape needs that padding to not look cramped, but it was throwing the
    badge's own text out of alignment with the plain text (byline,
    question, options) below it in the same list. */
-.badge.type-announcement, .badge.type-poll { margin-left: -9px; }
+.badge.type-announcement, .badge.type-poll, .badge.type-links { margin-left: -9px; }
 .badge.type-announcement { border-color: var(--type-announcement); color: var(--type-announcement); }
 .badge.type-poll { border-color: var(--type-poll); color: var(--type-poll); }
+.badge.type-links { border-color: var(--type-links); color: var(--type-links); }
 .badge.type-podium { border-color: var(--type-podium); color: var(--type-podium); }
 
 /* Rata history: each revealed consequence, who was assigned, and its
@@ -1010,7 +1025,13 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
      (justify-content only kicks in once there's surplus width; below that
      it falls back to normal flow + the overflow-x scroll). */
   justify-content: space-evenly;
-  gap: 26px;
+  /* Was a flat 26px, which overflowed the row by a handful of pixels on a
+     phone - just enough that the whole bar slid under a thumb, on a control
+     that is supposed to sit still. The gap gives way on narrow screens
+     instead, so the tabs fit and there is nothing to drag; the overflow
+     scroll below stays as the floor for anything genuinely too wide (a
+     longer label, another tab, a large accessibility text size). */
+  gap: clamp(5px, 2.4vw, 26px);
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
@@ -1034,7 +1055,24 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   color: var(--ink-soft);
   padding: 4px 0 12px;
   font-family: var(--serif);
-  font-size: 1.35rem;
+  /* Scales with the viewport so five tabs fit a narrow phone. At a flat
+     size the row was a few pixels too wide and slid under a thumb - a
+     navigation bar that moves when you touch it reads as broken, and it
+     was worst on the admin page where the labels are longest.
+     The padding below compensates: shrinking the type would otherwise take
+     the tap target down with it, and 44px is the floor a thumb needs (see
+     the tab-size test). Narrower type, same height. */
+  font-size: clamp(0.84rem, 4.4vw, 1.35rem);
+  /* The tab's own box is the tap target: 44px each way, label centred in
+     it. "rata" and "wall" only draw 34-36px of text, and five of them in a
+     row means a miss lands on the neighbour rather than on nothing. Sizing
+     the box rather than overlaying an invisible one means the targets
+     cannot overlap by construction - whatever the gap does at any width. */
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 500;
   text-transform: lowercase;
   letter-spacing: 0.01em;
@@ -1050,22 +1088,11 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
    visible - overriding both to zero/none removes it, leaving just the
    underline. */
 .tab { -webkit-appearance: none; appearance: none; border-radius: 0; position: relative; }
-/* The label is only 34-36px wide at its narrowest ("rata", "wall"), well
-   under the 44px a thumb needs, and five of them sit in a row - a miss lands
-   on the neighbouring tab, not on nothing. Widened as an overlay rather than
-   as padding: the row is already 4px wider than an iPhone SE and real
-   padding would push it further. The tabs sit 20px apart, so +10 per side
-   exactly meets the neighbour without ever overlapping it. */
-.tab::after {
-  content: '';
-  position: absolute;
-  /* The row measures 43.x tall, a hair under the minimum; nothing sits
-     directly above or below a tab, so the vertical growth is free. */
-  top: -3px;
-  bottom: -3px;
-  left: -10px;
-  right: -10px;
-}
+/* No invisible overlay widening the hit area any more - the tab's own box
+   is 44px each way (see .tab above). The overlay had to guess how far it
+   could reach without meeting its neighbour, and once the row's gap started
+   shrinking with the viewport that guess was wrong: two targets claiming
+   the same pixels, which is worse than one being small. */
 /* outline:none used to be here with nothing in its place, so a keyboard or
    VoiceOver user got no indication of where they were. The ring is drawn on
    the label rather than the widened hit area, which would look detached. */
@@ -1387,8 +1414,9 @@ th { font-family: var(--body); text-transform: lowercase; letter-spacing: 0.12em
      breakpoint's html{font-size} bump, so stacking a rem override on top of
      it here would silently inflate it again (exactly what caused the
      overflow this replaces). */
-  .tabs { gap: 20px; }
-  .tab { font-size: 1.2rem; }
+  /* gap and .tab font-size are clamped against the viewport in the base
+     rules above, which already do the right thing here - overriding them
+     with flat values is what put the row back over the edge. */
   .card { padding: 18px; }
   .highlight, .hero-line { font-size: 1.3rem; }
 }
@@ -2048,6 +2076,10 @@ html.mode-dark .plaza-post-type { color: #fff; }
 .admin-post-options li { padding: 3px 0; }
 .admin-post-options strong { font-weight: 700; margin-left: 4px; }
 
+/* .highlight paints its own tinted ground and left edge (see .highlight
+   above), so the plain text rule's border would draw a second one right
+   beside it. */
+.plaza-post-text.highlight { border-left: none; padding-left: 20px; font-size: 1.25rem; }
 .plaza-post-announcement, .plaza-post-podium {
   background: var(--paper-2);
   border: 1px solid var(--line);
@@ -2104,22 +2136,36 @@ html.mode-dark .plaza-post-type { color: #fff; }
    that shape is the point. */
 .dedication-written { white-space: pre-wrap; }
 
-.plaza-links { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.plaza-link {
+/* The line above the addresses is just a line - no accent bar down its
+   side. The highlight treatment belongs to announcements, where the words
+   are the whole post; on a links post it made the intro shout over the
+   thing it was introducing. */
+.plaza-links-intro { border-left: none; padding-left: 0; }
+.plaza-links {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper-3);
-  color: var(--ink);
-  text-decoration: none;
+  flex-direction: column;
+  gap: 8px;
 }
+.plaza-links li { display: flex; align-items: baseline; gap: 8px; }
+/* Demure: the name, its emoji, and an underline. No border, no fill, no
+   padding - a links post should read as a note with addresses under it,
+   not as a stack of buttons competing with the announcement beside it. */
+.plaza-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+.plaza-link:hover { text-decoration-color: var(--clay); }
 .plaza-link-emoji { flex: none; font-size: 1.1em; line-height: 1; }
 /* The name carries the underline, so what is tappable is the thing you read
    rather than the whole strip it sits in. */
-.plaza-link-label { font-family: var(--body); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
 .plaza-link:active { background: var(--paper-2); }
 
 /* Name and address side by side while there is room, stacked on the

@@ -113,15 +113,15 @@ export function listPlazaPostsForAdmin() {
 const POST_TYPES = ['announcement', 'poll', 'links'];
 
 /**
- * Creates an announcement, a poll, or a list of links. Announcements ignore
- * both extras; polls require 2-6 non-empty option labels; links require at
- * least one label+URL pair. Returns { ok, id } or { error }.
+ * The rules a post's contents have to satisfy, shared by creating and
+ * editing so the two can never drift apart - an edit that accepted what a
+ * create refuses would be a way around the limits rather than a feature.
+ * Returns { text, options, links } or { error }.
  */
-export function createPlazaPost(authorId, { type, text, options, links }) {
+function validatePostContent(type, { text, options, links }) {
   const trimmedText = String(text ?? '').trim();
   if (!trimmedText) return { error: 'err_post_text_required' };
   if (trimmedText.length > MAX_TEXT_LENGTH) return { error: 'err_post_too_long' };
-
   if (!POST_TYPES.includes(type)) return { error: 'err_invalid_post_type' };
 
   let cleanOptions = [];
@@ -155,21 +155,83 @@ export function createPlazaPost(authorId, { type, text, options, links }) {
     if (cleanLinks.some((l) => !l.url)) return { error: 'err_link_invalid_url' };
   }
 
+  return { text: trimmedText, options: cleanOptions, links: cleanLinks };
+}
+
+/**
+ * Creates an announcement, a poll, or a list of links. Announcements ignore
+ * both extras; polls require 2-6 non-empty option labels; links require at
+ * least one label+URL pair. Returns { ok, id } or { error }.
+ */
+export function createPlazaPost(authorId, { type, text, options, links }) {
+  const clean = validatePostContent(type, { text, options, links });
+  if (clean.error) return clean;
+
   const info = db.prepare('INSERT INTO plaza_posts (type, author_id, text) VALUES (?, ?, ?)')
-    .run(type, authorId, trimmedText);
+    .run(type, authorId, clean.text);
   const postId = info.lastInsertRowid;
 
   if (type === 'poll') {
     const insOption = db.prepare('INSERT INTO plaza_poll_options (post_id, label, position) VALUES (?, ?, ?)');
-    cleanOptions.forEach((label, i) => insOption.run(postId, label, i));
+    clean.options.forEach((label, i) => insOption.run(postId, label, i));
   }
 
   if (type === 'links') {
     const insLink = db.prepare('INSERT INTO plaza_link_items (post_id, emoji, label, url, position) VALUES (?, ?, ?, ?, ?)');
-    cleanLinks.forEach((l, i) => insLink.run(postId, l.emoji, l.label, l.url, i));
+    clean.links.forEach((l, i) => insLink.run(postId, l.emoji, l.label, l.url, i));
   }
 
   return { ok: true, id: postId };
+}
+
+/**
+ * Edits a post already on the Wall - a typo in an announcement, a wrong
+ * address in a link, an option nobody understood. The type is fixed at
+ * creation and cannot change: a poll people have voted in is not an
+ * announcement, and pretending otherwise would strand those votes.
+ *
+ * Poll options are matched by position rather than wiped and re-inserted,
+ * so renaming one keeps the votes already cast for it - fixing a typo must
+ * not quietly reset the tally. Options removed outright do lose theirs;
+ * there is no honest way around that, and the frontend says so before it
+ * sends. Links carry no votes, so they are simply replaced.
+ *
+ * Returns { ok, id } or { error }.
+ */
+export function updatePlazaPost(id, { text, options, links }) {
+  const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(id);
+  if (!post) return { error: 'err_post_not_found' };
+  // Snapshots and the day video are generated, not written - their text is
+  // a JSON payload or a date, and editing it by hand only breaks them.
+  if (!POST_TYPES.includes(post.type)) return { error: 'err_post_not_editable' };
+
+  const clean = validatePostContent(post.type, { text, options, links });
+  if (clean.error) return clean;
+
+  db.prepare('UPDATE plaza_posts SET text = ? WHERE id = ?').run(clean.text, id);
+
+  if (post.type === 'poll') {
+    const existing = db.prepare(
+      'SELECT id, position FROM plaza_poll_options WHERE post_id = ? ORDER BY position ASC, id ASC'
+    ).all(id);
+    const rename = db.prepare('UPDATE plaza_poll_options SET label = ? WHERE id = ?');
+    const insert = db.prepare('INSERT INTO plaza_poll_options (post_id, label, position) VALUES (?, ?, ?)');
+    const remove = db.prepare('DELETE FROM plaza_poll_options WHERE id = ?');
+    clean.options.forEach((label, i) => {
+      if (existing[i]) rename.run(label, existing[i].id);
+      else insert.run(id, label, i);
+    });
+    // Votes on a removed option go with it (ON DELETE CASCADE).
+    existing.slice(clean.options.length).forEach((o) => remove.run(o.id));
+  }
+
+  if (post.type === 'links') {
+    db.prepare('DELETE FROM plaza_link_items WHERE post_id = ?').run(id);
+    const insLink = db.prepare('INSERT INTO plaza_link_items (post_id, emoji, label, url, position) VALUES (?, ?, ?, ?, ?)');
+    clean.links.forEach((l, i) => insLink.run(id, l.emoji, l.label, l.url, i));
+  }
+
+  return { ok: true, id };
 }
 
 /** Removes a post (options/votes cascade). Returns { ok } or { error }. */

@@ -118,8 +118,12 @@
               </div>
               <button type="button" id="plaza-add-link-btn" class="small ghost" style="margin-top:8px" data-i18n="plaza_add_link">Adicionar link</button>
             </div>
-            <div style="text-align:right;margin-top:12px">
-              <button type="submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
+            <div class="actions-right" style="margin-top:12px">
+              <!-- The same form composes a new post and edits an existing
+                   one - see startPlazaEdit() in settings.js. The cancel
+                   button only appears while editing. -->
+              <button type="button" id="plaza-edit-cancel" class="small ghost hidden" data-i18n="cancel">Cancelar</button>
+              <button type="submit" id="plaza-post-submit" class="small" data-i18n="plaza_publish_btn">Publicar</button>
             </div>
             <span id="plaza-post-msg" class="muted"></span>
           </form>

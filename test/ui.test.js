@@ -577,15 +577,23 @@ test('Wall admin can publish a list of links from Settings, and they open out of
 
   const guestPage = await loginPage(context, guest.token);
   await guestPage.waitForSelector('.plaza-post-links', { timeout: WAIT_TIMEOUT });
-  const links = await guestPage.$$eval('.plaza-post-links .plaza-link', (els) =>
-    els.map((el) => ({
-      emoji: el.querySelector('.plaza-link-emoji')?.textContent.trim() || '',
-      label: el.querySelector('.plaza-link-label').textContent.trim(),
-      href: el.getAttribute('href'),
-      target: el.getAttribute('target'),
-      rel: el.getAttribute('rel') || '',
-      hasArrow: !!el.querySelector('.plaza-link-arrow'),
-    })));
+  // The emoji sits beside the link, not inside it: inside, the underline
+  // ran under the picture too and it read as part of the address. Only the
+  // words are the link.
+  const links = await guestPage.$$eval('.plaza-post-links li', (els) =>
+    els.map((li) => {
+      const a = li.querySelector('.plaza-link');
+      return {
+        emoji: li.querySelector('.plaza-link-emoji')?.textContent.trim() || '',
+        emojiInsideLink: !!a.querySelector('.plaza-link-emoji'),
+        label: a.textContent.trim(),
+        href: a.getAttribute('href'),
+        target: a.getAttribute('target'),
+        rel: a.getAttribute('rel') || '',
+        hasArrow: !!li.querySelector('.plaza-link-arrow'),
+      };
+    }));
+  assert.ok(links.every((l) => !l.emojiInsideLink), 'the emoji must sit outside the link, or it gets underlined too');
   assert.deepEqual(links.map((l) => l.label), ['Form', 'Playlist']);
   assert.deepEqual(links.map((l) => l.emoji), ['📃', '🎹'], 'the emoji is its own field beside the name');
   assert.ok(links.every((l) => !l.hasArrow), 'the name is what you tap, not an arrow parked at the far edge');
@@ -597,6 +605,91 @@ test('Wall admin can publish a list of links from Settings, and they open out of
   }
 
   await context.close();
+});
+
+// What is already on the Wall can be fixed. It could only be pinned or
+// deleted before, so a typo in an announcement everyone had seen meant
+// deleting it and publishing again - which loses the votes on a poll, and
+// looks to a guest like the host changing their mind twice.
+// The three Wall post types have to be tellable apart at a glance in the
+// history. "links" had no colour of its own, so it fell back to the
+// announcement chip and the two read as the same kind of post.
+test('post, poll and link chips are three different colours, in both modes', async () => {
+  const made = [];
+  made.push(await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'um aviso' } }));
+  made.push(await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'poll', text: 'uma pergunta?', options: ['sim', 'não'] } }));
+  made.push(await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'links', text: 'uns links', links: [{ emoji: '📃', label: 'form', url: 'https://a.test/x' }] } }));
+
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN, '/settings.html');
+    await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+    await page.reload();
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+    await page.click('[data-atab="plaza"]');
+    await page.waitForSelector('#plaza-posts-list .badge', { timeout: WAIT_TIMEOUT });
+
+    const colours = await page.evaluate(() => {
+      const of = (cls) => {
+        const el = document.querySelector(`#plaza-posts-list .badge.${cls}`);
+        return el ? getComputedStyle(el).color : null;
+      };
+      return { post: of('type-announcement'), poll: of('type-poll'), link: of('type-links') };
+    });
+
+    for (const [kind, value] of Object.entries(colours)) {
+      assert.ok(value, `no ${kind} chip on screen in ${mode} mode`);
+    }
+    assert.equal(
+      new Set(Object.values(colours)).size,
+      3,
+      `the three chips should be three colours in ${mode} mode, got ${JSON.stringify(colours)}`,
+    );
+    await context.close();
+  }
+
+  for (const m of made) await api('DELETE', `/admin/plaza-posts/${m.id}`, { token: ADMIN });
+});
+
+test('an admin can edit a post that is already published', async () => {
+  const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'o jantar é às 19h' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector(`[data-edit-post="${post.id}"]`, { timeout: WAIT_TIMEOUT });
+
+  await page.click(`[data-edit-post="${post.id}"]`);
+  // The composer becomes the editor - same form, so the same rules apply.
+  await page.waitForFunction(
+    () => document.getElementById('plaza-post-text')?.value.includes('19h'),
+    undefined,
+    { timeout: WAIT_TIMEOUT },
+  );
+  assert.equal(await page.isVisible('#plaza-edit-cancel'), true, 'there has to be a way out of editing');
+
+  await page.fill('#plaza-post-text', 'o jantar é às 20h');
+  await page.click('#plaza-post-submit');
+  await page.waitForFunction(
+    () => document.getElementById('plaza-posts-list')?.textContent.includes('20h'),
+    undefined,
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  // And the form is back to composing, not still holding the edited post.
+  assert.equal(await page.inputValue('#plaza-post-text'), '', 'the form should be empty again after saving');
+  assert.equal(await page.isVisible('#plaza-edit-cancel'), false, 'and out of edit mode');
+
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Edit Reader' } });
+  const guestPage = await loginPage(context, guest.token);
+  await guestPage.waitForSelector('.plaza-post-announcement', { timeout: WAIT_TIMEOUT });
+  const feed = await guestPage.textContent('#plaza-feed');
+  assert.match(feed, /20h/, 'the guest sees the corrected text');
+  assert.doesNotMatch(feed, /19h/, 'and not the old one');
+
+  await context.close();
+  await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
 });
 
 test('Wall admin can publish a poll from Settings, and a user can vote on it from the main feed', async () => {
@@ -1271,6 +1364,25 @@ test('a dropped connection says so, instead of the screen quietly going still', 
   await page.waitForSelector('#offline-banner', { state: 'hidden', timeout: Math.max(WAIT_TIMEOUT, 12000) });
 
   await context.close();
+});
+
+// Regression: the tab row was a few pixels wider than the viewport, so it
+// slid sideways under a thumb - on the admin page worst of all, where the
+// labels are longest. A navigation bar that moves when you touch it reads
+// as broken. Both rows are checked, because the public one overflowed too;
+// Ivo only happened to notice it on the admin side.
+test('neither tab row can be dragged sideways, on any phone', async () => {
+  for (const device of IOS_DEVICES) {
+    const context = await iphoneContext(device);
+    const page = await loginPage(context, ADMIN, '/');
+    const guest = await page.$eval('.tabs', (el) => el.scrollWidth - el.clientWidth);
+    assert.ok(guest <= 0, `the guest tab row overflows by ${guest}px on ${device}`);
+
+    const admin = await loginPage(context, ADMIN, '/settings.html');
+    const settings = await admin.$eval('#admin-tabs', (el) => el.scrollWidth - el.clientWidth);
+    assert.ok(settings <= 0, `the admin tab row overflows by ${settings}px on ${device}`);
+    await context.close();
+  }
 });
 
 test('every tab clears the 44px minimum, and no two of their hit areas overlap', async () => {
