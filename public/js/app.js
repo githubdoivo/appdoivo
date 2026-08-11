@@ -204,15 +204,21 @@ function startSessionWatcher() {
 // production, where the tab itself is hidden, would be a step about a
 // feature nobody can actually see.
 function tutorialSteps() {
+  // The tabs in the order the tab bar shows them - wall, plaza, memo, rata,
+  // snatch - so someone can follow the tour with a finger along the row
+  // instead of being sent back and forth across it. Mind the naming swap
+  // when reading these keys: tutorial_plaza is the page displayed as
+  // "wall", tutorial_wall the one displayed as "plaza" (see CLAUDE.md).
   const steps = [
     ['tutorial_1_title', 'tutorial_1_text'],
     ['tutorial_plaza_title', 'tutorial_plaza_text'],
-    ['tutorial_2_title', 'tutorial_2_text'],
-    ['tutorial_3_title', 'tutorial_3_text'],
     ['tutorial_wall_title', 'tutorial_wall_text'],
   ];
   if (memoEnabled) steps.push(['tutorial_memo_title', 'tutorial_memo_text']);
   steps.push(
+    ['tutorial_2_title', 'tutorial_2_text'],
+    ['tutorial_3_title', 'tutorial_3_text'],
+    // The three that are not tabs at all come last, whatever the row does.
     ['tutorial_4_title', 'tutorial_4_text'],
     ['tutorial_5_title', 'tutorial_5_text'],
     ['tutorial_6_title', 'tutorial_6_text'],

@@ -202,6 +202,10 @@ body {
      terracotta on the Wall, olive on Swamp, cyan on Memo. Worst case
      4.7:1, on Memo in dark mode. */
   --on-cta: color-mix(in srgb, var(--clay) 50%, #fff);
+  /* What a focused field glows with. The accent by default, but the login
+     screen sits on a green photograph where terracotta is the one colour
+     that belongs to nothing on screen - it overrides this below. */
+  --focus-ring: var(--clay);
   margin: 0;
   font-family: var(--body);
   font-size: 18px;
@@ -364,7 +368,12 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   max-width: none;
   width: 100vw;
   min-height: 100vh;
-  min-height: 100dvh;
+  /* svh, not dvh: dvh is the *dynamic* viewport, so it shrinks the moment
+     the keyboard opens and grows back when it closes - the whole screen
+     re-centring itself twice per tap, which is what "the page keeps going
+     up and down" was. svh is the small viewport: the same number whether
+     the keyboard is up or not, so nothing reflows around it. */
+  min-height: 100svh;
   margin-left: calc(50% - 50vw);
   padding: 0;
   /* Fallback for any sliver the cover photo doesn't reach (aspect-ratio
@@ -377,6 +386,10 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   --ink: #ece5d5;
   --ink-soft: #c7bca3;
   --line: rgba(236, 229, 213, 0.35);
+  /* The same warm cream as this screen's own edges - a focused field
+     deepens into the design instead of lighting up in an accent that
+     belongs to the app's other palette. */
+  --focus-ring: rgba(236, 229, 213, 0.9);
   --paper-3: #241d17;
   /* This screen has a fixed palette of its own over the photo, so every
      token a solid button reads has to be declared here or it falls through
@@ -2398,6 +2411,27 @@ html.mode-dark .plaza-post-type { color: #fff; }
    design elsewhere in the app - override it here so skip/next actually
    match, not just share a flex-basis. */
 .tutorial-actions button.ghost { padding: 12px 20px; font-size: 0.78rem; }
+/* The two read as one pair, each wearing the other's colour: skip is the
+   card with the solid button's ink on it, next is that ink with the card's
+   colour written on it. Swapping them like this is what makes them look
+   like two halves of the same control rather than two buttons that
+   happened to land side by side. */
+.tutorial-actions button.ghost {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.tutorial-actions button.ghost:hover { background: transparent; color: var(--ink); }
+.tutorial-actions #tutorial-next {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-2);
+}
+.tutorial-actions #tutorial-next:hover {
+  background: var(--ink);
+  color: var(--paper-2);
+  opacity: 0.88;
+}
 
 /* ------------------------------ Modal (alert/confirm) ---------------------- */
 /* Same overlay/card treatment as the tutorial above - a custom stand-in for
@@ -2605,11 +2639,23 @@ button.seed:hover {
 button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--clay);
   outline-offset: 2px;
+}
+
+/* A field already draws its own border, so a hard ring floating two pixels
+   outside it put two contours around one box - and on the login screen the
+   accent ring is terracotta over a green photograph, which was the pair
+   that looked wrong. A text field gets a soft halo in its own accent
+   instead: no second edge, its own border deepens, and the glow is the
+   theme's colour rather than a system-looking outline. Still unmistakably
+   focused, still only on :focus-visible so a thumb tap never draws it. */
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 22%, transparent);
 }
 
 /* Only the Memo dot honoured this before, out of ten animated properties -

@@ -1043,6 +1043,10 @@ router.get('/admin/consequences', (req, res) => {
   // Most recently touched first - a pending one sorts by when it was
   // suggested, but the moment it's revealed it jumps to the top too
   // (revealed_at, once set, is always more recent than created_at).
+  // id DESC breaks the tie: the timestamps are millisecond strings, and two
+  // suggestions posted in the same millisecond otherwise came back in
+  // whatever order the scan happened to produce - i.e. oldest first, the
+  // opposite of what this list promises.
   const rows = db.prepare(`
     SELECT c.id, c.text, c.day, c.status, c.revealed_at, u.name AS author,
            c.assigned_user_id, a.name AS assignedName, c.assigned_at,
@@ -1050,7 +1054,7 @@ router.get('/admin/consequences', (req, res) => {
     FROM consequences c
     JOIN users u ON u.id = c.user_id
     LEFT JOIN users a ON a.id = c.assigned_user_id
-    ORDER BY COALESCE(c.revealed_at, c.created_at) DESC
+    ORDER BY COALESCE(c.revealed_at, c.created_at) DESC, c.id DESC
   `).all();
   res.json(rows);
 });

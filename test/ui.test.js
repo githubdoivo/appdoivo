@@ -1611,13 +1611,25 @@ test('first-session tutorial shows once, steps through, then never shows again',
   // Step through every step via "next" (9 total steps with Memo enabled -
   // see tutorialSteps() in app.js - so 8 clicks to reach the last one; the
   // final "finish" click happens after the loop).
+  const tourTitles = [firstTitle.trim().toLowerCase()];
   for (let i = 0; i < 8; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);
     const titleAfter = await page.$eval('#tutorial-title', (el) => el.textContent);
     assert.notEqual(titleAfter, titleBefore, `step ${i + 2} did not render new content`);
+    tourTitles.push(titleAfter.trim().toLowerCase());
   }
+
+  // The tour walks the tabs in the order they sit in the tab bar - someone
+  // following along should be able to read left to right, not hop about.
+  const tabLabels = await page.$$eval('.tabs .tab:not(.hidden)', (els) =>
+    els.map((el) => el.textContent.trim().toLowerCase()));
+  const tourTabSteps = tourTitles.filter((t) => tabLabels.includes(t));
+  assert.deepEqual(tourTabSteps, tabLabels,
+    `the tour introduces the tabs as ${tourTabSteps.join(', ')} but the tab bar reads ${tabLabels.join(', ')}`);
+  assert.deepEqual(tourTitles.slice(1, 1 + tabLabels.length), tabLabels,
+    'the tab tour steps should come first, straight after the welcome step');
 
   // Last step's button finishes the tutorial instead of advancing further.
   await page.click('#tutorial-next');
@@ -2546,6 +2558,49 @@ test('every solid button keeps its label readable, on the login screen and in bo
     );
     await context.close();
   }
+});
+
+test('focusing the key field lights it up in the screen\'s own colours, not a browser outline', async () => {
+  // The default focus-visible outline landed a hard salmon ring on the one
+  // field every guest types into, over the photo, in a palette that belongs
+  // to nothing else on that screen. Inputs now take a soft halo drawn from
+  // --focus-ring, which #login redefines to its own cream.
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  const before = await page.$eval('#token-input', (el) => getComputedStyle(el).borderColor);
+  await page.focus('#token-input');
+  await page.waitForTimeout(120);
+  const after = await page.$eval('#token-input', (el) => {
+    const s = getComputedStyle(el);
+    return { outline: s.outlineStyle, shadow: s.boxShadow, border: s.borderColor };
+  });
+
+  assert.equal(after.outline, 'none', 'the hard focus outline should be gone from text fields');
+  assert.notEqual(after.shadow, 'none', 'a focused field still has to be visibly focused - the halo is missing');
+  assert.notEqual(after.border, before, 'the border should also pick up the focus colour');
+
+  // On-theme means the halo comes from #login's cream, not the app's clay.
+  const [r, g, b] = after.border.match(/\d+/g).map(Number);
+  assert.ok(r > 200 && g > 200 && b > 180,
+    `the login halo should be the screen's cream, got ${after.border}`);
+
+  await context.close();
+});
+
+test('the login screen does not resize itself when the keyboard opens', async () => {
+  // dvh tracks the *dynamic* viewport, so every time iOS raised the keyboard
+  // the min-height changed and the whole centred column slid up and back
+  // down. svh is the small viewport - the keyboard-open size - so the layout
+  // is already sitting where the keyboard would put it.
+  const css = await (await fetch(base + '/css/styles.css')).text();
+  const loginBlock = css.slice(css.indexOf('#login {'), css.indexOf('}', css.indexOf('#login {')));
+  assert.ok(/min-height:\s*100svh/.test(loginBlock),
+    '#login should size itself with svh so the keyboard cannot reflow it');
+  assert.ok(!/min-height:\s*100dvh/.test(loginBlock),
+    '#login is back on dvh - the page will jump again when the keyboard opens');
 });
 
 test('an empty Wall feed is a titled card too, not a stray line under the hero', async () => {
