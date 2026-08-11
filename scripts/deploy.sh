@@ -1,21 +1,41 @@
 #!/usr/bin/env bash
 # Runs the test suite, then deploys to the given target - refuses to touch
-# qa.appdoivo.com or appdoivo.com if a test fails. Requires FLY_API_TOKEN
-# (fly deploy's own auth) - read from .env if not already in the
-# environment (e.g. CI, which sets it directly as a secret instead).
+# qa.appdoivo.com or appdoivo.com if a test fails.
 # See CONTRIBUTING.md for the full branch -> QA -> prod process this fits into.
+#
+# Auth: one token per environment, picked by target, so the credential that
+# deploys QA cannot reach production at all. That is the whole point of
+# splitting them - a single account-wide token means any accident or leak
+# reaches everything. FLY_API_TOKEN is still honoured as a fallback for
+# anywhere that sets one directly (CI, a one-off shell), so nothing that
+# worked before stops working.
 set -euo pipefail
-
-if [[ -z "${FLY_API_TOKEN:-}" && -f .env ]]; then
-  FLY_API_TOKEN="$(grep -m1 '^FLY_API_TOKEN=' .env | cut -d= -f2-)"
-  export FLY_API_TOKEN
-fi
 
 target="${1:-}"
 if [[ "$target" != "qa" && "$target" != "prod" ]]; then
   echo "Usage: scripts/deploy.sh <qa|prod>" >&2
   exit 1
 fi
+
+# Reads one variable out of .env without sourcing the file - .env holds
+# secrets with characters a shell would happily interpret.
+read_env() {
+  [[ -f .env ]] && grep -m1 "^$1=" .env | cut -d= -f2- || true
+}
+
+if [[ "$target" == "qa" ]]; then
+  token="${FLY_API_TOKEN_QA:-$(read_env FLY_API_TOKEN_QA)}"
+else
+  token="${FLY_API_TOKEN_PROD:-$(read_env FLY_API_TOKEN_PROD)}"
+fi
+# Fallback: the older single token, for CI and anything not yet split.
+token="${token:-${FLY_API_TOKEN:-$(read_env FLY_API_TOKEN)}}"
+
+if [[ -z "$token" ]]; then
+  echo "No Fly token for '$target'. Set FLY_API_TOKEN_${target^^} in .env (see CONTRIBUTING.md)." >&2
+  exit 1
+fi
+export FLY_API_TOKEN="$token"
 
 echo "Running tests before deploy..."
 npm test
