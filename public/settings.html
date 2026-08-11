@@ -10,9 +10,23 @@
        dark mode. Was #e7e3d6, a cream from a palette that no longer exists. -->
   <meta name="theme-color" content="#e2d8f2" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#17131f" media="(prefers-color-scheme: dark)" />
-  <!-- SVG first: it carries both light/dark tunings and swaps them itself
-       (see favicon.svg). The PNGs below are the fallback for anything that
-       doesn't take an SVG favicon; .ico is the last resort. -->
+  <!-- SVG first, PNGs as the fallback for anything that doesn't take one;
+       .ico is the last resort. All of them are the same crop as the app
+       icon now - the SVG used to carry a light and a dark tuning and swap
+       them, but the dark one was the darker of the two, so on a dark tab
+       bar the mark sank into the background. -->
+  <!-- The admin page is installable too - Ivo keeps it on his home screen
+       beside the app. Without these iOS has no icon to use and draws a
+       grey square with the first letter of the title in it, which is what
+       it did until now. PNG, not SVG: iOS silently ignores an SVG
+       apple-touch-icon.
+       The name is lowercase and says "settings", not "appdoivo": the label
+       under a home screen icon is drawn by the OS, so the golden rule has
+       to be kept in the markup (same reason as the push copy), and two
+       icons both called "appdoivo" would be indistinguishable. -->
+  <link rel="apple-touch-icon" href="/icons/icon-180.png?v=6" />
+  <meta name="apple-mobile-web-app-title" content="settings" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=6" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=6" />
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png?v=6" />
