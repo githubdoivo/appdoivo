@@ -1149,8 +1149,13 @@ html.mode-light .hero-line { color: var(--ink); }
    especially for a single short line with lots of empty room around it.
    A thicker border plus a faint accent-tinted wash (instead of the flat
    --paper-3 every other box already uses) makes the emphasis match the size. */
+/* No tinted ground behind it. On a themed page the motif down the side is
+   the whole marker (see the ::before rules below) - the fill underneath it
+   made a second card inside the card, which reads worst in dark mode where
+   two dark grounds an inch apart are hard to tell from a rendering fault.
+   The border-left stays for the untinted base, which has no motif to lean
+   on; every theme overrides it away. */
 .highlight {
-  background: color-mix(in srgb, var(--rata) 7%, var(--paper-3));
   border-left: 5px solid var(--rata);
   padding: 18px 20px;
   font-family: var(--serif);
@@ -1177,7 +1182,9 @@ body.theme-plaza .highlight,
 body.theme-memo .highlight {
   position: relative;
   border-left: none;
-  padding-left: 34px;
+  /* No rail to clear any more - the motif is behind the text now, not
+     beside it (see ::before below), so this is ordinary padding. */
+  padding-left: 20px;
 }
 body.theme-rata .highlight::before,
 body.theme-furnished .highlight::before,
@@ -1185,22 +1192,29 @@ body.theme-swamp .highlight::before,
 body.theme-mural .highlight::before,
 body.theme-plaza .highlight::before,
 body.theme-memo .highlight::before {
+  /* The night's motif behind the whole block, not a rail down its side.
+     It used to be a 16px strip repeating vertically beside the text, with
+     a tinted ground behind the words; the ground is gone (see .highlight)
+     and the motif now tiles the full area at low opacity, so a highlight
+     reads as a piece of the night's paper rather than as a quoted box.
+     Kept behind the text - the element's own content paints over it - and
+     at 30%, which is where it is visible without competing with the
+     words. */
   content: '';
   position: absolute;
-  left: 7px;
-  top: 8px;
-  bottom: 8px;
-  width: 16px;
+  inset: 0;
   background: var(--clay);
-  -webkit-mask-repeat: repeat-y;
-  mask-repeat: repeat-y;
+  opacity: 0.3;
+  pointer-events: none;
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
   -webkit-mask-position: center top;
   mask-position: center top;
   /* Each theme's tile is its own height - Plaza's bunting repeats every
      72px where the others repeat every 40 - so the size comes from the
      theme rather than being fixed here. */
-  -webkit-mask-size: 16px var(--highlight-motif-h, 40px);
-  mask-size: 16px var(--highlight-motif-h, 40px);
+  -webkit-mask-size: 26px var(--highlight-motif-h, 40px);
+  mask-size: 26px var(--highlight-motif-h, 40px);
   -webkit-mask-image: var(--highlight-motif);
   mask-image: var(--highlight-motif);
 }
@@ -2072,6 +2086,8 @@ html.mode-dark .plaza-post-type { color: #fff; }
 /* .highlight paints its own tinted ground and left edge (see .highlight
    above), so the plain text rule's border would draw a second one right
    beside it. */
+/* The Wall's own announcement: same motif rail as everywhere else, so the
+   padding has to clear it rather than the 20px a bare text block needed. */
 .plaza-post-text.highlight { border-left: none; padding-left: 20px; font-size: 1.25rem; }
 .plaza-post-announcement, .plaza-post-podium {
   background: var(--paper-2);
