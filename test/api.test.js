@@ -1873,6 +1873,65 @@ test('Plaza polls: creating one requires 2-6 options, voting tallies correctly, 
   await api('DELETE', `/admin/plaza-posts/${postId}`, { token: ADMIN });
 });
 
+test('a post can be edited after it is up, and renaming a poll option keeps its votes', async () => {
+  // An announcement: the plain case, a typo fixed.
+  const ann = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'a rata abre às 21h' } });
+  const fixed = await api('PATCH', `/admin/plaza-posts/${ann.data.id}`, { token: ADMIN, body: { text: 'a rata abre às 22h' } });
+  assert.equal(fixed.status, 200);
+  const feed = await api('GET', '/plaza-posts', { token: userToken });
+  assert.equal(feed.status, 200, `feed: ${JSON.stringify(feed.data).slice(0, 120)}`);
+  assert.equal(feed.data.posts.find((p) => p.id === ann.data.id).text, 'a rata abre às 22h');
+
+  // A poll someone has already voted in. Renaming an option must not reset
+  // the tally - fixing a typo is the whole reason to edit, and losing the
+  // votes for it would make editing something nobody dares touch.
+  const poll = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN, body: { type: 'poll', text: 'onde jantar?', options: ['tasca', 'sushi'] },
+  });
+  const posted = (await api('GET', '/plaza-posts', { token: userToken })).data.posts.find((p) => p.id === poll.data.id);
+  const tasca = posted.options.find((o) => o.label === 'tasca');
+  await api('POST', `/plaza-posts/${poll.data.id}/vote`, { token: userToken, body: { optionId: tasca.id } });
+
+  const renamed = await api('PATCH', `/admin/plaza-posts/${poll.data.id}`, {
+    token: ADMIN, body: { text: 'onde jantar hoje?', options: ['tasca do zé', 'sushi'] },
+  });
+  assert.equal(renamed.status, 200);
+  const afterEdit = (await api('GET', '/plaza-posts', { token: userToken })).data.posts.find((p) => p.id === poll.data.id);
+  assert.equal(afterEdit.text, 'onde jantar hoje?');
+  const kept = afterEdit.options.find((o) => o.id === tasca.id);
+  assert.ok(kept, 'the option keeps its identity through a rename');
+  assert.equal(kept.label, 'tasca do zé');
+  assert.equal(kept.votes, 1, 'and it keeps the vote that was cast for it');
+
+  // Links carry no votes, so they are simply replaced.
+  const links = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN, body: { type: 'links', text: 'links', links: [{ emoji: '📃', label: 'form', url: 'https://a.test/x' }] },
+  });
+  await api('PATCH', `/admin/plaza-posts/${links.data.id}`, {
+    token: ADMIN, body: { text: 'links úteis', links: [{ emoji: '🎹', label: 'playlist', url: 'open.spotify.com/y' }] },
+  });
+  const editedLinks = (await api('GET', '/plaza-posts', { token: userToken })).data.posts.find((p) => p.id === links.data.id);
+  assert.deepEqual(editedLinks.links.map((l) => l.label), ['playlist']);
+  assert.equal(editedLinks.links[0].url, 'https://open.spotify.com/y', 'the missing scheme is filled in on an edit too');
+
+  // The same rules as creating - an edit is not a way round the limits.
+  const tooFew = await api('PATCH', `/admin/plaza-posts/${poll.data.id}`, {
+    token: ADMIN, body: { text: 'onde jantar?', options: ['só uma'] },
+  });
+  assert.equal(tooFew.status, 400);
+  assert.equal(tooFew.data.error, 'err_poll_min_options');
+
+  const empty = await api('PATCH', `/admin/plaza-posts/${ann.data.id}`, { token: ADMIN, body: { text: '   ' } });
+  assert.equal(empty.status, 400);
+
+  const missing = await api('PATCH', '/admin/plaza-posts/999999', { token: ADMIN, body: { text: 'nada' } });
+  assert.equal(missing.status, 404);
+
+  for (const id of [ann.data.id, poll.data.id, links.data.id]) {
+    await api('DELETE', `/admin/plaza-posts/${id}`, { token: ADMIN });
+  }
+});
+
 test('Plaza posts: only the owner can delete, and deleting one leaves the rest of the feed untouched', async () => {
   const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;

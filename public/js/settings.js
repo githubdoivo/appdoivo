@@ -1749,6 +1749,7 @@ const PLAZA_ADMIN_LABEL = {
 };
 const PLAZA_ADMIN_BADGE = {
   poll: ' type-poll',
+  links: ' type-links',
   announcement: ' type-announcement',
   podium: ' type-podium',
   video: ' type-podium',
@@ -1797,11 +1798,19 @@ async function loadPlazaPosts() {
           ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
         </ul>` : ''}
         <div class="row-actions">
+          ${['announcement', 'poll', 'links'].includes(p.type) ? `<button class="small ghost" data-edit-post="${p.id}">${t('edit')}</button>` : ''}
           ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
           ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
         </div>
       </div>`).join('')
     : `<p class="muted">${t('plaza_no_posts')}</p>`;
+
+  $('plaza-posts-list').querySelectorAll('[data-edit-post]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const post = posts.find((p) => String(p.id) === b.dataset.editPost);
+      if (post) startPlazaEdit(post);
+    });
+  });
 
   $('plaza-posts-list').querySelectorAll('[data-del-post]').forEach((b) => {
     b.addEventListener('click', async () => {
@@ -1832,6 +1841,71 @@ async function loadPlazaPosts() {
   });
 }
 
+// Which post the form is currently editing, or null when it is composing a
+// new one. The same form does both: an editor that duplicated the builder
+// would be a second place for the rules to drift out of step, and this one
+// already knows how to lay out every type.
+let editingPostId = null;
+
+function setPlazaPostType(type) {
+  $('plaza-post-type').querySelectorAll('[data-post-type]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.postType === type);
+  });
+  $('plaza-post-type').querySelector(`[data-post-type="${type}"]`)?.click();
+}
+
+/** Puts the form back to composing a new post. */
+function cancelPlazaEdit() {
+  editingPostId = null;
+  $('plaza-post-text').value = '';
+  $('plaza-poll-question').value = '';
+  $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));
+  [...$('plaza-link-items').querySelectorAll('.plaza-link-row')].forEach((row, i) => {
+    if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
+    else row.remove();
+  });
+  $('plaza-post-submit').textContent = t('plaza_publish_btn');
+  $('plaza-edit-cancel').classList.add('hidden');
+  $('plaza-post-msg').textContent = '';
+}
+
+/** Loads an existing post into the form for editing. */
+function startPlazaEdit(post) {
+  editingPostId = post.id;
+  setPlazaPostType(post.type);
+  if (post.type === 'poll') {
+    $('plaza-poll-question').value = post.text;
+    const inputs = [...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input')];
+    // Grow the builder to fit however many options this poll has.
+    while (inputs.length < (post.options ?? []).length && inputs.length < MAX_POLL_OPTIONS) {
+      $('plaza-add-option-btn').click();
+      inputs.length = 0;
+      inputs.push(...$('plaza-poll-options').querySelectorAll('.plaza-poll-option-input'));
+    }
+    inputs.forEach((input, i) => { input.value = (post.options ?? [])[i]?.label ?? ''; });
+  } else if (post.type === 'links') {
+    $('plaza-post-text').value = post.text;
+    let rows = [...$('plaza-link-items').querySelectorAll('.plaza-link-row')];
+    while (rows.length < (post.links ?? []).length) {
+      $('plaza-add-link-btn').click();
+      rows = [...$('plaza-link-items').querySelectorAll('.plaza-link-row')];
+    }
+    rows.forEach((row, i) => {
+      const l = (post.links ?? [])[i];
+      row.querySelector('.plaza-link-emoji-input').value = l?.emoji ?? '';
+      row.querySelector('.plaza-link-label-input').value = l?.label ?? '';
+      row.querySelector('.plaza-link-url-input').value = l?.url ?? '';
+    });
+  } else {
+    $('plaza-post-text').value = post.text;
+  }
+  $('plaza-post-submit').textContent = t('save');
+  $('plaza-edit-cancel').classList.remove('hidden');
+  $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('plaza-edit-cancel').addEventListener('click', cancelPlazaEdit);
+
 $('plaza-post-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('plaza-post-msg').textContent = '';
@@ -1847,7 +1921,16 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
       }))
     : undefined;
   try {
-    await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
+    if (editingPostId) {
+      // The type is fixed at creation - a poll people have voted in is not
+      // an announcement - so it is not sent, and the server ignores it.
+      await api(`/admin/plaza-posts/${editingPostId}`, { method: 'PATCH', body: { text, options, links } });
+    } else {
+      await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
+    }
+    editingPostId = null;
+    $('plaza-post-submit').textContent = t('plaza_publish_btn');
+    $('plaza-edit-cancel').classList.add('hidden');
     $('plaza-post-text').value = '';
     $('plaza-poll-question').value = '';
     $('plaza-poll-options').querySelectorAll('.plaza-poll-option-input').forEach((i) => (i.value = ''));

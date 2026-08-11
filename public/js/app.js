@@ -882,30 +882,40 @@ function renderPlazaPost(post) {
   // trailing arrow, because a row where only the far edge looks tappable
   // invites aiming at the edge. rel="noopener" on every one: these open in a
   // new tab, and without it the page opened gets a handle back on this one.
+  // A links post reads as a note with the addresses tucked underneath, not
+  // as a stack of boxed rows. Each link used to be its own bordered card,
+  // which turned a short list into a piece of furniture heavier than the
+  // announcement it sat next to. They stay one per line so a thumb can
+  // still tell them apart - just quiet: no box, no fill, only the name.
   if (post.type === 'links') {
+    // The emoji sits outside the anchor: inside it, the underline ran along
+    // under the emoji too, which looked like the picture was part of the
+    // link. Only the words are the link, and only the words are underlined.
     const rows = (post.links ?? []).map((l) => `
       <li>
-        <a class="plaza-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
-          ${l.emoji ? `<span class="plaza-link-emoji" aria-hidden="true">${esc(l.emoji)}</span>` : ''}
-          <span class="plaza-link-label">${esc(l.label)}</span>
-        </a>
+        ${l.emoji ? `<span class="plaza-link-emoji" aria-hidden="true">${esc(l.emoji)}</span>` : ''}
+        <a class="plaza-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>
       </li>`).join('');
     return `
       <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
-        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
+        <p class="plaza-post-text plaza-links-intro">${linkify(esc(post.text))}</p>
         <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
 
+  // An announcement is the one post type that is purely words, so it gets
+  // the highlight treatment the rest of the app uses for the thing you are
+  // meant to read - the tinted box with the theme's own motif down its
+  // side. It was the only place on the Wall that never used it.
   if (post.type !== 'poll') {
     return `
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
-        <p class="plaza-post-text">${linkify(esc(post.text))}</p>
+        <p class="plaza-post-text highlight">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }

@@ -267,6 +267,8 @@ export const translations = {
     reveal_next_btn_all: 'revelar tudo',
     reveal_next_btn_done: 'concluído',
     save: 'Guardar',
+    edit: 'editar',
+    cancel: 'cancelar',
     saved: 'Guardado.',
     // Modal (substitui alert()/confirm())
     modal_ok: 'ok',
@@ -738,6 +740,8 @@ export const translations = {
     reveal_next_btn_all: 'reveal all',
     reveal_next_btn_done: 'done',
     save: 'Save',
+    edit: 'edit',
+    cancel: 'cancel',
     saved: 'Saved.',
     modal_ok: 'ok',
     modal_cancel: 'cancel',
