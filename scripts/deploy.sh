@@ -18,9 +18,21 @@ if [[ "$target" != "qa" && "$target" != "prod" ]]; then
 fi
 
 # Reads one variable out of .env without sourcing the file - .env holds
-# secrets with characters a shell would happily interpret.
+# secrets with characters a shell would happily interpret. Sourcing it is
+# not a shortcut worth taking: an unquoted Fly token run through `source`
+# fails with the token itself in the error message, which is how both of
+# them ended up in a transcript on 2026-08-11.
+#
+# Surrounding quotes are stripped, so writing them into .env quoted - the
+# only way to make that `source` accident harmless - does not hand the
+# quotes to Fly as part of the credential.
 read_env() {
-  [[ -f .env ]] && grep -m1 "^$1=" .env | cut -d= -f2- || true
+  local value
+  [[ -f .env ]] || return 0
+  value="$(grep -m1 "^$1=" .env | cut -d= -f2-)"
+  value="${value%\"}"; value="${value#\"}"
+  value="${value%\'}"; value="${value#\'}"
+  printf '%s' "$value"
 }
 
 if [[ "$target" == "qa" ]]; then
