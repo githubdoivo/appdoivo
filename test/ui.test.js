@@ -866,7 +866,7 @@ test('Manage Users: a freshly created user floats to the top of this session\'s 
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.fill('#user-name-input', 'Zzz Session Tester');
+  await page.fill('#people-search', 'Zzz Session Tester');
   await page.click('#user-create-btn');
   const alertOk = page.locator('.modal-actions button');
   await alertOk.first().waitFor({ timeout: WAIT_TIMEOUT });
@@ -921,7 +921,7 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.fill('#user-name-input', 'cesar session');
+  await page.fill('#people-search', 'cesar session');
   await page.waitForTimeout(200);
   const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(names.includes('César Session Search'), 'plain-ASCII "cesar" should match the accented name');
@@ -1038,7 +1038,7 @@ test('an expanded user row stays open when the list re-renders under it', async 
 
   // Exactly what a poll tick does - rebuild the list from the same data.
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
-  await page.locator('#user-name-input').fill('');
+  await page.locator('#people-search').fill('');
   await page.waitForTimeout(400);
 
   assert.equal(
@@ -2745,11 +2745,23 @@ test('the settings user search is not something iOS password autofill will grab'
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   const fields = await page.evaluate(() => ({
-    search: document.getElementById('user-name-input').type,
+    search: document.getElementById('people-search').type,
+    name: document.getElementById('people-search').getAttribute('name'),
+    id: document.getElementById('people-search').id,
     current: document.getElementById('current-key-input').getAttribute('autocomplete'),
     next: document.getElementById('new-key-input').getAttribute('autocomplete'),
   }));
   assert.equal(fields.search, 'search', 'the user search must not be a plain text field');
+  // Safari reads the name first and only falls back to the placeholder, and
+  // this field had no name at all - so it read "procura ou cria um
+  // utilizador", decided it was a username box, and focused it on its own
+  // every time Settings opened. "search" is the value it maps to "nothing
+  // to fill here". The id is checked too: it used to say "user-name".
+  assert.equal(fields.name, 'search', 'the field needs a name Safari reads as a search box');
+  assert.ok(
+    !/user|name|nome|utilizador|email/i.test(fields.id),
+    `the id must not read as a username field either, got "${fields.id}"`,
+  );
   assert.equal(fields.current, 'current-password', 'the key fields must describe themselves, so Safari stops guessing');
   assert.equal(fields.next, 'new-password');
 
@@ -2773,7 +2785,7 @@ test('the settings user search is not something iOS password autofill will grab'
   // The search box must not be in a form - a text input plus a button
   // inside one is the shape read as a sign-in.
   assert.equal(
-    await page.$eval('#user-name-input', (el) => !!el.closest('form')),
+    await page.$eval('#people-search', (el) => !!el.closest('form')),
     false,
     'the user search should not sit inside a form',
   );
@@ -3169,7 +3181,7 @@ test('filtering the user list does not yank the page out from under you', async 
   // phone, where it is far more disruptive than on a desktop.
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#user-name-input', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#people-search', { timeout: WAIT_TIMEOUT });
 
   // Enough accounts for the list to be worth shortening.
   for (const name of ['Scroll Anna', 'Scroll Bruno', 'Scroll Carla', 'Scroll Diogo', 'Scroll Elsa']) {
@@ -3178,12 +3190,12 @@ test('filtering the user list does not yank the page out from under you', async 
   await page.reload();
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.$eval('#user-name-input', (el) => el.scrollIntoView({ block: 'center' }));
+  await page.$eval('#people-search', (el) => el.scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(300);
   const before = await page.evaluate(() => window.scrollY);
 
-  await page.click('#user-name-input');
-  await page.type('#user-name-input', 'carla', { delay: 60 });
+  await page.click('#people-search');
+  await page.type('#people-search', 'carla', { delay: 60 });
   await page.waitForTimeout(500);
 
   const after = await page.evaluate(() => window.scrollY);
@@ -3197,7 +3209,7 @@ test('filtering the user list does not yank the page out from under you', async 
 
   // The role chips shorten the same list the same way, and were reported
   // separately - one shared helper covers both, so both are checked.
-  await page.fill('#user-name-input', '');
+  await page.fill('#people-search', '');
   await page.waitForTimeout(300);
   await page.$eval('#user-role-filter', (el) => el.scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(300);

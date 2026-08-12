@@ -562,7 +562,15 @@
                      things at once: not being a text field, not sitting in
                      a <form>, and the change-key form having a username
                      anchor of its own so nothing has to be hunted for. -->
-                <input id="user-name-input" type="search" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
+                <!-- name="search" is load-bearing, not decoration. Safari decides what
+                     a field is for by reading its name first and falling back to the
+                     placeholder - this one had no name at all, so it read
+                     "procura ou cria um utilizador" and offered to fill in a
+                     username, focusing the field on its own every time Settings
+                     opened. "search" is a value Safari maps to "nothing to fill
+                     here". autocomplete="off" alone has never stopped it.
+                     The id carries no "user"/"name" either, for the same reason. -->
+                <input id="people-search" name="search" type="search" data-i18n-ph="user_name_ph" placeholder="Procura ou cria um utilizador..." autocomplete="off" />
                 <button type="button" id="user-create-btn" class="small" disabled data-i18n="create_user">Criar</button>
               </div>
               <div class="role-pills" id="user-role-filter" style="margin-top:8px">

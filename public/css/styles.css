@@ -236,7 +236,25 @@ body {
    belongs to nothing on that page. Drawn from the surface's own ink
    instead, so it stays in palette in both light and dark. */
 body:not([class*="theme-"]) {
+  /* The base palette was retinted violet - paper, ink, lines and every
+     role badge - but --clay stayed the terracotta it had before, so on the
+     Settings tab the accent belonged to no other colour on the page: a
+     salmon focus halo, and a brown "test data" button under a lavender
+     card while the same button on every other tab wears that tab's own
+     colour. Given its own violet here, so an unthemed surface has an
+     accent the way a themed one does.
+     Only surfaces with no night theme are touched: every body.theme-*
+     sets --clay for itself, and the login screen overrides what it needs
+     over its photograph. */
+  --clay: #6d4f9e;
+  --clay-2: #553c7d;
+  --clay-active: #6d4f9e;
   --focus-ring: color-mix(in srgb, var(--ink) 62%, var(--paper));
+}
+html.mode-dark body:not([class*="theme-"]) {
+  --clay: #b9a2e0;
+  --clay-2: #cdbcec;
+  --clay-active: #b9a2e0;
 }
 
 .hidden { display: none !important; }
@@ -812,12 +830,24 @@ button.icon-action {
   border: 1px solid var(--line-2);
   color: var(--ink);
 }
+/* Not behind (hover: hover), deliberately. That guard is the right default
+   and it is still there on the generic button rule, but it cannot be the
+   only thing standing between a finger and a stuck state: a tap leaves
+   :hover applied on WebKit until you touch something else, and it was
+   measured still applied here even in a touch context. So these say
+   "transparent" outright at a specificity the generic rule cannot beat,
+   whatever the media query decides. A row action never fills on hover
+   anyway - the border and the stroke carry it. */
+button.icon-action:hover,
+button.icon-action:active,
+button.icon-action:focus {
+  background: transparent;
+  opacity: 1;
+}
 @media (hover: hover) {
   button.icon-action:hover {
-    background: transparent;
     border-color: var(--ink);
     color: var(--ink);
-    opacity: 1;
   }
 }
 button.icon-action svg { width: 19px; height: 19px; }
@@ -844,18 +874,21 @@ button.icon-action.lead {
   color: var(--clay);
 }
 button.icon-action.lead svg { width: 27px; height: 27px; }
-@media (hover: hover) {
-  button.icon-action.lead:hover {
-    background: color-mix(in srgb, var(--clay) 12%, transparent);
-    border-color: var(--clay);
-    color: var(--clay);
-  }
+/* Same reasoning as the row actions above: no fill on hover, so nothing can
+   be left painted under a thumb. */
+button.icon-action.lead:hover,
+button.icon-action.lead:active,
+button.icon-action.lead:focus {
+  background: transparent;
+  border-color: var(--clay);
+  color: var(--clay);
 }
-/* A pinned post's button is the one that unpins it, so it reads as "on". */
-button.icon-action[data-pinned="true"] {
-  border-color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
+/* No "on" state on the pin button. It had a tinted ground, which washed the
+   stroke of the very icon it was meant to emphasise - and it was saying
+   something already said twice over: the post carries a "fixado" badge, and
+   the button's own icon has changed to the struck-through pin that undoes
+   it. Three ways of saying pinned, one of them making the other two harder
+   to read. */
 
 /* Destructive: Red danger button (delete, wipe, reset). A genuinely solid
    fill, not a tint. This used to color-mix --danger 50% into --paper-2,

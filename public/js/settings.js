@@ -794,7 +794,7 @@ function renderKeepingPlace(container, render, filtered) {
 }
 
 function applyUserSearch() {
-  const term = $('user-name-input').value.trim();
+  const term = $('people-search').value.trim();
   const createBtn = $('user-create-btn');
   const searching = term.length >= 3;
   const everyRole = roleFilter.size === ALL_ROLES.length;
@@ -833,7 +833,7 @@ document.querySelectorAll('[data-lead-icon]').forEach((btn) => {
 
 syncRolePills();
 wireUsersListOnce();
-$('user-name-input').addEventListener('input', applyUserSearch);
+$('people-search').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -854,11 +854,11 @@ $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
 // stops reading this box as a sign-in, which means submit has to be wired
 // by hand: the button, plus Enter, which a real form would have given free.
 async function createUserFromInput() {
-  const name = $('user-name-input').value.trim();
+  const name = $('people-search').value.trim();
   if (!name || $('user-create-btn').disabled) return;
   try {
     const u = await api('/admin/users', { method: 'POST', body: { name } });
-    $('user-name-input').value = '';
+    $('people-search').value = '';
     $('user-search-hint').classList.add('hidden');
     $('user-create-btn').disabled = true;
     markRecent(u.id);
@@ -869,7 +869,7 @@ async function createUserFromInput() {
   }
 }
 $('user-create-btn').addEventListener('click', createUserFromInput);
-$('user-name-input').addEventListener('keydown', (e) => {
+$('people-search').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     createUserFromInput();
