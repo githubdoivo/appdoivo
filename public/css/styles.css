@@ -867,20 +867,24 @@ button.icon-action.danger:hover { border-color: color-mix(in srgb, var(--danger-
    a control glyph. The accent belongs here where it would be noise on a
    row action - there is exactly one of these per card. */
 button.icon-action.lead {
-  width: 58px;
-  height: 58px;
-  border-radius: 999px;
-  border: 1.5px solid var(--clay);
+  width: 62px;
+  height: 62px;
+  /* No box of any kind - the artwork is the button. It was a circle first;
+     with nothing to hold it the mark can be drawn large enough to carry the
+     job on its own, which is the whole argument for using the section's own
+     drawing rather than a control glyph. */
+  border: none;
+  border-radius: 0;
   color: var(--clay);
 }
-button.icon-action.lead svg { width: 27px; height: 27px; }
+button.icon-action.lead svg { width: 38px; height: 38px; }
 /* Same reasoning as the row actions above: no fill on hover, so nothing can
    be left painted under a thumb. */
 button.icon-action.lead:hover,
 button.icon-action.lead:active,
 button.icon-action.lead:focus {
   background: transparent;
-  border-color: var(--clay);
+  border: none;
   color: var(--clay);
 }
 /* No "on" state on the pin button. It had a tinted ground, which washed the

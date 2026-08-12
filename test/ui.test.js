@@ -1401,14 +1401,18 @@ test('the lead action of a card is its own artwork, and still has a name', async
       title: el.getAttribute('title'),
       hasSvg: !!el.querySelector('svg'),
       w: el.getBoundingClientRect().width,
-      radius: getComputedStyle(el).borderRadius,
+      border: getComputedStyle(el).borderTopStyle,
+      bg: getComputedStyle(el).backgroundColor,
     }));
     assert.ok(lead.hasSvg, `${tab}'s lead button has no artwork in it`);
     assert.equal(lead.text, '', `${tab}'s lead button still carries a word`);
     assert.ok(lead.label, `${tab}'s lead button has no accessible name`);
     assert.equal(lead.title, lead.label, `${tab}: tooltip and accessible name should agree`);
     assert.ok(lead.w >= 44, `${tab}'s lead button is ${lead.w}px wide`);
-    assert.ok(parseFloat(lead.radius) > 20, `${tab}'s lead button should be round, got ${lead.radius}`);
+    // No box around it - Ivo's call. The drawing is the button, which only
+    // works while it is drawn big enough to be one.
+    assert.equal(lead.border, 'none', `${tab}'s lead button should carry no box`);
+    assert.match(lead.bg, /rgba\(0, 0, 0, 0\)|transparent/, `${tab}'s lead button should have no ground`);
   }
 
   await context.close();
