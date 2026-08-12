@@ -76,12 +76,15 @@ function crc32(buf) {
 // a demo account sharing the owner's name showed up in the unclaimed-user
 // search on QA, which is confusing/alarming even though it's just a
 // regular demo user under the hood, not an actual owner-account exposure.
+// The real guest list, minus the owner, kept in step with Ivo's own Guest DB
+// (24 guests + the owner = the 25 accounts the app should hold).
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
-  'Leonor Matos', 'Marta Freitas', 'Nádia Barros', 'Óscar Lima',
-  'Paula Neves', 'Rebeca Campos', 'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias',
-  'Vera Lobo', 'Xavier Salgado', 'Inácio Pires', 'Simão Valente',
+  'Joana Correia', 'Leonor Matos', 'Manuel Antunes', 'Marta Freitas',
+  'Nádia Barros', 'Óscar Lima', 'Paula Neves', 'Rebeca Campos',
+  'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias', 'Vera Lobo',
+  'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
 
 // The one demo user pre-promoted to admin on every fresh seed, so there's

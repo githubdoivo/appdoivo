@@ -55,13 +55,15 @@
   --role-owner: #6b4c8a;
   --role-admin: #a3402f;
   --role-user:  #2a6ca6;
+  /* The three post-type chips sit side by side in the Wall history, so
+     they have to be told apart - but they were three separate hues (brown,
+     orange, teal) and read as three unrelated systems rather than three
+     kinds of the same thing. Same warm family now, separated by depth and
+     a small hue drift instead: deep brown, mid amber, soft ochre. Far
+     enough apart to distinguish at chip size, close enough to belong. */
   --type-announcement: #5c3a1f;
-  --type-poll: #a35a1a;
-  /* Links needed a hue of their own: without one they fell back to the
-     announcement chip and the two post types were indistinguishable in the
-     history. Kept in the app's own earth palette (this is --rata's family)
-     rather than introducing a colour from nowhere. */
-  --type-links: #3f6b5f;
+  --type-poll: #91541f;
+  --type-links: #7d5f2b;
   --type-podium: #6b4a8a;
   /* Four status colours, all built the same way: an outline chip in the
      list, a chip filled with that same colour under paper ink when it's an
@@ -162,8 +164,8 @@ html.mode-dark {
   --role-admin: #d9695a;
   --role-user:  #6badde;
   --type-announcement: #c9a07a;
-  --type-poll: #e08a4a;
-  --type-links: #6fb3a0;
+  --type-poll: #d69a63;
+  --type-links: #cdae77;
   --type-podium: #b294d6;
   --status-pending: #d4b04a;
   --status-pending-fill: #f2c811;
@@ -202,6 +204,13 @@ body {
      terracotta on the Wall, olive on Swamp, cyan on Memo. Worst case
      4.7:1, on Memo in dark mode. */
   --on-cta: color-mix(in srgb, var(--clay) 50%, #fff);
+  /* What a focused field glows with: whichever colour the surface it sits
+     on actually belongs to. Every body.theme-* block redefines --clay on
+     this same element, so this resolves to the night's own accent without
+     any of them having to say so - terracotta on the Wall, yellow on
+     Plaza, cyan on Memo.
+     The surfaces with no theme at all override it below. */
+  --focus-ring: var(--clay);
   margin: 0;
   font-family: var(--body);
   font-size: 18px;
@@ -219,6 +228,33 @@ body {
   min-height: 100vh;
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The Settings tab carries no night theme, so it keeps the base palette -
+   which is violet, while the base --clay is still the terracotta that
+   palette had before it was retinted. A salmon halo on a lavender field
+   belongs to nothing on that page. Drawn from the surface's own ink
+   instead, so it stays in palette in both light and dark. */
+body:not([class*="theme-"]) {
+  /* The base palette was retinted violet - paper, ink, lines and every
+     role badge - but --clay stayed the terracotta it had before, so on the
+     Settings tab the accent belonged to no other colour on the page: a
+     salmon focus halo, and a brown "test data" button under a lavender
+     card while the same button on every other tab wears that tab's own
+     colour. Given its own violet here, so an unthemed surface has an
+     accent the way a themed one does.
+     Only surfaces with no night theme are touched: every body.theme-*
+     sets --clay for itself, and the login screen overrides what it needs
+     over its photograph. */
+  --clay: #6d4f9e;
+  --clay-2: #553c7d;
+  --clay-active: #6d4f9e;
+  --focus-ring: color-mix(in srgb, var(--ink) 62%, var(--paper));
+}
+html.mode-dark body:not([class*="theme-"]) {
+  --clay: #b9a2e0;
+  --clay-2: #cdbcec;
+  --clay-active: #b9a2e0;
 }
 
 .hidden { display: none !important; }
@@ -364,7 +400,12 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   max-width: none;
   width: 100vw;
   min-height: 100vh;
-  min-height: 100dvh;
+  /* svh, not dvh: dvh is the *dynamic* viewport, so it shrinks the moment
+     the keyboard opens and grows back when it closes - the whole screen
+     re-centring itself twice per tap, which is what "the page keeps going
+     up and down" was. svh is the small viewport: the same number whether
+     the keyboard is up or not, so nothing reflows around it. */
+  min-height: 100svh;
   margin-left: calc(50% - 50vw);
   padding: 0;
   /* Fallback for any sliver the cover photo doesn't reach (aspect-ratio
@@ -377,6 +418,10 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   --ink: #ece5d5;
   --ink-soft: #c7bca3;
   --line: rgba(236, 229, 213, 0.35);
+  /* The same warm cream as this screen's own edges - a focused field
+     deepens into the design instead of lighting up in an accent that
+     belongs to the app's other palette. */
+  --focus-ring: rgba(236, 229, 213, 0.9);
   --paper-3: #241d17;
   /* This screen has a fixed palette of its own over the photo, so every
      token a solid button reads has to be declared here or it falls through
@@ -731,10 +776,17 @@ button, .btn {
      worst, on Wall). */
   color: var(--paper);
 }
-button:hover, .btn:hover {
-  background: var(--ink);
-  color: var(--paper);
-  opacity: 0.8;
+/* Guarded, and this is the whole reason the guard exists: on iOS a tap
+   applies :hover and leaves it applied until you touch something else. A
+   filter chip switched off therefore kept the *on* look under your thumb -
+   which is what made deselecting look like nothing had happened. A mouse
+   still gets its hover; a finger never does. */
+@media (hover: hover) {
+  button:hover, .btn:hover {
+    background: var(--ink);
+    color: var(--paper);
+    opacity: 0.8;
+  }
 }
 button:disabled {
   opacity: 0.45;
@@ -749,14 +801,98 @@ button.ghost, a.ghost {
   background: transparent;
   color: var(--ink);
 }
-button.ghost:hover, a.ghost:hover {
-  border-color: var(--ink);
-  background: transparent;
-  color: var(--ink);
+@media (hover: hover) {
+  button.ghost:hover, a.ghost:hover {
+    border-color: var(--ink);
+    background: transparent;
+    color: var(--ink);
+  }
 }
 
 /* Size modifier: small buttons, just padding/font size, inherit color scheme. */
 button.small { padding: 7px 12px; font-size: var(--text-xs); letter-spacing: 0.14em; }
+
+/* Icon-only row action (edit, remove, pin, regenerate, approve, reset).
+   A list row used to carry three words at 0.16em letter-spacing, which is
+   wide enough that the row wrapped onto a second line on an iPhone SE and
+   the actions stopped lining up down the list. One square each instead:
+   same size everywhere, so a column of rows reads as a column.
+   Never nameless - see iconButton() in icons.js, which is the only thing
+   that builds these and always writes aria-label and title. */
+button.icon-action {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink);
+}
+/* Not behind (hover: hover), deliberately. That guard is the right default
+   and it is still there on the generic button rule, but it cannot be the
+   only thing standing between a finger and a stuck state: a tap leaves
+   :hover applied on WebKit until you touch something else, and it was
+   measured still applied here even in a touch context. So these say
+   "transparent" outright at a specificity the generic rule cannot beat,
+   whatever the media query decides. A row action never fills on hover
+   anyway - the border and the stroke carry it. */
+button.icon-action:hover,
+button.icon-action:active,
+button.icon-action:focus {
+  background: transparent;
+  opacity: 1;
+}
+@media (hover: hover) {
+  button.icon-action:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+}
+button.icon-action svg { width: 19px; height: 19px; }
+/* Destructive keeps its colour but not its fill - a row of outlines with
+   one solid red block in it reads as an error state rather than as one
+   action among three. The red is in the stroke and the border instead. */
+button.icon-action.danger,
+button.icon-action.danger:hover {
+  background: transparent;
+  color: color-mix(in srgb, var(--danger-fill) 60%, #000);
+  border-color: color-mix(in srgb, var(--danger-fill) 45%, var(--line-2));
+}
+button.icon-action.danger:hover { border-color: color-mix(in srgb, var(--danger-fill) 60%, #000); }
+/* The lead action of a card - revealing a consequence, throwing a Memo
+   moment open. Round rather than square, and larger: it is the one thing
+   its card exists for, and it carries its section's own artwork instead of
+   a control glyph. The accent belongs here where it would be noise on a
+   row action - there is exactly one of these per card. */
+button.icon-action.lead {
+  width: 62px;
+  height: 62px;
+  /* No box of any kind - the artwork is the button. It was a circle first;
+     with nothing to hold it the mark can be drawn large enough to carry the
+     job on its own, which is the whole argument for using the section's own
+     drawing rather than a control glyph. */
+  border: none;
+  border-radius: 0;
+  color: var(--clay);
+}
+button.icon-action.lead svg { width: 38px; height: 38px; }
+/* Same reasoning as the row actions above: no fill on hover, so nothing can
+   be left painted under a thumb. */
+button.icon-action.lead:hover,
+button.icon-action.lead:active,
+button.icon-action.lead:focus {
+  background: transparent;
+  border: none;
+  color: var(--clay);
+}
+/* No "on" state on the pin button. It had a tinted ground, which washed the
+   stroke of the very icon it was meant to emphasise - and it was saying
+   something already said twice over: the post carries a "fixado" badge, and
+   the button's own icon has changed to the struck-through pin that undoes
+   it. Three ways of saying pinned, one of them making the other two harder
+   to read. */
 
 /* Destructive: Red danger button (delete, wipe, reset). A genuinely solid
    fill, not a tint. This used to color-mix --danger 50% into --paper-2,
@@ -775,10 +911,12 @@ button.danger {
   background: color-mix(in srgb, var(--danger-fill) 60%, #000);
   color: var(--on-solid);
 }
-button.danger:hover {
-  background: color-mix(in srgb, var(--danger-fill) 50%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
-  color: var(--on-solid);
+@media (hover: hover) {
+  button.danger:hover {
+    background: color-mix(in srgb, var(--danger-fill) 50%, #000);
+    border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
+    color: var(--on-solid);
+  }
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -975,22 +1113,32 @@ button.danger:hover {
    down. Six pixels on four rarely-used controls is not worth reintroducing a
    flake in a test that was green - the tab row, which was the real problem
    at 34px with five neighbours, is widened below instead. */
+/* No box at all - just the stroke of the icon. The boxes were four outlined
+   squares in a row over a papered header, competing with the brand beside
+   them for a job the icons already did on their own.
+   Two things the box was quietly providing, kept: the hit area (44px now,
+   not the 38px the boxes were - under the touch minimum, and nobody
+   noticed while there was a visible border to aim at), and the bell's
+   "off" signal, which was a tinted ground and is the accent on the stroke
+   instead (see #notif-btn below). */
 button.icon-btn,
 a.icon-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: none;
   font-size: 1.05rem;
   line-height: 1;
 }
-button.icon-btn:hover,
-a.icon-btn:hover { border-color: var(--ink); background: transparent; }
+@media (hover: hover) {
+  button.icon-btn:hover,
+  a.icon-btn:hover { background: transparent; color: var(--clay); }
+}
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
 .lang-toggle { font-family: var(--serif); font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
@@ -1002,12 +1150,14 @@ html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 /* Notification bell: when ON, it looks like every other icon button
-   (conformity - nothing to act on). When OFF, a soft accent tint draws
-   the eye, signaling "click to turn this on" instead of the reverse.
+   (conformity - nothing to act on). When OFF, the accent draws the eye,
+   signaling "click to turn this on" instead of the reverse.
    Uses --clay (the app's warm brand accent, same as the logo/badges),
    not --rata - --rata is minty green in light mode, an odd, unrelated
-   color for this button. */
-#notif-btn:not(.active):not(.hidden) { background: color-mix(in srgb, var(--clay) 18%, transparent); }
+   color for this button. It was a tinted ground until the buttons lost
+   their boxes; on the stroke it says the same thing, and is if anything
+   harder to miss now that nothing else in the row carries colour. */
+#notif-btn:not(.active):not(.hidden) { color: var(--clay); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -1029,7 +1179,12 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
      longer label, another tab, a large accessibility text size). */
   gap: clamp(5px, 1.7vw, 26px);
   margin-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  /* No baseline under the row - the selected tab is marked by colour alone
+     now (see .tab.active below), and a rule under all of them put back the
+     horizontal line that choice was getting rid of. The topbar above keeps
+     its own, which separates the header from the app rather than marking
+     anything. */
+  border-bottom: none;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   /* Scrolling itself is for phones with a narrow viewport - the visible
@@ -1043,7 +1198,6 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
    on its own. In dark mode it reads as a bright, hard "limit" line across
    the whole tab row - blend it toward the background so it stays a subtle
    separator instead of a stark bar. */
-html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, var(--paper)); }
 .tab {
   flex: 0 0 auto;
   background: transparent;
@@ -1095,7 +1249,18 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   outline-offset: 3px;
   border-radius: 3px;
 }
-.tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
+/* No rule under the selected tab, and no rule under the row either. The
+   active tab is said with the night's own colour and full weight; the rest
+   step back to --ink-soft, which is a token already tuned for contrast on
+   every theme rather than an opacity guessed here.
+   The row keeps its 2px transparent border-bottom (see .tab above) so
+   nothing shifts by a pixel between the selected tab and its neighbours. */
+.tab { color: var(--ink-soft); }
+.tab.active {
+  color: var(--clay-active, var(--clay));
+  font-weight: 700;
+  border-bottom-color: transparent;
+}
 /* Fallback only - reachable when no content theme is active (admin never
    sets one, see settings.js), where the plain light-mode --clay reads
    pale/salmon against the paper, too soft to read as "selected" at a
@@ -1182,9 +1347,13 @@ body.theme-plaza .highlight,
 body.theme-memo .highlight {
   position: relative;
   border-left: none;
-  /* No rail to clear any more - the motif is behind the text now, not
-     beside it (see ::before below), so this is ordinary padding. */
   padding-left: 20px;
+  /* No gutter reserved for the emblem. It sits behind the words (see
+     ::before) and the words are what matter: holding a column clear of it
+     narrowed every consequence, worst on the smallest phone, to buy space
+     for decoration. The text runs straight over it instead - which is the
+     whole reason the emblem is painted at 22% and behind the content. */
+  padding-right: 20px;
 }
 body.theme-rata .highlight::before,
 body.theme-furnished .highlight::before,
@@ -1192,29 +1361,35 @@ body.theme-swamp .highlight::before,
 body.theme-mural .highlight::before,
 body.theme-plaza .highlight::before,
 body.theme-memo .highlight::before {
-  /* The night's motif behind the whole block, not a rail down its side.
-     It used to be a 16px strip repeating vertically beside the text, with
-     a tinted ground behind the words; the ground is gone (see .highlight)
-     and the motif now tiles the full area at low opacity, so a highlight
-     reads as a piece of the night's paper rather than as a quoted box.
-     Kept behind the text - the element's own content paints over it - and
-     at 30%, which is where it is visible without competing with the
-     words. */
+  /* The night's motif drawn ONCE, large, running the height of the block
+     and bleeding off its right edge.
+     It was briefly tiled in both directions as a watermark, which is what
+     this replaces. Every one of these motifs is a 16px-wide vertical
+     composition - a reed, a tail, a string of bunting - drawn to stand up
+     on its own; repeated as wallpaper at 26px the swamp's reeds read as a
+     picket fence and the rata's tail as static. Used at its own
+     proportions it is an emblem again.
+     Kept behind the text (the element's own content paints over it) and
+     low enough that a long sentence can run across it without fighting. */
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 0 -6px 0 auto;
+  /* Scales with the viewport too, so the smallest phone does not end up
+     with a full-size emblem and a three-word text column beside it. */
+  width: clamp(64px, 24vw, 92px);
   background: var(--clay);
-  opacity: 0.3;
+  opacity: 0.22;
   pointer-events: none;
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-position: center top;
-  mask-position: center top;
-  /* Each theme's tile is its own height - Plaza's bunting repeats every
-     72px where the others repeat every 40 - so the size comes from the
-     theme rather than being fixed here. */
-  -webkit-mask-size: 26px var(--highlight-motif-h, 40px);
-  mask-size: 26px var(--highlight-motif-h, 40px);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  /* Height-driven, so each theme's tile keeps its own aspect ratio however
+     tall the block ends up - Plaza's bunting is 16x72 where the rest are
+     16x40, and forcing a fixed width would squash one or stretch the
+     other. */
+  -webkit-mask-size: auto 96%;
+  mask-size: auto 96%;
   -webkit-mask-image: var(--highlight-motif);
   mask-image: var(--highlight-motif);
 }
@@ -2398,6 +2573,27 @@ html.mode-dark .plaza-post-type { color: #fff; }
    design elsewhere in the app - override it here so skip/next actually
    match, not just share a flex-basis. */
 .tutorial-actions button.ghost { padding: 12px 20px; font-size: 0.78rem; }
+/* The two read as one pair, each wearing the other's colour: skip is the
+   card with the solid button's ink on it, next is that ink with the card's
+   colour written on it. Swapping them like this is what makes them look
+   like two halves of the same control rather than two buttons that
+   happened to land side by side. */
+.tutorial-actions button.ghost {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.tutorial-actions button.ghost:hover { background: transparent; color: var(--ink); }
+.tutorial-actions #tutorial-next {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-2);
+}
+.tutorial-actions #tutorial-next:hover {
+  background: var(--ink);
+  color: var(--paper-2);
+  opacity: 0.88;
+}
 
 /* ------------------------------ Modal (alert/confirm) ---------------------- */
 /* Same overlay/card treatment as the tutorial above - a custom stand-in for
@@ -2435,7 +2631,12 @@ html.mode-dark .plaza-post-type { color: #fff; }
 /* ----------------------------------- Chat ---------------------------------- */
 
 .chat-messages {
-  max-height: 360px;
+  /* Was 360px, which on a phone left the card standing taller than a
+     screenful before anyone had written anything - the send box sat below
+     the fold on its own tab. The list scrolls anyway (Plaza keeps only the
+     20 most recent, see chat.js), so the ceiling only decides how much of
+     the card the messages may claim, not how many there can be. */
+  max-height: 260px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -2605,11 +2806,23 @@ button.seed:hover {
 button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--clay);
   outline-offset: 2px;
+}
+
+/* A field already draws its own border, so a hard ring floating two pixels
+   outside it put two contours around one box - and on the login screen the
+   accent ring is terracotta over a green photograph, which was the pair
+   that looked wrong. A text field gets a soft halo in its own accent
+   instead: no second edge, its own border deepens, and the glow is the
+   theme's colour rather than a system-looking outline. Still unmistakably
+   focused, still only on :focus-visible so a thumb tap never draws it. */
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 22%, transparent);
 }
 
 /* Only the Memo dot honoured this before, out of ten animated properties -
@@ -2654,3 +2867,18 @@ select:focus-visible {
    is genuinely what this page is called. It is an h1 purely for structure;
    it must not pick up the default heading margins or size. */
 h1.brand-name { margin: 0; font-size: inherit; font-weight: inherit; }
+
+/* Where the post form lands while an existing post is being edited (see
+   placePlazaForm() in settings.js). Empty and invisible the rest of the
+   time - it only has a border once it is actually holding the form, so a
+   row that is not being edited shows nothing at all. */
+.plaza-edit-host:not(:empty) {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-2);
+}
+
+/* While a post is being edited in place, its own row actions step aside -
+   the form sitting right there has its own cancel and save, and three more
+   buttons under them read as a second set of choices for the same thing. */
+.user-row.editing .row-actions { display: none; }

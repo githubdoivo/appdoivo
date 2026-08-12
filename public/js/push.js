@@ -144,3 +144,64 @@ export function wireNotifButton(btnId = 'notif-btn') {
     refreshNotifButton(btnId);
   });
 }
+
+/**
+ * A notification tap has to land on the page the notification is about, and
+ * two of the three ways in were dead ends:
+ *
+ *  - Tapped while Settings was open, a "/?tab=rata" notification did
+ *    nothing at all. sw.js posts the deep link to whichever window is open
+ *    and lets that page apply it, but only the main app was ever listening,
+ *    so the message fell on the floor and you stayed on Settings.
+ *  - Tapped while the main app was open, a role-change notification
+ *    ("/settings.html") also did nothing: the app was listening, but it
+ *    only ever read ?tab= and ?night= out of the url and this one carries
+ *    neither, so there was nothing for it to apply.
+ *
+ * Both pages call this now. A link to somewhere else is a real navigation;
+ * a link to the page you are already on is handed to applyInPage, which is
+ * what keeps an in-app tab switch from reloading the whole PWA (iOS Safari
+ * frequently refuses Client.navigate() while the app is in the foreground -
+ * see sw.js).
+ */
+export function wireDeepLinks(applyInPage) {
+  const follow = (rawUrl) => {
+    const url = new URL(rawUrl, location.origin);
+    if (url.pathname !== location.pathname) {
+      location.href = url.href;
+      return;
+    }
+    applyInPage?.(url.searchParams);
+  };
+
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type !== 'deep-link' || !event.data.url) return;
+    follow(event.data.url);
+  });
+
+  return follow;
+}
+
+/**
+ * The other half of the iOS cold-start case described in sw.js: the query
+ * string never survives the launch, so ask the service worker whether a
+ * notification tap left a destination waiting. Only ever returns something
+ * straight after a tap - a normal open finds nothing and this is a no-op.
+ * Times out rather than hanging if the worker is slow to wake.
+ */
+export async function consumePendingDeepLink(follow) {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg?.active) return;
+    const url = await new Promise((resolve) => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (event) => resolve(event.data?.url || null);
+      reg.active.postMessage({ type: 'take-pending-deep-link' }, [channel.port2]);
+      setTimeout(() => resolve(null), 1500);
+    });
+    if (url) follow(url);
+  } catch {
+    // Nothing to recover here - the page is already where it would have
+    // been without this.
+  }
+}

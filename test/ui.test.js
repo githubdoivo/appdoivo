@@ -512,7 +512,7 @@ test('a first-time user can find their name, claim their key, and get logged str
 // beside them and not a tinted box. Three things have to hold together or
 // it stops being that: the motif covers the whole block, nothing paints a
 // ground behind it, and it stays faint enough to read over.
-test('a highlight is the night motif behind the text, with no tinted box', async () => {
+test('a highlight carries the night motif once, as an emblem, with no tinted box', async () => {
   const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'a rata abre às 22h' } });
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
@@ -525,19 +525,61 @@ test('a highlight is the night motif behind the text, with no tinted box', async
     return {
       maskImage: before.maskImage || before.webkitMaskImage,
       maskRepeat: before.maskRepeat || before.webkitMaskRepeat,
+      maskPosition: before.maskPosition || before.webkitMaskPosition,
       opacity: Number(before.opacity),
       width: before.width,
       background: own.backgroundColor,
       borderLeft: own.borderLeftWidth,
+      paddingLeft: own.paddingLeft,
+      paddingRight: own.paddingRight,
     };
   });
 
   assert.match(style.maskImage, /svg/, 'the motif should be the mask on the ::before');
-  assert.match(style.maskRepeat, /repeat/, 'and it should tile');
-  assert.ok(!/repeat-y/.test(style.maskRepeat), 'in both directions - repeat-y is the old rail');
+  // Every one of these motifs is a 16px-wide vertical drawing - a reed, a
+  // tail, a string of bunting. Tiled as a watermark they read as noise
+  // (the swamp's reeds became a picket fence), so the emblem is drawn once
+  // at its own proportions and bled off the right edge.
+  assert.equal(style.maskRepeat, 'no-repeat', 'the motif is an emblem now, not a tiled watermark');
+  assert.ok(/right|100%/.test(style.maskPosition), `and it sits on the right edge, got ${style.maskPosition}`);
+  assert.ok(parseFloat(style.width) > 50, `drawn large, not as a 26px tile - got ${style.width}`);
   assert.ok(style.opacity > 0.15 && style.opacity <= 0.4, `faint but visible, got ${style.opacity}`);
   assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(style.background), `no tinted ground behind it, got ${style.background}`);
   assert.equal(style.borderLeft, '0px', 'and no accent bar down the side');
+
+  // The emblem is decoration, so it never takes width from the words. A
+  // gutter held clear of it narrowed every consequence - worst on the
+  // smallest phone, where a long one became a ladder of three-word lines.
+  // The text runs over it instead.
+  assert.equal(
+    style.paddingRight, style.paddingLeft,
+    `the text column should not be squeezed for the emblem: ${style.paddingLeft} left vs ${style.paddingRight} right`,
+  );
+
+  // Which only holds up if the words stay readable where they cross it.
+  // Measured as the real blend: the emblem's colour at its own opacity
+  // over the card, and the text on top of that.
+  const contrast = await page.evaluate(() => {
+    const el = document.querySelector('.plaza-post-text.highlight');
+    const before = getComputedStyle(el, '::before');
+    const rgb = (css) => css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const over = (fg, bg, a) => fg.map((c, i) => c * a + bg[i] * (1 - a));
+    const relLum = ([r, g, b]) => {
+      const f = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    // The card behind it, walked up until something actually paints.
+    let node = el, ground = null;
+    while (node && !ground) {
+      const bg = getComputedStyle(node).backgroundColor;
+      if (bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg)) ground = rgb(bg);
+      node = node.parentElement;
+    }
+    const emblem = over(rgb(before.backgroundColor), ground, Number(before.opacity));
+    const [hi, lo] = [relLum(rgb(getComputedStyle(el).color)), relLum(emblem)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  });
+  assert.ok(contrast >= 4.5, `text over the emblem reads at ${contrast.toFixed(2)}:1 - it has to clear 4.5`);
 
   await context.close();
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
@@ -724,6 +766,29 @@ test('an admin can edit a post that is already published', async () => {
   );
   assert.equal(await page.isVisible('#plaza-edit-cancel'), true, 'there has to be a way out of editing');
 
+  // Editing happens at the post, not at the top of the page: the form node
+  // itself is moved into the row and back (see placePlazaForm()). One form
+  // doing both jobs is the point - a second, inline copy would mean a
+  // second poll builder and a second validation path to keep in step.
+  assert.equal(
+    await page.evaluate((id) => !!document.querySelector(`[data-edit-host="${id}"] #plaza-post-form`), post.id),
+    true,
+    'the form should be inside the post being edited',
+  );
+  assert.equal(
+    await page.isVisible('#plaza-compose-card'),
+    false,
+    'and the composer card should stand down rather than sit there empty',
+  );
+  assert.equal(
+    await page.evaluate((id) => {
+      const row = document.querySelector(`[data-edit-host="${id}"]`).closest('.user-row');
+      return getComputedStyle(row.querySelector('.row-actions')).display;
+    }, post.id),
+    'none',
+    "the row's own actions should step aside - the form has its own cancel and save",
+  );
+
   await page.fill('#plaza-post-text', 'o jantar é às 20h');
   await page.click('#plaza-post-submit');
   await page.waitForFunction(
@@ -735,6 +800,12 @@ test('an admin can edit a post that is already published', async () => {
   // And the form is back to composing, not still holding the edited post.
   assert.equal(await page.inputValue('#plaza-post-text'), '', 'the form should be empty again after saving');
   assert.equal(await page.isVisible('#plaza-edit-cancel'), false, 'and out of edit mode');
+  assert.equal(
+    await page.evaluate(() => !!document.querySelector('#plaza-compose-card > #plaza-post-form')),
+    true,
+    'and back in the composer, which is where a new post is written',
+  );
+  assert.equal(await page.isVisible('#plaza-compose-card'), true, 'with its card back');
 
   const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Edit Reader' } });
   const guestPage = await loginPage(context, guest.token);
@@ -824,7 +895,7 @@ test('Manage Users: a freshly created user floats to the top of this session\'s 
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.fill('#user-name-input', 'Zzz Session Tester');
+  await page.fill('#people-search', 'Zzz Session Tester');
   await page.click('#user-create-btn');
   const alertOk = page.locator('.modal-actions button');
   await alertOk.first().waitFor({ timeout: WAIT_TIMEOUT });
@@ -879,7 +950,7 @@ test('user search ignores accents - "cesar" finds "César"', async () => {
   const page = await loginPage(context, ADMIN, '/settings.html');
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.fill('#user-name-input', 'cesar session');
+  await page.fill('#people-search', 'cesar session');
   await page.waitForTimeout(200);
   const names = await page.$$eval('.user-row-name-text', (els) => els.map((e) => e.textContent.trim()));
   assert.ok(names.includes('César Session Search'), 'plain-ASCII "cesar" should match the accented name');
@@ -996,7 +1067,7 @@ test('an expanded user row stays open when the list re-renders under it', async 
 
   // Exactly what a poll tick does - rebuild the list from the same data.
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
-  await page.locator('#user-name-input').fill('');
+  await page.locator('#people-search').fill('');
   await page.waitForTimeout(400);
 
   assert.equal(
@@ -1130,6 +1201,332 @@ test('the account card\'s key updates immediately after a self-service key chang
   const updated = await api('GET', '/admin/users', { token: ADMIN });
   const tester = updated.find((u) => u.name === 'accountcardtest');
   await api('DELETE', `/admin/users/${tester.id}`, { token: ADMIN });
+});
+
+test('changing your own key updates Manage Users too, not just the account card', async () => {
+  // The two places that show a key disagreed after a self-service change:
+  // the account card was patched in place, the list below it was not asked
+  // for again, so it went on listing a key that no longer worked.
+  const restoreKey = 'ownerkeyrestored1';
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  const ownerRowKey = async () => page.$eval(
+    '#users-list .user-row',
+    (row) => row.querySelector('[data-token]')?.dataset.token,
+  );
+  assert.equal(await ownerRowKey(), ADMIN, 'the owner is the first row, showing their current key');
+
+  try {
+    await page.fill('#current-key-input', ADMIN);
+    await page.fill('#new-key-input', restoreKey);
+    await page.click('#change-key-form button[type="submit"]');
+    await page.waitForSelector('#change-key-msg:not(:empty)', { timeout: WAIT_TIMEOUT });
+
+    await page.waitForFunction(
+      (expected) => document.querySelector('#users-list .user-row [data-token]')?.dataset.token === expected,
+      restoreKey,
+      { timeout: WAIT_TIMEOUT },
+    );
+    assert.equal(
+      await page.$eval('#account-token', (el) => el.dataset.token),
+      restoreKey,
+      'and the account card agrees with it',
+    );
+  } finally {
+    // Every other test in this file authenticates as ADMIN - put it back
+    // even if the assertions above never got there.
+    await api('POST', '/me/change-token', {
+      token: restoreKey,
+      body: { currentToken: restoreKey, newToken: ADMIN },
+    }).catch(() => {});
+    await context.close();
+  }
+});
+
+test('a row action is an icon, and every one of them still says what it does', async () => {
+  // Row actions carried three words each at 0.16em tracking, which wrapped
+  // the row onto a second line on an iPhone SE and stopped the actions
+  // lining up down a list. They are squares now - which only works if
+  // dropping the word did not drop the name with it, so every icon button
+  // has to carry an accessible one, and clear the 44px touch minimum.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso com ações' } });
+
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .icon-action', { timeout: WAIT_TIMEOUT });
+
+  const actions = await page.$$eval('.icon-action', (els) => els.map((el) => ({
+    label: el.getAttribute('aria-label'),
+    title: el.getAttribute('title'),
+    text: el.textContent.trim(),
+    hasSvg: !!el.querySelector('svg'),
+    w: el.getBoundingClientRect().width,
+    h: el.getBoundingClientRect().height,
+  })));
+  assert.ok(actions.length >= 3, `expected the post's row actions, found ${actions.length}`);
+
+  for (const a of actions) {
+    assert.ok(a.hasSvg, 'an icon action with no icon in it');
+    assert.equal(a.text, '', `"${a.label}" still has a word in it - it should be icon only`);
+    assert.ok(a.label && a.label.length > 0, 'an icon action with no accessible name');
+    assert.equal(a.title, a.label, `the tooltip and the accessible name should agree, got "${a.title}" and "${a.label}"`);
+  }
+
+  // Size only for the ones actually on screen - a collapsed Manage Users
+  // row keeps its actions in the DOM at 0x0 until it is opened.
+  const onScreen = actions.filter((a) => a.w > 0);
+  assert.ok(onScreen.length >= 3, `expected the post's three actions visible, found ${onScreen.length}`);
+  for (const a of onScreen) {
+    assert.ok(a.w >= 44 && a.h >= 44, `${a.label} is ${a.w}x${a.h} - under the 44px touch minimum`);
+  }
+
+  // The row fits on one line on the smallest phone, which was the point.
+  const rowLines = await page.$eval('#plaza-posts-list .row-actions', (row) => {
+    const tops = [...row.querySelectorAll('button')].map((b) => Math.round(b.getBoundingClientRect().top));
+    return new Set(tops).size;
+  });
+  assert.equal(rowLines, 1, 'the actions should sit on one line, not wrap');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('the topbar icons carry no box, and the tab row no rule', async () => {
+  // Ivo's call, both of them. Two things the old chrome was doing quietly
+  // have to survive it: the touch target (the boxes were 38px, under the
+  // minimum, which nobody noticed while there was a border to aim at) and
+  // the bell's "off" signal, which was a tinted ground and is now colour.
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/');
+
+  const buttons = await page.$$eval('.topbar-actions > *', (els) => els.map((el) => {
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return { id: el.id || el.tagName, border: cs.borderBottomStyle, bg: cs.backgroundColor, w: r.width, h: r.height };
+  }));
+  assert.ok(buttons.length >= 3, `expected the topbar controls, found ${buttons.length}`);
+  for (const b of buttons) {
+    assert.equal(b.border, 'none', `${b.id} still has a box around it`);
+    assert.match(b.bg, /rgba\(0, 0, 0, 0\)|transparent/, `${b.id} still has a filled ground`);
+    assert.ok(b.w >= 44 && b.h >= 44, `${b.id} is ${b.w}x${b.h} - under the 44px touch minimum`);
+  }
+
+  // The bell says "off" in colour rather than in a tinted box.
+  const bell = await page.$eval('#notif-btn', (el) => ({
+    active: el.classList.contains('active'),
+    color: getComputedStyle(el).color,
+  }));
+  const plainColour = await page.$eval('#theme-toggle', (el) => getComputedStyle(el).color);
+  if (!bell.active) {
+    assert.notEqual(bell.color, plainColour, 'a bell that is off has to stand out from the other icons somehow');
+  }
+
+  // The tab row: no rule under it, and the selected tab marked by colour
+  // and weight rather than by a line.
+  assert.equal(
+    await page.$eval('.tabs', (el) => getComputedStyle(el).borderBottomStyle),
+    'none',
+    'the tab row should carry no baseline',
+  );
+  const tabs = await page.evaluate(() => {
+    const on = document.querySelector('.tab.active');
+    const off = document.querySelector('.tab:not(.active):not(.hidden)');
+    const read = (el) => ({
+      colour: getComputedStyle(el).color,
+      weight: getComputedStyle(el).fontWeight,
+      marker: getComputedStyle(el).borderBottomColor,
+    });
+    return { on: read(on), off: read(off) };
+  });
+  assert.notEqual(tabs.on.colour, tabs.off.colour, 'the selected tab has to differ in colour');
+  assert.notEqual(tabs.on.weight, tabs.off.weight, 'and in weight');
+  assert.match(tabs.on.marker, /rgba\(0, 0, 0, 0\)|transparent/, 'the underline marker should be gone');
+
+  // The header still separates itself from the app below it.
+  assert.equal(
+    await page.$eval('.topbar', (el) => getComputedStyle(el).borderBottomStyle),
+    'solid',
+    'the topbar keeps its own rule - that one separates the header, it marks nothing',
+  );
+
+  await context.close();
+});
+
+test('revealing a consequence asks first, and declining leaves the queue alone', async () => {
+  // It draws for real, pushes to all fifty guests and cannot be undone -
+  // the same bar as the Memo trigger, which has confirmed from the start.
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'revealconfirm' } });
+  await api('POST', '/consequences', { token: poster.token, body: { text: 'uma consequência à espera' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('[data-reveal-next]', { timeout: WAIT_TIMEOUT });
+
+  const before = await api('GET', '/admin/consequences', { token: ADMIN });
+  const pendingBefore = before.filter((c) => c.status !== 'used').length;
+
+  await page.click('[data-reveal-next]');
+  await page.waitForSelector('.modal-overlay:not(.hidden) .modal-actions', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button.ghost');
+  await page.waitForTimeout(300);
+
+  const after = await api('GET', '/admin/consequences', { token: ADMIN });
+  assert.equal(
+    after.filter((c) => c.status !== 'used').length,
+    pendingBefore,
+    'saying no to the confirmation must not have revealed anything',
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${poster.id}`, { token: ADMIN });
+});
+
+test('the lead action of a card is its own artwork, and still has a name', async () => {
+  // The rata's paw and Memo's shutter, in place of a worded button. Same
+  // rule as every other icon: dropping the word must not drop the name.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  for (const [tab, selector] of [['rata', '[data-reveal-next]'], ['memo', '#memo-trigger-btn']]) {
+    await page.click(`[data-atab="${tab}"]`);
+    await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
+    const lead = await page.$eval(selector, (el) => ({
+      text: el.textContent.trim(),
+      label: el.getAttribute('aria-label'),
+      title: el.getAttribute('title'),
+      hasSvg: !!el.querySelector('svg'),
+      w: el.getBoundingClientRect().width,
+      border: getComputedStyle(el).borderTopStyle,
+      bg: getComputedStyle(el).backgroundColor,
+    }));
+    assert.ok(lead.hasSvg, `${tab}'s lead button has no artwork in it`);
+    assert.equal(lead.text, '', `${tab}'s lead button still carries a word`);
+    assert.ok(lead.label, `${tab}'s lead button has no accessible name`);
+    assert.equal(lead.title, lead.label, `${tab}: tooltip and accessible name should agree`);
+    assert.ok(lead.w >= 44, `${tab}'s lead button is ${lead.w}px wide`);
+    // No box around it - Ivo's call. The drawing is the button, which only
+    // works while it is drawn big enough to be one.
+    assert.equal(lead.border, 'none', `${tab}'s lead button should carry no box`);
+    assert.match(lead.bg, /rgba\(0, 0, 0, 0\)|transparent/, `${tab}'s lead button should have no ground`);
+  }
+
+  await context.close();
+});
+
+test('a filter chip cannot keep its hover look after a tap on a phone', async () => {
+  // iOS applies :hover on tap and leaves it applied until you touch
+  // something else, so a chip switched off went on wearing the "on" look
+  // under your thumb - which is what made deselecting look broken. The
+  // hover rules are behind (hover: hover), which a touch device never
+  // matches.
+  // The chip row only exists once the history holds more than one kind of
+  // post - a filter that cannot filter anything is hidden on purpose.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso' } });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'que noite?', options: ['furnished', 'swamp'] },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  assert.equal(
+    await page.evaluate(() => matchMedia('(hover: hover)').matches),
+    false,
+    'a phone should not report a hovering pointer',
+  );
+
+  // Asked of the CSSOM rather than of the stylesheet text: what matters is
+  // that the rule ended up inside a hover media block, not how it is typed.
+  const guarded = await page.evaluate(() => {
+    const walk = (rules) => {
+      for (const rule of rules) {
+        if (rule.cssRules) {
+          const found = walk(rule.cssRules);
+          if (found) return found;
+        }
+        if (rule.selectorText === 'button:hover, .btn:hover') {
+          return { media: rule.parentRule?.conditionText ?? null };
+        }
+      }
+      return null;
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        const hit = walk(sheet.cssRules);
+        if (hit) return hit;
+      } catch { /* cross-origin sheet (the font CDN) - not ours */ }
+    }
+    return null;
+  });
+  assert.ok(guarded, 'the generic button hover rule went missing');
+  assert.match(
+    guarded.media ?? '',
+    /hover:\s*hover/,
+    `the generic button hover rule has to sit inside a (hover: hover) block, found ${guarded.media}`,
+  );
+
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-type-filter .role-pill', { timeout: WAIT_TIMEOUT });
+  const before = await page.$eval('#plaza-type-filter .role-pill', (el) => getComputedStyle(el).color);
+  await page.hover('#plaza-type-filter .role-pill');
+  await page.waitForTimeout(150);
+  const after = await page.$eval('#plaza-type-filter .role-pill', (el) => getComputedStyle(el).color);
+  assert.equal(after, before, 'a chip must look the same whether or not a pointer is over it');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('the Wall history can be filtered down to one kind of post', async () => {
+  // By the party this list is the whole Wall in one column. Same pills as
+  // Manage Users' roles, and the same rule: cumulative, and switching the
+  // last one off means "show everything" rather than showing nothing.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso da casa' } });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'que noite preferes?', options: ['furnished', 'swamp'] },
+  });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'links', text: 'onde e', links: [{ emoji: '📍', label: 'mapa', url: 'https://maps.example' }] },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  const rows = () => page.$$eval('#plaza-posts-list .user-row', (els) => els.length);
+  const chips = () => page.$$eval('#plaza-type-filter .role-pill', (els) => els.map((e) => e.dataset.postType));
+  assert.deepEqual(await chips(), ['announcement', 'poll', 'links'], 'one chip per kind of post on the Wall');
+  assert.equal(await rows(), 3, 'everything shows before anything is filtered');
+
+  // Switch two off, leaving polls.
+  await page.click('#plaza-type-filter [data-post-type="announcement"]');
+  await page.click('#plaza-type-filter [data-post-type="links"]');
+  await page.waitForTimeout(200);
+  assert.equal(await rows(), 1, 'only the poll should be left');
+  assert.equal(
+    await page.$eval('#plaza-posts-list .user-row .badge', (el) => el.className.includes('type-poll')),
+    true,
+    'and the one left is the poll',
+  );
+
+  // Switching the last one off would leave an empty list - it means "all".
+  await page.click('#plaza-type-filter [data-post-type="poll"]');
+  await page.waitForTimeout(200);
+  assert.equal(await rows(), 3, 'no chip selected shows everything, never nothing');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
 });
 
 /* -------------- Golden rule: non-owner admin UI (regression) ------------- */
@@ -1357,6 +1754,39 @@ test('a notification click while the app is already open switches tabs via postM
   const rataActive = await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active'));
   assert.ok(rataActive, 'the simulated postMessage should have switched to the Rata tab without a page reload');
   assert.equal(page.url(), `${base}/`, 'this path must not navigate/reload - only the in-page tab should change');
+  await context.close();
+});
+
+test('a notification tapped from another page takes you to the page it is about', async () => {
+  // Two dead ends, both real: sw.js hands the deep link to whichever window
+  // is open and lets that page act on it, but only the main app was
+  // listening - so a Rata notification tapped while Settings was open did
+  // nothing at all. And the app, which was listening, only ever read ?tab=
+  // out of the url, so a role-change notification pointing at
+  // /settings.html found nothing to apply and also did nothing. Neither tap
+  // moved you an inch.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  await page.evaluate(() => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'deep-link', url: '/?tab=rata' } })
+    );
+  });
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  assert.ok(
+    await page.$eval('[data-tab="rata"]', (el) => el.classList.contains('active')),
+    'a Rata notification tapped on Settings should land on the Rata tab',
+  );
+
+  // And the other direction: this one carries no ?tab= at all.
+  await page.evaluate(() => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'deep-link', url: '/settings.html' } })
+    );
+  });
+  await page.waitForURL(`${base}/settings.html`, { timeout: WAIT_TIMEOUT });
+
   await context.close();
 });
 
@@ -1611,13 +2041,25 @@ test('first-session tutorial shows once, steps through, then never shows again',
   // Step through every step via "next" (9 total steps with Memo enabled -
   // see tutorialSteps() in app.js - so 8 clicks to reach the last one; the
   // final "finish" click happens after the loop).
+  const tourTitles = [firstTitle.trim().toLowerCase()];
   for (let i = 0; i < 8; i++) {
     const titleBefore = await page.$eval('#tutorial-title', (el) => el.textContent);
     await page.click('#tutorial-next');
     await page.waitForTimeout(100);
     const titleAfter = await page.$eval('#tutorial-title', (el) => el.textContent);
     assert.notEqual(titleAfter, titleBefore, `step ${i + 2} did not render new content`);
+    tourTitles.push(titleAfter.trim().toLowerCase());
   }
+
+  // The tour walks the tabs in the order they sit in the tab bar - someone
+  // following along should be able to read left to right, not hop about.
+  const tabLabels = await page.$$eval('.tabs .tab:not(.hidden)', (els) =>
+    els.map((el) => el.textContent.trim().toLowerCase()));
+  const tourTabSteps = tourTitles.filter((t) => tabLabels.includes(t));
+  assert.deepEqual(tourTabSteps, tabLabels,
+    `the tour introduces the tabs as ${tourTabSteps.join(', ')} but the tab bar reads ${tabLabels.join(', ')}`);
+  assert.deepEqual(tourTitles.slice(1, 1 + tabLabels.length), tabLabels,
+    'the tab tour steps should come first, straight after the welcome step');
 
   // Last step's button finishes the tutorial instead of advancing further.
   await page.click('#tutorial-next');
@@ -2336,11 +2778,23 @@ test('the settings user search is not something iOS password autofill will grab'
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
   const fields = await page.evaluate(() => ({
-    search: document.getElementById('user-name-input').type,
+    search: document.getElementById('people-search').type,
+    name: document.getElementById('people-search').getAttribute('name'),
+    id: document.getElementById('people-search').id,
     current: document.getElementById('current-key-input').getAttribute('autocomplete'),
     next: document.getElementById('new-key-input').getAttribute('autocomplete'),
   }));
   assert.equal(fields.search, 'search', 'the user search must not be a plain text field');
+  // Safari reads the name first and only falls back to the placeholder, and
+  // this field had no name at all - so it read "procura ou cria um
+  // utilizador", decided it was a username box, and focused it on its own
+  // every time Settings opened. "search" is the value it maps to "nothing
+  // to fill here". The id is checked too: it used to say "user-name".
+  assert.equal(fields.name, 'search', 'the field needs a name Safari reads as a search box');
+  assert.ok(
+    !/user|name|nome|utilizador|email/i.test(fields.id),
+    `the id must not read as a username field either, got "${fields.id}"`,
+  );
   assert.equal(fields.current, 'current-password', 'the key fields must describe themselves, so Safari stops guessing');
   assert.equal(fields.next, 'new-password');
 
@@ -2364,7 +2818,7 @@ test('the settings user search is not something iOS password autofill will grab'
   // The search box must not be in a form - a text input plus a button
   // inside one is the shape read as a sign-in.
   assert.equal(
-    await page.$eval('#user-name-input', (el) => !!el.closest('form')),
+    await page.$eval('#people-search', (el) => !!el.closest('form')),
     false,
     'the user search should not sit inside a form',
   );
@@ -2487,9 +2941,14 @@ test('the populate and delete buttons carry one label colour, on every admin tab
     await page.reload();
     await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
+    // Worded buttons only. A row action is destructive too, but it is an
+    // icon in an outline now (see button.icon-action in styles.css) - it
+    // carries the red in its stroke rather than as a label on a red
+    // ground, so pooling it with these would be comparing two different
+    // things and calling the difference a bug.
     const colours = await page.evaluate(() => {
       const seen = (sel) => [...document.querySelectorAll(sel)].map((el) => getComputedStyle(el).color);
-      return { seed: seen('button.seed'), danger: seen('button.danger') };
+      return { seed: seen('button.seed'), danger: seen('button.danger:not(.icon-action)') };
     });
 
     assert.ok(colours.seed.length >= 5, `expected a populate button on every feature tab, found ${colours.seed.length}`);
@@ -2546,6 +3005,49 @@ test('every solid button keeps its label readable, on the login screen and in bo
     );
     await context.close();
   }
+});
+
+test('focusing the key field lights it up in the screen\'s own colours, not a browser outline', async () => {
+  // The default focus-visible outline landed a hard salmon ring on the one
+  // field every guest types into, over the photo, in a palette that belongs
+  // to nothing else on that screen. Inputs now take a soft halo drawn from
+  // --focus-ring, which #login redefines to its own cream.
+  const context = await iphoneContext('iPhone 13');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.waitForSelector('#login:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  const before = await page.$eval('#token-input', (el) => getComputedStyle(el).borderColor);
+  await page.focus('#token-input');
+  await page.waitForTimeout(120);
+  const after = await page.$eval('#token-input', (el) => {
+    const s = getComputedStyle(el);
+    return { outline: s.outlineStyle, shadow: s.boxShadow, border: s.borderColor };
+  });
+
+  assert.equal(after.outline, 'none', 'the hard focus outline should be gone from text fields');
+  assert.notEqual(after.shadow, 'none', 'a focused field still has to be visibly focused - the halo is missing');
+  assert.notEqual(after.border, before, 'the border should also pick up the focus colour');
+
+  // On-theme means the halo comes from #login's cream, not the app's clay.
+  const [r, g, b] = after.border.match(/\d+/g).map(Number);
+  assert.ok(r > 200 && g > 200 && b > 180,
+    `the login halo should be the screen's cream, got ${after.border}`);
+
+  await context.close();
+});
+
+test('the login screen does not resize itself when the keyboard opens', async () => {
+  // dvh tracks the *dynamic* viewport, so every time iOS raised the keyboard
+  // the min-height changed and the whole centred column slid up and back
+  // down. svh is the small viewport - the keyboard-open size - so the layout
+  // is already sitting where the keyboard would put it.
+  const css = await (await fetch(base + '/css/styles.css')).text();
+  const loginBlock = css.slice(css.indexOf('#login {'), css.indexOf('}', css.indexOf('#login {')));
+  assert.ok(/min-height:\s*100svh/.test(loginBlock),
+    '#login should size itself with svh so the keyboard cannot reflow it');
+  assert.ok(!/min-height:\s*100dvh/.test(loginBlock),
+    '#login is back on dvh - the page will jump again when the keyboard opens');
 });
 
 test('an empty Wall feed is a titled card too, not a stray line under the hero', async () => {
@@ -2712,7 +3214,7 @@ test('filtering the user list does not yank the page out from under you', async 
   // phone, where it is far more disruptive than on a desktop.
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');
-  await page.waitForSelector('#user-name-input', { timeout: WAIT_TIMEOUT });
+  await page.waitForSelector('#people-search', { timeout: WAIT_TIMEOUT });
 
   // Enough accounts for the list to be worth shortening.
   for (const name of ['Scroll Anna', 'Scroll Bruno', 'Scroll Carla', 'Scroll Diogo', 'Scroll Elsa']) {
@@ -2721,12 +3223,12 @@ test('filtering the user list does not yank the page out from under you', async 
   await page.reload();
   await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
 
-  await page.$eval('#user-name-input', (el) => el.scrollIntoView({ block: 'center' }));
+  await page.$eval('#people-search', (el) => el.scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(300);
   const before = await page.evaluate(() => window.scrollY);
 
-  await page.click('#user-name-input');
-  await page.type('#user-name-input', 'carla', { delay: 60 });
+  await page.click('#people-search');
+  await page.type('#people-search', 'carla', { delay: 60 });
   await page.waitForTimeout(500);
 
   const after = await page.evaluate(() => window.scrollY);
@@ -2740,7 +3242,7 @@ test('filtering the user list does not yank the page out from under you', async 
 
   // The role chips shorten the same list the same way, and were reported
   // separately - one shared helper covers both, so both are checked.
-  await page.fill('#user-name-input', '');
+  await page.fill('#people-search', '');
   await page.waitForTimeout(300);
   await page.$eval('#user-role-filter', (el) => el.scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(300);

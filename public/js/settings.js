@@ -1,13 +1,14 @@
 import { api, fetchMe, getToken, setToken, clearToken, onConnectionChange } from './api.js';
 import { t, applyI18n, getLang, setLang } from './i18n.js';
 import { applyMode, toggleMode, syncThemeColor } from './theme.js';
-import { registerServiceWorker, refreshNotifButton, wireNotifButton } from './push.js';
+import { registerServiceWorker, refreshNotifButton, wireNotifButton, wireDeepLinks, consumePendingDeepLink } from './push.js';
 import { wireLogoEasterEgg } from './logoEasterEgg.js';
 import { wirePasswordToggle } from './passwordToggle.js';
 import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
+import { iconButton, LEAD_ICONS } from './icons.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
 // restoring a stale scroll position when its backgrounded WKWebView is
@@ -66,16 +67,18 @@ let plazaEnabled = false;
 let memoEnabled = false;
 let myUserId = null;
 let myName = '';
+let myKey = '';
 
 // Your own name, role and access key, click-to-reveal/copy same as a row
-// in Manage Users below - the token itself never needs a server round-trip,
-// it's already what's in localStorage (see getToken() in api.js).
+// in Manage Users below. The key comes from /me rather than from
+// localStorage: what's stored there is whatever was typed at login, which
+// for the owner on QA is the short dev word, not the account's real key.
 function renderAccountCard() {
   $('account-name').textContent = myName;
   $('account-role-badge').className = `badge ${isOwner ? 'role-owner' : isAdmin ? 'role-admin' : 'role-user'}`;
   $('account-role-badge').textContent = isOwner ? 'owner' : isAdmin ? 'admin' : 'user';
   const tokenEl = $('account-token');
-  tokenEl.dataset.token = getToken();
+  tokenEl.dataset.token = myKey;
   const toggle = async () => {
     const revealed = tokenEl.classList.toggle('censored') === false;
     tokenEl.textContent = revealed ? tokenEl.dataset.token : '••••••••••••';
@@ -93,10 +96,17 @@ function renderAccountCard() {
 // account card kept showing/copying the OLD key after a self-service
 // change (see wireChangeKeyForm()) - one that no longer even works to log
 // in - until a full page reload synced it back up.
-function refreshAccountToken() {
+//
+// Manage Users reads its keys from the server and had the same problem the
+// other way round: it kept listing the old key for whoever had just changed
+// theirs, because nothing asked for the list again. Both are refreshed here,
+// so the two places can never disagree about someone's key.
+function refreshAccountToken(newKey) {
+  myKey = newKey;
   const tokenEl = $('account-token');
-  tokenEl.dataset.token = getToken();
+  tokenEl.dataset.token = myKey;
   if (!tokenEl.classList.contains('censored')) tokenEl.textContent = tokenEl.dataset.token;
+  if (isOwner) loadUsers();
 }
 
 async function boot() {
@@ -124,6 +134,7 @@ async function boot() {
     memoEnabled = !!me.memoEnabled;
     myUserId = me.id;
     myName = me.name;
+    myKey = me.key || getToken();
     // Feeds the off-screen autocomplete="username" anchor in the change-key
     // form (see settings.html) - Safari needs a username to pair with the
     // saved password, and giving it one here is what keeps it off the
@@ -580,9 +591,13 @@ function renderUsersList(users) {
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
           ${isOwner ? `
           <div class="row-actions">
+            ${/* The one action here that keeps its word: a shield cannot say
+                  "make this person an admin" as opposed to "take it away",
+                  and getting that backwards on a live party is not a small
+                  mistake. */''}
             ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
-            <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-            ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
+            ${iconButton('key', t('regen_key'), `data-regen-user="${u.id}"`)}
+            ${u.is_owner ? '' : iconButton('remove', t('remove'), `data-del-user="${u.id}"`, 'danger')}
           </div>` : ''}
         </div>
       </div>`).join('')
@@ -779,7 +794,7 @@ function renderKeepingPlace(container, render, filtered) {
 }
 
 function applyUserSearch() {
-  const term = $('user-name-input').value.trim();
+  const term = $('people-search').value.trim();
   const createBtn = $('user-create-btn');
   const searching = term.length >= 3;
   const everyRole = roleFilter.size === ALL_ROLES.length;
@@ -809,9 +824,16 @@ async function loadUsers() {
   applyUserSearch();
 }
 
+// The two lead actions carry artwork from their own section rather than a
+// word (the rata's paw, Memo's aperture). Injected here rather than sitting
+// in the HTML so the markup keeps one source for each icon.
+document.querySelectorAll('[data-lead-icon]').forEach((btn) => {
+  btn.innerHTML = LEAD_ICONS[btn.dataset.leadIcon] ?? '';
+});
+
 syncRolePills();
 wireUsersListOnce();
-$('user-name-input').addEventListener('input', applyUserSearch);
+$('people-search').addEventListener('input', applyUserSearch);
 
 $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -832,11 +854,11 @@ $('user-role-filter').querySelectorAll('.role-pill').forEach((btn) => {
 // stops reading this box as a sign-in, which means submit has to be wired
 // by hand: the button, plus Enter, which a real form would have given free.
 async function createUserFromInput() {
-  const name = $('user-name-input').value.trim();
+  const name = $('people-search').value.trim();
   if (!name || $('user-create-btn').disabled) return;
   try {
     const u = await api('/admin/users', { method: 'POST', body: { name } });
-    $('user-name-input').value = '';
+    $('people-search').value = '';
     $('user-search-hint').classList.add('hidden');
     $('user-create-btn').disabled = true;
     markRecent(u.id);
@@ -847,7 +869,7 @@ async function createUserFromInput() {
   }
 }
 $('user-create-btn').addEventListener('click', createUserFromInput);
-$('user-name-input').addEventListener('keydown', (e) => {
+$('people-search').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     createUserFromInput();
@@ -995,7 +1017,7 @@ function renderContestants() {
           <td>${photo}</td>
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span>${pending}</td>
           <td class="muted">${who}</td>
-          <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
+          <td style="text-align:right">${isOwner ? iconButton('remove', t('remove'), `data-del-contestant="${c.id}"`, 'danger') : ''}</td>
         </tr>`;
       }).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
@@ -1455,6 +1477,10 @@ $('dedications-pdf-btn').addEventListener('click', async () => {
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-reveal-next]')) return;
   $('reveal-msg').textContent = '';
+  // Confirmed for the same reason the Memo trigger is: it draws a
+  // consequence for real, notifies all fifty guests at once, and there is
+  // no putting it back.
+  if (!(await showConfirm(t('confirm_rata_reveal')))) return;
   try {
     await api('/admin/consequences/reveal', { method: 'POST' });
     loadConsequences();
@@ -1553,7 +1579,7 @@ function renderConsequenceCard(c, revealed) {
       <span class="muted">${byline}</span>
       <span class="rata-badge ${status.cls}">${t(status.key)}</span>
       <select data-assign-id="${c.id}"${c.done_at ? ' disabled' : ''}>${userOptionsHtml(c.assigned_user_id)}</select>
-      ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
+      ${canApprove ? iconButton('approve', t('rata_approve_btn'), `data-approve-id="${c.id}"`) : ''}
     </div>
   </div>`;
 }
@@ -1645,7 +1671,7 @@ async function loadWallPseudonyms() {
       rows.map((r) => `<tr>
         <td>${esc(r.name)}</td>
         <td>${formatPseudonymHistory(r.pseudonyms)}</td>
-        <td style="text-align:right"><button class="small" data-reset-pseudonym="${r.id}">${t('wall_reset_pseudonym_btn')}</button></td>
+        <td style="text-align:right">${iconButton('reset', t('wall_reset_pseudonym_btn'), `data-reset-pseudonym="${r.id}"`)}</td>
       </tr>`).join('')
     : `<tr><td class="muted">${t('no_wall_pseudonyms')}</td></tr>`;
 
@@ -1772,20 +1798,102 @@ function adminPodiumSummary(p) {
     <ul class="admin-post-options">${rows}${cong}</ul>`;
 }
 
+// The Wall history mixes five kinds of post, and by the party there will be
+// a lot of them - the same reason Manage Users has its role pills. Same
+// behaviour too: cumulative (OR), and unselecting the last one means "show
+// everything" rather than showing nothing at all.
+const PLAZA_TYPE_ORDER = ['announcement', 'poll', 'links', 'podium', 'video'];
+const plazaTypeFilter = new Set();
+let allPlazaPosts = [];
+
+function renderPlazaTypeFilter() {
+  // Only the types this history actually holds: a "day's video" chip on a
+  // Wall that has never published one is a filter that can only empty the
+  // list.
+  const present = PLAZA_TYPE_ORDER.filter((type) => allPlazaPosts.some((p) => p.type === type));
+  for (const type of [...plazaTypeFilter]) {
+    if (!present.includes(type)) plazaTypeFilter.delete(type);
+  }
+  // One kind of post left is not a filter, it's a label - hide the row.
+  $('plaza-type-filter').classList.toggle('hidden', present.length < 2);
+  $('plaza-type-filter').innerHTML = present.map((type) => `
+    <button type="button" class="role-pill${plazaTypeFilter.size === 0 || plazaTypeFilter.has(type) ? ' active' : ''}"
+            data-post-type="${type}">${t(PLAZA_ADMIN_LABEL[type])}</button>`).join('');
+
+  $('plaza-type-filter').querySelectorAll('[data-post-type]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.postType;
+      // An empty set means "everything", which is also what a full one
+      // means - fill it in first so the tap below reads as switching this
+      // one off, the way the role pills behave.
+      if (plazaTypeFilter.size === 0) present.forEach((p) => plazaTypeFilter.add(p));
+      if (plazaTypeFilter.has(type)) plazaTypeFilter.delete(type);
+      else plazaTypeFilter.add(type);
+      if (plazaTypeFilter.size === 0) present.forEach((p) => plazaTypeFilter.add(p));
+      renderPlazaPostsList();
+    });
+  });
+}
+
 async function loadPlazaPosts() {
   const { posts } = await api('/admin/plaza-posts');
+  allPlazaPosts = posts;
+  renderPlazaPostsList();
+}
+
+// The one form does both jobs, so editing happens where the post is rather
+// than in a composer at the top of the page: the form node itself is moved
+// into the row and back. Rebuilding a second copy inline would have meant a
+// second set of listeners, a second poll/link builder and a second
+// validation path, all of which could drift from these.
+function placePlazaForm() {
+  const form = $('plaza-post-form');
+  const host = editingPostId != null
+    ? document.querySelector(`[data-edit-host="${editingPostId}"]`)
+    : null;
+  (host ?? $('plaza-compose-card')).appendChild(form);
+  // With the form away, the composer card is a title over nothing.
+  $('plaza-compose-card').classList.toggle('hidden', !!host);
+  // Marked here as well as at render time: pressing edit moves the form
+  // immediately, without waiting for the list to be drawn again, and the
+  // row's own actions have to step aside at the same moment.
+  $('plaza-posts-list').querySelectorAll('.user-row.editing')
+    .forEach((row) => row.classList.remove('editing'));
+  host?.closest('.user-row')?.classList.add('editing');
+}
+
+function renderPlazaPostsList() {
+  const posts = plazaTypeFilter.size === 0
+    ? allPlazaPosts
+    : allPlazaPosts.filter((p) => plazaTypeFilter.has(p.type));
+  // Deliberately NOT renderKeepingPlace(): that holds the container at the
+  // height it had, which is right for a list you are typing a search into
+  // (the page must not shift under your thumb mid-keystroke) and wrong
+  // here. Tapping a chip is a deliberate, one-off act, and the card was
+  // left standing at its full height with a stretch of empty paper below
+  // two results.
+  $('plaza-posts-list').style.minHeight = '';
+  // The form may be sitting inside a row that is about to be replaced -
+  // park it at home first or innerHTML would destroy it mid-edit, and this
+  // list is re-rendered by every pin, delete and save.
+  $('plaza-compose-card').appendChild($('plaza-post-form'));
+  renderPlazaPosts(posts);
+  renderPlazaTypeFilter();
+  placePlazaForm();
+}
+
+function renderPlazaPosts(posts) {
   $('plaza-posts-list').innerHTML = posts.length
     ? posts.map((p) => `
-      <div class="user-row">
+      <div class="user-row${p.id === editingPostId ? ' editing' : ''}">
         <div class="user-row-top">
           <div class="user-row-name">
             <span class="badge${PLAZA_ADMIN_BADGE[p.type] ?? ' type-announcement'}">${t(PLAZA_ADMIN_LABEL[p.type] ?? 'plaza_type_announcement')}</span>
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
-        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        ${p.type === 'video' ? `<p class="muted" style="margin:8px 0 0">${esc(formatEuDate(p.text))}</p>`
-          : p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
+        ${p.type === 'video' ? `<p class="muted" style="margin:10px 0 0">${esc(formatEuDate(p.text))}</p>`
+          : p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:10px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
         ${p.type === 'poll' ? `
         <ul class="admin-post-options">
           ${p.options.map((o) => {
@@ -1797,10 +1905,15 @@ async function loadPlazaPosts() {
         <ul class="admin-post-options">
           ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
         </ul>` : ''}
+        ${/* Below the body, the way the same post reads on the Wall itself
+              (see renderPlazaPost() in app.js) - who wrote it is a footnote
+              to the post, not a heading over it. */''}
+        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
+        ${['announcement', 'poll', 'links'].includes(p.type) ? `<div class="plaza-edit-host" data-edit-host="${p.id}"></div>` : ''}
         <div class="row-actions">
-          ${['announcement', 'poll', 'links'].includes(p.type) ? `<button class="small ghost" data-edit-post="${p.id}">${t('edit')}</button>` : ''}
-          ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
-          ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
+          ${['announcement', 'poll', 'links'].includes(p.type) ? iconButton('edit', t('edit'), `data-edit-post="${p.id}"`) : ''}
+          ${isOwner ? iconButton(p.pinnedAt ? 'unpin' : 'pin', t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn'), `data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}"`) : ''}
+          ${isOwner ? iconButton('remove', t('remove'), `data-del-post="${p.id}"`, 'danger') : ''}
         </div>
       </div>`).join('')
     : `<p class="muted">${t('plaza_no_posts')}</p>`;
@@ -1867,6 +1980,8 @@ function cancelPlazaEdit() {
   $('plaza-post-submit').textContent = t('plaza_publish_btn');
   $('plaza-edit-cancel').classList.add('hidden');
   $('plaza-post-msg').textContent = '';
+  // Back to the composer at the top, which is where a *new* post is written.
+  placePlazaForm();
 }
 
 /** Loads an existing post into the form for editing. */
@@ -1901,7 +2016,8 @@ function startPlazaEdit(post) {
   }
   $('plaza-post-submit').textContent = t('save');
   $('plaza-edit-cancel').classList.remove('hidden');
-  $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  placePlazaForm();
+  $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 $('plaza-edit-cancel').addEventListener('click', cancelPlazaEdit);
@@ -2127,7 +2243,7 @@ function wireChangeKeyForm() {
     try {
       await api('/me/change-token', { method: 'POST', body: { currentToken, newToken } });
       setToken(newToken);
-      refreshAccountToken();
+      refreshAccountToken(newToken);
       $('current-key-input').value = '';
       $('new-key-input').value = '';
       $('change-key-msg').textContent = t('key_changed_msg');
@@ -2137,7 +2253,13 @@ function wireChangeKeyForm() {
   });
 }
 
-boot();
+// Settings has no tabs a notification ever points at, so every deep link
+// that reaches this page is somewhere else and wireDeepLinks() navigates
+// there. Before this, a notification tapped while Settings was open simply
+// did nothing at all.
+const followDeepLink = wireDeepLinks();
+
+boot().then(() => consumePendingDeepLink(followDeepLink));
 
 
 // One subscriber for the whole page - see onConnectionChange() in api.js for

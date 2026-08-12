@@ -14,24 +14,44 @@ list of what is still owed, and by whom.
 These cannot start until he hands something over. Listing them is not a
 nudge; they sit here until they don't.
 
-### Reconcile the production guest accounts
+### Three guest accounts missing from production
 
-Ivo's guest list (confirmed 11 Aug 2026) and the accounts on production
-disagree in three places. `src/seedDemo.js` was corrected to match the
-list; production was deliberately left untouched, because creating and
-deleting accounts there is real people's access, and removing one
-destroys their key.
+Read off Ivo's own Guest DB on 12 Aug 2026: 24 guests plus the owner, 25
+accounts in all. `src/seedDemo.js` matches that list, so QA rebuilds
+itself correctly on every deploy. Production holds 22 and is missing:
 
-- **Óscar Lima** — on the guest list, has no production account, so
-  cannot log in.
-- **Rebeca Campos** — same.
-- **Zé Monteiro** — has a production account but is not on the guest
-  list. Delete, or keep if he is coming after all and the list was
-  incomplete.
+- **Joana Correia**
+- **Manuel Antunes**
+- **Zé Monteiro** — removed from production on 11 Aug for not being on
+  the shorter list that was to hand at the time. He was on the real one
+  all along.
 
-Needs one word from Ivo before anything is created or removed. Not
-urgent in itself, but it wants doing before invitations go out, since
-two guests currently have no way in. The party is 18–20 Sept 2026.
+Nobody needs their key handed to them: each claims their own through the
+first-time name search. The quickest route is Ivo typing the three names
+into Manage Users himself — Claude Code's sandbox permits reading the
+production database but refuses to write to it, and the permission rule
+that would change that did not take effect mid-session (see the note in
+`.claude/settings.local.json`).
+
+Wants doing before invitations go out, since three guests currently have
+no way in. The party is 18–20 Sept 2026.
+
+### Replace both Fly API tokens
+
+`FLY_API_TOKEN_QA` and `FLY_API_TOKEN_PROD` were both echoed into a
+session transcript on 11 Aug 2026 — an unquoted value in `.env` run
+through `source`, which fails with the value itself in the error. They
+still work and are still in use; they should not be.
+
+Revoking has to happen in the Fly dashboard: the Fly API deliberately
+does not let a token revoke itself or any other. Once replaced, write
+them back **quoted** — `scripts/deploy.sh` now strips surrounding quotes
+when reading `.env`, so the quoted form is what survives the same
+accident a second time.
+
+The narrower replacement is one app-scoped deploy token per environment
+rather than an account-wide one, so a leaked QA credential cannot reach
+production at all.
 
 ### High-resolution vectorised login background
 

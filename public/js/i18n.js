@@ -284,7 +284,7 @@ export const translations = {
     confirm_seed_demo: 'encher esta secção com dados de teste? só acrescenta se estiver vazia - podes apagar tudo no botão ao lado.',
     global_data_title: 'dados de toda a app',
     global_data_help: 'para preparares uma passagem de teste com tudo cheio, e limpares no fim. o de apagar leva também as contas dos convidados - a tua e as dos administradores ficam.',
-    global_seed_btn: 'popular tudo com dados de teste',
+    global_seed_btn: 'dados de teste',
     global_wipe_btn: 'apagar todos os dados',
     confirm_global_wipe: 'apagar tudo em toda a app, incluindo as contas dos convidados? não há forma de recuperar.',
     global_wipe_done: 'tudo apagado.',
@@ -333,6 +333,7 @@ export const translations = {
     memo_trigger_btn: 'lançar',
     memo_trigger_done: 'momento aberto - toda a gente foi notificada.',
     confirm_memo_trigger: 'Isto abre já o próximo momento e notifica toda a gente. Continuar?',
+    confirm_rata_reveal: 'Sorteia já uma consequência e avisa toda a gente. Não dá para voltar atrás.',
     err_memo_no_slots_left: 'já não há momentos por abrir hoje.',
     memo_admin_days_title: 'Vídeo do dia',
     memo_admin_days_help: 'Por cada dia: quantos momentos foram enviados, descarregar as fotos, e montar o vídeo do dia para publicar no Wall.',
@@ -756,7 +757,7 @@ export const translations = {
     confirm_seed_demo: 'fill this section with demo data? it only adds when empty - you can clear it with the button beside it.',
     global_data_title: 'data across the whole app',
     global_data_help: 'for setting up a full run-through and clearing it afterwards. the delete takes the guest accounts too - yours and the other admins stay.',
-    global_seed_btn: 'fill everything with demo data',
+    global_seed_btn: 'test data',
     global_wipe_btn: 'delete all data',
     confirm_global_wipe: 'delete everything across the whole app, including guest accounts? there is no getting it back.',
     global_wipe_done: 'everything deleted.',
@@ -805,6 +806,7 @@ export const translations = {
     memo_trigger_btn: 'launch',
     memo_trigger_done: 'moment opened - everyone has been notified.',
     confirm_memo_trigger: 'This opens the next moment right now and notifies everyone. Continue?',
+    confirm_rata_reveal: 'Draws a consequence now and tells everyone. There is no taking it back.',
     err_memo_no_slots_left: 'no moments left to open today.',
     memo_admin_days_title: 'Day video',
     memo_admin_days_help: "Per day: how many moments came in, download the photos, and build the day's video to publish on the Wall.",
@@ -991,6 +993,14 @@ export function applyI18n(root = document) {
   });
   root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
     el.placeholder = t(el.dataset.i18nPh);
+  });
+  // For controls whose label is not text they can hold - an icon button's
+  // name lives in aria-label and title, and writing it into textContent
+  // would paint the word over the icon.
+  root.querySelectorAll('[data-i18n-label]').forEach((el) => {
+    const label = t(el.dataset.i18nLabel);
+    el.setAttribute('aria-label', label);
+    el.setAttribute('title', label);
   });
   document.documentElement.lang = getLang();
 }

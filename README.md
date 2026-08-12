@@ -6,7 +6,7 @@ A private-party PWA (~50 guests) with four features, all behind one login:
    polls (2-6 options) for everyone to see. Posts can be pinned to the top.
    Publishing sends a push notification to the group.
 2. **Rata** - each user suggests one "consequence" per day through a
-   free-text form. Every 3 hours (16:00-04:00) a random pending consequence
+   free-text form. Every 3 hours (14:00-02:00) a random pending consequence
    is drawn, everyone is notified, and it is removed from the draw. The
    owner can record who's actually holding the rata for the current
    consequence (only knowable by looking around the party).
