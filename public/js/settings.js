@@ -1841,6 +1841,27 @@ async function loadPlazaPosts() {
   renderPlazaPostsList();
 }
 
+// The one form does both jobs, so editing happens where the post is rather
+// than in a composer at the top of the page: the form node itself is moved
+// into the row and back. Rebuilding a second copy inline would have meant a
+// second set of listeners, a second poll/link builder and a second
+// validation path, all of which could drift from these.
+function placePlazaForm() {
+  const form = $('plaza-post-form');
+  const host = editingPostId != null
+    ? document.querySelector(`[data-edit-host="${editingPostId}"]`)
+    : null;
+  (host ?? $('plaza-compose-card')).appendChild(form);
+  // With the form away, the composer card is a title over nothing.
+  $('plaza-compose-card').classList.toggle('hidden', !!host);
+  // Marked here as well as at render time: pressing edit moves the form
+  // immediately, without waiting for the list to be drawn again, and the
+  // row's own actions have to step aside at the same moment.
+  $('plaza-posts-list').querySelectorAll('.user-row.editing')
+    .forEach((row) => row.classList.remove('editing'));
+  host?.closest('.user-row')?.classList.add('editing');
+}
+
 function renderPlazaPostsList() {
   const posts = plazaTypeFilter.size === 0
     ? allPlazaPosts
@@ -1852,14 +1873,19 @@ function renderPlazaPostsList() {
   // left standing at its full height with a stretch of empty paper below
   // two results.
   $('plaza-posts-list').style.minHeight = '';
+  // The form may be sitting inside a row that is about to be replaced -
+  // park it at home first or innerHTML would destroy it mid-edit, and this
+  // list is re-rendered by every pin, delete and save.
+  $('plaza-compose-card').appendChild($('plaza-post-form'));
   renderPlazaPosts(posts);
   renderPlazaTypeFilter();
+  placePlazaForm();
 }
 
 function renderPlazaPosts(posts) {
   $('plaza-posts-list').innerHTML = posts.length
     ? posts.map((p) => `
-      <div class="user-row">
+      <div class="user-row${p.id === editingPostId ? ' editing' : ''}">
         <div class="user-row-top">
           <div class="user-row-name">
             <span class="badge${PLAZA_ADMIN_BADGE[p.type] ?? ' type-announcement'}">${t(PLAZA_ADMIN_LABEL[p.type] ?? 'plaza_type_announcement')}</span>
@@ -1883,6 +1909,7 @@ function renderPlazaPosts(posts) {
               (see renderPlazaPost() in app.js) - who wrote it is a footnote
               to the post, not a heading over it. */''}
         <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
+        ${['announcement', 'poll', 'links'].includes(p.type) ? `<div class="plaza-edit-host" data-edit-host="${p.id}"></div>` : ''}
         <div class="row-actions">
           ${['announcement', 'poll', 'links'].includes(p.type) ? iconButton('edit', t('edit'), `data-edit-post="${p.id}"`) : ''}
           ${isOwner ? iconButton(p.pinnedAt ? 'unpin' : 'pin', t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn'), `data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}"`) : ''}
@@ -1953,6 +1980,8 @@ function cancelPlazaEdit() {
   $('plaza-post-submit').textContent = t('plaza_publish_btn');
   $('plaza-edit-cancel').classList.add('hidden');
   $('plaza-post-msg').textContent = '';
+  // Back to the composer at the top, which is where a *new* post is written.
+  placePlazaForm();
 }
 
 /** Loads an existing post into the form for editing. */
@@ -1987,7 +2016,8 @@ function startPlazaEdit(post) {
   }
   $('plaza-post-submit').textContent = t('save');
   $('plaza-edit-cancel').classList.remove('hidden');
-  $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  placePlazaForm();
+  $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 $('plaza-edit-cancel').addEventListener('click', cancelPlazaEdit);

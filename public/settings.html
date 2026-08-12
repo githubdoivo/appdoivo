@@ -93,7 +93,12 @@
       <!-- Separador: Plaza (qualquer admin pode publicar - feed visivel a
            todos na app principal via GET /plaza-posts) -->
       <div id="atab-plaza" class="tab-panel hidden">
-        <div class="card">
+        <!-- The form inside this card is moved, node and all, into the post
+             being edited and back again - see placePlazaForm() in
+             settings.js. Moving it rather than building a second one keeps
+             one form, one set of listeners and one validation path for
+             composing and editing alike. -->
+        <div class="card" id="plaza-compose-card">
           <h2 data-i18n="plaza_admin_title">Nova publicação</h2>
           <p class="help" data-i18n="plaza_admin_help">Explicação</p>
           <form id="plaza-post-form" style="margin-top:12px">

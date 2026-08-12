@@ -766,6 +766,29 @@ test('an admin can edit a post that is already published', async () => {
   );
   assert.equal(await page.isVisible('#plaza-edit-cancel'), true, 'there has to be a way out of editing');
 
+  // Editing happens at the post, not at the top of the page: the form node
+  // itself is moved into the row and back (see placePlazaForm()). One form
+  // doing both jobs is the point - a second, inline copy would mean a
+  // second poll builder and a second validation path to keep in step.
+  assert.equal(
+    await page.evaluate((id) => !!document.querySelector(`[data-edit-host="${id}"] #plaza-post-form`), post.id),
+    true,
+    'the form should be inside the post being edited',
+  );
+  assert.equal(
+    await page.isVisible('#plaza-compose-card'),
+    false,
+    'and the composer card should stand down rather than sit there empty',
+  );
+  assert.equal(
+    await page.evaluate((id) => {
+      const row = document.querySelector(`[data-edit-host="${id}"]`).closest('.user-row');
+      return getComputedStyle(row.querySelector('.row-actions')).display;
+    }, post.id),
+    'none',
+    "the row's own actions should step aside - the form has its own cancel and save",
+  );
+
   await page.fill('#plaza-post-text', 'o jantar é às 20h');
   await page.click('#plaza-post-submit');
   await page.waitForFunction(
@@ -777,6 +800,12 @@ test('an admin can edit a post that is already published', async () => {
   // And the form is back to composing, not still holding the edited post.
   assert.equal(await page.inputValue('#plaza-post-text'), '', 'the form should be empty again after saving');
   assert.equal(await page.isVisible('#plaza-edit-cancel'), false, 'and out of edit mode');
+  assert.equal(
+    await page.evaluate(() => !!document.querySelector('#plaza-compose-card > #plaza-post-form')),
+    true,
+    'and back in the composer, which is where a new post is written',
+  );
+  assert.equal(await page.isVisible('#plaza-compose-card'), true, 'with its card back');
 
   const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Edit Reader' } });
   const guestPage = await loginPage(context, guest.token);

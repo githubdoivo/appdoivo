@@ -2627,7 +2627,12 @@ html.mode-dark .plaza-post-type { color: #fff; }
 /* ----------------------------------- Chat ---------------------------------- */
 
 .chat-messages {
-  max-height: 360px;
+  /* Was 360px, which on a phone left the card standing taller than a
+     screenful before anyone had written anything - the send box sat below
+     the fold on its own tab. The list scrolls anyway (Plaza keeps only the
+     20 most recent, see chat.js), so the ceiling only decides how much of
+     the card the messages may claim, not how many there can be. */
+  max-height: 260px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -2858,3 +2863,18 @@ textarea:focus-visible {
    is genuinely what this page is called. It is an h1 purely for structure;
    it must not pick up the default heading margins or size. */
 h1.brand-name { margin: 0; font-size: inherit; font-weight: inherit; }
+
+/* Where the post form lands while an existing post is being edited (see
+   placePlazaForm() in settings.js). Empty and invisible the rest of the
+   time - it only has a border once it is actually holding the form, so a
+   row that is not being edited shows nothing at all. */
+.plaza-edit-host:not(:empty) {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-2);
+}
+
+/* While a post is being edited in place, its own row actions step aside -
+   the form sitting right there has its own cancel and save, and three more
+   buttons under them read as a second set of choices for the same thing. */
+.user-row.editing .row-actions { display: none; }
