@@ -530,6 +530,8 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
       width: before.width,
       background: own.backgroundColor,
       borderLeft: own.borderLeftWidth,
+      paddingLeft: own.paddingLeft,
+      paddingRight: own.paddingRight,
     };
   });
 
@@ -544,6 +546,40 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
   assert.ok(style.opacity > 0.15 && style.opacity <= 0.4, `faint but visible, got ${style.opacity}`);
   assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(style.background), `no tinted ground behind it, got ${style.background}`);
   assert.equal(style.borderLeft, '0px', 'and no accent bar down the side');
+
+  // The emblem is decoration, so it never takes width from the words. A
+  // gutter held clear of it narrowed every consequence - worst on the
+  // smallest phone, where a long one became a ladder of three-word lines.
+  // The text runs over it instead.
+  assert.equal(
+    style.paddingRight, style.paddingLeft,
+    `the text column should not be squeezed for the emblem: ${style.paddingLeft} left vs ${style.paddingRight} right`,
+  );
+
+  // Which only holds up if the words stay readable where they cross it.
+  // Measured as the real blend: the emblem's colour at its own opacity
+  // over the card, and the text on top of that.
+  const contrast = await page.evaluate(() => {
+    const el = document.querySelector('.plaza-post-text.highlight');
+    const before = getComputedStyle(el, '::before');
+    const rgb = (css) => css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const over = (fg, bg, a) => fg.map((c, i) => c * a + bg[i] * (1 - a));
+    const relLum = ([r, g, b]) => {
+      const f = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    // The card behind it, walked up until something actually paints.
+    let node = el, ground = null;
+    while (node && !ground) {
+      const bg = getComputedStyle(node).backgroundColor;
+      if (bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg)) ground = rgb(bg);
+      node = node.parentElement;
+    }
+    const emblem = over(rgb(before.backgroundColor), ground, Number(before.opacity));
+    const [hi, lo] = [relLum(rgb(getComputedStyle(el).color)), relLum(emblem)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  });
+  assert.ok(contrast >= 4.5, `text over the emblem reads at ${contrast.toFixed(2)}:1 - it has to clear 4.5`);
 
   await context.close();
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
@@ -1225,6 +1261,130 @@ test('a row action is an icon, and every one of them still says what it does', a
     return new Set(tops).size;
   });
   assert.equal(rowLines, 1, 'the actions should sit on one line, not wrap');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('revealing a consequence asks first, and declining leaves the queue alone', async () => {
+  // It draws for real, pushes to all fifty guests and cannot be undone -
+  // the same bar as the Memo trigger, which has confirmed from the start.
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'revealconfirm' } });
+  await api('POST', '/consequences', { token: poster.token, body: { text: 'uma consequência à espera' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('[data-reveal-next]', { timeout: WAIT_TIMEOUT });
+
+  const before = await api('GET', '/admin/consequences', { token: ADMIN });
+  const pendingBefore = before.filter((c) => c.status !== 'used').length;
+
+  await page.click('[data-reveal-next]');
+  await page.waitForSelector('.modal-overlay:not(.hidden) .modal-actions', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button.ghost');
+  await page.waitForTimeout(300);
+
+  const after = await api('GET', '/admin/consequences', { token: ADMIN });
+  assert.equal(
+    after.filter((c) => c.status !== 'used').length,
+    pendingBefore,
+    'saying no to the confirmation must not have revealed anything',
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${poster.id}`, { token: ADMIN });
+});
+
+test('the lead action of a card is its own artwork, and still has a name', async () => {
+  // The rata's paw and Memo's aperture, in place of a worded button. Same
+  // rule as every other icon: dropping the word must not drop the name.
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  for (const [tab, selector] of [['rata', '[data-reveal-next]'], ['memo', '#memo-trigger-btn']]) {
+    await page.click(`[data-atab="${tab}"]`);
+    await page.waitForSelector(selector, { timeout: WAIT_TIMEOUT });
+    const lead = await page.$eval(selector, (el) => ({
+      text: el.textContent.trim(),
+      label: el.getAttribute('aria-label'),
+      title: el.getAttribute('title'),
+      hasSvg: !!el.querySelector('svg'),
+      w: el.getBoundingClientRect().width,
+      radius: getComputedStyle(el).borderRadius,
+    }));
+    assert.ok(lead.hasSvg, `${tab}'s lead button has no artwork in it`);
+    assert.equal(lead.text, '', `${tab}'s lead button still carries a word`);
+    assert.ok(lead.label, `${tab}'s lead button has no accessible name`);
+    assert.equal(lead.title, lead.label, `${tab}: tooltip and accessible name should agree`);
+    assert.ok(lead.w >= 44, `${tab}'s lead button is ${lead.w}px wide`);
+    assert.ok(parseFloat(lead.radius) > 20, `${tab}'s lead button should be round, got ${lead.radius}`);
+  }
+
+  await context.close();
+});
+
+test('a filter chip cannot keep its hover look after a tap on a phone', async () => {
+  // iOS applies :hover on tap and leaves it applied until you touch
+  // something else, so a chip switched off went on wearing the "on" look
+  // under your thumb - which is what made deselecting look broken. The
+  // hover rules are behind (hover: hover), which a touch device never
+  // matches.
+  // The chip row only exists once the history holds more than one kind of
+  // post - a filter that cannot filter anything is hidden on purpose.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso' } });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'que noite?', options: ['furnished', 'swamp'] },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+
+  assert.equal(
+    await page.evaluate(() => matchMedia('(hover: hover)').matches),
+    false,
+    'a phone should not report a hovering pointer',
+  );
+
+  // Asked of the CSSOM rather than of the stylesheet text: what matters is
+  // that the rule ended up inside a hover media block, not how it is typed.
+  const guarded = await page.evaluate(() => {
+    const walk = (rules) => {
+      for (const rule of rules) {
+        if (rule.cssRules) {
+          const found = walk(rule.cssRules);
+          if (found) return found;
+        }
+        if (rule.selectorText === 'button:hover, .btn:hover') {
+          return { media: rule.parentRule?.conditionText ?? null };
+        }
+      }
+      return null;
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        const hit = walk(sheet.cssRules);
+        if (hit) return hit;
+      } catch { /* cross-origin sheet (the font CDN) - not ours */ }
+    }
+    return null;
+  });
+  assert.ok(guarded, 'the generic button hover rule went missing');
+  assert.match(
+    guarded.media ?? '',
+    /hover:\s*hover/,
+    `the generic button hover rule has to sit inside a (hover: hover) block, found ${guarded.media}`,
+  );
+
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-type-filter .role-pill', { timeout: WAIT_TIMEOUT });
+  const before = await page.$eval('#plaza-type-filter .role-pill', (el) => getComputedStyle(el).color);
+  await page.hover('#plaza-type-filter .role-pill');
+  await page.waitForTimeout(150);
+  const after = await page.$eval('#plaza-type-filter .role-pill', (el) => getComputedStyle(el).color);
+  assert.equal(after, before, 'a chip must look the same whether or not a pointer is over it');
 
   await context.close();
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });

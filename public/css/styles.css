@@ -55,13 +55,15 @@
   --role-owner: #6b4c8a;
   --role-admin: #a3402f;
   --role-user:  #2a6ca6;
+  /* The three post-type chips sit side by side in the Wall history, so
+     they have to be told apart - but they were three separate hues (brown,
+     orange, teal) and read as three unrelated systems rather than three
+     kinds of the same thing. Same warm family now, separated by depth and
+     a small hue drift instead: deep brown, mid amber, soft ochre. Far
+     enough apart to distinguish at chip size, close enough to belong. */
   --type-announcement: #5c3a1f;
-  --type-poll: #a35a1a;
-  /* Links needed a hue of their own: without one they fell back to the
-     announcement chip and the two post types were indistinguishable in the
-     history. Kept in the app's own earth palette (this is --rata's family)
-     rather than introducing a colour from nowhere. */
-  --type-links: #3f6b5f;
+  --type-poll: #91541f;
+  --type-links: #7d5f2b;
   --type-podium: #6b4a8a;
   /* Four status colours, all built the same way: an outline chip in the
      list, a chip filled with that same colour under paper ink when it's an
@@ -162,8 +164,8 @@ html.mode-dark {
   --role-admin: #d9695a;
   --role-user:  #6badde;
   --type-announcement: #c9a07a;
-  --type-poll: #e08a4a;
-  --type-links: #6fb3a0;
+  --type-poll: #d69a63;
+  --type-links: #cdae77;
   --type-podium: #b294d6;
   --status-pending: #d4b04a;
   --status-pending-fill: #f2c811;
@@ -202,9 +204,12 @@ body {
      terracotta on the Wall, olive on Swamp, cyan on Memo. Worst case
      4.7:1, on Memo in dark mode. */
   --on-cta: color-mix(in srgb, var(--clay) 50%, #fff);
-  /* What a focused field glows with. The accent by default, but the login
-     screen sits on a green photograph where terracotta is the one colour
-     that belongs to nothing on screen - it overrides this below. */
+  /* What a focused field glows with: whichever colour the surface it sits
+     on actually belongs to. Every body.theme-* block redefines --clay on
+     this same element, so this resolves to the night's own accent without
+     any of them having to say so - terracotta on the Wall, yellow on
+     Plaza, cyan on Memo.
+     The surfaces with no theme at all override it below. */
   --focus-ring: var(--clay);
   margin: 0;
   font-family: var(--body);
@@ -223,6 +228,15 @@ body {
   min-height: 100vh;
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The Settings tab carries no night theme, so it keeps the base palette -
+   which is violet, while the base --clay is still the terracotta that
+   palette had before it was retinted. A salmon halo on a lavender field
+   belongs to nothing on that page. Drawn from the surface's own ink
+   instead, so it stays in palette in both light and dark. */
+body:not([class*="theme-"]) {
+  --focus-ring: color-mix(in srgb, var(--ink) 62%, var(--paper));
 }
 
 .hidden { display: none !important; }
@@ -744,10 +758,17 @@ button, .btn {
      worst, on Wall). */
   color: var(--paper);
 }
-button:hover, .btn:hover {
-  background: var(--ink);
-  color: var(--paper);
-  opacity: 0.8;
+/* Guarded, and this is the whole reason the guard exists: on iOS a tap
+   applies :hover and leaves it applied until you touch something else. A
+   filter chip switched off therefore kept the *on* look under your thumb -
+   which is what made deselecting look like nothing had happened. A mouse
+   still gets its hover; a finger never does. */
+@media (hover: hover) {
+  button:hover, .btn:hover {
+    background: var(--ink);
+    color: var(--paper);
+    opacity: 0.8;
+  }
 }
 button:disabled {
   opacity: 0.45;
@@ -762,10 +783,12 @@ button.ghost, a.ghost {
   background: transparent;
   color: var(--ink);
 }
-button.ghost:hover, a.ghost:hover {
-  border-color: var(--ink);
-  background: transparent;
-  color: var(--ink);
+@media (hover: hover) {
+  button.ghost:hover, a.ghost:hover {
+    border-color: var(--ink);
+    background: transparent;
+    color: var(--ink);
+  }
 }
 
 /* Size modifier: small buttons, just padding/font size, inherit color scheme. */
@@ -789,11 +812,13 @@ button.icon-action {
   border: 1px solid var(--line-2);
   color: var(--ink);
 }
-button.icon-action:hover {
-  background: transparent;
-  border-color: var(--ink);
-  color: var(--ink);
-  opacity: 1;
+@media (hover: hover) {
+  button.icon-action:hover {
+    background: transparent;
+    border-color: var(--ink);
+    color: var(--ink);
+    opacity: 1;
+  }
 }
 button.icon-action svg { width: 19px; height: 19px; }
 /* Destructive keeps its colour but not its fill - a row of outlines with
@@ -806,6 +831,26 @@ button.icon-action.danger:hover {
   border-color: color-mix(in srgb, var(--danger-fill) 45%, var(--line-2));
 }
 button.icon-action.danger:hover { border-color: color-mix(in srgb, var(--danger-fill) 60%, #000); }
+/* The lead action of a card - revealing a consequence, throwing a Memo
+   moment open. Round rather than square, and larger: it is the one thing
+   its card exists for, and it carries its section's own artwork instead of
+   a control glyph. The accent belongs here where it would be noise on a
+   row action - there is exactly one of these per card. */
+button.icon-action.lead {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  border: 1.5px solid var(--clay);
+  color: var(--clay);
+}
+button.icon-action.lead svg { width: 27px; height: 27px; }
+@media (hover: hover) {
+  button.icon-action.lead:hover {
+    background: color-mix(in srgb, var(--clay) 12%, transparent);
+    border-color: var(--clay);
+    color: var(--clay);
+  }
+}
 /* A pinned post's button is the one that unpins it, so it reads as "on". */
 button.icon-action[data-pinned="true"] {
   border-color: var(--ink);
@@ -829,10 +874,12 @@ button.danger {
   background: color-mix(in srgb, var(--danger-fill) 60%, #000);
   color: var(--on-solid);
 }
-button.danger:hover {
-  background: color-mix(in srgb, var(--danger-fill) 50%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
-  color: var(--on-solid);
+@media (hover: hover) {
+  button.danger:hover {
+    background: color-mix(in srgb, var(--danger-fill) 50%, #000);
+    border-color: color-mix(in srgb, var(--danger-fill) 50%, #000);
+    color: var(--on-solid);
+  }
 }
 
 /* -------------------------------- Topbar --------------------------------- */
@@ -1237,12 +1284,12 @@ body.theme-memo .highlight {
   position: relative;
   border-left: none;
   padding-left: 20px;
-  /* Room for the emblem on the right (see ::before). Scaled to the
-     viewport rather than fixed: on an iPhone SE a fixed 62px gutter turns
-     a long consequence into a ladder of three-word lines, and the emblem
-     is faint enough that the last few characters crossing it costs
-     nothing. */
-  padding-right: clamp(24px, 10vw, 58px);
+  /* No gutter reserved for the emblem. It sits behind the words (see
+     ::before) and the words are what matter: holding a column clear of it
+     narrowed every consequence, worst on the smallest phone, to buy space
+     for decoration. The text runs straight over it instead - which is the
+     whole reason the emblem is painted at 22% and behind the content. */
+  padding-right: 20px;
 }
 body.theme-rata .highlight::before,
 body.theme-furnished .highlight::before,

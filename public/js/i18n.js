@@ -333,6 +333,7 @@ export const translations = {
     memo_trigger_btn: 'lançar',
     memo_trigger_done: 'momento aberto - toda a gente foi notificada.',
     confirm_memo_trigger: 'Isto abre já o próximo momento e notifica toda a gente. Continuar?',
+    confirm_rata_reveal: 'Sorteia já uma consequência e avisa toda a gente. Não dá para voltar atrás.',
     err_memo_no_slots_left: 'já não há momentos por abrir hoje.',
     memo_admin_days_title: 'Vídeo do dia',
     memo_admin_days_help: 'Por cada dia: quantos momentos foram enviados, descarregar as fotos, e montar o vídeo do dia para publicar no Wall.',
@@ -805,6 +806,7 @@ export const translations = {
     memo_trigger_btn: 'launch',
     memo_trigger_done: 'moment opened - everyone has been notified.',
     confirm_memo_trigger: 'This opens the next moment right now and notifies everyone. Continue?',
+    confirm_rata_reveal: 'Draws a consequence now and tells everyone. There is no taking it back.',
     err_memo_no_slots_left: 'no moments left to open today.',
     memo_admin_days_title: 'Day video',
     memo_admin_days_help: "Per day: how many moments came in, download the photos, and build the day's video to publish on the Wall.",
@@ -991,6 +993,14 @@ export function applyI18n(root = document) {
   });
   root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
     el.placeholder = t(el.dataset.i18nPh);
+  });
+  // For controls whose label is not text they can hold - an icon button's
+  // name lives in aria-label and title, and writing it into textContent
+  // would paint the word over the icon.
+  root.querySelectorAll('[data-i18n-label]').forEach((el) => {
+    const label = t(el.dataset.i18nLabel);
+    el.setAttribute('aria-label', label);
+    el.setAttribute('title', label);
   });
   document.documentElement.lang = getLang();
 }

@@ -8,7 +8,7 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
-import { iconButton } from './icons.js';
+import { iconButton, LEAD_ICONS } from './icons.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
 // restoring a stale scroll position when its backgrounded WKWebView is
@@ -824,6 +824,13 @@ async function loadUsers() {
   applyUserSearch();
 }
 
+// The two lead actions carry artwork from their own section rather than a
+// word (the rata's paw, Memo's aperture). Injected here rather than sitting
+// in the HTML so the markup keeps one source for each icon.
+document.querySelectorAll('[data-lead-icon]').forEach((btn) => {
+  btn.innerHTML = LEAD_ICONS[btn.dataset.leadIcon] ?? '';
+});
+
 syncRolePills();
 wireUsersListOnce();
 $('user-name-input').addEventListener('input', applyUserSearch);
@@ -1470,6 +1477,10 @@ $('dedications-pdf-btn').addEventListener('click', async () => {
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-reveal-next]')) return;
   $('reveal-msg').textContent = '';
+  // Confirmed for the same reason the Memo trigger is: it draws a
+  // consequence for real, notifies all fifty guests at once, and there is
+  // no putting it back.
+  if (!(await showConfirm(t('confirm_rata_reveal')))) return;
   try {
     await api('/admin/consequences/reveal', { method: 'POST' });
     loadConsequences();
@@ -1831,12 +1842,17 @@ async function loadPlazaPosts() {
 }
 
 function renderPlazaPostsList() {
-  const present = PLAZA_TYPE_ORDER.filter((type) => allPlazaPosts.some((p) => p.type === type));
-  const filtered = plazaTypeFilter.size > 0 && plazaTypeFilter.size < present.length;
   const posts = plazaTypeFilter.size === 0
     ? allPlazaPosts
     : allPlazaPosts.filter((p) => plazaTypeFilter.has(p.type));
-  renderKeepingPlace($('plaza-posts-list'), () => renderPlazaPosts(posts), filtered);
+  // Deliberately NOT renderKeepingPlace(): that holds the container at the
+  // height it had, which is right for a list you are typing a search into
+  // (the page must not shift under your thumb mid-keystroke) and wrong
+  // here. Tapping a chip is a deliberate, one-off act, and the card was
+  // left standing at its full height with a stretch of empty paper below
+  // two results.
+  $('plaza-posts-list').style.minHeight = '';
+  renderPlazaPosts(posts);
   renderPlazaTypeFilter();
 }
 
@@ -1850,9 +1866,8 @@ function renderPlazaPosts(posts) {
             ${p.pinnedAt ? `<span class="plaza-pinned-badge">${t('plaza_post_pinned_label')}</span>` : ''}
           </div>
         </div>
-        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
-        ${p.type === 'video' ? `<p class="muted" style="margin:8px 0 0">${esc(formatEuDate(p.text))}</p>`
-          : p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:8px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
+        ${p.type === 'video' ? `<p class="muted" style="margin:10px 0 0">${esc(formatEuDate(p.text))}</p>`
+          : p.type === 'podium' ? adminPodiumSummary(p) : `<p class="plaza-post-text" style="margin:10px 0 0;border-left:none;padding-left:0;font-weight:600">${linkify(esc(p.text))}</p>`}
         ${p.type === 'poll' ? `
         <ul class="admin-post-options">
           ${p.options.map((o) => {
@@ -1864,6 +1879,10 @@ function renderPlazaPosts(posts) {
         <ul class="admin-post-options">
           ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
         </ul>` : ''}
+        ${/* Below the body, the way the same post reads on the Wall itself
+              (see renderPlazaPost() in app.js) - who wrote it is a footnote
+              to the post, not a heading over it. */''}
+        <p class="muted" style="margin:10px 0 0">${esc(p.author)} · ${esc(formatEuDateTime(p.created_at))}</p>
         <div class="row-actions">
           ${['announcement', 'poll', 'links'].includes(p.type) ? iconButton('edit', t('edit'), `data-edit-post="${p.id}"`) : ''}
           ${isOwner ? iconButton(p.pinnedAt ? 'unpin' : 'pin', t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn'), `data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}"`) : ''}

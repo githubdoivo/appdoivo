@@ -34,6 +34,29 @@ export const ICONS = {
   reset: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5"/>'),
 };
 
+/* The two lead actions get artwork from their own section rather than a
+   generic control glyph - they are the one thing their card is for, and
+   both sections already have a world to draw from. Solid rather than
+   outlined: at this size a filled shape reads as an object, an outline
+   reads as another button. */
+export const LEAD_ICONS = {
+  // A rat's paw - the Rata's own mark, and the reveal is the whole game.
+  paw: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    + '<ellipse cx="6.6" cy="10.4" rx="2.1" ry="2.6"/>'
+    + '<ellipse cx="10.4" cy="7.2" rx="2.1" ry="2.7"/>'
+    + '<ellipse cx="14.6" cy="7.4" rx="2.1" ry="2.7"/>'
+    + '<ellipse cx="18.2" cy="10.8" rx="2" ry="2.5"/>'
+    + '<path d="M12.4 11.6c3.3 0 5.6 2.2 5.6 4.7 0 2.2-1.9 3.5-4 3.5-1 0-1.4-.3-2.2-.3s-1.2.3-2.2.3c-2.1 0-3.9-1.3-3.9-3.5 0-2.5 2.3-4.7 5.6-4.7Z"/>'
+    + '</svg>',
+  // A camera aperture, wide open - Memo's moment being thrown open to
+  // everyone at once. Round, which is also what Ivo asked for.
+  aperture: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+    + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="8.6"/>'
+    + '<path d="M12 3.4 12 12 4.6 7.7M20.6 8.9 12 12l4.3 7.5M8.6 20.3 12 12l-7.4 4.3"/>'
+    + '</svg>',
+};
+
 /**
  * Builds an icon-only action button. `label` is what the word used to say -
  * it becomes the button's accessible name and its tooltip, so the action is
