@@ -53,6 +53,21 @@ The narrower replacement is one app-scoped deploy token per environment
 rather than an account-wide one, so a leaked QA credential cannot reach
 production at all.
 
+### The tab-row test depends on a font arriving over the network
+
+`neither tab row can be dragged sideways` failed once on CI (12 Aug 2026)
+with the guest row overflowing by 15px on an iPhone SE, and passed on a
+re-run of the same commit with nothing changed. The row sits at its minimum
+gap on a 320px screen, so it has almost no slack: if the Google Fonts
+stylesheet does not arrive, the fallback serif is wide enough to push it
+over, and the test reads that as a regression.
+
+Nothing is broken - the row scrolls rather than breaking, and the page-level
+overflow tests pass either way. But a red cross that means "the font CDN was
+slow" costs someone an afternoon eventually. The fix is to self-host the two
+faces instead of linking them, which also removes a third-party request from
+every cold start; the test can then stop being weather-dependent.
+
 ### High-resolution vectorised login background
 
 The login background is still the placeholder noted in `styles.css`
