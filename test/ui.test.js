@@ -512,7 +512,7 @@ test('a first-time user can find their name, claim their key, and get logged str
 // beside them and not a tinted box. Three things have to hold together or
 // it stops being that: the motif covers the whole block, nothing paints a
 // ground behind it, and it stays faint enough to read over.
-test('a highlight is the night motif behind the text, with no tinted box', async () => {
+test('a highlight carries the night motif once, as an emblem, with no tinted box', async () => {
   const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'a rata abre às 22h' } });
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/');
@@ -525,6 +525,7 @@ test('a highlight is the night motif behind the text, with no tinted box', async
     return {
       maskImage: before.maskImage || before.webkitMaskImage,
       maskRepeat: before.maskRepeat || before.webkitMaskRepeat,
+      maskPosition: before.maskPosition || before.webkitMaskPosition,
       opacity: Number(before.opacity),
       width: before.width,
       background: own.backgroundColor,
@@ -533,8 +534,13 @@ test('a highlight is the night motif behind the text, with no tinted box', async
   });
 
   assert.match(style.maskImage, /svg/, 'the motif should be the mask on the ::before');
-  assert.match(style.maskRepeat, /repeat/, 'and it should tile');
-  assert.ok(!/repeat-y/.test(style.maskRepeat), 'in both directions - repeat-y is the old rail');
+  // Every one of these motifs is a 16px-wide vertical drawing - a reed, a
+  // tail, a string of bunting. Tiled as a watermark they read as noise
+  // (the swamp's reeds became a picket fence), so the emblem is drawn once
+  // at its own proportions and bled off the right edge.
+  assert.equal(style.maskRepeat, 'no-repeat', 'the motif is an emblem now, not a tiled watermark');
+  assert.ok(/right|100%/.test(style.maskPosition), `and it sits on the right edge, got ${style.maskPosition}`);
+  assert.ok(parseFloat(style.width) > 50, `drawn large, not as a 26px tile - got ${style.width}`);
   assert.ok(style.opacity > 0.15 && style.opacity <= 0.4, `faint but visible, got ${style.opacity}`);
   assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(style.background), `no tinted ground behind it, got ${style.background}`);
   assert.equal(style.borderLeft, '0px', 'and no accent bar down the side');
@@ -1172,6 +1178,56 @@ test('changing your own key updates Manage Users too, not just the account card'
     }).catch(() => {});
     await context.close();
   }
+});
+
+test('a row action is an icon, and every one of them still says what it does', async () => {
+  // Row actions carried three words each at 0.16em tracking, which wrapped
+  // the row onto a second line on an iPhone SE and stopped the actions
+  // lining up down a list. They are squares now - which only works if
+  // dropping the word did not drop the name with it, so every icon button
+  // has to carry an accessible one, and clear the 44px touch minimum.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'aviso com ações' } });
+
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .icon-action', { timeout: WAIT_TIMEOUT });
+
+  const actions = await page.$$eval('.icon-action', (els) => els.map((el) => ({
+    label: el.getAttribute('aria-label'),
+    title: el.getAttribute('title'),
+    text: el.textContent.trim(),
+    hasSvg: !!el.querySelector('svg'),
+    w: el.getBoundingClientRect().width,
+    h: el.getBoundingClientRect().height,
+  })));
+  assert.ok(actions.length >= 3, `expected the post's row actions, found ${actions.length}`);
+
+  for (const a of actions) {
+    assert.ok(a.hasSvg, 'an icon action with no icon in it');
+    assert.equal(a.text, '', `"${a.label}" still has a word in it - it should be icon only`);
+    assert.ok(a.label && a.label.length > 0, 'an icon action with no accessible name');
+    assert.equal(a.title, a.label, `the tooltip and the accessible name should agree, got "${a.title}" and "${a.label}"`);
+  }
+
+  // Size only for the ones actually on screen - a collapsed Manage Users
+  // row keeps its actions in the DOM at 0x0 until it is opened.
+  const onScreen = actions.filter((a) => a.w > 0);
+  assert.ok(onScreen.length >= 3, `expected the post's three actions visible, found ${onScreen.length}`);
+  for (const a of onScreen) {
+    assert.ok(a.w >= 44 && a.h >= 44, `${a.label} is ${a.w}x${a.h} - under the 44px touch minimum`);
+  }
+
+  // The row fits on one line on the smallest phone, which was the point.
+  const rowLines = await page.$eval('#plaza-posts-list .row-actions', (row) => {
+    const tops = [...row.querySelectorAll('button')].map((b) => Math.round(b.getBoundingClientRect().top));
+    return new Set(tops).size;
+  });
+  assert.equal(rowLines, 1, 'the actions should sit on one line, not wrap');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
 });
 
 test('the Wall history can be filtered down to one kind of post', async () => {
@@ -2619,9 +2675,14 @@ test('the populate and delete buttons carry one label colour, on every admin tab
     await page.reload();
     await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
 
+    // Worded buttons only. A row action is destructive too, but it is an
+    // icon in an outline now (see button.icon-action in styles.css) - it
+    // carries the red in its stroke rather than as a label on a red
+    // ground, so pooling it with these would be comparing two different
+    // things and calling the difference a bug.
     const colours = await page.evaluate(() => {
       const seen = (sel) => [...document.querySelectorAll(sel)].map((el) => getComputedStyle(el).color);
-      return { seed: seen('button.seed'), danger: seen('button.danger') };
+      return { seed: seen('button.seed'), danger: seen('button.danger:not(.icon-action)') };
     });
 
     assert.ok(colours.seed.length >= 5, `expected a populate button on every feature tab, found ${colours.seed.length}`);

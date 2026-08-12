@@ -8,6 +8,7 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
+import { iconButton } from './icons.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
 // restoring a stale scroll position when its backgrounded WKWebView is
@@ -590,9 +591,13 @@ function renderUsersList(users) {
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
           ${isOwner ? `
           <div class="row-actions">
+            ${/* The one action here that keeps its word: a shield cannot say
+                  "make this person an admin" as opposed to "take it away",
+                  and getting that backwards on a live party is not a small
+                  mistake. */''}
             ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
-            <button class="small ghost" data-regen-user="${u.id}">${t('regen_key')}</button>
-            ${u.is_owner ? '' : `<button class="small danger" data-del-user="${u.id}">${t('remove')}</button>`}
+            ${iconButton('key', t('regen_key'), `data-regen-user="${u.id}"`)}
+            ${u.is_owner ? '' : iconButton('remove', t('remove'), `data-del-user="${u.id}"`, 'danger')}
           </div>` : ''}
         </div>
       </div>`).join('')
@@ -1005,7 +1010,7 @@ function renderContestants() {
           <td>${photo}</td>
           <td><span class="contestant-name-edit" data-edit-contestant="${c.id}" data-name="${esc(c.name)}" role="button" tabindex="0">${esc(c.name)}</span>${pending}</td>
           <td class="muted">${who}</td>
-          <td style="text-align:right">${isOwner ? `<button class="small danger" data-del-contestant="${c.id}">${t('remove')}</button>` : ''}</td>
+          <td style="text-align:right">${isOwner ? iconButton('remove', t('remove'), `data-del-contestant="${c.id}"`, 'danger') : ''}</td>
         </tr>`;
       }).join('')
     : `<tr><td class="muted">${t('no_contestants')}</td></tr>`;
@@ -1563,7 +1568,7 @@ function renderConsequenceCard(c, revealed) {
       <span class="muted">${byline}</span>
       <span class="rata-badge ${status.cls}">${t(status.key)}</span>
       <select data-assign-id="${c.id}"${c.done_at ? ' disabled' : ''}>${userOptionsHtml(c.assigned_user_id)}</select>
-      ${canApprove ? `<button type="button" class="small ghost" data-approve-id="${c.id}">${t('rata_approve_btn')}</button>` : ''}
+      ${canApprove ? iconButton('approve', t('rata_approve_btn'), `data-approve-id="${c.id}"`) : ''}
     </div>
   </div>`;
 }
@@ -1655,7 +1660,7 @@ async function loadWallPseudonyms() {
       rows.map((r) => `<tr>
         <td>${esc(r.name)}</td>
         <td>${formatPseudonymHistory(r.pseudonyms)}</td>
-        <td style="text-align:right"><button class="small" data-reset-pseudonym="${r.id}">${t('wall_reset_pseudonym_btn')}</button></td>
+        <td style="text-align:right">${iconButton('reset', t('wall_reset_pseudonym_btn'), `data-reset-pseudonym="${r.id}"`)}</td>
       </tr>`).join('')
     : `<tr><td class="muted">${t('no_wall_pseudonyms')}</td></tr>`;
 
@@ -1860,9 +1865,9 @@ function renderPlazaPosts(posts) {
           ${(p.links ?? []).map((l) => `<li><span>${l.emoji ? `${esc(l.emoji)} ` : ''}${esc(l.label)}</span> <span class="muted">${esc(l.url)}</span></li>`).join('')}
         </ul>` : ''}
         <div class="row-actions">
-          ${['announcement', 'poll', 'links'].includes(p.type) ? `<button class="small ghost" data-edit-post="${p.id}">${t('edit')}</button>` : ''}
-          ${isOwner ? `<button class="small" data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}">${t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn')}</button>` : ''}
-          ${isOwner ? `<button class="small danger" data-del-post="${p.id}">${t('remove')}</button>` : ''}
+          ${['announcement', 'poll', 'links'].includes(p.type) ? iconButton('edit', t('edit'), `data-edit-post="${p.id}"`) : ''}
+          ${isOwner ? iconButton(p.pinnedAt ? 'unpin' : 'pin', t(p.pinnedAt ? 'plaza_unpin_btn' : 'plaza_pin_btn'), `data-pin-post="${p.id}" data-pinned="${!!p.pinnedAt}"`) : ''}
+          ${isOwner ? iconButton('remove', t('remove'), `data-del-post="${p.id}"`, 'danger') : ''}
         </div>
       </div>`).join('')
     : `<p class="muted">${t('plaza_no_posts')}</p>`;
