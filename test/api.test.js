@@ -2013,9 +2013,9 @@ test('the 5 daily slots never land close together - each is at least MEMO_MIN_GA
     const gapMinutes = (new Date(`${rows[i].scheduled_at.replace(' ', 'T')}Z`) - new Date(`${rows[i - 1].scheduled_at.replace(' ', 'T')}Z`)) / 60000;
     assert.ok(gapMinutes >= MEMO_MIN_GAP_MINUTES, `expected at least ${MEMO_MIN_GAP_MINUTES}min between consecutive slots, got ${gapMinutes}`);
   }
-  // Regression: the window is always "11:00 today" on the calendar, but if
+  // Regression: the window is always "14:00 today" on the calendar, but if
   // the schedule ends up generated later than that (whoever opens the app
-  // first that day), anchoring purely to 11:00 would place several slots
+  // first that day), anchoring purely to 14:00 would place several slots
   // in the past already, so they'd all fire at once on the next scheduler
   // tick instead of being spread out. None should ever be scheduled before
   // this run could possibly have generated them - can't check against a
@@ -2026,6 +2026,38 @@ test('the 5 daily slots never land close together - each is at least MEMO_MIN_GA
   for (const row of rows) {
     const scheduledMs = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`).getTime();
     assert.ok(scheduledMs >= TEST_RUN_STARTED_AT, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
+  }
+});
+
+test('Memo and the Rata keep to the same hours, and no slot lands outside them', async () => {
+  // The app's only two unprompted interruptions. Ivo set both to 14:00-02:00
+  // on 12 Aug 2026, and they are declared in two different files - memo.js's
+  // window and scheduler.js's cron - so nothing but this stops one being
+  // retuned later and the other quietly staying where it was.
+  const { readFileSync } = await import('node:fs');
+  const scheduler = readFileSync(new URL('../src/scheduler.js', import.meta.url), 'utf8');
+  const revealHours = scheduler.match(/cron\.schedule\('0 ([\d,]+) \* \* \*'/)?.[1]?.split(',').map(Number);
+  assert.deepEqual(revealHours, [14, 17, 20, 23, 2], 'the Rata reveals every 3 hours across 14:00-02:00');
+
+  // Every generated slot has to sit inside the same window, read back as
+  // Lisbon wall-clock rather than UTC - the two differ by an hour or two
+  // depending on the season, which is exactly how a slot could look fine
+  // in UTC and land at 04:00 for a guest.
+  const { getTimezone } = await import('../src/time.js');
+  const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
+  const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  assert.ok(rows.length > 0, 'no slots to check');
+
+  for (const row of rows) {
+    const at = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`);
+    const hour = Number(new Intl.DateTimeFormat('en-GB', {
+      timeZone: getTimezone(), hour: '2-digit', hour12: false,
+    }).format(at));
+    // 14:00-02:00 crosses midnight, so "inside" is either half.
+    assert.ok(
+      hour >= 14 || hour < 2,
+      `a Memo moment landed at ${hour}:xx local - outside the 14:00-02:00 window`,
+    );
   }
 });
 

@@ -18,11 +18,14 @@ export const MEMO_SLOTS_PER_DAY = 5;
 export const MEMO_WINDOW_OPEN_MINUTES = 15;
 export const MEMO_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-// The daily window guests can get pinged in - 11:00 to 01:00 (crosses
-// midnight), Europe/Lisbon wall-clock. Not admin-configurable for v1;
-// easy to tune here if the party's actual hours run differently.
-const WINDOW_START_HOUR = 11;
-const WINDOW_END_HOUR = 1;
+// The daily window guests can get pinged in - 14:00 to 02:00 (crosses
+// midnight), Europe/Lisbon wall-clock. Deliberately the same hours as the
+// Rata's reveal schedule (see scheduler.js): the two are the app's only
+// unprompted interruptions, and a guest should be able to learn one set of
+// hours rather than two. Not admin-configurable for v1; easy to tune here
+// if the party's actual hours run differently.
+const WINDOW_START_HOUR = 14;
+const WINDOW_END_HOUR = 2;
 
 // Minimum spacing enforced between any two of today's 5 slots for the same
 // user - well above MEMO_WINDOW_OPEN_MINUTES so two windows can never
@@ -67,8 +70,8 @@ export function ensureTodaysSlots() {
   const tz = getTimezone();
   const windowStart = zonedTimeToUtc(day, WINDOW_START_HOUR, 0, tz);
   const windowEnd = zonedTimeToUtc(addDays(day, 1), WINDOW_END_HOUR, 0, tz);
-  // The window is always "11:00 today to 01:00 tomorrow" on the calendar,
-  // but the schedule can end up being generated well after 11:00 (whoever
+  // The window is always "14:00 today to 02:00 tomorrow" on the calendar,
+  // but the schedule can end up being generated well after 14:00 (whoever
   // happens to trigger it first that day - e.g. the first guest to open
   // the app after lunch). Anchoring purely to windowStart in that case
   // would place several of the 5 random times in the past already, and
