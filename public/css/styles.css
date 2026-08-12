@@ -1076,22 +1076,32 @@ button.danger {
    down. Six pixels on four rarely-used controls is not worth reintroducing a
    flake in a test that was green - the tab row, which was the real problem
    at 34px with five neighbours, is widened below instead. */
+/* No box at all - just the stroke of the icon. The boxes were four outlined
+   squares in a row over a papered header, competing with the brand beside
+   them for a job the icons already did on their own.
+   Two things the box was quietly providing, kept: the hit area (44px now,
+   not the 38px the boxes were - under the touch minimum, and nobody
+   noticed while there was a visible border to aim at), and the bell's
+   "off" signal, which was a tinted ground and is the accent on the stroke
+   instead (see #notif-btn below). */
 button.icon-btn,
 a.icon-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: none;
   font-size: 1.05rem;
   line-height: 1;
 }
-button.icon-btn:hover,
-a.icon-btn:hover { border-color: var(--ink); background: transparent; }
+@media (hover: hover) {
+  button.icon-btn:hover,
+  a.icon-btn:hover { background: transparent; color: var(--clay); }
+}
 .icon-btn svg { width: 19px; height: 19px; display: block; }
 
 .lang-toggle { font-family: var(--serif); font-size: 0.98rem; font-weight: 600; letter-spacing: 0.02em; }
@@ -1103,12 +1113,14 @@ html.mode-dark #theme-toggle .icon-sun { display: block; }
 html.mode-dark #theme-toggle .icon-moon { display: none; }
 
 /* Notification bell: when ON, it looks like every other icon button
-   (conformity - nothing to act on). When OFF, a soft accent tint draws
-   the eye, signaling "click to turn this on" instead of the reverse.
+   (conformity - nothing to act on). When OFF, the accent draws the eye,
+   signaling "click to turn this on" instead of the reverse.
    Uses --clay (the app's warm brand accent, same as the logo/badges),
    not --rata - --rata is minty green in light mode, an odd, unrelated
-   color for this button. */
-#notif-btn:not(.active):not(.hidden) { background: color-mix(in srgb, var(--clay) 18%, transparent); }
+   color for this button. It was a tinted ground until the buttons lost
+   their boxes; on the stroke it says the same thing, and is if anything
+   harder to miss now that nothing else in the row carries colour. */
+#notif-btn:not(.active):not(.hidden) { color: var(--clay); }
 
 /* --------------------------------- Tabs ---------------------------------- */
 
@@ -1130,7 +1142,12 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
      longer label, another tab, a large accessibility text size). */
   gap: clamp(5px, 1.7vw, 26px);
   margin-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  /* No baseline under the row - the selected tab is marked by colour alone
+     now (see .tab.active below), and a rule under all of them put back the
+     horizontal line that choice was getting rid of. The topbar above keeps
+     its own, which separates the header from the app rather than marking
+     anything. */
+  border-bottom: none;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   /* Scrolling itself is for phones with a narrow viewport - the visible
@@ -1144,7 +1161,6 @@ html.mode-dark #theme-toggle .icon-moon { display: none; }
    on its own. In dark mode it reads as a bright, hard "limit" line across
    the whole tab row - blend it toward the background so it stays a subtle
    separator instead of a stark bar. */
-html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, var(--paper)); }
 .tab {
   flex: 0 0 auto;
   background: transparent;
@@ -1196,7 +1212,18 @@ html.mode-dark .tabs { border-bottom-color: color-mix(in srgb, var(--line) 45%, 
   outline-offset: 3px;
   border-radius: 3px;
 }
-.tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--clay-active, var(--clay)); }
+/* No rule under the selected tab, and no rule under the row either. The
+   active tab is said with the night's own colour and full weight; the rest
+   step back to --ink-soft, which is a token already tuned for contrast on
+   every theme rather than an opacity guessed here.
+   The row keeps its 2px transparent border-bottom (see .tab above) so
+   nothing shifts by a pixel between the selected tab and its neighbours. */
+.tab { color: var(--ink-soft); }
+.tab.active {
+  color: var(--clay-active, var(--clay));
+  font-weight: 700;
+  border-bottom-color: transparent;
+}
 /* Fallback only - reachable when no content theme is active (admin never
    sets one, see settings.js), where the plain light-mode --clay reads
    pale/salmon against the paper, too soft to read as "selected" at a

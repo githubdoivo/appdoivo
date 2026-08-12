@@ -1266,6 +1266,67 @@ test('a row action is an icon, and every one of them still says what it does', a
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
 });
 
+test('the topbar icons carry no box, and the tab row no rule', async () => {
+  // Ivo's call, both of them. Two things the old chrome was doing quietly
+  // have to survive it: the touch target (the boxes were 38px, under the
+  // minimum, which nobody noticed while there was a border to aim at) and
+  // the bell's "off" signal, which was a tinted ground and is now colour.
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/');
+
+  const buttons = await page.$$eval('.topbar-actions > *', (els) => els.map((el) => {
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return { id: el.id || el.tagName, border: cs.borderBottomStyle, bg: cs.backgroundColor, w: r.width, h: r.height };
+  }));
+  assert.ok(buttons.length >= 3, `expected the topbar controls, found ${buttons.length}`);
+  for (const b of buttons) {
+    assert.equal(b.border, 'none', `${b.id} still has a box around it`);
+    assert.match(b.bg, /rgba\(0, 0, 0, 0\)|transparent/, `${b.id} still has a filled ground`);
+    assert.ok(b.w >= 44 && b.h >= 44, `${b.id} is ${b.w}x${b.h} - under the 44px touch minimum`);
+  }
+
+  // The bell says "off" in colour rather than in a tinted box.
+  const bell = await page.$eval('#notif-btn', (el) => ({
+    active: el.classList.contains('active'),
+    color: getComputedStyle(el).color,
+  }));
+  const plainColour = await page.$eval('#theme-toggle', (el) => getComputedStyle(el).color);
+  if (!bell.active) {
+    assert.notEqual(bell.color, plainColour, 'a bell that is off has to stand out from the other icons somehow');
+  }
+
+  // The tab row: no rule under it, and the selected tab marked by colour
+  // and weight rather than by a line.
+  assert.equal(
+    await page.$eval('.tabs', (el) => getComputedStyle(el).borderBottomStyle),
+    'none',
+    'the tab row should carry no baseline',
+  );
+  const tabs = await page.evaluate(() => {
+    const on = document.querySelector('.tab.active');
+    const off = document.querySelector('.tab:not(.active):not(.hidden)');
+    const read = (el) => ({
+      colour: getComputedStyle(el).color,
+      weight: getComputedStyle(el).fontWeight,
+      marker: getComputedStyle(el).borderBottomColor,
+    });
+    return { on: read(on), off: read(off) };
+  });
+  assert.notEqual(tabs.on.colour, tabs.off.colour, 'the selected tab has to differ in colour');
+  assert.notEqual(tabs.on.weight, tabs.off.weight, 'and in weight');
+  assert.match(tabs.on.marker, /rgba\(0, 0, 0, 0\)|transparent/, 'the underline marker should be gone');
+
+  // The header still separates itself from the app below it.
+  assert.equal(
+    await page.$eval('.topbar', (el) => getComputedStyle(el).borderBottomStyle),
+    'solid',
+    'the topbar keeps its own rule - that one separates the header, it marks nothing',
+  );
+
+  await context.close();
+});
+
 test('revealing a consequence asks first, and declining leaves the queue alone', async () => {
   // It draws for real, pushes to all fifty guests and cannot be undone -
   // the same bar as the Memo trigger, which has confirmed from the start.
