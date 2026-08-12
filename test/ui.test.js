@@ -1387,7 +1387,7 @@ test('revealing a consequence asks first, and declining leaves the queue alone',
 });
 
 test('the lead action of a card is its own artwork, and still has a name', async () => {
-  // The rata's paw and Memo's aperture, in place of a worded button. Same
+  // The rata's paw and Memo's shutter, in place of a worded button. Same
   // rule as every other icon: dropping the word must not drop the name.
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');

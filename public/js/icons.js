@@ -48,12 +48,15 @@ export const LEAD_ICONS = {
     + '<ellipse cx="18.2" cy="10.8" rx="2" ry="2.5"/>'
     + '<path d="M12.4 11.6c3.3 0 5.6 2.2 5.6 4.7 0 2.2-1.9 3.5-4 3.5-1 0-1.4-.3-2.2-.3s-1.2.3-2.2.3c-2.1 0-3.9-1.3-3.9-3.5 0-2.5 2.3-4.7 5.6-4.7Z"/>'
     + '</svg>',
-  // A camera aperture, wide open - Memo's moment being thrown open to
-  // everyone at once. Round, which is also what Ivo asked for.
-  aperture: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+  // A camera's shutter release - ring and core. Chosen over the aperture
+  // and over Memo's own lens-and-frames motif for being unmistakably a
+  // thing you press: this button throws the next moment open to fifty
+  // people at once, and is not the place to make anyone work out what the
+  // drawing means.
+  shutter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
     + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-    + '<circle cx="12" cy="12" r="8.6"/>'
-    + '<path d="M12 3.4 12 12 4.6 7.7M20.6 8.9 12 12l4.3 7.5M8.6 20.3 12 12l-7.4 4.3"/>'
+    + '<circle cx="12" cy="12" r="9.2"/>'
+    + '<circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>'
     + '</svg>',
 };
 
