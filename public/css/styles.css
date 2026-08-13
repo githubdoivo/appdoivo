@@ -873,13 +873,19 @@ button.icon-action svg { width: 19px; height: 19px; }
    control in the row reading as the quietest. Both the stroke and the
    border are the full danger colour now; still no fill, so it does not
    read as an error state, but it is unmistakably there. */
+/* --danger, not a mix of --danger-fill toward black. That mix is right for
+   a label on a solid red ground and exactly wrong here: on a dark page it
+   put a near-black stroke on a near-black card, which is how the reset and
+   the remove buttons vanished in dark mode. --danger is the token that
+   already carries a value per mode for precisely this - red as a line and
+   as text, readable on either paper. */
 button.icon-action.danger,
 button.icon-action.danger:hover,
 button.icon-action.danger:active,
 button.icon-action.danger:focus {
   background: transparent;
-  color: color-mix(in srgb, var(--danger-fill) 60%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 60%, #000);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 /* The lead action of a card - revealing a consequence, throwing a Memo
    moment open. Round rather than square, and larger: it is the one thing
@@ -1393,7 +1399,11 @@ body.theme-memo .highlight::before {
      low enough that a long sentence can run across it without fighting. */
   content: '';
   position: absolute;
-  inset: 0 -6px 0 auto;
+  /* Left, not right. Every card on every page starts at the same left
+     margin, so an emblem on that edge lines up with the column the reader
+     is already following down the page; on the right it sat wherever each
+     block happened to end. */
+  inset: 0 auto 0 -6px;
   /* Scales with the viewport too, so the smallest phone does not end up
      with a full-size emblem and a three-word text column beside it. */
   width: clamp(64px, 24vw, 92px);
@@ -1402,8 +1412,8 @@ body.theme-memo .highlight::before {
   pointer-events: none;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-position: right center;
-  mask-position: right center;
+  -webkit-mask-position: left center;
+  mask-position: left center;
   /* Height-driven, so each theme's tile keeps its own aspect ratio however
      tall the block ends up - Plaza's bunting is 16x72 where the rest are
      16x40, and forcing a fixed width would squash one or stretch the
@@ -1432,8 +1442,8 @@ body.theme-memo .highlight::before {
    against the edge instead of over it, so the string reads as the block's
    own margin. */
 body.theme-plaza .highlight::before {
-  inset: 0 0 0 auto;
-  transform: scaleX(-1);
+  inset: 0 auto 0 0;
+  transform: none;
 }
 
 /* ----------------------------- Rata / Outfit ----------------------------- */

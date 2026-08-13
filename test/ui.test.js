@@ -539,9 +539,11 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
   // Every one of these motifs is a 16px-wide vertical drawing - a reed, a
   // tail, a string of bunting. Tiled as a watermark they read as noise
   // (the swamp's reeds became a picket fence), so the emblem is drawn once
-  // at its own proportions and bled off the right edge.
+  // at its own proportions and bled off the left edge - the same margin
+  // every card on every page starts at, so it lines up with the column the
+  // reader is already following down.
   assert.equal(style.maskRepeat, 'no-repeat', 'the motif is an emblem now, not a tiled watermark');
-  assert.ok(/right|100%/.test(style.maskPosition), `and it sits on the right edge, got ${style.maskPosition}`);
+  assert.ok(/left|0%|0px/.test(style.maskPosition), `and it sits on the left edge, got ${style.maskPosition}`);
   assert.ok(parseFloat(style.width) > 50, `drawn large, not as a 26px tile - got ${style.width}`);
   assert.ok(style.opacity > 0.15 && style.opacity <= 0.4, `faint but visible, got ${style.opacity}`);
   assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(style.background), `no tinted ground behind it, got ${style.background}`);

@@ -53,6 +53,12 @@ export const ICONS = {
   // to stop. Three shapes from one family, so the row says "move the night
   // along" and only the direction of travel changes.
   close: svg('<path d="M3.5 12h11M10 6.5l5.5 5.5L10 17.5M20 5v14"/>'),
+  // The role a person holds, as two different drawings rather than one
+  // drawing in two states: a shield for an admin, a plain person for a
+  // guest. Filled-versus-outline needs both versions side by side to be
+  // read, and a list shows one at a time.
+  roleAdmin: svg('<path d="M12 3l7 3v5.5c0 4.2-3 7.4-7 8.5-4-1.1-7-4.3-7-8.5V6z"/>'),
+  roleUser: svg('<circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>'),
   // Scales - "break the tie". Only ever shown when there is one.
   runoff: svg('<path d="M12 4.5V20M7.5 20h9M4 9h16M4 9l-2.4 5a2.9 2.9 0 0 0 4.8 0Zm16 0l2.4 5a2.9 2.9 0 0 1-4.8 0Z"/><path d="M9 6.6l6-1.4"/>'),
 };

@@ -603,7 +603,16 @@ function renderUsersList(users) {
                   "make this person an admin" as opposed to "take it away",
                   and getting that backwards on a live party is not a small
                   mistake. */''}
-            ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
+            ${/* The icon shows what this person IS - a shield for an admin, a
+                  plain person for a guest - while its name says what pressing
+                  it does. That inversion is the whole reason it can be an
+                  icon at all: the word had to say what they would BECOME
+                  ("user" on an admin), which a picture cannot. */''}
+            ${adminPromotionEnabled && !u.is_owner
+              ? iconButton(u.is_admin ? 'roleAdmin' : 'roleUser',
+                  t(u.is_admin ? 'role_make_user' : 'role_make_admin'),
+                  `data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}"`)
+              : ''}
             ${iconButton('key', t('regen_key'), `data-regen-user="${u.id}"`)}
             ${u.is_owner ? '' : iconButton('remove', t('remove'), `data-del-user="${u.id}"`, 'danger')}
           </div>` : ''}
