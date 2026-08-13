@@ -2757,34 +2757,49 @@ test('a dedication is private to the birthday person, one per guest, and comes o
   for (const u of [ana, rui, helper]) await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
 });
 
-test('the owner can fill the whole app with demo data and clear it again, accounts included', async () => {
-  // The per-feature pairs each cover their own section; this one exists for
-  // setting the app up as a demo before a run-through and putting it back
-  // afterwards, which means it is the only switch that touches accounts.
-  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Helper' } });
+test('the guest-list card empties the list and puts the default guests back', async () => {
+  // This pair sits under Manage Users, so it acts on that list and nothing
+  // else. It used to fill and empty the entire app from there, which made
+  // the button on the users page a kill switch for the whole party.
+  const helper = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Guest List Helper' } });
   await api('PATCH', `/admin/users/${helper.data.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
-  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Global Wipe Guest' } });
 
-  assert.equal((await api('POST', '/admin/wipe-everything', { token: helper.data.token })).status, 403,
-    'wiping the whole app belongs with the owner');
-  assert.equal((await api('POST', '/admin/seed-demo', { token: helper.data.token })).status, 403);
+  assert.equal((await api('POST', '/admin/users/wipe', { token: helper.data.token })).status, 403,
+    'emptying the guest list belongs with the owner');
+  assert.equal((await api('POST', '/admin/users/seed-guests', { token: helper.data.token })).status, 403);
 
-  const wiped = await api('POST', '/admin/wipe-everything', { token: ADMIN });
+  const wiped = await api('POST', '/admin/users/wipe', { token: ADMIN });
   assert.equal(wiped.status, 200);
 
   const left = (await api('GET', '/admin/users', { token: ADMIN })).data;
-  assert.ok(left.some((u) => u.is_owner), 'the owner has to survive, or nobody can get back into the panel');
-  assert.ok(left.some((u) => u.id === helper.data.id), 'other admins stay - they are people, not demo data');
-  assert.ok(!left.some((u) => u.id === guest.data.id), 'guest accounts go');
+  assert.equal(left.length, 1, 'everyone but the owner goes, promoted admins included');
+  assert.ok(left[0].is_owner, 'and the owner survives, or nobody can get back into the panel');
+
+  // Their work goes with them - every user-owned table declares ON DELETE
+  // CASCADE, so this is the database's rule rather than something the route
+  // asks for. Worth a test either way: it is the part that surprises.
   assert.equal((await api('GET', '/admin/consequences', { token: ADMIN })).data.length, 0);
   assert.equal((await api('GET', '/plaza-posts', { token: ADMIN })).data.posts.length, 0);
 
-  const seeded = await api('POST', '/admin/seed-demo', { token: ADMIN });
+  const seeded = await api('POST', '/admin/users/seed-guests', { token: ADMIN });
   assert.equal(seeded.status, 200);
-  const after = (await api('GET', '/admin/users', { token: ADMIN })).data;
-  assert.ok(after.length > left.length, 'seeding brings the guest accounts back');
-  assert.ok((await api('GET', '/admin/consequences', { token: ADMIN })).data.length > 0);
+  assert.ok(seeded.data.created > 20, `expected the default guest list back, created ${seeded.data.created}`);
 
-  await api('POST', '/admin/wipe-everything', { token: ADMIN });
-  await api('DELETE', `/admin/users/${helper.data.id}`, { token: ADMIN });
+  const after = (await api('GET', '/admin/users', { token: ADMIN })).data;
+  assert.equal(after.length, seeded.data.created + 1, 'the list is the guests plus the owner');
+  assert.ok(after.every((u) => u.is_owner || !u.is_admin), 'restored guests come back as plain guests');
+
+  // Keys are freshly generated, not derived from the name. A key anyone can
+  // work out from a guest list is fine for a QA tester predicting their own
+  // login and not fine for the list the real party runs on.
+  const { generateDemoUserToken } = await import('../src/db.js');
+  const sample = after.find((u) => !u.is_owner);
+  assert.notEqual(sample.token, generateDemoUserToken(sample.name),
+    'a restored guest must not get the predictable demo key');
+
+  // Nothing is doubled up by pressing it twice.
+  const again = await api('POST', '/admin/users/seed-guests', { token: ADMIN });
+  assert.equal(again.data.created, 0, 'a second press adds nobody');
+
+  await api('POST', '/admin/users/wipe', { token: ADMIN });
 });

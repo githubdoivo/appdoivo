@@ -924,10 +924,13 @@ wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo
 wireSeedButton('chat-seed-btn', 'chat-wipe-msg', '/admin/chat/seed-demo', () => {});
 wireSeedButton('memo-seed-btn', 'memo-wipe-msg', '/admin/memo/seed-demo', loadMemoDays);
 
-// The whole app at once, owner-only (see boot() below for the card).
-wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/seed-demo', () => location.reload());
-wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/wipe-everything',
-  'confirm_global_wipe', 'global_wipe_done', () => location.reload());
+// The guest list, owner-only (see boot() below for the card). This card
+// sits under Manage Users, so it acts on that list and nothing else - it
+// used to fill and empty the whole app from here, which made the button on
+// the users page a kill switch for the party.
+wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/users/seed-guests', loadUsers);
+wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/users/wipe',
+  'confirm_global_wipe', 'global_wipe_done', loadUsers);
 
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
