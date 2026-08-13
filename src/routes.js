@@ -1040,8 +1040,14 @@ router.get('/admin/dedications.pdf', requireOwner, (req, res) => {
     doc.font('Times-Roman').fontSize(13.5).fillColor(PDF_INK)
       .text(row.text, { align: 'left', lineGap: 5 });
     doc.moveDown(0.5);
+    // Lowercased here rather than trusted to arrive that way. The golden
+    // rule is enforced by `body { text-transform: lowercase }`, and a PDF
+    // is the one artefact this app produces that no stylesheet reaches -
+    // so a name typed "Alice Moreira" printed with its capitals while the
+    // same name reads lowercase on every screen. Same reasoning as the
+    // push notification copy, which has had its own test for a while.
     doc.font('Times-Italic').fontSize(11).fillColor(PDF_CLAY)
-      .text(`— ${row.author}`, { align: 'right' });
+      .text(`— ${String(row.author ?? '').toLowerCase()}`, { align: 'right' });
   });
 
   doc.end();

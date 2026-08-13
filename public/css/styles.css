@@ -1394,9 +1394,26 @@ body.theme-memo .highlight::before {
   mask-image: var(--highlight-motif);
 }
 
+/* No ground here either. This tint predates the emblem and outlived the
+   decision that took the ground off .highlight everywhere else, so the one
+   on Snatch sat in a tinted box while every other highlight in the app sat
+   on the paper - the only place in the app where the same component looked
+   like two different things. The border-left stays for the unthemed
+   fallback, exactly as it does on the base rule. */
 #tab-outfit .highlight {
   border-left-color: var(--outfit);
-  background: color-mix(in srgb, var(--outfit) 7%, var(--paper-3));
+}
+
+/* Plaza's motif is the one that is not a free-standing drawing: it is a
+   string with pennants hanging off one side of it. Bled off the right edge
+   like the others, the string sat outside the block and the flags pointed
+   away from the text - reading as something falling out of the card rather
+   than as a mark on it. Mirrored so the flags hang inward, and held
+   against the edge instead of over it, so the string reads as the block's
+   own margin. */
+body.theme-plaza .highlight::before {
+  inset: 0 0 0 auto;
+  transform: scaleX(-1);
 }
 
 /* ----------------------------- Rata / Outfit ----------------------------- */

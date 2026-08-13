@@ -79,6 +79,14 @@ export function ensureTodaysSlots() {
   // being spread through the day. Anchoring to whichever is later (window
   // start, or right now) guarantees every slot is still in the future.
   const effectiveStart = Math.max(windowStart.getTime(), Date.now());
+
+  // Note the dead zone this leaves, deliberately unhandled for now: the
+  // app's day rolls over at 06:00 (see today() in time.js) while this
+  // window closes at 02:00, so between those hours a day that has no
+  // schedule yet gets one crammed into the small hours, outside the window.
+  // It needs a clock the tests can hold still before it can be fixed
+  // properly - see BACKLOG.md. On production the schedule already exists
+  // from the afternoon before, so this only bites a freshly wiped QA.
   const gapMs = MEMO_MIN_GAP_MINUTES * 60 * 1000;
   const slackMs = Math.max(0, (windowEnd.getTime() - effectiveStart) - gapMs * (MEMO_SLOTS_PER_DAY - 1));
 

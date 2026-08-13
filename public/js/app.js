@@ -1717,7 +1717,10 @@ function renderCongeniality(c) {
   // status === 'open'
   if (c.myVote !== null) {
     const voted = c.candidates.find((x) => x.id === c.myVote);
-    area.innerHTML = `<p class="muted">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
+    // Same treatment as Best Outfit's own "you voted for X" right above it
+    // (see the vote block earlier in this file) - the two say the same kind
+    // of thing about the same night, and one of them was plain grey text.
+    area.innerHTML = `<p class="highlight">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
     return;
   }
   // You don't get to crown yourself (castCongenialityVote() refuses it

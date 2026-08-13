@@ -53,6 +53,28 @@ The narrower replacement is one app-scoped deploy token per environment
 rather than an account-wide one, so a leaked QA credential cannot reach
 production at all.
 
+### Two things that need a clock the tests can hold still
+
+**Memo's dead zone.** The app's day rolls over at 06:00 (`today()` in
+`time.js`) while Memo's window closes at 02:00, so between those hours a day
+with no schedule yet gets one generated into the small hours, outside the
+window it is meant to live in. Guarding against it is two lines; the reason
+it is not done is that four Memo tests generate their slots from the real
+clock, so the guard makes them fail when the suite runs between 02:00 and
+06:00 - which is how this was found. Fixing it properly means giving the
+tests an injectable now(), then the guard.
+
+On production the schedule already exists from the afternoon before, so
+this only shows on a freshly wiped QA opened in the small hours.
+
+**The dedications PDF has no test.** `GET /admin/dedications.pdf` now
+lowercases the signature, because a PDF is the one thing this app produces
+that `body { text-transform: lowercase }` never reaches. There is no test
+behind that fix: PDFKit deflates its content streams and reading the drawn
+text back out needs a PDF parser this project does not carry. Worth either
+a small dev dependency or a `compress: false` seam for tests, so the golden
+rule is guarded there the way it is for push notification copy.
+
 ### The tab-row test depends on a font arriving over the network
 
 `neither tab row can be dragged sideways` failed once on CI (12 Aug 2026)
