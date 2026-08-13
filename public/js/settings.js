@@ -1606,9 +1606,18 @@ function renderConsequences() {
   // grouping only got in the way (a newly assigned row became 'pendente'
   // and sank below the entire queue).
   const getLatestTime = (c) => c.approved_at || c.done_at || c.assigned_at || c.revealed_at || '';
+  // ...with one exception on top of recency: anything still waiting to be
+  // assigned is held at the very top of the list. Recency alone is a record
+  // of what happened; this list is also the owner's to-do, and the moment a
+  // row is assigned it stops needing them and drops back into the timeline
+  // by its own timestamp - which by then is the assignment, so it sits
+  // below the rows assigned after it. Exactly what Ivo asked for: needs-you
+  // first, then last-touched.
+  const needsAssigning = (c) => (rataStatus(c).state === 'atribuir' ? 0 : 1);
   const historyRows = rataRows
     .filter((c) => rataStatusFilter.has(rataStatus(c).state))
-    .sort((a, b) => getLatestTime(b).localeCompare(getLatestTime(a)));
+    .sort((a, b) => needsAssigning(a) - needsAssigning(b)
+      || getLatestTime(b).localeCompare(getLatestTime(a)));
   renderKeepingPlace($('consequences-table'), () => {
     $('consequences-table').innerHTML = historyRows.length
       ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')

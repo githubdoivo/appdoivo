@@ -1356,6 +1356,43 @@ test('the topbar icons carry no box, and the tab row no rule', async () => {
   await context.close();
 });
 
+test('a consequence waiting to be assigned sits above the whole history', async () => {
+  // The list is the running history, but it is also the owner's to-do. A
+  // revealed consequence with nobody on it needs them; sorted purely by
+  // last-touched it slid under rows that had been dealt with since. It is
+  // held at the top until it is assigned, and then rejoins the timeline by
+  // its own timestamp - which by then is the assignment.
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'assignorder' } });
+  const holder = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'assignholder' } });
+
+  // One revealed and left unassigned...
+  await api('POST', '/consequences', { token: poster.token, body: { text: 'a que precisa de dono' } });
+  const first = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  // ...then a second one revealed and assigned, so it is the more recently
+  // touched of the two and would otherwise sort above.
+  await api('POST', '/consequences', { token: holder.token, body: { text: 'a que ja tem dono' } });
+  const second = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  await api('PATCH', `/admin/consequences/${second.revealed.id}/assign`, {
+    token: ADMIN, body: { userId: holder.id },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('#consequences-table .rata-history-item', { timeout: WAIT_TIMEOUT });
+
+  const firstRowText = await page.$eval('#consequences-table .rata-history-item', (el) => el.textContent);
+  assert.match(
+    firstRowText,
+    /precisa de dono/,
+    'the one still needing an assignment has to be the first thing the owner sees',
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${poster.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${holder.id}`, { token: ADMIN });
+});
+
 test('revealing a consequence asks first, and declining leaves the queue alone', async () => {
   // It draws for real, pushes to all fifty guests and cannot be undone -
   // the same bar as the Memo trigger, which has confirmed from the start.
@@ -2959,6 +2996,15 @@ test('the populate and delete buttons carry one label colour, on every admin tab
       colours.seed[0],
       colours.danger[0],
       `populate and delete should read as a pair, got ${colours.seed[0]} and ${colours.danger[0]} in ${mode} mode`,
+    );
+    // And that shared colour is white, in both modes. It used to carry 45%
+    // of the section's accent, which put a pink-white on one tab and a
+    // green-white on the next - on the most consequential control an admin
+    // page has.
+    assert.match(
+      colours.danger[0],
+      /rgb\(255, 255, 255\)|#fff/,
+      `wipe labels should be white in ${mode} mode, got ${colours.danger[0]}`,
     );
     await context.close();
   }

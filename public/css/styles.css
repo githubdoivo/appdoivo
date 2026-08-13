@@ -196,7 +196,14 @@ body {
      the tint could triple - worst case now 5.0:1, measured across all six
      themes in both modes. --clay is redefined per theme, so this follows
      on its own. */
-  --on-solid: color-mix(in srgb, var(--clay) 45%, #fff);
+  /* The label on a solid dark button - the populate/wipe pair, and the
+     danger buttons. Plain white, deliberately. It used to carry 45% of the
+     section's accent, which is the sort of tinting that reads as
+     considered on a swatch and as "slightly wrong" on a phone: a wipe
+     button, the most consequential control on any admin tab, wearing a
+     pink-white on one tab and a green-white on another. White says the
+     same thing everywhere and clears every ground it sits on by a mile. */
+  --on-solid: #fff;
   /* The CTA buttons sit on a much deeper ground than the red ones, so they
      can carry far more of the accent before contrast bites - half, against
      the danger button's 22%. That is the difference between a label that is
@@ -842,6 +849,13 @@ button.icon-action:hover,
 button.icon-action:active,
 button.icon-action:focus {
   background: transparent;
+  /* colour and border belong here too, not just the background. Without
+     them the generic button:hover still handed this its `color:
+     var(--paper)` - so a tapped pin kept a pale, washed-out glyph inside a
+     suddenly dark border until you touched elsewhere, which is neither the
+     pinned state nor the normal one. */
+  color: var(--ink);
+  border-color: var(--line-2);
   opacity: 1;
 }
 @media (hover: hover) {
@@ -854,13 +868,19 @@ button.icon-action svg { width: 19px; height: 19px; }
 /* Destructive keeps its colour but not its fill - a row of outlines with
    one solid red block in it reads as an error state rather than as one
    action among three. The red is in the stroke and the border instead. */
+/* The border was mixed 45% toward --line-2, which on most themes left it
+   fainter than the two plain buttons beside it - the most destructive
+   control in the row reading as the quietest. Both the stroke and the
+   border are the full danger colour now; still no fill, so it does not
+   read as an error state, but it is unmistakably there. */
 button.icon-action.danger,
-button.icon-action.danger:hover {
+button.icon-action.danger:hover,
+button.icon-action.danger:active,
+button.icon-action.danger:focus {
   background: transparent;
   color: color-mix(in srgb, var(--danger-fill) 60%, #000);
-  border-color: color-mix(in srgb, var(--danger-fill) 45%, var(--line-2));
+  border-color: color-mix(in srgb, var(--danger-fill) 60%, #000);
 }
-button.icon-action.danger:hover { border-color: color-mix(in srgb, var(--danger-fill) 60%, #000); }
 /* The lead action of a card - revealing a consequence, throwing a Memo
    moment open. Round rather than square, and larger: it is the one thing
    its card exists for, and it carries its section's own artwork instead of
