@@ -3172,9 +3172,19 @@ test('Miss Congeniality never offers you your own name, and its finished button 
   await adminPage.waitForTimeout(800);
 
   assert.equal(await adminPage.isDisabled('#congeniality-advance-btn'), true, 'a finished round has no next step');
-  const congLabel = (await adminPage.textContent('#congeniality-advance-btn')).trim();
-  assert.ok(congLabel.length > 0, 'the finished button still says something');
+  // The phase button is an icon now - the phase itself is named right above
+  // it - so the word it used to carry lives in its accessible name. Which
+  // still has to be there, and still has to read as finished rather than as
+  // a status word: one round reading "done" beside another reading
+  // "revealed" was the bug this line was written for.
+  const congLabel = (await adminPage.getAttribute('#congeniality-advance-btn', 'aria-label')).trim();
+  assert.ok(congLabel.length > 0, 'the finished button still has to say what it is');
   assert.notEqual(congLabel, 'revelada', 'it should read as finished, the same word Best Outfit uses, not as a status');
+  assert.equal(
+    await adminPage.$eval('#congeniality-advance-btn', (el) => !!el.querySelector('svg')),
+    true,
+    'and it still carries its icon while disabled',
+  );
 
   await adminCtx.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });

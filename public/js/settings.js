@@ -8,7 +8,7 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
-import { iconButton, LEAD_ICONS } from './icons.js';
+import { iconButton, LEAD_ICONS, ICONS } from './icons.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
 // restoring a stale scroll position when its backgrounded WKWebView is
@@ -394,23 +394,31 @@ async function loadVotingState() {
   label.classList.toggle('is-closed', status === 'closed');
 
   const btn = $('voting-advance-btn');
+  // The phase is named right above this button, so the button itself only
+  // has to say which way the night moves. Three shapes from one family:
+  // play to begin, arrow to carry on, arrow-into-a-bar to end. The word it
+  // used to carry lives on as its accessible name, so nothing is lost to
+  // anyone who cannot see the drawing.
   if (!started) {
-    btn.textContent = t('voting_start_btn');
-    btn.dataset.action = 'registration';
-    btn.disabled = false;
+    setLeadAction(btn, 'start', t('voting_start_btn'), 'registration', false);
   } else if (status === 'registration') {
-    btn.textContent = t('voting_open_btn');
-    btn.dataset.action = 'open';
-    btn.disabled = false;
+    setLeadAction(btn, 'advance', t('voting_open_btn'), 'open', false);
   } else if (status === 'open') {
-    btn.textContent = t('voting_close_btn');
-    btn.dataset.action = 'close';
-    btn.disabled = false;
+    setLeadAction(btn, 'close', t('voting_close_btn'), 'close', false);
   } else {
-    btn.textContent = t(NEXT_REVEAL_LABEL[phase]);
-    btn.dataset.action = phase === 'all' ? '' : 'reveal-next';
-    btn.disabled = phase === 'all';
+    setLeadAction(btn, 'advance', t(NEXT_REVEAL_LABEL[phase]),
+      phase === 'all' ? '' : 'reveal-next', phase === 'all');
   }
+}
+
+/** Paints a phase button: its icon, its name, what it will do, and whether
+ *  there is anything left for it to do. */
+function setLeadAction(btn, icon, label, action, disabled) {
+  btn.innerHTML = ICONS[icon] ?? '';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+  btn.dataset.action = action;
+  btn.disabled = disabled;
 }
 
 // Every stage transition here is either hard to undo (reveal-next: no way
@@ -829,6 +837,11 @@ async function loadUsers() {
 // in the HTML so the markup keeps one source for each icon.
 document.querySelectorAll('[data-lead-icon]').forEach((btn) => {
   btn.innerHTML = LEAD_ICONS[btn.dataset.leadIcon] ?? '';
+});
+// The controls whose meaning never changes carry their icon in the markup;
+// the phase button's is chosen per phase, see setLeadAction().
+document.querySelectorAll('[data-icon]').forEach((btn) => {
+  btn.innerHTML = ICONS[btn.dataset.icon] ?? '';
 });
 
 syncRolePills();
@@ -1317,9 +1330,9 @@ async function loadVotes() {
 // mid-state (voting shut, winner not out yet), so the label depends on
 // whether any vote has actually been cast.
 function congenialityAdvance(status, hasVotes) {
-  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close' };
-  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal' };
-  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open' };
+  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close', icon: 'close' };
+  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal', icon: 'advance' };
+  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open', icon: 'start' };
   return null; // revealed - nowhere left to go
 }
 
@@ -1339,10 +1352,16 @@ function renderCongenialityAdmin() {
   // Same word as Best Outfit's own terminal state (reveal_next_btn_done),
   // not this round's status label - one finished round should not read
   // as 'revealed' next to another reading as 'done'.
-  btn.textContent = next ? t(next.label) : t('reveal_next_btn_done');
-  btn.dataset.action = next ? next.action : '';
+  // Same shapes as Best Outfit's phase button right above it - play to
+  // begin, arrow to carry on, arrow-into-a-bar to end.
+  setLeadAction(
+    btn,
+    next ? next.icon : 'advance',
+    next ? t(next.label) : t('reveal_next_btn_done'),
+    next ? next.action : '',
+    !next,
+  );
   btn.dataset.confirm = next ? next.confirm : '';
-  btn.disabled = !next;
 
   // The Wall post carries both rounds, so it can only go out once both are
   // finished. Disabled rather than left tappable to fail: the server

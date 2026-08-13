@@ -2370,21 +2370,45 @@ html.mode-dark .plaza-post-type { color: #fff; }
   flex-direction: column;
   gap: 8px;
 }
-.plaza-links li { display: flex; align-items: baseline; gap: 8px; }
+/* A row each, at reading size. It was a tight little list of small text
+   inside a full-width card - the smallest thing on the Wall sitting in the
+   biggest component on it - and the tap target was the width of the word.
+   Now the emoji leads, the name is set in the serif at the size everything
+   else is read at, and the whole row is the thing you press. */
+.plaza-links li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--line-2);
+}
+.plaza-links li:last-child { border-bottom: none; }
+/* The chevron says "this leaves the app", which every one of these does. */
+.plaza-links li::after {
+  content: '\203A';
+  color: var(--ink-soft);
+  font-size: 1.4rem;
+  line-height: 1;
+  flex: none;
+}
 /* Demure: the name, its emoji, and an underline. No border, no fill, no
    padding - a links post should read as a note with addresses under it,
    not as a stack of buttons competing with the announcement beside it. */
 .plaza-link {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 7px;
+  flex: 1;
   color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--line);
-  text-underline-offset: 3px;
+  font-family: var(--serif);
+  font-size: 1.22rem;
+  /* No underline now that the row is the target and the chevron marks it as
+     a way out - an underline as well made every row read as three
+     decorations stacked on one short word. */
+  text-decoration: none;
 }
-.plaza-link:hover { text-decoration-color: var(--clay); }
-.plaza-link-emoji { flex: none; font-size: 1.1em; line-height: 1; }
+@media (hover: hover) { .plaza-link:hover { color: var(--clay); } }
+.plaza-link-emoji { flex: none; font-size: 1.7em; line-height: 1; }
 /* The name carries the underline, so what is tappable is the thing you read
    rather than the whole strip it sits in. */
 .plaza-link:active { background: var(--paper-2); }
@@ -2919,3 +2943,8 @@ h1.brand-name { margin: 0; font-size: inherit; font-weight: inherit; }
    the form sitting right there has its own cancel and save, and three more
    buttons under them read as a second set of choices for the same thing. */
 .user-row.editing .row-actions { display: none; }
+
+/* The voting controls are icons now (the phase is named right above them),
+   so the three-column grid holds three squares rather than three labels
+   that wrapped onto two lines each on a narrow phone. */
+.voting-controls button.icon-action { width: 100%; }

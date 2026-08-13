@@ -195,14 +195,14 @@
           </p>
           <p class="help" data-i18n="reveal_phase_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" class="small" id="voting-advance-btn" data-i18n="voting_start_btn">Iniciar</button>
+            <button type="button" class="icon-action" id="voting-advance-btn" aria-label="Iniciar" title="Iniciar"></button>
             <!-- Only shown once voting's closed AND the top spot is tied -
                  see the tie check in loadVotes() in settings.js. Starts a
                  fresh vote scoped to just the tied contestants (see
                  startRunoff() in votes.js). -->
-            <button type="button" class="small hidden" id="voting-runoff-btn" data-i18n="voting_runoff_btn">Desempate</button>
-            <button type="button" class="small" id="voting-reset-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
-            <button type="button" class="small danger" id="voting-reset-all-btn" data-i18n="voting_reset_all_btn">Reiniciar tudo</button>
+            <button type="button" class="icon-action hidden" id="voting-runoff-btn" data-i18n-label="voting_runoff_btn" aria-label="Desempate" title="Desempate" data-icon="runoff"></button>
+            <button type="button" class="icon-action" id="voting-reset-btn" data-i18n-label="voting_reset_btn" aria-label="Reiniciar votação" title="Reiniciar votação" data-icon="reset"></button>
+            <button type="button" class="icon-action danger" id="voting-reset-all-btn" data-i18n-label="voting_reset_all_btn" aria-label="Reiniciar tudo" title="Reiniciar tudo" data-icon="resetAll"></button>
           </div>
           <span id="voting-msg" class="muted"></span>
 
@@ -220,9 +220,9 @@
           </p>
           <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
-            <button type="button" class="small" id="congeniality-advance-btn" data-i18n="congeniality_start_btn">Iniciar</button>
-            <button type="button" class="small" id="congeniality-reset-votes-btn" data-i18n="voting_reset_btn">Reiniciar votação</button>
-            <button type="button" class="small danger" id="congeniality-reset-btn" data-i18n="congeniality_reset_btn">Reiniciar tudo</button>
+            <button type="button" class="icon-action" id="congeniality-advance-btn" aria-label="Iniciar" title="Iniciar"></button>
+            <button type="button" class="icon-action" id="congeniality-reset-votes-btn" data-i18n-label="voting_reset_btn" aria-label="Reiniciar votação" title="Reiniciar votação" data-icon="reset"></button>
+            <button type="button" class="icon-action danger" id="congeniality-reset-btn" data-i18n-label="congeniality_reset_btn" aria-label="Reiniciar tudo" title="Reiniciar tudo" data-icon="resetAll"></button>
           </div>
 
           <span id="congeniality-msg" class="muted"></span>
