@@ -1522,6 +1522,49 @@ test('a filter chip cannot keep its hover look after a tap on a phone', async ()
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
 });
 
+test('a long address in the Wall history never spills out of its card', async () => {
+  // The seeded links were shortener URLs a few characters long until they
+  // were replaced with the real destinations, which run past a hundred
+  // characters and ran straight out of the card. Nobody reads a URL in this
+  // list - the label identifies the row - so it is held to one line and
+  // cut.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: {
+      type: 'links',
+      text: 'useful links',
+      links: [{
+        emoji: '📃',
+        label: 'form',
+        url: 'https://www.google.com/forms/about/',
+      }],
+    },
+  });
+
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .admin-post-options li', { timeout: WAIT_TIMEOUT });
+
+  const spill = await page.$eval('#plaza-posts-list', (el) => el.scrollWidth - el.clientWidth);
+  assert.ok(spill <= 0, `the history overflows its card by ${spill}px`);
+
+  const row = await page.$eval('#plaza-posts-list .admin-post-options li', (li) => {
+    const url = li.querySelector('.muted');
+    return {
+      lines: Math.round(li.getBoundingClientRect().height / parseFloat(getComputedStyle(li).fontSize)),
+      clipped: url.scrollWidth > url.clientWidth,
+      wrap: getComputedStyle(url).whiteSpace,
+    };
+  });
+  assert.equal(row.wrap, 'nowrap', 'the address should stay on one line');
+  assert.ok(row.clipped, 'and be cut when it does not fit, rather than wrapping');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
 test('the Wall history can be filtered down to one kind of post', async () => {
   // By the party this list is the whole Wall in one column. Same pills as
   // Manage Users' roles, and the same rule: cumulative, and switching the

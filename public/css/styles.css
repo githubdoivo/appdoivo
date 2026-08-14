@@ -2303,7 +2303,26 @@ html.mode-dark .plaza-post-type { color: #fff; }
   font-family: var(--body);
   font-size: 0.92rem;
 }
-.admin-post-options li { padding: 3px 0; }
+.admin-post-options li {
+  padding: 3px 0;
+  /* The address is one line, clipped. These used to be shortener links a
+     few characters long; the real destinations they were replaced with run
+     to 120 characters and spilled straight out of the card. Nobody reads a
+     URL here - the label above it is what identifies the row, and the link
+     is checked by tapping it on the Wall itself - so it is held to a line
+     and cut rather than wrapped into a paragraph of its own. */
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.admin-post-options li > span:first-child { flex: none; }
+.admin-post-options li > .muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .admin-post-options strong { font-weight: 700; margin-left: 4px; }
 
 /* .highlight paints its own tinted ground and left edge (see .highlight
