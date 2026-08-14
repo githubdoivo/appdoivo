@@ -1399,11 +1399,12 @@ body.theme-memo .highlight::before {
      low enough that a long sentence can run across it without fighting. */
   content: '';
   position: absolute;
-  /* Left, not right. Every card on every page starts at the same left
-     margin, so an emblem on that edge lines up with the column the reader
-     is already following down the page; on the right it sat wherever each
-     block happened to end. */
-  inset: 0 auto 0 -6px;
+  /* Right edge. Tried on the left, where it lines up with the margin every
+     card starts at - Ivo's call after seeing both, and the reason it works
+     is that the text is what leads on the left; a mark there competes with
+     the first word of every line, where on the right it closes the block
+     instead of opening it. */
+  inset: 0 -6px 0 auto;
   /* Scales with the viewport too, so the smallest phone does not end up
      with a full-size emblem and a three-word text column beside it. */
   width: clamp(64px, 24vw, 92px);
@@ -1412,8 +1413,8 @@ body.theme-memo .highlight::before {
   pointer-events: none;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-position: left center;
-  mask-position: left center;
+  -webkit-mask-position: right center;
+  mask-position: right center;
   /* Height-driven, so each theme's tile keeps its own aspect ratio however
      tall the block ends up - Plaza's bunting is 16x72 where the rest are
      16x40, and forcing a fixed width would squash one or stretch the
@@ -1442,8 +1443,8 @@ body.theme-memo .highlight::before {
    against the edge instead of over it, so the string reads as the block's
    own margin. */
 body.theme-plaza .highlight::before {
-  inset: 0 auto 0 0;
-  transform: none;
+  inset: 0 0 0 auto;
+  transform: scaleX(-1);
 }
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
