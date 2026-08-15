@@ -539,7 +539,8 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
   // Every one of these motifs is a 16px-wide vertical drawing - a reed, a
   // tail, a string of bunting. Tiled as a watermark they read as noise
   // (the swamp's reeds became a picket fence), so the emblem is drawn once
-  // at its own proportions and bled off the right edge.
+  // at its own proportions and bled off the right edge, where it closes the
+  // block rather than competing with the first word of every line.
   assert.equal(style.maskRepeat, 'no-repeat', 'the motif is an emblem now, not a tiled watermark');
   assert.ok(/right|100%/.test(style.maskPosition), `and it sits on the right edge, got ${style.maskPosition}`);
   assert.ok(parseFloat(style.width) > 50, `drawn large, not as a 26px tile - got ${style.width}`);
@@ -583,6 +584,57 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
 
   await context.close();
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
+});
+
+test('a long message is set to be read, and Plaza carries no emblem at all', async () => {
+  // Two decisions in one place. A highlight is set at headline size for a
+  // sentence; a dedication can be a paragraph, and at that size a paragraph
+  // is a wall of type to be scrolled past rather than read - so whatever
+  // renders one drops it to reading size past a certain length.
+  // And Plaza is the one section with no motif. Its own was a string of
+  // bunting, a repeat rather than a free-standing mark, and it read as
+  // something falling out of the card at every size tried; roughly thirty
+  // replacements were drawn and none belonged. This is the page the writing
+  // lives on, and a picture in the margin of a long message competes with
+  // it.
+  const writer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'longdedication' } });
+  const long = 'ivo, obrigada por teres feito isto tudo - a app, a casa, as noites com nome, '
+    + 'e as consequencias que ninguem queria cumprir e cumpriu na mesma. foi a melhor festa '
+    + 'em que estive e ainda me rio a lembrar. parabens, e obrigada por nos juntares a todos.';
+  await api('PUT', '/dedications/mine', { token: writer.token, body: { text: long } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, writer.token, '/');
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('.dedication-written', { timeout: WAIT_TIMEOUT });
+
+  const written = await page.$eval('.dedication-written', (el) => {
+    const cs = getComputedStyle(el);
+    const before = getComputedStyle(el, '::before');
+    return {
+      isLong: el.classList.contains('is-long'),
+      size: parseFloat(cs.fontSize),
+      leading: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize),
+      motif: before.maskImage || before.webkitMaskImage || 'none',
+      wrap: cs.overflowWrap,
+    };
+  });
+  assert.ok(written.isLong, 'a paragraph-length dedication should be marked as long');
+  assert.ok(written.size < 22, `and set smaller than a headline, got ${written.size}px`);
+  assert.ok(written.leading > 1.4, `with leading opened up for reading, got ${written.leading.toFixed(2)}`);
+  assert.equal(written.wrap, 'anywhere', 'an unbroken word must not push the card open');
+  assert.equal(written.motif, 'none', 'Plaza carries no emblem - see the note by theme-plaza in styles.css');
+
+  // A one-liner keeps the headline size it was designed for.
+  await api('PUT', '/dedications/mine', { token: writer.token, body: { text: 'parabens!' } });
+  await page.reload();
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('.dedication-written', { timeout: WAIT_TIMEOUT });
+  const short = await page.$eval('.dedication-written', (el) => parseFloat(getComputedStyle(el).fontSize));
+  assert.ok(short > 22, `a short dedication should stay at headline size, got ${short}px`);
+
+  await context.close();
+  await api('DELETE', `/admin/users/${writer.id}`, { token: ADMIN });
 });
 
 test('Wall opens by default and shows a posted announcement in the feed', async () => {
@@ -1356,6 +1408,43 @@ test('the topbar icons carry no box, and the tab row no rule', async () => {
   await context.close();
 });
 
+test('a consequence waiting to be assigned sits above the whole history', async () => {
+  // The list is the running history, but it is also the owner's to-do. A
+  // revealed consequence with nobody on it needs them; sorted purely by
+  // last-touched it slid under rows that had been dealt with since. It is
+  // held at the top until it is assigned, and then rejoins the timeline by
+  // its own timestamp - which by then is the assignment.
+  const poster = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'assignorder' } });
+  const holder = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'assignholder' } });
+
+  // One revealed and left unassigned...
+  await api('POST', '/consequences', { token: poster.token, body: { text: 'a que precisa de dono' } });
+  const first = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  // ...then a second one revealed and assigned, so it is the more recently
+  // touched of the two and would otherwise sort above.
+  await api('POST', '/consequences', { token: holder.token, body: { text: 'a que ja tem dono' } });
+  const second = await api('POST', '/admin/consequences/reveal', { token: ADMIN });
+  await api('PATCH', `/admin/consequences/${second.revealed.id}/assign`, {
+    token: ADMIN, body: { userId: holder.id },
+  });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="rata"]');
+  await page.waitForSelector('#consequences-table .rata-history-item', { timeout: WAIT_TIMEOUT });
+
+  const firstRowText = await page.$eval('#consequences-table .rata-history-item', (el) => el.textContent);
+  assert.match(
+    firstRowText,
+    /precisa de dono/,
+    'the one still needing an assignment has to be the first thing the owner sees',
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${poster.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${holder.id}`, { token: ADMIN });
+});
+
 test('revealing a consequence asks first, and declining leaves the queue alone', async () => {
   // It draws for real, pushes to all fifty guests and cannot be undone -
   // the same bar as the Memo trigger, which has confirmed from the start.
@@ -1479,6 +1568,49 @@ test('a filter chip cannot keep its hover look after a tap on a phone', async ()
   await page.waitForTimeout(150);
   const after = await page.$eval('#plaza-type-filter .role-pill', (el) => getComputedStyle(el).color);
   assert.equal(after, before, 'a chip must look the same whether or not a pointer is over it');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('a long address in the Wall history never spills out of its card', async () => {
+  // The seeded links were shortener URLs a few characters long until they
+  // were replaced with the real destinations, which run past a hundred
+  // characters and ran straight out of the card. Nobody reads a URL in this
+  // list - the label identifies the row - so it is held to one line and
+  // cut.
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: {
+      type: 'links',
+      text: 'useful links',
+      links: [{
+        emoji: '📃',
+        label: 'form',
+        url: 'https://www.google.com/forms/about/',
+      }],
+    },
+  });
+
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="plaza"]');
+  await page.waitForSelector('#plaza-posts-list .admin-post-options li', { timeout: WAIT_TIMEOUT });
+
+  const spill = await page.$eval('#plaza-posts-list', (el) => el.scrollWidth - el.clientWidth);
+  assert.ok(spill <= 0, `the history overflows its card by ${spill}px`);
+
+  const row = await page.$eval('#plaza-posts-list .admin-post-options li', (li) => {
+    const url = li.querySelector('.muted');
+    return {
+      lines: Math.round(li.getBoundingClientRect().height / parseFloat(getComputedStyle(li).fontSize)),
+      clipped: url.scrollWidth > url.clientWidth,
+      wrap: getComputedStyle(url).whiteSpace,
+    };
+  });
+  assert.equal(row.wrap, 'nowrap', 'the address should stay on one line');
+  assert.ok(row.clipped, 'and be cut when it does not fit, rather than wrapping');
 
   await context.close();
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
@@ -2960,6 +3092,15 @@ test('the populate and delete buttons carry one label colour, on every admin tab
       colours.danger[0],
       `populate and delete should read as a pair, got ${colours.seed[0]} and ${colours.danger[0]} in ${mode} mode`,
     );
+    // And that shared colour is white, in both modes. It used to carry 45%
+    // of the section's accent, which put a pink-white on one tab and a
+    // green-white on the next - on the most consequential control an admin
+    // page has.
+    assert.match(
+      colours.danger[0],
+      /rgb\(255, 255, 255\)|#fff/,
+      `wipe labels should be white in ${mode} mode, got ${colours.danger[0]}`,
+    );
     await context.close();
   }
 });
@@ -3126,9 +3267,19 @@ test('Miss Congeniality never offers you your own name, and its finished button 
   await adminPage.waitForTimeout(800);
 
   assert.equal(await adminPage.isDisabled('#congeniality-advance-btn'), true, 'a finished round has no next step');
-  const congLabel = (await adminPage.textContent('#congeniality-advance-btn')).trim();
-  assert.ok(congLabel.length > 0, 'the finished button still says something');
+  // The phase button is an icon now - the phase itself is named right above
+  // it - so the word it used to carry lives in its accessible name. Which
+  // still has to be there, and still has to read as finished rather than as
+  // a status word: one round reading "done" beside another reading
+  // "revealed" was the bug this line was written for.
+  const congLabel = (await adminPage.getAttribute('#congeniality-advance-btn', 'aria-label')).trim();
+  assert.ok(congLabel.length > 0, 'the finished button still has to say what it is');
   assert.notEqual(congLabel, 'revelada', 'it should read as finished, the same word Best Outfit uses, not as a status');
+  assert.equal(
+    await adminPage.$eval('#congeniality-advance-btn', (el) => !!el.querySelector('svg')),
+    true,
+    'and it still carries its icon while disabled',
+  );
 
   await adminCtx.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });

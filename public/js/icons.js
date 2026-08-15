@@ -27,11 +27,40 @@ export const ICONS = {
   // post's button is the one you press to undo it.
   unpin: svg('<path d="M9 4h6l-1 6 4 3v2h-5M12 15v5M8 15H6v-2l2.4-1.8M4 4l16 16"/>'),
   // A key - "issue a new access key".
-  key: svg('<circle cx="8" cy="12" r="3.4"/><path d="M11.4 12H21M18 12v3.2M15 12v2.4"/>'),
+  // Ring widened and the teeth shortened: at r=3.4 with long teeth this read
+  // as a lighter drawing than the icons either side of it, which is what
+  // Ivo spotted - the weight has to match, not just the stroke width.
+  key: svg('<circle cx="8.5" cy="12" r="3.9"/><path d="M12.4 12H20.5M18.2 12v3M15.3 12v2.4"/>'),
   // Tick - "approve".
   approve: svg('<path d="M4.5 12.5 9.5 17.5 19.5 6.5"/>'),
   // Arrow curling back on itself - "reset to a new one".
   reset: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5"/>'),
+  // The same arrow with a cross through it - "reset everything, contestants
+  // included". Deliberately the reset icon plus something, so the pair
+  // reads as the smaller and the larger version of one action.
+  resetAll: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5"/><path d="M9.6 9.6l4.8 4.8M14.4 9.6l-4.8 4.8"/>'),
+  // A triangle - "begin". The one phase step that is not "carry on".
+  start: svg('<path d="M8 5.5l10 6.5-10 6.5z" fill="currentColor" stroke-linejoin="round"/>'),
+  // Forward - "next phase". The card names the phase it is in right above
+  // this, so the button only has to mean "advance", which it means at every
+  // stage. That is the whole reason an arrow works here where a picture of
+  // each phase would not: three different icons for start/close/reveal
+  // would each have to be learnt, and getting one wrong mid-party is
+  // expensive.
+  advance: svg('<path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5"/>'),
+  // Forward into a wall - "end this phase". The transport-control reading
+  // everyone already has: play to begin, arrow to carry on, arrow-into-a-bar
+  // to stop. Three shapes from one family, so the row says "move the night
+  // along" and only the direction of travel changes.
+  close: svg('<path d="M3.5 12h11M10 6.5l5.5 5.5L10 17.5M20 5v14"/>'),
+  // The role a person holds, as two different drawings rather than one
+  // drawing in two states: a shield for an admin, a plain person for a
+  // guest. Filled-versus-outline needs both versions side by side to be
+  // read, and a list shows one at a time.
+  roleAdmin: svg('<path d="M12 3l7 3v5.5c0 4.2-3 7.4-7 8.5-4-1.1-7-4.3-7-8.5V6z"/>'),
+  roleUser: svg('<circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>'),
+  // Scales - "break the tie". Only ever shown when there is one.
+  runoff: svg('<path d="M12 4.5V20M7.5 20h9M4 9h16M4 9l-2.4 5a2.9 2.9 0 0 0 4.8 0Zm16 0l2.4 5a2.9 2.9 0 0 1-4.8 0Z"/><path d="M9 6.6l6-1.4"/>'),
 };
 
 /* The two lead actions get artwork from their own section rather than a

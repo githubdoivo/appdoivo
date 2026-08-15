@@ -891,7 +891,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
-        <p class="plaza-post-text highlight">${linkify(esc(post.text))}</p>
+        <p class="plaza-post-text highlight${post.text.length > 140 ? ' is-long' : ''}">${linkify(esc(post.text))}</p>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -1075,7 +1075,7 @@ async function loadConsequences() {
 
     if (data.mySuggestion) {
       $('suggest-area').innerHTML =
-        `<p class="highlight">${t('rata_my')}<br><em>&ldquo;${esc(data.mySuggestion.text)}&rdquo;</em></p>`;
+        `<p class="highlight${data.mySuggestion.text.length > 140 ? ' is-long' : ''}">${t('rata_my')}<br><em>&ldquo;${esc(data.mySuggestion.text)}&rdquo;</em></p>`;
       $('suggest-msg').textContent = t('rata_one_per_day');
     } else {
       $('suggest-msg').textContent = '';
@@ -1145,7 +1145,7 @@ async function loadDedication() {
          <button type="button" id="dedication-save-btn" class="small">${esc(t('dedication_save_btn'))}</button>
        </div>
        <p id="dedication-msg" class="muted" style="margin-top:8px"></p>`
-    : `<p class="highlight dedication-written">${esc(written)}</p>
+    : `<p class="highlight dedication-written${written.length > 140 ? ' is-long' : ''}">${esc(written)}</p>
        <div class="actions-right">
          <button type="button" id="dedication-edit-btn" class="small ghost">${esc(t('dedication_update_btn'))}</button>
        </div>
@@ -1717,7 +1717,10 @@ function renderCongeniality(c) {
   // status === 'open'
   if (c.myVote !== null) {
     const voted = c.candidates.find((x) => x.id === c.myVote);
-    area.innerHTML = `<p class="muted">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
+    // Same treatment as Best Outfit's own "you voted for X" right above it
+    // (see the vote block earlier in this file) - the two say the same kind
+    // of thing about the same night, and one of them was plain grey text.
+    area.innerHTML = `<p class="highlight">${t('congeniality_voted', { name: voted ? voted.name : '' })}</p>`;
     return;
   }
   // You don't get to crown yourself (castCongenialityVote() refuses it

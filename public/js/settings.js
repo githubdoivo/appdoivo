@@ -8,7 +8,7 @@ import { wireVersionBadge } from './version.js';
 import { showAlert, showConfirm } from './modal.js';
 import { resizePhotoToJpeg } from './photo.js';
 import { formatEuDate, formatEuDateTime, formatTimeInZone } from './time.js';
-import { iconButton, LEAD_ICONS } from './icons.js';
+import { iconButton, LEAD_ICONS, ICONS } from './icons.js';
 
 // See the matching comment in app.js - stops an installed iOS PWA from
 // restoring a stale scroll position when its backgrounded WKWebView is
@@ -394,23 +394,31 @@ async function loadVotingState() {
   label.classList.toggle('is-closed', status === 'closed');
 
   const btn = $('voting-advance-btn');
+  // The phase is named right above this button, so the button itself only
+  // has to say which way the night moves. Three shapes from one family:
+  // play to begin, arrow to carry on, arrow-into-a-bar to end. The word it
+  // used to carry lives on as its accessible name, so nothing is lost to
+  // anyone who cannot see the drawing.
   if (!started) {
-    btn.textContent = t('voting_start_btn');
-    btn.dataset.action = 'registration';
-    btn.disabled = false;
+    setLeadAction(btn, 'start', t('voting_start_btn'), 'registration', false);
   } else if (status === 'registration') {
-    btn.textContent = t('voting_open_btn');
-    btn.dataset.action = 'open';
-    btn.disabled = false;
+    setLeadAction(btn, 'advance', t('voting_open_btn'), 'open', false);
   } else if (status === 'open') {
-    btn.textContent = t('voting_close_btn');
-    btn.dataset.action = 'close';
-    btn.disabled = false;
+    setLeadAction(btn, 'close', t('voting_close_btn'), 'close', false);
   } else {
-    btn.textContent = t(NEXT_REVEAL_LABEL[phase]);
-    btn.dataset.action = phase === 'all' ? '' : 'reveal-next';
-    btn.disabled = phase === 'all';
+    setLeadAction(btn, 'advance', t(NEXT_REVEAL_LABEL[phase]),
+      phase === 'all' ? '' : 'reveal-next', phase === 'all');
   }
+}
+
+/** Paints a phase button: its icon, its name, what it will do, and whether
+ *  there is anything left for it to do. */
+function setLeadAction(btn, icon, label, action, disabled) {
+  btn.innerHTML = ICONS[icon] ?? '';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+  btn.dataset.action = action;
+  btn.disabled = disabled;
 }
 
 // Every stage transition here is either hard to undo (reveal-next: no way
@@ -595,7 +603,16 @@ function renderUsersList(users) {
                   "make this person an admin" as opposed to "take it away",
                   and getting that backwards on a live party is not a small
                   mistake. */''}
-            ${adminPromotionEnabled && !u.is_owner ? `<button class="small ghost" data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}">${u.is_admin ? 'user' : 'admin'}</button>` : ''}
+            ${/* The icon shows what this person IS - a shield for an admin, a
+                  plain person for a guest - while its name says what pressing
+                  it does. That inversion is the whole reason it can be an
+                  icon at all: the word had to say what they would BECOME
+                  ("user" on an admin), which a picture cannot. */''}
+            ${adminPromotionEnabled && !u.is_owner
+              ? iconButton(u.is_admin ? 'roleAdmin' : 'roleUser',
+                  t(u.is_admin ? 'role_make_user' : 'role_make_admin'),
+                  `data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}"`)
+              : ''}
             ${iconButton('key', t('regen_key'), `data-regen-user="${u.id}"`)}
             ${u.is_owner ? '' : iconButton('remove', t('remove'), `data-del-user="${u.id}"`, 'danger')}
           </div>` : ''}
@@ -830,6 +847,11 @@ async function loadUsers() {
 document.querySelectorAll('[data-lead-icon]').forEach((btn) => {
   btn.innerHTML = LEAD_ICONS[btn.dataset.leadIcon] ?? '';
 });
+// The controls whose meaning never changes carry their icon in the markup;
+// the phase button's is chosen per phase, see setLeadAction().
+document.querySelectorAll('[data-icon]').forEach((btn) => {
+  btn.innerHTML = ICONS[btn.dataset.icon] ?? '';
+});
 
 syncRolePills();
 wireUsersListOnce();
@@ -924,10 +946,13 @@ wireSeedButton('plaza-seed-btn', 'plaza-wipe-msg', '/admin/plaza-posts/seed-demo
 wireSeedButton('chat-seed-btn', 'chat-wipe-msg', '/admin/chat/seed-demo', () => {});
 wireSeedButton('memo-seed-btn', 'memo-wipe-msg', '/admin/memo/seed-demo', loadMemoDays);
 
-// The whole app at once, owner-only (see boot() below for the card).
-wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/seed-demo', () => location.reload());
-wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/wipe-everything',
-  'confirm_global_wipe', 'global_wipe_done', () => location.reload());
+// The guest list, owner-only (see boot() below for the card). This card
+// sits under Manage Users, so it acts on that list and nothing else - it
+// used to fill and empty the whole app from here, which made the button on
+// the users page a kill switch for the party.
+wireSeedButton('global-seed-btn', 'global-data-msg', '/admin/users/seed-guests', loadUsers);
+wireWipeButton('global-wipe-btn', 'global-data-msg', '/admin/users/wipe',
+  'confirm_global_wipe', 'global_wipe_done', loadUsers);
 
 wireWipeButton('rata-wipe-btn', 'rata-wipe-msg', '/admin/consequences/wipe', 'confirm_rata_wipe', 'rata_wipe_done_msg', loadConsequences);
 wireWipeButton('outfit-wipe-btn', 'outfit-wipe-msg', '/admin/contestants/wipe', 'confirm_outfit_wipe', 'outfit_wipe_done_msg', () => {
@@ -1314,9 +1339,9 @@ async function loadVotes() {
 // mid-state (voting shut, winner not out yet), so the label depends on
 // whether any vote has actually been cast.
 function congenialityAdvance(status, hasVotes) {
-  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close' };
-  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal' };
-  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open' };
+  if (status === 'open') return { action: 'closed', label: 'congeniality_close_btn', confirm: 'confirm_congeniality_close', icon: 'close' };
+  if (status === 'closed' && hasVotes) return { action: 'revealed', label: 'congeniality_reveal_btn', confirm: 'confirm_congeniality_reveal', icon: 'advance' };
+  if (status === 'closed') return { action: 'open', label: 'congeniality_start_btn', confirm: 'confirm_congeniality_open', icon: 'start' };
   return null; // revealed - nowhere left to go
 }
 
@@ -1336,10 +1361,16 @@ function renderCongenialityAdmin() {
   // Same word as Best Outfit's own terminal state (reveal_next_btn_done),
   // not this round's status label - one finished round should not read
   // as 'revealed' next to another reading as 'done'.
-  btn.textContent = next ? t(next.label) : t('reveal_next_btn_done');
-  btn.dataset.action = next ? next.action : '';
+  // Same shapes as Best Outfit's phase button right above it - play to
+  // begin, arrow to carry on, arrow-into-a-bar to end.
+  setLeadAction(
+    btn,
+    next ? next.icon : 'advance',
+    next ? t(next.label) : t('reveal_next_btn_done'),
+    next ? next.action : '',
+    !next,
+  );
   btn.dataset.confirm = next ? next.confirm : '';
-  btn.disabled = !next;
 
   // The Wall post carries both rounds, so it can only go out once both are
   // finished. Disabled rather than left tappable to fail: the server
@@ -1606,9 +1637,18 @@ function renderConsequences() {
   // grouping only got in the way (a newly assigned row became 'pendente'
   // and sank below the entire queue).
   const getLatestTime = (c) => c.approved_at || c.done_at || c.assigned_at || c.revealed_at || '';
+  // ...with one exception on top of recency: anything still waiting to be
+  // assigned is held at the very top of the list. Recency alone is a record
+  // of what happened; this list is also the owner's to-do, and the moment a
+  // row is assigned it stops needing them and drops back into the timeline
+  // by its own timestamp - which by then is the assignment, so it sits
+  // below the rows assigned after it. Exactly what Ivo asked for: needs-you
+  // first, then last-touched.
+  const needsAssigning = (c) => (rataStatus(c).state === 'atribuir' ? 0 : 1);
   const historyRows = rataRows
     .filter((c) => rataStatusFilter.has(rataStatus(c).state))
-    .sort((a, b) => getLatestTime(b).localeCompare(getLatestTime(a)));
+    .sort((a, b) => needsAssigning(a) - needsAssigning(b)
+      || getLatestTime(b).localeCompare(getLatestTime(a)));
   renderKeepingPlace($('consequences-table'), () => {
     $('consequences-table').innerHTML = historyRows.length
       ? historyRows.map((c) => renderConsequenceCard(c, revealed)).join('')

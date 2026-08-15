@@ -66,7 +66,7 @@ import {
   notifyUser,
 } from './push.js';
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
-import { seedDemo, seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
+import { seedDemo, seedGuestList, seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import PDFDocument from 'pdfkit';
@@ -817,30 +817,28 @@ router.post('/admin/users/:id/wall-pseudonym/reset', requireOwner, (req, res) =>
 // Everything at once. Seeding covers the guest accounts too, which no
 // per-feature button does - the point is to set the whole app up as a demo
 // for a run-through and then put it back.
-router.post('/admin/seed-demo', requireOwner, (req, res) => {
-  seedDemo();
-  res.json({ ok: true });
+// The card these two live in sits under Manage Users, so they act on the
+// guest list and nothing else. It used to fill and empty the entire app,
+// which meant the one button on the users page could take the whole party
+// with it - a kill switch nobody asked for. Each feature tab already has
+// its own seed and wipe for its own data.
+router.post('/admin/users/seed-guests', requireOwner, (req, res) => {
+  res.json({ ok: true, ...seedGuestList() });
 });
 
-// The only switch that removes accounts. The owner survives - deleting it
-// would lock everyone out of the admin panel with no way back in - and so
-// does every other admin, since those are people helping run the night
-// rather than demo data.
-router.post('/admin/wipe-everything', requireOwner, (req, res) => {
-  db.prepare('DELETE FROM consequences').run();
-  db.prepare('DELETE FROM contestants').run();
-  db.prepare('DELETE FROM plaza_posts').run();
-  db.prepare('DELETE FROM messages').run();
-  db.prepare('DELETE FROM wall_pseudonym_history').run();
-  wipeAllDedications();
-  wipeAllMemo();
-  for (const night of NIGHTS) {
-    setSetting(`voting_status_${night}`, 'closed');
-    setSetting(`voting_started_${night}`, '0');
-    resetCongeniality(night);
-  }
-  db.prepare('DELETE FROM users WHERE is_admin = 0').run();
-  res.json({ ok: true });
+// Empties the guest list. Everyone but the owner goes, promoted admins
+// included - the list on that page shows them all, so the button under it
+// clears them all. The owner survives because deleting it locks everyone
+// out of the admin panel with no way back in.
+//
+// What each person wrote goes with them, and not because this asks for it:
+// consequences, contestants, messages, posts, uploads and dedications all
+// declare ON DELETE CASCADE on users(id) (see db.js). Worth knowing before
+// pressing it - there is no version of "remove the account, keep the
+// evidence" here.
+router.post('/admin/users/wipe', requireOwner, (req, res) => {
+  const { changes } = db.prepare('DELETE FROM users WHERE is_owner = 0').run();
+  res.json({ ok: true, removed: changes });
 });
 
 router.post('/admin/consequences/seed-demo', requireOwner, (req, res) => {
@@ -1040,8 +1038,14 @@ router.get('/admin/dedications.pdf', requireOwner, (req, res) => {
     doc.font('Times-Roman').fontSize(13.5).fillColor(PDF_INK)
       .text(row.text, { align: 'left', lineGap: 5 });
     doc.moveDown(0.5);
+    // Lowercased here rather than trusted to arrive that way. The golden
+    // rule is enforced by `body { text-transform: lowercase }`, and a PDF
+    // is the one artefact this app produces that no stylesheet reaches -
+    // so a name typed "Alice Moreira" printed with its capitals while the
+    // same name reads lowercase on every screen. Same reasoning as the
+    // push notification copy, which has had its own test for a while.
     doc.font('Times-Italic').fontSize(11).fillColor(PDF_CLAY)
-      .text(`— ${row.author}`, { align: 'right' });
+      .text(`— ${String(row.author ?? '').toLowerCase()}`, { align: 'right' });
   });
 
   doc.end();

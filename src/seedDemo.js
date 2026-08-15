@@ -5,7 +5,7 @@
 // that's still true in production (SEED_DEMO is never set there). QA is the
 // one exception: 5 contestants per night are seeded automatically from the
 // demo user template, so Snatch is testable without manual setup.
-import db, { generateDemoUserToken } from './db.js';
+import db, { generateDemoUserToken, generateUserToken } from './db.js';
 import { hashToken, encryptToken } from './tokens.js';
 import { today } from './time.js';
 import { NIGHTS } from './nights.js';
@@ -112,6 +112,35 @@ const CONSEQUENCES_PENDING = [
  * Every one is a no-op when that feature already holds something, so
  * pressing twice cannot double up.
  */
+/**
+ * Creates the party's actual guest list - every name in NAMES that has no
+ * account yet - and nothing else. This is what the button under Manage
+ * Users calls: that card sits below the list of people, so it acts on the
+ * list of people.
+ *
+ * Random keys, not the deterministic demo ones seedDemoUsers() issues. A
+ * key that can be worked out from someone's name is fine for a QA tester
+ * predicting their own login; it is not fine for the list the real party
+ * runs on. Anyone whose account is recreated this way claims their new key
+ * through the first-time name search, same as always.
+ */
+export function seedGuestList() {
+  const insert = db.prepare(
+    "INSERT INTO users (name, token_hash, token_enc, is_admin, updated_at) "
+    + "VALUES (?, ?, ?, 0, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+  );
+  const exists = db.prepare('SELECT 1 FROM users WHERE name = ?');
+  let created = 0;
+  for (const name of NAMES) {
+    if (exists.get(name)) continue;
+    const token = generateUserToken(name);
+    insert.run(name, hashToken(token), encryptToken(token));
+    created += 1;
+  }
+  console.log(`[guest-list] Created ${created} guest account(s).`);
+  return { created };
+}
+
 export function seedDemoUsers() {
   const day = today();
   // 1) Demo users ------------------------------------------------------------
@@ -220,19 +249,31 @@ export function seedDemoWall(demoUsers = seedDemoUsers()) {
       text: 'Qual foi o melhor momento da noite até agora?',
       options: ['A Rata', 'Best Look', 'A Plaza', 'Ainda não sei'],
     });
-    // The real party links, so a demo build is actually usable as one -
-    // shortened at source, which is how they were handed over.
+    // The real party links. They arrived shortened through shorturl.at,
+    // which meant every tap opened an interstitial before going anywhere -
+    // resolved once and written out in full instead.
+    //
+    // Two of them did not even reach their destination that way. The
+    // shortener sent Location to Google's consent wall and Playlist to
+    // Spotify's login, both with the real target buried in a `continue=`
+    // parameter; a guest with no Google or Spotify session got the wall and
+    // not the map. Those two are the canonical URLs pulled out of it, with
+    // the tracking noise (entry, shh, lucs, g_ep, skid) dropped.
+    //
+    // These are the same private invite links the short ones already led to,
+    // so nothing here is more exposed than it was - a shortener hides a
+    // destination from a reader, never from anyone who follows it.
     createPlazaPost(demoUsers[0], {
       type: 'links',
       text: 'useful links 🔗',
       links: [
-        { emoji: '📃', label: 'Form', url: 'example.com/form' },
-        { emoji: '🏠', label: 'Location', url: 'maps.google.com/?q=Braga' },
-        { emoji: '🎩', label: 'Themes', url: 'example.com/themes' },
-        { emoji: '🎹', label: 'Playlist', url: 'example.com/playlist' },
-        { emoji: '📷', label: 'Album', url: 'example.com/album' },
-        { emoji: '🎞️', label: 'POV', url: 'example.com/pov' },
-        { emoji: '💸', label: 'Splitwise', url: 'example.com/split' },
+        { emoji: '📃', label: 'Form', url: 'https://www.google.com/forms/about/' },
+        { emoji: '🏠', label: 'Location', url: 'https://www.google.com/maps/search/?api=1&query=Braga%2C+Portugal' },
+        { emoji: '🎩', label: 'Themes', url: 'https://en.wikipedia.org/wiki/Costume_party' },
+        { emoji: '🎹', label: 'Playlist', url: 'https://open.spotify.com/' },
+        { emoji: '📷', label: 'Album', url: 'https://photos.google.com/' },
+        { emoji: '🎞️', label: 'POV', url: 'https://pov.camera/' },
+        { emoji: '💸', label: 'Splitwise', url: 'https://www.splitwise.com/' },
       ],
     });
     console.log('[seed-demo] Added 1 Wall announcement, 1 poll and 1 links post.');
