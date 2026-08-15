@@ -1353,6 +1353,19 @@ html.mode-light .hero-line { color: var(--ink); }
   font-size: 1.5rem;
   line-height: 1.35;
   color: var(--ink);
+  /* A long word with no spaces in it - a pasted address, someone's
+     unbroken enthusiasm - has to break rather than push the card open. */
+  overflow-wrap: anywhere;
+}
+/* Set at a size that suits a sentence. A dedication can be a paragraph, and
+   at 1.5rem a paragraph is a wall of large type that has to be scrolled
+   past rather than read; the class is added by whatever renders it once the
+   text passes the length a headline can carry (see renderDedication() in
+   app.js). Line height opens up as the size comes down, which is what long
+   reading wants. */
+.highlight.is-long {
+  font-size: 1.12rem;
+  line-height: 1.55;
 }
 /* The .highlight box is the one place each section gets to be playful
    rather than just informative, so instead of a flat accent bar it carries
@@ -1369,7 +1382,6 @@ body.theme-rata .highlight,
 body.theme-furnished .highlight,
 body.theme-swamp .highlight,
 body.theme-mural .highlight,
-body.theme-plaza .highlight,
 body.theme-memo .highlight {
   position: relative;
   border-left: none;
@@ -1385,7 +1397,6 @@ body.theme-rata .highlight::before,
 body.theme-furnished .highlight::before,
 body.theme-swamp .highlight::before,
 body.theme-mural .highlight::before,
-body.theme-plaza .highlight::before,
 body.theme-memo .highlight::before {
   /* The night's motif drawn ONCE, large, running the height of the block
      and bleeding off its right edge.
@@ -1435,17 +1446,24 @@ body.theme-memo .highlight::before {
   border-left-color: var(--outfit);
 }
 
-/* Plaza's motif is the one that is not a free-standing drawing: it is a
-   string with pennants hanging off one side of it. Bled off the right edge
-   like the others, the string sat outside the block and the flags pointed
-   away from the text - reading as something falling out of the card rather
-   than as a mark on it. Mirrored so the flags hang inward, and held
-   against the edge instead of over it, so the string reads as the block's
-   own margin. */
-body.theme-plaza .highlight::before {
-  inset: 0 0 0 auto;
-  transform: scaleX(-1);
+/* Plaza's own rule, chosen rather than inherited. Without an emblem it was
+   falling through to the base .highlight, whose 5px bar exists as a
+   fallback for an unthemed page and is heavy beside eight lines of a
+   dedication. Thinner, in the night's own colour, and the text keeps its
+   distance from it. */
+body.theme-plaza .highlight {
+  border-left: 3px solid var(--clay);
+  padding-left: 18px;
 }
+
+/* Plaza has no emblem, deliberately - the only section without one.
+   Its motif was never a free-standing drawing like the others (a tail,
+   reeds, a lens): it is a string of bunting, a repeat, and it read as
+   something falling out of the card at every size and orientation we tried.
+   Roughly thirty replacements were drawn and none of them belonged.
+   The reason they could not: this is the page where the writing is, the
+   open chat and the dedication, and a picture in the margin of a long
+   message competes with it. The rule and the words carry it here. */
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
 

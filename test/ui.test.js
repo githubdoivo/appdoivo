@@ -586,6 +586,57 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
 });
 
+test('a long message is set to be read, and Plaza carries no emblem at all', async () => {
+  // Two decisions in one place. A highlight is set at headline size for a
+  // sentence; a dedication can be a paragraph, and at that size a paragraph
+  // is a wall of type to be scrolled past rather than read - so whatever
+  // renders one drops it to reading size past a certain length.
+  // And Plaza is the one section with no motif. Its own was a string of
+  // bunting, a repeat rather than a free-standing mark, and it read as
+  // something falling out of the card at every size tried; roughly thirty
+  // replacements were drawn and none belonged. This is the page the writing
+  // lives on, and a picture in the margin of a long message competes with
+  // it.
+  const writer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'longdedication' } });
+  const long = 'ivo, obrigada por teres feito isto tudo - a app, a casa, as noites com nome, '
+    + 'e as consequencias que ninguem queria cumprir e cumpriu na mesma. foi a melhor festa '
+    + 'em que estive e ainda me rio a lembrar. parabens, e obrigada por nos juntares a todos.';
+  await api('PUT', '/dedications/mine', { token: writer.token, body: { text: long } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, writer.token, '/');
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('.dedication-written', { timeout: WAIT_TIMEOUT });
+
+  const written = await page.$eval('.dedication-written', (el) => {
+    const cs = getComputedStyle(el);
+    const before = getComputedStyle(el, '::before');
+    return {
+      isLong: el.classList.contains('is-long'),
+      size: parseFloat(cs.fontSize),
+      leading: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize),
+      motif: before.maskImage || before.webkitMaskImage || 'none',
+      wrap: cs.overflowWrap,
+    };
+  });
+  assert.ok(written.isLong, 'a paragraph-length dedication should be marked as long');
+  assert.ok(written.size < 22, `and set smaller than a headline, got ${written.size}px`);
+  assert.ok(written.leading > 1.4, `with leading opened up for reading, got ${written.leading.toFixed(2)}`);
+  assert.equal(written.wrap, 'anywhere', 'an unbroken word must not push the card open');
+  assert.equal(written.motif, 'none', 'Plaza carries no emblem - see the note by theme-plaza in styles.css');
+
+  // A one-liner keeps the headline size it was designed for.
+  await api('PUT', '/dedications/mine', { token: writer.token, body: { text: 'parabens!' } });
+  await page.reload();
+  await page.click('[data-tab="chat"]');
+  await page.waitForSelector('.dedication-written', { timeout: WAIT_TIMEOUT });
+  const short = await page.$eval('.dedication-written', (el) => parseFloat(getComputedStyle(el).fontSize));
+  assert.ok(short > 22, `a short dedication should stay at headline size, got ${short}px`);
+
+  await context.close();
+  await api('DELETE', `/admin/users/${writer.id}`, { token: ADMIN });
+});
+
 test('Wall opens by default and shows a posted announcement in the feed', async () => {
   const post = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
 
