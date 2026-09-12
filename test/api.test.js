@@ -2896,6 +2896,21 @@ test('the dedications PDF signs every message in lowercase, however the name was
   // The owner's name in the dedication heading is lowercased the same way.
   const heading = drawn.find((line) => line.startsWith('para o'));
   assert.equal(heading, 'para o ivo', `the heading should name the owner in lowercase, got ${heading}`);
+
+  // The messages themselves are NOT lowercased, and that is deliberate -
+  // Ivo's call, 12 Sept 2026, asked directly. The golden rule is about the
+  // app's own voice; these forty messages are his friends' voices, written
+  // to him, and the book should read the way they wrote it. Only the app's
+  // own furniture around them (the heading, the signature line) follows the
+  // house style.
+  //
+  // Pinned here because it looks exactly like an oversight: someone will
+  // eventually notice the PDF has capitals in it, see the toLowerCase()
+  // sitting on the signature right beside it, and "finish the job".
+  const messages = drawn.filter((line) => line.startsWith('Parabens') || line.startsWith('Um brinde') || line.startsWith('Ate para'));
+  assert.equal(messages.length, 3, `expected the three messages as written, got ${JSON.stringify(drawn)}`);
+  assert.ok(messages.some((m) => m !== m.toLowerCase()),
+    'the messages should be printed as they were typed, capitals and all - see the note above before changing this');
 });
 
 test('a dedication is private to the birthday person, one per guest, and comes out as a PDF', async () => {

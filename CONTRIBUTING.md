@@ -95,6 +95,22 @@ again:
   why it was left until days before the party rather than done up front.
 - A volume can be **extended but never shrunk**, so this was one-way.
 
+## The golden rule stops at the guests' own words
+
+`body { text-transform: lowercase }` makes the app lowercase everywhere, and
+that is the house style - it applies to every string the app itself writes.
+It does not apply to what guests write.
+
+The dedications PDF is where the two meet, and the split there is
+deliberate (Ivo's call, 12 Sept 2026): the heading and the signature line
+are the app talking, so they are lowercased in code, because a PDF is the
+one artefact no stylesheet reaches. The **messages** are printed exactly as
+they were typed, capitals and all - they are his friends' voices, written
+to him, and the book should read the way they wrote it.
+
+This looks like an oversight and is not. There is an assertion pinning it
+in `test/api.test.js`; read the note beside it before changing anything.
+
 ## Domain and email
 
 `security.txt` is **not** served from this repo. `public/.well-known/security.txt`

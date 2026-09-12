@@ -53,24 +53,6 @@ The narrower replacement is one app-scoped deploy token per environment
 rather than an account-wide one, so a leaked QA credential cannot reach
 production at all.
 
-### Should the dedications PDF lowercase the messages too?
-
-A question for Ivo rather than a job, found while putting a test behind the
-PDF's signature. The signature is lowercased in code, because a PDF is the
-one thing this app produces that `body { text-transform: lowercase }` never
-reaches. The **message text** is not: it is printed exactly as the guest
-typed it, capitals and all.
-
-On screen the same message reads lowercase, because the CSS rule catches it
-there. So one message currently reads two different ways depending on where
-it is looked at - which is the same inconsistency the signature fix was
-for, left half-done.
-
-Deliberately not changed. The golden rule is about the app's own voice, and
-these are forty private messages written to Ivo by his friends - whether
-his keepsake should overrule how someone chose to write to him is his call,
-not a style rule's. Two lines either way once he says.
-
 ### Express 5, after the party
 
 Dependabot PR #68 is open and will stay open until the party is over. It
