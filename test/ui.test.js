@@ -2003,6 +2003,58 @@ test('a dropped connection says so, instead of the screen quietly going still', 
   await context.close();
 });
 
+// The tab row sits at its minimum gap on a 320px screen, so it has almost
+// no slack: when the faces were linked from Google, a slow CDN meant the
+// wide fallback serif rendered instead and the overflow test below went red
+// for reasons that had nothing to do with this repo (seen on CI, 12 Aug
+// 2026, passing on a re-run of the same commit). The faces are self-hosted
+// now. This guards that: nothing may reach for a third-party font host, and
+// the faces the layout is measured against must actually be the ones that
+// loaded.
+test('the fonts are served by this app, not by a font CDN', async () => {
+  const context = await iphoneContext('iPhone SE');
+  const offsite = [];
+  context.on('request', (req) => {
+    const host = new URL(req.url()).host;
+    if (/fonts\.(googleapis|gstatic)\.com$/.test(host)) offsite.push(req.url());
+  });
+
+  for (const path of ['/', '/settings.html']) {
+    const page = await loginPage(context, ADMIN, path);
+
+    // Deliberately not document.fonts.check(): its text argument defaults
+    // to a single space, which the fallback serif satisfies too, so it
+    // answers true even with /fonts entirely missing. The FontFace entries
+    // carry the real outcome - a woff2 that 404s lands as status 'error'
+    // while the page still renders happily in the fallback, which is
+    // exactly the silent failure worth catching.
+    await page.evaluate(() => document.fonts.ready.catch(() => {}));
+    const faces = await page.evaluate(() =>
+      [...document.fonts].map((f) => ({ family: f.family.replace(/['"]/g, ''), status: f.status })));
+
+    for (const family of ['Cormorant Garamond', 'EB Garamond', 'Italianno']) {
+      const mine = faces.filter((f) => f.family === family);
+      assert.ok(mine.length, `${family} has no @font-face at all on ${path}`);
+      const bad = mine.filter((f) => f.status === 'error');
+      assert.deepEqual(bad, [], `${family} failed to load on ${path} - check /fonts and fonts.css`);
+    }
+
+    // The families above can all sit unused at 'unloaded' if nothing on the
+    // page asks for them, so pin the one the layout is actually measured
+    // against: the tab labels must be rendering in the real body face.
+    const tabFace = await page.evaluate(() => {
+      const tab = document.querySelector('.tab');
+      return tab ? getComputedStyle(tab).fontFamily : null;
+    });
+    if (tabFace) {
+      const used = faces.find((f) => tabFace.includes(f.family) && f.status === 'loaded');
+      assert.ok(used, `the tab row fell back to a system serif on ${path} (wanted ${tabFace})`);
+    }
+  }
+
+  assert.deepEqual(offsite, [], `these went off to a font CDN: ${offsite.join(', ')}`);
+});
+
 // Regression: the tab row was a few pixels wider than the viewport, so it
 // slid sideways under a thumb - on the admin page worst of all, where the
 // labels are longest. A navigation bar that moves when you touch it reads
@@ -2063,11 +2115,36 @@ test('every tab clears the 44px minimum, and no two of their hit areas overlap',
 });
 
 test('fonts load via a <link> in <head>, not a render-blocking @import', async () => {
-  const html = await (await fetch(base + '/')).text();
-  assert.match(html, /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com/, 'no font <link> found in <head>');
+  // fonts.css has to be linked ahead of styles.css rather than @imported
+  // from inside it: an @import cannot start downloading until the importing
+  // stylesheet has been fetched and parsed, so the faces would queue behind
+  // 150KB of CSS instead of travelling alongside it.
+  for (const path of ['/', '/settings.html']) {
+    const html = await (await fetch(base + path)).text();
+    const fonts = html.indexOf('/css/fonts.css');
+    const styles = html.indexOf('/css/styles.css');
+    assert.ok(fonts !== -1, `no font <link> found in <head> on ${path}`);
+    assert.ok(fonts < styles, `fonts.css should be linked before styles.css on ${path}`);
+    assert.doesNotMatch(html, /fonts\.(googleapis|gstatic)\.com/,
+      `${path} still reaches for Google Fonts - the faces are self-hosted now`);
+  }
 
   const css = await (await fetch(base + '/css/styles.css')).text();
-  assert.doesNotMatch(css, /@import\s+url\(['"]?https:\/\/fonts\.googleapis\.com/, 'styles.css still render-blocks on a Google Fonts @import');
+  // Anchored to the line start so the word "@import" inside the comment at
+  // the top of styles.css - which explains why there isn't one - does not
+  // read as one.
+  assert.doesNotMatch(css, /^\s*@import\b/m, 'styles.css render-blocks on an @import');
+
+  // The generated file is the thing actually serving the faces, so it is
+  // worth knowing it is present and pointing at real files rather than
+  // silently empty.
+  const fontCss = await (await fetch(base + '/css/fonts.css')).text();
+  const srcs = [...fontCss.matchAll(/url\('([^']+)'\)/g)].map((m) => m[1]);
+  assert.ok(srcs.length >= 3, `fonts.css declares only ${srcs.length} faces`);
+  for (const src of srcs) {
+    const res = await fetch(base + src);
+    assert.equal(res.status, 200, `${src} is declared in fonts.css but ${res.status}s`);
+  }
 });
 
 /* ------------------------- Version badge (regression) ---------------------- */

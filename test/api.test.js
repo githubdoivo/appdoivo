@@ -32,8 +32,9 @@ process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
-const { MEMO_DIR, MEMO_MIN_GAP_MINUTES } = await import('../src/memo.js');
-const { today } = await import('../src/time.js');
+const { MEMO_DIR, MEMO_MIN_GAP_MINUTES, ensureTodaysSlots, zonedTimeToUtc } = await import('../src/memo.js');
+const { renderDedications, newDedicationsDocument } = await import('../src/dedicationsPdf.js');
+const { today, setClockForTests, now, getTimezone } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
 let server;
@@ -1991,23 +1992,104 @@ test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', 
 // deliberately marks it notified via a direct DB write, the same way this
 // suite handles other time-dependent state.
 
-function markSlotNotified(slotId, when = new Date()) {
+// Holds the clock still for the duration of one test, then puts it back.
+// Slot generation is the one part of Memo that depends on what time it is
+// when it runs: after roughly 23:15 there is no longer room for five
+// moments before the window shuts, and between 02:00 and 06:00 there is no
+// window left at all. Any test that generates a schedule therefore has to
+// say what time it is, rather than inheriting whatever hour the suite
+// happened to start at - otherwise the whole file is green by day and red
+// to whoever is still working at 3am.
+function atClock(at, fn) {
+  const restore = setClockForTests(at);
+  try {
+    return fn();
+  } finally {
+    restore();
+  }
+}
+
+// Same, for the tests that trigger generation over HTTP. The server runs
+// in this process (app.listen(0) above), so the pin is still in force while
+// the request is handled - but the await has to happen inside it, or the
+// clock is restored before the handler ever runs.
+async function atClockAsync(at, fn) {
+  const restore = setClockForTests(at);
+  try {
+    return await fn();
+  } finally {
+    restore();
+  }
+}
+
+// A plain afternoon on whichever day the app currently calls today(), used
+// by every test that just needs a normal full schedule to exist and does
+// not care what time produced it.
+//
+// 15:00 in the app's own timezone, converted through the same helper the
+// window itself is built with - not 15:00Z. The two differ by an hour for
+// Lisbon in summer, which is harmless, but writing it as UTC quietly bakes
+// in the assumption that the app's zone is near Greenwich, and that is the
+// sort of thing that is true right up until it is not.
+function memoAfternoon() {
+  return zonedTimeToUtc(today(), 15, 0, getTimezone()).toISOString();
+}
+
+// Leaves a normal, full day's schedule in place for whatever runs next.
+// Memo's slots are one shared, lazily-built schedule, so a test that clears
+// them and walks away hands the next test whatever the real clock happens
+// to produce - four moments at 23:40, three at 00:30, none at all between
+// 02:00 and 06:00. Every test downstream of here indexes into slots[0..3]
+// and would fail on an hour rather than on a regression. Rebuilding at a
+// pinned afternoon is what keeps the rest of the file honest at any hour.
+function resetSchedule() {
+  db.prepare('DELETE FROM memo_slots').run();
+  atClock(memoAfternoon(), ensureTodaysSlots);
+}
+
+// Reads the slots back as epoch ms, with the window they were meant to fall
+// inside, so a test can just compare numbers.
+function generatedSlots() {
+  const day = today();
+  const rows = db.prepare('SELECT slot_index, scheduled_at FROM memo_slots WHERE day = ? ORDER BY slot_index').all(day);
+  return rows.map((r) => ({
+    index: r.slot_index,
+    at: new Date(`${r.scheduled_at.replace(' ', 'T')}Z`).getTime(),
+    label: r.scheduled_at,
+  }));
+}
+
+// Defaults to the app's clock, not Date.now() - if a test pins the clock,
+// the moment it says fired has to be the same moment the 15-minute upload
+// window is measured against, or the slot reads as already expired.
+function markSlotNotified(slotId, when = new Date(now())) {
   const ts = when.toISOString().replace('T', ' ').replace('Z', '');
   db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
 }
 
 test('GET /memo/today lazily creates 5 distinct slots, idempotently', async () => {
-  const first = await api('GET', '/memo/today', { token: userToken });
+  // Pinned to an afternoon because this is the call that actually builds
+  // the schedule, and how many moments fit depends on how much of the
+  // window is left when it runs: five need three hours, so a suite started
+  // at 23:30 would legitimately get fewer and a suite started at 04:00
+  // would get none at all.
+  db.prepare('DELETE FROM memo_slots').run();
+  const { first, second } = await atClockAsync(memoAfternoon(), async () => ({
+    first: await api('GET', '/memo/today', { token: userToken }),
+    second: await api('GET', '/memo/today', { token: userToken }),
+  }));
+
   assert.equal(first.status, 200);
   assert.equal(first.data.slots.length, 5);
   assert.ok(first.data.slots.every((s) => s.status === 'waiting'), 'nothing has been notified yet');
-
-  const second = await api('GET', '/memo/today', { token: userToken });
   assert.deepEqual(second.data.slots.map((s) => s.id), first.data.slots.map((s) => s.id), 'a second call must not generate new slots for the same day');
 });
 
 test('the 5 daily slots never land close together - each is at least MEMO_MIN_GAP_MINUTES from the next', async () => {
-  const ids = (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id);
+  db.prepare('DELETE FROM memo_slots').run();
+  const generatedAt = memoAfternoon();
+  const ids = await atClockAsync(generatedAt, async () =>
+    (await api('GET', '/memo/today', { token: userToken })).data.slots.map((s) => s.id));
   const rows = db.prepare(`SELECT scheduled_at FROM memo_slots WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY scheduled_at`).all(...ids);
   for (let i = 1; i < rows.length; i++) {
     const gapMinutes = (new Date(`${rows[i].scheduled_at.replace(' ', 'T')}Z`) - new Date(`${rows[i - 1].scheduled_at.replace(' ', 'T')}Z`)) / 60000;
@@ -2017,16 +2099,81 @@ test('the 5 daily slots never land close together - each is at least MEMO_MIN_GA
   // the schedule ends up generated later than that (whoever opens the app
   // first that day), anchoring purely to 14:00 would place several slots
   // in the past already, so they'd all fire at once on the next scheduler
-  // tick instead of being spread out. None should ever be scheduled before
-  // this run could possibly have generated them - can't check against a
-  // timestamp taken locally above, since slots are a shared/global
-  // schedule now: whichever test in this file happens to call /memo/today
-  // first is the one that actually triggers generation, not necessarily
-  // this test.
+  // tick instead of being spread out. Measured against the instant the
+  // schedule was actually built - which is knowable now that this test
+  // pins it, rather than being whenever some earlier test in the file
+  // happened to trigger generation.
+  const builtAtMs = Date.parse(generatedAt);
   for (const row of rows) {
     const scheduledMs = new Date(`${row.scheduled_at.replace(' ', 'T')}Z`).getTime();
-    assert.ok(scheduledMs >= TEST_RUN_STARTED_AT, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
+    assert.ok(scheduledMs >= builtAtMs, `a slot must never be scheduled in the past relative to when it was generated (${row.scheduled_at})`);
   }
+});
+
+// Lisbon is UTC+1 in September (WEST), so these are written with an
+// explicit offset rather than a bare "Z" - the window is a wall-clock
+// window, and reading it as UTC would silently shift every bound by an hour.
+const WINDOW_OPENS = Date.parse('2026-09-18T14:00:00+01:00');
+const WINDOW_SHUTS = Date.parse('2026-09-19T02:00:00+01:00');
+
+test('between 02:00 and 06:00 no schedule is generated at all, rather than one in the small hours', async () => {
+  const { ensureTodaysSlots } = await import('../src/memo.js');
+
+  // 04:00 sits in the gap between Memo's window shutting (02:00) and the
+  // app's day rolling over (06:00), so today() still names the 17th - a day
+  // whose window closed two hours ago. It used to build a full schedule
+  // anyway, starting from right now, which meant five notifications fired
+  // between 04:00 and 07:00 for a night that was already over.
+  db.prepare('DELETE FROM memo_slots').run();
+  atClock('2026-09-18T04:00:00+01:00', () => {
+    assert.equal(today(), '2026-09-17', 'before the 06:00 rollover, today() is still the day before');
+    ensureTodaysSlots();
+    assert.deepEqual(generatedSlots(), [], 'the window has shut - there is nothing left to schedule today');
+  });
+  resetSchedule();
+});
+
+test('every generated slot lands inside the 14:00-02:00 window, never past the end of it', async () => {
+  const { ensureTodaysSlots, MEMO_SLOTS_PER_DAY } = await import('../src/memo.js');
+
+  db.prepare('DELETE FROM memo_slots').run();
+  atClock('2026-09-18T14:00:00+01:00', () => {
+    ensureTodaysSlots();
+    const slots = generatedSlots();
+    assert.equal(slots.length, MEMO_SLOTS_PER_DAY, 'a full window fits the whole day of moments');
+    for (const slot of slots) {
+      assert.ok(slot.at >= WINDOW_OPENS, `slot ${slot.index} (${slot.label}) is before the window opens`);
+      // Inclusive at the top: 02:00 is the last moment the window can hand
+      // out, not the first one past it.
+      assert.ok(slot.at <= WINDOW_SHUTS, `slot ${slot.index} (${slot.label}) lands after the window shuts`);
+    }
+  });
+  resetSchedule();
+});
+
+test('a window with less than three hours left gets fewer moments, not five spilling past 02:00', async () => {
+  const { ensureTodaysSlots } = await import('../src/memo.js');
+
+  // 00:30 leaves 90 minutes, which at the 45-minute minimum gap holds three
+  // moments. The old arithmetic always laid out five and let the last ones
+  // fall past the end - 02:53 was the worst seen. Fewer moments is the
+  // honest answer; the gap is what keeps two upload windows from
+  // overlapping, so it is not the thing to compromise.
+  db.prepare('DELETE FROM memo_slots').run();
+  atClock('2026-09-19T00:30:00+01:00', () => {
+    assert.equal(today(), '2026-09-18', 'after midnight but before the rollover, this is still the 18th');
+    ensureTodaysSlots();
+    const slots = generatedSlots();
+    assert.equal(slots.length, 3, `90 minutes at a ${MEMO_MIN_GAP_MINUTES}min gap holds three moments`);
+    for (const slot of slots) {
+      assert.ok(slot.at <= WINDOW_SHUTS, `slot ${slot.index} (${slot.label}) lands after the window shuts`);
+    }
+    for (let i = 1; i < slots.length; i++) {
+      const gap = (slots[i].at - slots[i - 1].at) / 60000;
+      assert.ok(gap >= MEMO_MIN_GAP_MINUTES, `only ${gap}min between moment ${i - 1} and ${i}`);
+    }
+  });
+  resetSchedule();
 });
 
 test('Memo and the Rata keep to the same hours, and no slot lands outside them', async () => {
@@ -2039,16 +2186,17 @@ test('Memo and the Rata keep to the same hours, and no slot lands outside them',
   const revealHours = scheduler.match(/cron\.schedule\('0 ([\d,]+) \* \* \*'/)?.[1]?.split(',').map(Number);
   assert.deepEqual(revealHours, [14, 17, 20, 23, 2], 'the Rata reveals every 3 hours across 14:00-02:00');
 
-  // What this test does NOT check: that every generated slot lands inside
-  // the window. It tried, three times, and each failure was met by loosening
-  // the assertion rather than understanding it - which is worth naming here
-  // instead of leaving a weakened check that looks like coverage. Slots do
-  // land outside it (02:53 was the last one seen), and the reason is in
-  // BACKLOG.md: ensureTodaysSlots() anchors to whichever is later of the
-  // window opening and right now, so a schedule built with less than three
-  // hours left cannot fit five slots at the minimum gap and spills past the
-  // end. Verifying it needs a clock the test can hold still, which is the
-  // same thing the fix needs.
+  // That every slot lands inside the window is checked separately, by the
+  // three tests above - they pin the clock, because otherwise the answer
+  // depends on what time the suite happens to run. This test is only about
+  // the two declarations agreeing with each other.
+  //
+  // Worth keeping the history: this assertion used to live here, failed
+  // three times, and was loosened on each of them rather than believed.
+  // Slots really were landing outside the window (02:53 was the worst
+  // seen), for two separate reasons - a schedule built after the window had
+  // already shut, and one built with too little room left to fit five at
+  // the minimum gap. Both are fixed in ensureTodaysSlots() now.
 });
 
 // The five dots are read left to right as a progress bar, so the states
@@ -2063,7 +2211,7 @@ test("today's slots fire strictly in order, so a later moment can never open bef
 
   db.prepare('DELETE FROM memo_uploads').run();
   db.prepare('DELETE FROM memo_slots').run();
-  ensureTodaysSlots();
+  atClock(memoAfternoon(), ensureTodaysSlots);
 
   const slots = db.prepare('SELECT slot_index, scheduled_at FROM memo_slots WHERE day = ? ORDER BY slot_index').all(today());
   assert.equal(slots.length, MEMO_SLOTS_PER_DAY);
@@ -2085,9 +2233,10 @@ test("today's slots fire strictly in order, so a later moment can never open bef
   assert.deepEqual(fired.map((f) => f.slot_index), [0, 1, 2, 3, 4]);
 
   // This test deliberately fires every slot, which would leave the later
-  // tests with nothing un-notified to work against - clear them so the next
-  // ensureTodaysSlots() call regenerates a fresh, untouched day.
-  db.prepare('DELETE FROM memo_slots').run();
+  // tests with nothing un-notified to work against - put a fresh, untouched
+  // day back rather than leaving the next test to rebuild one at whatever
+  // hour the suite is running at.
+  resetSchedule();
 });
 
 // A slot that never fired used to stay "due" indefinitely, with no day
@@ -2105,14 +2254,20 @@ test('a slot from a previous day is never resurrected as due, however long it sa
 
   assert.deepEqual(getDueSlots(), [], "a January slot must not be due in " + today());
 
-  // A genuinely due slot today still fires.
-  ensureTodaysSlots();
-  db.prepare("UPDATE memo_slots SET scheduled_at = '2020-01-01 00:00:00' WHERE day = ? AND slot_index = 0").run(today());
-  const due = getDueSlots();
-  assert.equal(due.length, 1);
+  // A genuinely due slot today still fires. Generated and read back at the
+  // same pinned instant: the other four moments are scheduled later that
+  // afternoon, so whether they are "due" too depends entirely on what time
+  // it is when this runs - which is the whole thing being taken out of the
+  // suite's hands here.
+  const due = atClock(memoAfternoon(), () => {
+    ensureTodaysSlots();
+    db.prepare("UPDATE memo_slots SET scheduled_at = '2020-01-01 00:00:00' WHERE day = ? AND slot_index = 0").run(today());
+    return getDueSlots();
+  });
+  assert.equal(due.length, 1, 'only the backdated slot has come round yet');
   assert.equal(due[0].day, today());
 
-  db.prepare('DELETE FROM memo_slots').run();
+  resetSchedule();
 });
 
 // Memo ships to prod fully working but shut to guests until the party, so
@@ -2679,6 +2834,68 @@ test('a feature can be filled with demo data and cleared again, owner-only', asy
   await api('POST', '/admin/consequences/wipe', { token: ADMIN });
   const cleared = (await api('GET', '/admin/consequences', { token: ADMIN })).data;
   assert.equal(cleared.length, 0, 'and the wipe beside it takes it all back out');
+});
+
+// Reads the drawn text back out of a PDF built with compression off.
+// PDFKit writes its glyphs as hex strings inside TJ arrays - the numbers in
+// between are kerning adjustments, not content - and encodes the standard
+// Times faces in WinAnsi, which is latin1 for everything Portuguese needs.
+// Only worth this much effort because it is the alternative to adding a PDF
+// parser as a dependency to check about forty words.
+function textDrawnInPdf(buf) {
+  const raw = buf.toString('latin1');
+  const lines = [];
+  for (const block of raw.matchAll(/\[((?:<[0-9a-fA-F]*>|[-\d.\s])*)\]\s*TJ/g)) {
+    let line = '';
+    for (const hex of block[1].matchAll(/<([0-9a-fA-F]*)>/g)) {
+      line += Buffer.from(hex[1], 'hex').toString('latin1');
+    }
+    if (line.trim()) lines.push(line.trim());
+  }
+  return lines;
+}
+
+function renderDedicationsToBuffer(rows, ownerName) {
+  return new Promise((resolve, reject) => {
+    const doc = newDedicationsDocument({ compress: false });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('error', reject);
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    renderDedications(doc, rows, ownerName);
+    doc.end();
+  });
+}
+
+// The golden rule is enforced by `body { text-transform: lowercase }`, which
+// reaches every screen in the app and nothing else. The dedications PDF is
+// the one artefact that leaves the browser entirely, so the signature is
+// lowercased in code instead - and that was unguarded, because PDFKit
+// deflates its content streams and reading the text back needed a parser
+// this project does not carry. Building the same document with compression
+// off is the cheaper seam.
+test('the dedications PDF signs every message in lowercase, however the name was typed', async () => {
+  const buf = await renderDedicationsToBuffer([
+    { text: 'Parabens e muitos anos.', author: 'Alice MOREIRA' },
+    { text: 'Um brinde a ti.', author: 'MARIA João' },
+    { text: 'Ate para o ano.', author: 'ze monteiro' },
+  ], 'Ivo');
+
+  const drawn = textDrawnInPdf(buf);
+  // Without this the whole test passes vacuously the day PDFKit changes how
+  // it writes text and every regex below matches nothing at all.
+  assert.ok(drawn.length >= 7, `expected the heading, the count and three messages with signatures, got ${JSON.stringify(drawn)}`);
+
+  const signatures = drawn.filter((line) => line.includes('alice') || line.includes('maria') || line.includes('rui')
+    || /moreira|jo|monteiro/i.test(line));
+  assert.equal(signatures.length, 3, `expected three signatures, got ${JSON.stringify(signatures)}`);
+  for (const sig of signatures) {
+    assert.equal(sig, sig.toLowerCase(), `"${sig}" went into the PDF with capitals in it`);
+  }
+
+  // The owner's name in the dedication heading is lowercased the same way.
+  const heading = drawn.find((line) => line.startsWith('para o'));
+  assert.equal(heading, 'para o ivo', `the heading should name the owner in lowercase, got ${heading}`);
 });
 
 test('a dedication is private to the birthday person, one per guest, and comes out as a PDF', async () => {

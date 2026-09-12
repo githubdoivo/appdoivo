@@ -4,8 +4,10 @@
    Night 2 "swamp" (pantano, musgo/oliva)
    ============================================================ */
 
-/* Fonts are loaded via a <link> in <head> (not @import here) so they
-   download in parallel with this stylesheet instead of after it. */
+/* Fonts live in fonts.css, linked from <head> just ahead of this file
+   (not @import here) so the faces download in parallel with this
+   stylesheet instead of after it. They are served from /fonts rather
+   than fetched from Google - see scripts/fetch-fonts.js. */
 
 :root {
   --paper:    #e7e3d6;

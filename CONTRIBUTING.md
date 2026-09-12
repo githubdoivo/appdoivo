@@ -64,32 +64,36 @@ session's work and deploy once at the end.
 8. Verify production directly (HTTP check, login, and whatever the batch
    actually touched) before considering the session's work done.
 
-### Before the party: extend the production volume
+### The production volume (extended 12 Sept 2026)
+
+**Done - `appdoivo_data` is 20GB as of 12 September 2026.** Fly extended it
+in place, with no restart and no downtime. Nothing further is needed before
+the party; what follows is why the size is what it is, for whoever looks at
+the bill.
 
 **The party is 18-20 September 2026.** Memo stores every uploaded photo
 and video, plus the generated day videos, as real files on the production
-volume (`/data/memo-uploads`) - not as rows in SQLite. That volume is
-still at its original **1GB**, which Memo would fill on day one, and a
-full disk means uploads start failing mid-party.
+volume (`/data/memo-uploads`) - not as rows in SQLite. At its original
+**1GB** Memo would have filled it on day one, and a full disk means uploads
+start failing mid-party. Memo opens itself on **17 September** (see
+`MEMO_START_DATE` in `fly.toml`), the day before the party - enough margin
+to catch a problem while it is still fixable, without a week of
+notifications first.
 
-Memo opens itself on **17 September** (see `MEMO_START_DATE` in `fly.toml`),
-the day before the party - enough margin to catch a problem while it is still
-fixable, without a week of notifications first. The volume therefore has to be
-extended **before the 17th** - aim for the 15th:
+Sizing: ~50 guests x 5 slots/day at a realistic ~12MB average is ~3GB a
+day, so 20GB covers the whole weekend with room to spare.
 
 ```
 fly volumes extend vol_v8ep3d82yoxxg65v -s 20 -a appdoivo
 ```
 
-Sizing: ~50 guests x 5 slots/day at a realistic ~12MB average is ~3GB a
-day, so 20GB covers the whole weekend with room to spare. Two things to
-know before running it:
+Two things that shaped the timing, and that matter if this ever comes up
+again:
 
 - Fly bills volumes on **provisioned** size, not bytes used - 20GB costs
-  ~$3/month from the moment you extend, whether or not it's full.
-- A volume can be **extended but never shrunk**, so this is one-way.
-  That's why it's deliberately left until close to the date rather than
-  done up front.
+  ~$3/month from the moment you extend, whether or not it's full. That is
+  why it was left until days before the party rather than done up front.
+- A volume can be **extended but never shrunk**, so this was one-way.
 
 ## Domain and email
 

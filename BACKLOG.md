@@ -53,42 +53,44 @@ The narrower replacement is one app-scoped deploy token per environment
 rather than an account-wide one, so a leaked QA credential cannot reach
 production at all.
 
-### Two things that need a clock the tests can hold still
+### Should the dedications PDF lowercase the messages too?
 
-**Memo's dead zone.** The app's day rolls over at 06:00 (`today()` in
-`time.js`) while Memo's window closes at 02:00, so between those hours a day
-with no schedule yet gets one generated into the small hours, outside the
-window it is meant to live in. Guarding against it is two lines; the reason
-it is not done is that four Memo tests generate their slots from the real
-clock, so the guard makes them fail when the suite runs between 02:00 and
-06:00 - which is how this was found. Fixing it properly means giving the
-tests an injectable now(), then the guard.
+A question for Ivo rather than a job, found while putting a test behind the
+PDF's signature. The signature is lowercased in code, because a PDF is the
+one thing this app produces that `body { text-transform: lowercase }` never
+reaches. The **message text** is not: it is printed exactly as the guest
+typed it, capitals and all.
 
-On production the schedule already exists from the afternoon before, so
-this only shows on a freshly wiped QA opened in the small hours.
+On screen the same message reads lowercase, because the CSS rule catches it
+there. So one message currently reads two different ways depending on where
+it is looked at - which is the same inconsistency the signature fix was
+for, left half-done.
 
-**The dedications PDF has no test.** `GET /admin/dedications.pdf` now
-lowercases the signature, because a PDF is the one thing this app produces
-that `body { text-transform: lowercase }` never reaches. There is no test
-behind that fix: PDFKit deflates its content streams and reading the drawn
-text back out needs a PDF parser this project does not carry. Worth either
-a small dev dependency or a `compress: false` seam for tests, so the golden
-rule is guarded there the way it is for push notification copy.
+Deliberately not changed. The golden rule is about the app's own voice, and
+these are forty private messages written to Ivo by his friends - whether
+his keepsake should overrule how someone chose to write to him is his call,
+not a style rule's. Two lines either way once he says.
 
-### The tab-row test depends on a font arriving over the network
+### Express 5, after the party
 
-`neither tab row can be dragged sideways` failed once on CI (12 Aug 2026)
-with the guest row overflowing by 15px on an iPhone SE, and passed on a
-re-run of the same commit with nothing changed. The row sits at its minimum
-gap on a 320px screen, so it has almost no slack: if the Google Fonts
-stylesheet does not arrive, the fallback serif is wide enough to push it
-over, and the test reads that as a regression.
+Dependabot PR #68 is open and will stay open until the party is over. It
+reads as a security bump and is not one: `qs` 6.15.3 -> 6.16.0 is a feature
+release with no advisory attached, and Express only appears in the PR
+because Dependabot has to move the ancestor dependency to reach it. What
+arrives with it is Express **4.21.2 -> 5.2.1**, a major version, which is
+why CI on that branch is red.
 
-Nothing is broken - the row scrolls rather than breaking, and the page-level
-overflow tests pass either way. But a red cross that means "the font CDN was
-slow" costs someone an afternoon eventually. The fix is to self-host the two
-faces instead of linking them, which also removes a third-party request from
-every cold start; the test can then stop being weather-dependent.
+The code surface is genuinely one line: `src/app.js` ends with a
+`app.get('*', ...)` SPA fallback, and Express 5's path-to-regexp rejects a
+bare `*` - it wants `'*splat'`. Nothing else in the app trips a 4->5
+breaking change: no `req.param()`, no `res.send(status)`, no `app.del`, no
+regex routes, and every `req.query` read is a flat string, so the query
+parser default moving from extended to simple changes nothing.
+
+So it is a small job - just not one worth doing in the week a live app has
+fifty guests pointed at it, for a dependency bump that fixes nothing we are
+exposed to. Do it after 20 September, on a branch, through QA like anything
+else.
 
 ### High-resolution vectorised login background
 
@@ -113,7 +115,7 @@ worth keeping from a finished item goes wherever that knowledge belongs
 
 ## Elsewhere
 
-The production volume has to be extended before the party. That one is a
-hard deadline rather than a backlog item, so it lives with the deploy
-process instead: see "Before the party: extend the production volume" in
+The production volume was extended to 20GB on 12 September 2026, ahead of
+the party. It was never a backlog item - it was a hard deadline, so it
+lives with the deploy process: see "The production volume" in
 [CONTRIBUTING.md](CONTRIBUTING.md).

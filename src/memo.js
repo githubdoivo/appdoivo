@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, unlinkSync, existsSync, writeFileSync, statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import db from './db.js';
-import { today, getTimezone } from './time.js';
+import { today, getTimezone, now } from './time.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Same DB_FILE resolution as db.js (not exported from there) - keeps the
@@ -44,7 +44,7 @@ function addDays(dateStr, n) {
 // into the equivalent UTC Date - the standard double-format correction
 // trick (no timezone library in this project's dependencies). DST
 // transitions are a non-issue for a few-day party's random prompts.
-function zonedTimeToUtc(dateStr, hour, minute, tz) {
+export function zonedTimeToUtc(dateStr, hour, minute, tz) {
   const guess = new Date(`${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`);
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
@@ -78,17 +78,35 @@ export function ensureTodaysSlots() {
   // they'd all fire at once on the very next scheduler tick instead of
   // being spread through the day. Anchoring to whichever is later (window
   // start, or right now) guarantees every slot is still in the future.
-  const effectiveStart = Math.max(windowStart.getTime(), Date.now());
+  const effectiveStart = Math.max(windowStart.getTime(), now());
 
-  // Note the dead zone this leaves, deliberately unhandled for now: the
-  // app's day rolls over at 06:00 (see today() in time.js) while this
-  // window closes at 02:00, so between those hours a day that has no
-  // schedule yet gets one crammed into the small hours, outside the window.
-  // It needs a clock the tests can hold still before it can be fixed
-  // properly - see BACKLOG.md. On production the schedule already exists
-  // from the afternoon before, so this only bites a freshly wiped QA.
+  // The day rolls over at 06:00 (see today() in time.js) but this window
+  // shuts at 02:00, so for those four hours today() still names a day whose
+  // window has already closed. Generating a schedule then crammed all five
+  // slots into the small hours, outside the window they exist to live in -
+  // guests pinged at 04:00 for a party that ended two hours ago. Nothing to
+  // schedule is the honest answer: the window is shut, and the next call
+  // after 06:00 generates the new day properly.
+  //
+  // In practice this only ever bit a freshly wiped QA opened in the small
+  // hours - production always has the afternoon's schedule already - but it
+  // is two lines, and the alternative was a note explaining the bug.
+  if (effectiveStart >= windowEnd.getTime()) return;
+
   const gapMs = MEMO_MIN_GAP_MINUTES * 60 * 1000;
-  const slackMs = Math.max(0, (windowEnd.getTime() - effectiveStart) - gapMs * (MEMO_SLOTS_PER_DAY - 1));
+
+  // Five slots at the minimum gap need four gaps' worth of room - three
+  // hours. A schedule built with less than that left (a QA wipe at 23:30,
+  // or the first guest opening the app very late) cannot fit five without
+  // running past 02:00, and it used to: slots landed at 02:53, outside the
+  // window, and the test that noticed was loosened three times rather than
+  // believed. Fit as many as the remaining window actually holds instead.
+  // Fewer moments late in the evening is the honest outcome; the gap is
+  // what stops two 15-minute windows overlapping, so compressing it to
+  // force five in would break something real to preserve a number.
+  const roomMs = windowEnd.getTime() - effectiveStart;
+  const slotCount = Math.min(MEMO_SLOTS_PER_DAY, Math.floor(roomMs / gapMs) + 1);
+  const slackMs = roomMs - gapMs * (slotCount - 1);
 
   // n random offsets into the leftover "slack" time, sorted ascending, then
   // spread apart by the fixed minimum gap. Because the offsets are sorted,
@@ -96,13 +114,13 @@ export function ensureTodaysSlots() {
   // between offsets is >= 0, plus the fixed gapMs) - unlike picking a random
   // point independently within each of 5 fixed-width buckets, which lets
   // two picks land right next to each other across a bucket boundary.
-  const offsets = Array.from({ length: MEMO_SLOTS_PER_DAY }, () => Math.random() * slackMs).sort((a, b) => a - b);
+  const offsets = Array.from({ length: slotCount }, () => Math.random() * slackMs).sort((a, b) => a - b);
 
   const insert = db.prepare(`
     INSERT OR IGNORE INTO memo_slots (day, slot_index, scheduled_at)
     VALUES (?, ?, ?)
   `);
-  for (let i = 0; i < MEMO_SLOTS_PER_DAY; i++) {
+  for (let i = 0; i < slotCount; i++) {
     const at = new Date(effectiveStart + offsets[i] + i * gapMs);
     insert.run(day, i, toDbTimestamp(at));
   }
@@ -117,12 +135,17 @@ export function ensureTodaysSlots() {
  * replayed days later.
  */
 export function getDueSlots() {
+  // "Now" comes from the app's clock rather than SQLite's, so that the one
+  // comparison deciding whether a moment has arrived reads the same clock
+  // as the code that scheduled it. They agree in production either way;
+  // they stop agreeing the moment a test pins one of them, and a test that
+  // cannot hold this still is how the 02:00-06:00 bug survived so long.
   return db.prepare(`
     SELECT id, day, slot_index FROM memo_slots
     WHERE notified_at IS NULL
       AND day = ?
-      AND scheduled_at <= strftime('%Y-%m-%d %H:%M:%f', 'now')
-  `).all(today());
+      AND scheduled_at <= ?
+  `).all(today(), toDbTimestamp(new Date(now())));
 }
 
 /**
@@ -204,7 +227,7 @@ function deriveStatus(slot, upload, currentId) {
   if (slot.id !== currentId) return { status: 'missed' };
   const notifiedMs = new Date(`${slot.notified_at.replace(' ', 'T')}Z`).getTime();
   const deadlineMs = notifiedMs + MEMO_WINDOW_OPEN_MINUTES * 60 * 1000;
-  const remainingMs = deadlineMs - Date.now();
+  const remainingMs = deadlineMs - now();
   if (remainingMs <= 0) return { status: 'missed' };
   return { status: 'open', secondsLeft: Math.round(remainingMs / 1000) };
 }
