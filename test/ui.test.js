@@ -942,6 +942,51 @@ test('owner, admin and user role badges each render in a distinct color', async 
   await api('DELETE', `/admin/users/${toPromote.id}`, { token: ADMIN });
 });
 
+// The role button used to draw what the person already WAS - a shield on
+// someone who was already an admin - while its label said what pressing it
+// would do ("make guest"). So the shield sat on exactly the rows where
+// pressing it took admin away, and every other action in that row (the key
+// regenerates, the cross removes) reads as its own outcome. Icon and label
+// now agree: whatever the row shows is what you get.
+test('the role button draws the role it hands out, not the one the person already has', async () => {
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Icon Guest' } });
+  const admin = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Icon Admin' } });
+  await api('PATCH', `/admin/users/${admin.id}/admin`, { token: ADMIN, body: { isAdmin: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.waitForSelector('#users-list .user-row', { timeout: WAIT_TIMEOUT });
+
+  // The two drawings are told apart by shape rather than by any class:
+  // roleUser is a head-and-shoulders (it has a <circle>), roleAdmin is a
+  // single shield path. Reading the rendered SVG is the point - a test that
+  // only checked the label would have passed happily all along.
+  const roleButton = (id) => page.$eval(`[data-toggle-admin="${id}"]`, (el) => ({
+    label: el.getAttribute('aria-label'),
+    next: el.getAttribute('data-next'),
+    hasCircle: !!el.querySelector('circle'),
+  }));
+
+  const onGuest = await roleButton(guest.id);
+  assert.equal(onGuest.next, '1', 'the button on a guest should promote');
+  assert.equal(onGuest.hasCircle, false,
+    `a guest's row should offer the shield, since pressing it hands out admin (label: "${onGuest.label}")`);
+
+  const onAdmin = await roleButton(admin.id);
+  assert.equal(onAdmin.next, '0', 'the button on an admin should demote');
+  assert.equal(onAdmin.hasCircle, true,
+    `an admin's row should offer the plain person, since pressing it takes admin away (label: "${onAdmin.label}")`);
+
+  // The labels were always right; this pins them to the drawing beside them
+  // so the two cannot drift apart again.
+  assert.notEqual(onGuest.label, onAdmin.label, 'the two buttons should not read the same');
+
+  await context.close();
+  await api('PATCH', `/admin/users/${admin.id}/admin`, { token: ADMIN, body: { isAdmin: false } });
+  await api('DELETE', `/admin/users/${admin.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
 test('Manage Users: a freshly created user floats to the top of this session\'s list, even though the base order is alphabetical', async () => {
   const context = await iphoneContext('iPhone 13');
   const page = await loginPage(context, ADMIN, '/settings.html');

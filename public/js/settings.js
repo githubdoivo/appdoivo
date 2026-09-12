@@ -599,17 +599,16 @@ function renderUsersList(users) {
           <div class="user-row-token censored" data-token="${esc(u.token)}" data-reveal-token role="button" tabindex="0">••••••••••••</div>
           ${isOwner ? `
           <div class="row-actions">
-            ${/* The one action here that keeps its word: a shield cannot say
-                  "make this person an admin" as opposed to "take it away",
-                  and getting that backwards on a live party is not a small
-                  mistake. */''}
-            ${/* The icon shows what this person IS - a shield for an admin, a
-                  plain person for a guest - while its name says what pressing
-                  it does. That inversion is the whole reason it can be an
-                  icon at all: the word had to say what they would BECOME
-                  ("user" on an admin), which a picture cannot. */''}
+            ${/* Icon and label both say what pressing this does, not what the
+                  person currently is: a shield on a guest means "make admin",
+                  a plain person on an admin means "make guest". Every other
+                  action in this row reads as its own outcome - the key
+                  regenerates, the cross removes - and this one used to read
+                  as a status instead, which put the shield on exactly the
+                  people who already had it. Whatever the row shows is what
+                  you get. */''}
             ${adminPromotionEnabled && !u.is_owner
-              ? iconButton(u.is_admin ? 'roleAdmin' : 'roleUser',
+              ? iconButton(u.is_admin ? 'roleUser' : 'roleAdmin',
                   t(u.is_admin ? 'role_make_user' : 'role_make_admin'),
                   `data-toggle-admin="${u.id}" data-next="${u.is_admin ? '0' : '1'}"`)
               : ''}
