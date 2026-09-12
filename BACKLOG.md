@@ -55,12 +55,16 @@ production at all.
 
 ### Express 5, after the party
 
-Dependabot PR #68 is open and will stay open until the party is over. It
-reads as a security bump and is not one: `qs` 6.15.3 -> 6.16.0 is a feature
-release with no advisory attached, and Express only appears in the PR
-because Dependabot has to move the ancestor dependency to reach it. What
+Dependabot raised this as PR #68 and then closed it automatically on
+12 Sept 2026, when merging the multer bump moved the lockfile underneath
+it. It will come back on its own; this note is here so the same decision
+does not have to be made from scratch when it does.
+
+It reads as a security bump and is not one: `qs` 6.15.3 -> 6.16.0 is a
+feature release with no advisory attached, and Express only appeared in the
+PR because Dependabot has to move the ancestor dependency to reach it. What
 arrives with it is Express **4.21.2 -> 5.2.1**, a major version, which is
-why CI on that branch is red.
+why CI on that branch was red.
 
 The code surface is genuinely one line: `src/app.js` ends with a
 `app.get('*', ...)` SPA fallback, and Express 5's path-to-regexp rejects a
