@@ -70,7 +70,7 @@ import { seedDemo, seedGuestList, seedDemoConsequences, seedDemoContestants, see
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import { renderDedications, newDedicationsDocument } from './dedicationsPdf.js';
-import { queueAndRun } from './translate.js';
+import { queueAndRun, backfill as backfillTranslations } from './translate.js';
 import { LANGS, wipeFor as wipeTranslationsFor } from './translations.js';
 import { localiseConsequences } from './consequences.js';
 
@@ -539,7 +539,7 @@ router.delete('/votes/pending', (req, res) => {
 // stays as-is, see tab_chat in i18n.js).
 
 router.get('/chat/messages', (req, res) => {
-  res.json({ messages: listMessages() });
+  res.json({ messages: listMessages(readerLang(req)) });
 });
 
 router.post('/chat/messages', async (req, res) => {
@@ -914,8 +914,19 @@ router.post('/admin/plaza-posts/wipe', requireOwner, (req, res) => {
 });
 
 // Plaza: every chat message.
+/**
+ * Queues everything written before translations existed. Owner-only and
+ * safe to run repeatedly - anything already queued is skipped, so this
+ * neither duplicates work nor revives a translation that already used up
+ * its attempts.
+ */
+router.post('/admin/translations/backfill', requireOwner, (req, res) => {
+  res.json({ ok: true, queued: backfillTranslations() });
+});
+
 router.post('/admin/chat/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM messages').run();
+  wipeTranslationsFor('message');
   res.json({ ok: true });
 });
 

@@ -195,7 +195,43 @@ const SOURCES = {
   plaza_post: (id) => db.prepare('SELECT text FROM plaza_posts WHERE id = ?').get(id)?.text,
   poll_option: (id) => db.prepare('SELECT label AS text FROM plaza_poll_options WHERE id = ?').get(id)?.text,
   link_item: (id) => db.prepare('SELECT label AS text FROM plaza_link_items WHERE id = ?').get(id)?.text,
+  message: (id) => db.prepare('SELECT text FROM messages WHERE id = ?').get(id)?.text,
 };
+
+// Everything that can be translated, and where to find the rows. Used by
+// the backfill below; SOURCES above resolves one row at a time.
+const BACKFILLABLE = [
+  ['consequence', 'text', 'SELECT id, text AS src FROM consequences'],
+  ['plaza_post', 'text', "SELECT id, text AS src FROM plaza_posts WHERE type IN ('announcement','poll','links')"],
+  ['poll_option', 'label', 'SELECT id, label AS src FROM plaza_poll_options'],
+  ['link_item', 'label', 'SELECT id, label AS src FROM plaza_link_items'],
+  ['message', 'text', 'SELECT id, text AS src FROM messages'],
+];
+
+/**
+ * Queues anything that has never been queued. Needed because queueing
+ * happens when something is written, so everything written before the
+ * feature existed - a month of real posts and consequences on production -
+ * had no rows and silently read as "translations are broken".
+ *
+ * Skips anything that already has a row in any state, so running it twice
+ * costs nothing and it will not re-try a translation that already failed
+ * its attempts. Returns how many it queued.
+ */
+export function backfill() {
+  let queued = 0;
+  const has = db.prepare('SELECT 1 FROM translations WHERE entity_type = ? AND entity_id = ? AND field = ? LIMIT 1');
+  for (const [type, field, sql] of BACKFILLABLE) {
+    for (const row of db.prepare(sql).all()) {
+      if (has.get(type, row.id, field)) continue;
+      if (!String(row.src ?? '').trim()) continue;
+      store.queue(type, row.id, field, detectLang(row.src));
+      queued += 1;
+    }
+  }
+  if (queued && isConfigured()) setImmediate(() => { runPending(500).catch(() => {}); });
+  return queued;
+}
 
 /**
  * Works through the queue once. Returns how many rows were translated.

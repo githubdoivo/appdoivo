@@ -47,7 +47,7 @@ const { MEMO_DIR, MEMO_MIN_GAP_MINUTES, ensureTodaysSlots, zonedTimeToUtc } = aw
 const { renderDedications, newDedicationsDocument } = await import('../src/dedicationsPdf.js');
 const { translationsFor, queue, pending, markOk, markFailed, wipeFor, MAX_ATTEMPTS } =
   await import('../src/translations.js');
-const { detectLang, isConfigured, interpretResponse } = await import('../src/translate.js');
+const { detectLang, isConfigured, interpretResponse, backfill } = await import('../src/translate.js');
 const { today, setClockForTests, now, getTimezone } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
@@ -2144,12 +2144,16 @@ test('a Rata consequence reads in the language you picked, and editing a post dr
 
 test('a translation that keeps failing is given up on rather than retried forever', async () => {
   queue('consequence', 4242, 'text', 'pt');
-  const queued = pending().filter((r) => r.entity_id === 4242);
+  // A generous limit rather than the default page: pending() is paginated
+  // (one pass is one batch), and with seeded content now queued too this
+  // row sits well past the first page. The test is about giving up after
+  // MAX_ATTEMPTS, not about where the row lands in a queue.
+  const queued = pending(1000).filter((r) => r.entity_id === 4242);
   assert.equal(queued.length, 1, 'only the language it was not written in gets queued');
   assert.equal(queued[0].lang, 'en');
 
   for (let i = 0; i < MAX_ATTEMPTS; i += 1) markFailed(queued[0].id);
-  assert.equal(pending().filter((r) => r.entity_id === 4242).length, 0,
+  assert.equal(pending(1000).filter((r) => r.entity_id === 4242).length, 0,
     `a row must stop being retried after ${MAX_ATTEMPTS} attempts - this runs against a paid API`);
 
   // And a failed row is never shown: the reader sees the original instead.
@@ -2158,6 +2162,54 @@ test('a translation that keeps failing is given up on rather than retried foreve
   markOk(queued[0].id, 'drink water');
   assert.equal(translationsFor('consequence', [4242], 'en').get('consequence:4242:text'), 'drink water');
   wipeFor('consequence', 4242);
+});
+
+test('Plaza chat translates too, and a wipe takes its translations with it', async () => {
+  await api('POST', '/admin/chat/wipe', { token: ADMIN });
+  const posted = await api('POST', '/chat/messages', { token: userToken, body: { text: 'o jantar é às oito' } });
+  assert.equal(posted.status, 201);
+
+  const msg = db.prepare('SELECT id FROM messages ORDER BY id DESC LIMIT 1').get();
+  fakeTranslation('message', msg.id, 'text', 'en', 'dinner is at eight');
+
+  const en = await api('GET', '/chat/messages?lang=en', { token: userToken });
+  assert.equal(en.data.messages.at(-1).text, 'dinner is at eight');
+
+  const pt = await api('GET', '/chat/messages?lang=pt', { token: userToken });
+  assert.equal(pt.data.messages.at(-1).text, 'o jantar é às oito', 'a reader in the source language sees what was written');
+
+  // Wiping the chat must not leave rows pointing at messages that are gone -
+  // ids get reused, and a stale row would surface under someone else's line.
+  await api('POST', '/admin/chat/wipe', { token: ADMIN });
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM translations WHERE entity_type = 'message'").get().n,
+    0,
+    'chat translations must go when the chat does',
+  );
+});
+
+test('content written before translations existed can be picked up by a backfill', async () => {
+  // Queueing happens on write, so a month of real posts and consequences on
+  // production had no rows at all and read as "translations are broken".
+  // This is the catch-up, and it has to be safe to run twice.
+  db.prepare('DELETE FROM translations').run();
+  db.prepare('DELETE FROM consequences').run();
+  const u = db.prepare('SELECT id FROM users LIMIT 1').get().id;
+  db.prepare("INSERT INTO consequences (user_id, text, day, status) VALUES (?, 'dançar em cima da mesa', ?, 'used')").run(u, '2026-08-09');
+
+  const first = backfill();
+  assert.ok(first > 0, 'the backfill found nothing to queue');
+  const queued = db.prepare("SELECT lang FROM translations WHERE entity_type = 'consequence'").all();
+  assert.equal(queued.length, 1, 'only the language it was not written in should be queued');
+  assert.equal(queued[0].lang, 'en');
+
+  // Running it again must be a no-op rather than piling up duplicates or
+  // reviving a translation that already used up its attempts.
+  const second = backfill();
+  assert.equal(second, 0, 'a second backfill should find nothing left to do');
+
+  db.prepare('DELETE FROM consequences').run();
+  db.prepare('DELETE FROM translations').run();
 });
 
 test('a model that answers instead of translating is ignored, not published', async () => {

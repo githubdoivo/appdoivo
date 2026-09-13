@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto';
 import db from './db.js';
 import { formatTimeInZone, today } from './time.js';
+import { translationsFor } from './translations.js';
+import { queueAndRun } from './translate.js';
 
 const MAX_MESSAGES = 15;
 const MAX_TEXT_LENGTH = 300;
@@ -102,14 +104,22 @@ export function pruneMessages() {
  * converted from its stored UTC value to the app's configured timezone -
  * the client must not format created_at itself, or it renders as if it
  * were already local. */
-export function listMessages() {
+export function listMessages(lang = null) {
   pruneMessages();
   const rows = db.prepare(`
     SELECT id, text, created_at, pseudonym AS author
     FROM messages
     ORDER BY id ASC
   `).all();
-  return rows.map((m) => ({ ...m, time: formatTimeInZone(m.created_at) }));
+  // Same rule as everywhere else: a translation for the reader's language
+  // if one exists, the original otherwise. A message written in the
+  // language you are reading in has no row and is shown untouched.
+  const t = lang ? translationsFor('message', rows.map((m) => m.id), lang) : null;
+  return rows.map((m) => ({
+    ...m,
+    text: t?.get(`message:${m.id}:text`) ?? m.text,
+    time: formatTimeInZone(m.created_at),
+  }));
 }
 
 // Lowercases everything - keeps the Wall's tone consistently casual - but
@@ -129,7 +139,10 @@ export function postMessage(userId, text) {
   if (sanitized.length > MAX_TEXT_LENGTH) return { error: 'err_message_too_long' };
 
   const pseudonym = getOrAssignPseudonym(userId);
-  db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, sanitized, pseudonym);
+  const info = db.prepare('INSERT INTO messages (user_id, text, pseudonym) VALUES (?, ?, ?)').run(userId, sanitized, pseudonym);
   pruneMessages();
+  // Queued after the row exists and after pruning, so a message that was
+  // immediately pruned off the end of the 20 never costs an API call.
+  queueAndRun('message', info.lastInsertRowid, 'text', sanitized);
   return { ok: true, pseudonym };
 }
