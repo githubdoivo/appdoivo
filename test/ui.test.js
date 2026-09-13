@@ -3701,6 +3701,58 @@ test('a translated Wall post reads in your language, with no second control to m
   await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
 });
 
+// Ivo could not get past closing the voting: the reveal button appeared to
+// do nothing. It works - but each of the four reveals asks for confirmation,
+// cancel is the focused button, and tapping outside the card also cancels.
+// Declining used to be completely silent, so a stage that did not advance
+// looked exactly like a stage that could not.
+test('the reveal steps advance when confirmed, and say so when they are not', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const people = [];
+  for (const name of ['Reveal Ana', 'Reveal Bruno']) {
+    const u = await api('POST', '/admin/users', { token: ADMIN, body: { name } });
+    people.push(u);
+    await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night, userId: u.id } });
+  }
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const roster = (await api('GET', `/votes/status?night=${night}`, { token: ADMIN })).contestants;
+  for (let i = 0; i < people.length; i += 1) {
+    await api('POST', '/votes', { token: people[i].token, body: { night, contestantId: roster[(i + 1) % roster.length].id } });
+  }
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="outfit"]');
+  await page.waitForSelector('#voting-advance-btn', { timeout: WAIT_TIMEOUT });
+
+  const phase = async () => (await api('GET', `/votes/status?night=${night}`, { token: ADMIN })).resultsPhase;
+  assert.equal(await phase(), 'hidden', 'closing should leave the night ready to reveal, not already revealed');
+
+  // Cancelling must leave the night alone AND say something, or the button
+  // reads as broken.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:first-child');
+  await page.waitForTimeout(300);
+  assert.equal(await phase(), 'hidden', 'a declined confirmation must not advance the night');
+  const msg = await page.$eval('#voting-msg', (el) => el.textContent.trim());
+  assert.ok(msg.length > 0, 'declining silently is what made this look broken - it must say something');
+
+  // Confirming advances it.
+  await page.click('#voting-advance-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('.modal-actions button:last-child');
+  await page.waitForTimeout(600);
+  assert.equal(await phase(), 'third', 'confirming should move the night on one stage');
+
+  await context.close();
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const p of people) await api('DELETE', `/admin/users/${p.id}`, { token: ADMIN });
+});
+
 test('the app tour never puts two sentences on one line', async () => {
   // Ivo's note, 13 Sept 2026: several steps are two short sentences, and
   // letting them wrap freely put the end of one and the start of the next

@@ -439,7 +439,15 @@ $('voting-advance-btn').addEventListener('click', async () => {
   if (!action) return;
   $('voting-msg').textContent = '';
   const genericKey = GENERIC_CONFIRM[action];
-  if (genericKey && !(await showConfirm(t(genericKey)))) return;
+  if (genericKey && !(await showConfirm(t(genericKey)))) {
+    // Saying nothing here is what made this look broken. Revealing takes
+    // four confirmations in a row, cancel is the focused button, and tapping
+    // outside the card counts as cancelling - so it is genuinely easy to
+    // dismiss one without meaning to, and a stage that silently does not
+    // advance is indistinguishable from a stage that cannot.
+    $('voting-msg').textContent = t('voting_step_cancelled');
+    return;
+  }
   // Closing while some accounts never voted at all leaves them out with no
   // way back - unlike the two 409 cases below (which the server itself
   // refuses so a stray API call can't skip them either), this is purely
