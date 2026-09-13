@@ -95,6 +95,29 @@ again:
   why it was left until days before the party rather than done up front.
 - A volume can be **extended but never shrunk**, so this was one-way.
 
+## Before the party: clear the test data
+
+Ivo and friends tested on production from 13 September, on the real
+accounts - which was the right call, because QA has no real accounts and
+so cannot exercise the one thing that matters most: a guest finding their
+name, claiming their key, and getting in.
+
+What that leaves behind is test content, and the party should not open on
+it. Settings has a wipe per feature; run all five, ideally on the 17th:
+
+- Wall (posts, polls, links, votes)
+- Rata (consequences)
+- Plaza (chat)
+- Snatch (contestants and votes)
+- Memo (uploads, moments, and the files on the volume)
+
+**None of them touch accounts.** Guest rows, keys and claimed status all
+survive every wipe, which is the point: anyone who claimed their key while
+testing stays claimed, and nobody has to do it twice on the day.
+
+Translations of wiped content go with it - the wipes clear those rows too,
+so nothing is left pointing at a post that no longer exists.
+
 ## The golden rule stops at the guests' own words
 
 `body { text-transform: lowercase }` makes the app lowercase everywhere, and
