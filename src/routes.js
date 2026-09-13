@@ -70,6 +70,21 @@ import { seedDemo, seedGuestList, seedDemoConsequences, seedDemoContestants, see
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import { renderDedications, newDedicationsDocument } from './dedicationsPdf.js';
+import { queueAndRun } from './translate.js';
+import { LANGS, wipeFor as wipeTranslationsFor } from './translations.js';
+import { localiseConsequences } from './consequences.js';
+
+/**
+ * Which language to render guest-written text in. The query parameter wins
+ * over the stored preference because the app switches language instantly on
+ * a tap and only persists it afterwards - reading the stored value here
+ * would show one stale feed immediately after someone switches.
+ */
+function readerLang(req) {
+  const asked = String(req.query?.lang ?? '');
+  if (LANGS.includes(asked)) return asked;
+  return LANGS.includes(req.user?.lang) ? req.user.lang : null;
+}
 import { listPlazaPosts, listPlazaPostsForAdmin, updatePlazaPost,
   createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
 import {
@@ -232,7 +247,7 @@ router.post('/me/change-token', (req, res) => {
 
 router.get('/plaza-posts', (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
-  res.json({ posts: listPlazaPosts(req.user.id) });
+  res.json({ posts: listPlazaPosts(req.user.id, readerLang(req)) });
 });
 
 router.get('/admin/plaza-posts', requireAdmin, (req, res) => {
@@ -292,7 +307,7 @@ router.post('/plaza-posts/:id/vote', (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   const result = castPlazaVote(req.user.id, Number(req.params.id), Number(req.body?.optionId));
   if (result.error) return res.status(400).json({ error: result.error });
-  res.json({ posts: listPlazaPosts(req.user.id) });
+  res.json({ posts: listPlazaPosts(req.user.id, readerLang(req)) });
 });
 
 /* ------------------------------ Consequences ----------------------------- */
@@ -310,16 +325,20 @@ router.post('/consequences', (req, res) => {
   // table's own DEFAULT - that only takes effect for tables created fresh
   // after this fix, and would silently stay at second-only precision (see
   // GET /admin/consequences's sort) on any database that already existed.
-  db.prepare(
+  const info = db.prepare(
     "INSERT INTO consequences (user_id, text, day, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(req.user.id, text, today());
+  // Answer first, translate after. A dare is suggested the moment this
+  // returns; whether anyone else reads it in their own language is a
+  // separate question that must never hold up the 201.
   res.status(201).json({ ok: true });
+  queueAndRun('consequence', info.lastInsertRowid, 'text', text);
 });
 
 // Currently revealed consequence (everyone sees the same one) + state.
 router.get('/consequences/current', (req, res) => {
   res.json({
-    current: currentConsequence(),
+    current: currentConsequence(readerLang(req)),
     pending: pendingCount(),
     mySuggestion: mySuggestionToday(req.user.id),
   });
@@ -329,7 +348,7 @@ router.get('/consequences/current', (req, res) => {
 // and whether it's done/approved. Visible to every logged-in user (not
 // admin-gated) since the whole point is social pressure via visibility.
 router.get('/consequences/revealed', (req, res) => {
-  res.json({ consequences: revealedConsequences() });
+  res.json({ consequences: revealedConsequences(readerLang(req)) });
 });
 
 // Self-report: the assigned user marks their own consequence as done.
@@ -868,6 +887,9 @@ router.post('/admin/memo/seed-demo', requireOwner, (req, res) => {
 
 router.post('/admin/consequences/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM consequences').run();
+  // The translations belonged to rows that no longer exist. Left behind,
+  // they would attach themselves to whatever reused those ids next.
+  wipeTranslationsFor('consequence');
   res.json({ ok: true });
 });
 
@@ -887,6 +909,7 @@ router.post('/admin/contestants/wipe', requireOwner, (req, res) => {
 // Wall: every post (announcements + polls, cascades poll options/votes).
 router.post('/admin/plaza-posts/wipe', requireOwner, (req, res) => {
   db.prepare('DELETE FROM plaza_posts').run();
+  for (const kind of ['plaza_post', 'poll_option', 'link_item']) wipeTranslationsFor(kind);
   res.json({ ok: true });
 });
 
@@ -994,7 +1017,7 @@ router.get('/admin/consequences', (req, res) => {
     LEFT JOIN users a ON a.id = c.assigned_user_id
     ORDER BY COALESCE(c.revealed_at, c.created_at) DESC, c.id DESC
   `).all();
-  res.json(rows);
+  res.json(localiseConsequences(rows, readerLang(req)));
 });
 
 // Reveal a consequence manually (for testing).

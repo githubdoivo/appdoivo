@@ -1,4 +1,5 @@
 import db from './db.js';
+import { translationsFor } from './translations.js';
 import { today } from './time.js';
 import { broadcast, notifyUser } from './push.js';
 
@@ -47,9 +48,26 @@ function getConsequenceWithAssignment(id) {
   return db.prepare(`${CONSEQUENCE_WITH_ASSIGNMENT} WHERE c.id = ?`).get(id);
 }
 
+/**
+ * Swaps a consequence's text for the reader's language where one exists,
+ * keeping the original as `originalText` so the client can offer to show
+ * what was actually written. A row with no translation is returned
+ * untouched and carries no original - that absence is how the client knows
+ * not to draw the toggle.
+ */
+export function localiseConsequences(rows, lang) {
+  if (!lang || !rows.length) return rows;
+  const t = translationsFor('consequence', rows.map((r) => r.id), lang);
+  return rows.map((r) => {
+    const text = t.get(`consequence:${r.id}:text`);
+    return text ? { ...r, text, originalText: r.text } : r;
+  });
+}
+
 /** Returns the currently revealed consequence (the most recent one). */
-export function currentConsequence() {
-  return db.prepare(`${CONSEQUENCE_WITH_ASSIGNMENT} WHERE c.status = 'used' ORDER BY c.revealed_at DESC LIMIT 1`).get() || null;
+export function currentConsequence(lang = null) {
+  const row = db.prepare(`${CONSEQUENCE_WITH_ASSIGNMENT} WHERE c.status = 'used' ORDER BY c.revealed_at DESC LIMIT 1`).get() || null;
+  return row ? localiseConsequences([row], lang)[0] : null;
 }
 
 /**
@@ -57,8 +75,8 @@ export function currentConsequence() {
  * list everyone sees on the Rata tab (text, who was assigned, and
  * done/approved state), not just the latest one.
  */
-export function revealedConsequences() {
-  return db.prepare(`${CONSEQUENCE_WITH_ASSIGNMENT} WHERE c.status = 'used' ORDER BY c.revealed_at DESC`).all();
+export function revealedConsequences(lang = null) {
+  return localiseConsequences(db.prepare(`${CONSEQUENCE_WITH_ASSIGNMENT} WHERE c.status = 'used' ORDER BY c.revealed_at DESC`).all(), lang);
 }
 
 /**

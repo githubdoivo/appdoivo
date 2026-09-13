@@ -19,6 +19,17 @@ const DB = join(tmpdir(), `appdoivo-ui-test-${process.pid}-${Date.now()}.sqlite`
 // a run that re-initialises the module graph gets a secret that cannot read
 // the tokens the rest of the run created. Locally a developer's .env hides
 // that; CI, which has no .env, does not.
+// Pinned empty so the suite can never reach the real API, whatever is in a
+// developer's .env. dotenv does not overwrite a variable that is already
+// set, so assigning '' here wins over the key loaded when app.js imports
+// dotenv/config - and isConfigured() reads it as absent.
+//
+// Without this the suite silently starts billing an API the moment a key
+// exists locally, which is exactly what happened the first time one did.
+// Translations are exercised through a fake translator instead; see the
+// tests further down.
+process.env.ANTHROPIC_API_KEY = '';
+
 process.env.TOKEN_SECRET ||= 'test-secret-not-used-anywhere-real';
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'UI Test Admin';
@@ -3647,6 +3658,83 @@ test('a guest writes their message on Plaza and can rewrite it; only the owner s
 
   await api('POST', '/admin/dedications/wipe', { token: ADMIN });
   await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
+// A guest writing in Portuguese and a guest reading in English are the same
+// party. This asserts what a person actually sees, not that an extra field
+// arrived in the JSON.
+//
+// There is deliberately no "see original" control any more: Ivo's call on
+// 13 Sept 2026 after seeing it on QA - the app's own language toggle is
+// already that control, and a second one under every message was clutter
+// on a screen that is mostly other people's messages.
+test('a translated Wall post reads in your language, with no second control to manage', async () => {
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  const posted = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'o jantar é às oito' },
+  });
+
+  // Stands in for the API call - the suite never talks to Anthropic.
+  db.prepare(`
+    INSERT INTO translations (entity_type, entity_id, field, lang, text, status)
+    VALUES ('plaza_post', ?, 'text', 'en', 'dinner is at eight', 'ok')
+    ON CONFLICT(entity_type, entity_id, field, lang)
+      DO UPDATE SET text = excluded.text, status = 'ok'
+  `).run(posted.id);
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN);
+  await page.evaluate(() => localStorage.setItem('appivo_lang', 'en'));
+  await page.reload();
+  await page.waitForSelector('.plaza-post', { timeout: WAIT_TIMEOUT });
+
+  assert.equal(await page.$eval('.plaza-post-text', (el) => el.textContent.trim()), 'dinner is at eight');
+  assert.equal(await page.$('.translation-toggle'), null, 'the per-message control was removed on purpose');
+
+  // Exactly one paragraph of body text - the original must not be rendered
+  // hidden alongside it, which is what the toggle used to need.
+  const bodies = await page.$$eval('.plaza-post-text', (els) => els.length);
+  assert.equal(bodies, 1, 'the original should not be shipped to the page at all');
+
+  await context.close();
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('the app tour never puts two sentences on one line', async () => {
+  // Ivo's note, 13 Sept 2026: several steps are two short sentences, and
+  // letting them wrap freely put the end of one and the start of the next
+  // on the same line. Each sentence gets its own line now.
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Tour Reader' } });
+  const context = await iphoneContext('iPhone SE');
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.evaluate((tok) => localStorage.setItem('appivo_token', tok), user.token);
+  await page.goto(base + '/');
+  await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  // The tour asks for a language before it shows any content.
+  await page.waitForSelector('#tutorial-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+  await page.click('#tutorial-lang-pt');
+  await page.waitForSelector('#tutorial-content-step:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  // Walk every step and check none of them renders a sentence boundary
+  // mid-line. A <br> between sentences is what makes that true.
+  for (let step = 0; step < 8; step += 1) {
+    const html = await page.$eval('#tutorial-text', (el) => el.innerHTML);
+    const text = await page.$eval('#tutorial-text', (el) => el.textContent.trim());
+    const sentences = text.split(/(?<=\.)\s+/).filter(Boolean);
+    if (sentences.length > 1) {
+      assert.ok(html.includes('<br>'),
+        `step ${step} has ${sentences.length} sentences but no line break: "${text}"`);
+    }
+    const next = await page.$('#tutorial-next');
+    if (!next || !(await next.isVisible())) break;
+    await next.click();
+    await page.waitForTimeout(120);
+  }
+
+  await context.close();
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
 });
 
 test('switching language repaints every visible string at once, not on the next poll', async () => {

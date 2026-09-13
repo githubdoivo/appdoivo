@@ -1,4 +1,7 @@
 import db from './db.js';
+import { translationsFor } from './translations.js';
+import { queueAndRun } from './translate.js';
+import * as translations from './translations.js';
 
 const linkItemsStmt = db.prepare(`
   SELECT id, emoji, label, url FROM plaza_link_items
@@ -45,7 +48,7 @@ function normaliseUrl(raw) {
  * userId has picked - so the frontend can highlight it and offer "change
  * your vote" instead of "vote" once someone already has.
  */
-export function listPlazaPosts(userId) {
+export function listPlazaPosts(userId, lang = null) {
   const posts = db.prepare(`
     SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
     FROM plaza_posts p
@@ -63,13 +66,63 @@ export function listPlazaPosts(userId) {
   `);
   const myVoteStmt = db.prepare('SELECT option_id FROM plaza_poll_votes WHERE post_id = ? AND user_id = ?');
 
-  return posts.map((p) => {
-    if (p.type === 'links') return { ...p, links: linkItemsStmt.all(p.id) };
+  const t = localiser(posts, lang);
+
+  return posts.map((post) => {
+    const p = t.post(post);
+    if (p.type === 'links') return { ...p, links: linkItemsStmt.all(p.id).map(t.link) };
     if (p.type !== 'poll') return p;
-    const options = optionsStmt.all(p.id);
+    const options = optionsStmt.all(p.id).map(t.option);
     const myVote = myVoteStmt.get(p.id, userId);
     return { ...p, options, myOptionId: myVote ? myVote.option_id : null };
   });
+}
+
+/**
+ * Swaps in the reader's language where a translation exists, and keeps the
+ * original alongside it as `originalText` / `originalLabel` so the client
+ * can offer to show what was actually written. A post with no translation
+ * comes back untouched and carries no original - the absence is the signal
+ * the client uses to decide whether to render the toggle at all.
+ *
+ * The three lookups happen once per feed rather than once per row: a Wall
+ * with twenty posts, each with options and links, is otherwise sixty
+ * queries to render one screen.
+ */
+function localiser(posts, lang) {
+  const translatable = posts.filter((p) => TRANSLATABLE_TYPES.has(p.type));
+  const ids = translatable.map((p) => p.id);
+  if (!lang || !ids.length) {
+    const asIs = (x) => x;
+    return { post: asIs, option: asIs, link: asIs };
+  }
+
+  const postT = translationsFor('plaza_post', ids, lang);
+  const optionIds = ids.length
+    ? db.prepare(`SELECT id FROM plaza_poll_options WHERE post_id IN (${ids.map(() => '?').join(',')})`).all(...ids).map((r) => r.id)
+    : [];
+  const linkIds = ids.length
+    ? db.prepare(`SELECT id FROM plaza_link_items WHERE post_id IN (${ids.map(() => '?').join(',')})`).all(...ids).map((r) => r.id)
+    : [];
+  const optionT = translationsFor('poll_option', optionIds, lang);
+  const linkT = translationsFor('link_item', linkIds, lang);
+
+  return {
+    post: (p) => {
+      if (!TRANSLATABLE_TYPES.has(p.type)) return p;
+      const text = postT.get(`plaza_post:${p.id}:text`);
+      return text ? { ...p, text, originalText: p.text } : p;
+    },
+    option: (o) => {
+      const label = optionT.get(`poll_option:${o.id}:label`);
+      return label ? { ...o, label, originalLabel: o.label } : o;
+    },
+    // The url is never touched - only the label a person reads.
+    link: (l) => {
+      const label = linkT.get(`link_item:${l.id}:label`);
+      return label ? { ...l, label, originalLabel: l.label } : l;
+    },
+  };
 }
 
 /**
@@ -111,6 +164,13 @@ export function listPlazaPostsForAdmin() {
 }
 
 const POST_TYPES = ['announcement', 'poll', 'links'];
+
+// Only these three carry prose. A 'podium' post's text is a JSON snapshot
+// of a Snatch result and a 'video' post's is a Memo recap filename - both
+// are generated, both are parsed by the client, and translating either
+// would corrupt the Wall rather than localise it. Anything not listed here
+// is left exactly as written.
+const TRANSLATABLE_TYPES = new Set(POST_TYPES);
 
 /**
  * The rules a post's contents have to satisfy, shared by creating and
@@ -181,7 +241,33 @@ export function createPlazaPost(authorId, { type, text, options, links }) {
     clean.links.forEach((l, i) => insLink.run(postId, l.emoji, l.label, l.url, i));
   }
 
+  queueTranslations(postId, type);
   return { ok: true, id: postId };
+}
+
+/**
+ * Queues every readable string on a post for translation. Runs after the
+ * rows are written and never blocks the caller - the post is already on the
+ * Wall by the time anything here is attempted, and a failure leaves it
+ * showing in the language it was written in.
+ *
+ * Link urls are deliberately absent: only the label is text a person reads.
+ */
+function queueTranslations(postId, type) {
+  if (!TRANSLATABLE_TYPES.has(type)) return;
+  const post = db.prepare('SELECT text FROM plaza_posts WHERE id = ?').get(postId);
+  if (post) queueAndRun('plaza_post', postId, 'text', post.text);
+
+  if (type === 'poll') {
+    for (const o of db.prepare('SELECT id, label FROM plaza_poll_options WHERE post_id = ?').all(postId)) {
+      queueAndRun('poll_option', o.id, 'label', o.label);
+    }
+  }
+  if (type === 'links') {
+    for (const l of db.prepare('SELECT id, label FROM plaza_link_items WHERE post_id = ?').all(postId)) {
+      queueAndRun('link_item', l.id, 'label', l.label);
+    }
+  }
 }
 
 /**
@@ -231,6 +317,12 @@ export function updatePlazaPost(id, { text, options, links }) {
     clean.links.forEach((l, i) => insLink.run(id, l.emoji, l.label, l.url, i));
   }
 
+  // An edit invalidates whatever was translated from the old wording. The
+  // stale rendering is cleared rather than left in place, because showing a
+  // translation of a sentence that no longer exists is worse than showing
+  // the corrected original while the new one is produced.
+  translations.wipeFor('plaza_post', id);
+  queueTranslations(id, post.type);
   return { ok: true, id };
 }
 
@@ -239,6 +331,7 @@ export function deletePlazaPost(id) {
   const post = db.prepare('SELECT id FROM plaza_posts WHERE id = ?').get(id);
   if (!post) return { error: 'err_post_not_found' };
   db.prepare('DELETE FROM plaza_posts WHERE id = ?').run(id);
+  translations.wipeFor('plaza_post', id);
   return { ok: true };
 }
 

@@ -15,6 +15,7 @@ import { postMessage } from './chat.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MEMO_DIR, ensureTodaysSlots } from './memo.js';
+import { queueAndRun } from './translate.js';
 
 // Flat-colour stand-in photos for the seeded contestants, so QA shows what
 // the voting list, the results podium and the published Wall post actually
@@ -76,13 +77,15 @@ function crc32(buf) {
 // a demo account sharing the owner's name showed up in the unclaimed-user
 // search on QA, which is confusing/alarming even though it's just a
 // regular demo user under the hood, not an actual owner-account exposure.
-// The real guest list, minus the owner, kept in step with Ivo's own Guest DB
-// (24 guests + the owner = the 25 accounts the app should hold).
+// The real guest list, minus the owner, read back from Ivo on 13 Sept 2026
+// and reconciled against production the same day: 23 guests + the owner =
+// the 24 accounts the app should hold. Rebeca Campos came off the list
+// then (not coming) and was removed from production too.
 const NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
   'Joana Correia', 'Leonor Matos', 'Manuel Antunes', 'Marta Freitas',
-  'Nádia Barros', 'Óscar Lima', 'Paula Neves', 'Rebeca Campos',
+  'Nádia Barros', 'Óscar Lima', 'Paula Neves',
   'Tiago Fonseca', 'Sofia Gaspar', 'Vasco Dias', 'Vera Lobo',
   'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
@@ -191,9 +194,17 @@ export function seedDemoConsequences(demoUsers = seedDemoUsers()) {
     ).lastInsertRowid;
     db.prepare("UPDATE consequences SET revealed_at = datetime('now') WHERE id = ?").run(revealedId);
     // several pending
-    CONSEQUENCES_PENDING.forEach((text, i) => {
-      insCons.run(demoUsers[(i + 1) % demoUsers.length], text, day, 'pending');
-    });
+    const pendingIds = CONSEQUENCES_PENDING.map((text, i) =>
+      insCons.run(demoUsers[(i + 1) % demoUsers.length], text, day, 'pending').lastInsertRowid);
+
+    // Seeded rows go in with raw SQL rather than through the route, so they
+    // miss the queueing the route does - which meant that on QA, where every
+    // consequence is seeded, the Rata tab never translated anything no
+    // matter how long you waited. Wall posts were fine because seeding them
+    // goes through createPlazaPost(). This closes the gap.
+    queueAndRun('consequence', revealedId, 'text', 'Act like a rat for 5 minutes.');
+    CONSEQUENCES_PENDING.forEach((text, i) => queueAndRun('consequence', pendingIds[i], 'text', text));
+
     console.log(`[seed-demo] Added 1 revealed consequence and ${CONSEQUENCES_PENDING.length} pending.`);
   }
 

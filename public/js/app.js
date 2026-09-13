@@ -231,7 +231,18 @@ function renderTutorialStep() {
   const steps = tutorialSteps();
   const [titleKey, textKey] = steps[tutorialStep];
   $('tutorial-title').textContent = t(titleKey);
-  $('tutorial-text').textContent = t(textKey);
+  // One sentence per line. These are two short sentences more often than
+  // not, and letting them wrap freely puts the end of one and the start of
+  // the next on the same line, which reads as a wall rather than as two
+  // beats. Split rather than styled, because no amount of text-wrap makes a
+  // sentence boundary land where a line break should be.
+  const el = $('tutorial-text');
+  el.textContent = '';
+  const sentences = t(textKey).split(/(?<=\.)\s+/).filter(Boolean);
+  sentences.forEach((line, i) => {
+    if (i) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(line));
+  });
   $('tutorial-next').textContent = tutorialStep === steps.length - 1 ? t('tutorial_done') : t('tutorial_next');
   $('tutorial-dots').innerHTML = steps
     .map((_, i) => `<span class="dot${i === tutorialStep ? ' active' : ''}"></span>`)
@@ -801,6 +812,17 @@ const PLAZA_TYPE_LABEL = {
   video: 'plaza_type_video',
 };
 
+/**
+ * Renders text the server may have translated. There is deliberately no
+ * control to see the original: the app's own language toggle already is
+ * that control, and a second one under every message was clutter on a
+ * screen that is mostly other people's messages.
+ */
+function translatedText(text, _original, { className = '', linkified = false } = {}) {
+  const body = linkified ? linkify(esc(text)) : esc(text);
+  return `<p class="${className}">${body}</p>`;
+}
+
 function renderPlazaPost(post) {
   const byline = t('plaza_post_byline', { author: post.author, time: timeAgo(post.created_at) });
   const pinnedBadge = post.pinnedAt ? `<span class="plaza-pinned-badge">${esc(t('plaza_post_pinned_label'))}</span>` : '';
@@ -876,7 +898,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
-        <p class="plaza-post-text plaza-links-intro">${linkify(esc(post.text))}</p>
+        ${translatedText(post.text, post.originalText, { className: 'plaza-post-text plaza-links-intro', linkified: true })}
         <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
@@ -891,7 +913,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
-        <p class="plaza-post-text highlight${post.text.length > 140 ? ' is-long' : ''}">${linkify(esc(post.text))}</p>
+        ${translatedText(post.text, post.originalText, { className: `plaza-post-text highlight${post.text.length > 140 ? ' is-long' : ''}`, linkified: true })}
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;
   }
@@ -926,7 +948,7 @@ function renderPlazaPost(post) {
     <article class="plaza-post plaza-post-poll${post.pinnedAt ? ' pinned' : ''}">
       ${typeLabel}
       ${pinnedBadge}
-      <p class="plaza-post-text">${linkify(esc(post.text))}</p>
+      ${translatedText(post.text, post.originalText, { className: 'plaza-post-text', linkified: true })}
       <div class="plaza-poll-options">${optionsHtml}</div>
       ${submitHtml}
       <p class="plaza-byline">${esc(byline)} · ${t(totalVotes === 1 ? 'plaza_post_vote_count_one' : 'plaza_post_vote_count_other', { n: totalVotes })}</p>
@@ -1030,7 +1052,7 @@ async function loadRataHistory() {
         // roughly when.
         const hour = c.revealed_at ? `${formatHourInZone(c.revealed_at)}h` : '';
         return `<div class="rata-history-item">
-          <p class="rata-history-text">${esc(c.text)}</p>
+          ${translatedText(c.text, c.originalText, { className: 'rata-history-text' })}
           <div class="rata-history-meta">
             <span class="muted">${line}${hour ? ` · ${hour}` : ''}</span>
           </div>

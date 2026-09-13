@@ -136,6 +136,11 @@ Avoid GoDaddy (up-sells and expensive renewals). Suggested names: `appdoivo.com`
   only - deliberately never set in `fly.toml`, so the safe default (off) holds
   even if some other env var fails to propagate correctly.
 - `ENABLE_PLAZA` - turns on the Wall tab. Off by default locally; on in both QA and production.
+- `ANTHROPIC_API_KEY` - translates what guests write (Rata consequences, Wall
+  posts) into whichever language each person is reading in. **Entirely
+  optional**: with no key the app shows every message exactly as written,
+  which is how it behaved before the feature existed. The test suite never
+  calls the API, so it is not needed to run `npm test`.
 - `SEED_DEMO` - auto-loads demo users/contestants/consequences on every boot. QA only - never set in production.
 - `DB_FILE` - (optional) database path; used by the tests and to point production/QA at their mounted volume.
 - `APP_ENV` - (optional) labels the version badge (e.g. `qa`), so it's obvious at a glance which environment is open.

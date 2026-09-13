@@ -105,7 +105,13 @@ app.get('/js/:name.js', (req, res, next) => {
 app.use(express.static(PUBLIC_DIR, { index: false, setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 
 // SPA fallback: any non-API route returns the index.
-app.get('*', (req, res) => sendVersionedHtml(res, 'index.html'));
+//
+// The braces are load-bearing. Express 5 rejects a bare '*', and the
+// migration guides mostly suggest '/*splat' - which 404s a bare '/', the
+// one address every guest actually types. '/{*splat}' makes the wildcard
+// optional, so it matches the root as well as every path under it. Checked
+// all three against a real server rather than taking the docs' word for it.
+app.get('/{*splat}', (req, res) => sendVersionedHtml(res, 'index.html'));
 
 // Catch-all for anything a route handler didn't handle itself (a thrown
 // error, a rejected promise in an async handler). Without this, Express's

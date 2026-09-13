@@ -23,6 +23,17 @@ const TEST_RUN_STARTED_AT = Date.now();
 // a run that re-initialises the module graph gets a secret that cannot read
 // the tokens the rest of the run created. Locally a developer's .env hides
 // that; CI, which has no .env, does not.
+// Pinned empty so the suite can never reach the real API, whatever is in a
+// developer's .env. dotenv does not overwrite a variable that is already
+// set, so assigning '' here wins over the key loaded when app.js imports
+// dotenv/config - and isConfigured() reads it as absent.
+//
+// Without this the suite silently starts billing an API the moment a key
+// exists locally, which is exactly what happened the first time one did.
+// Translations are exercised through a fake translator instead; see the
+// tests further down.
+process.env.ANTHROPIC_API_KEY = '';
+
 process.env.TOKEN_SECRET ||= 'test-secret-not-used-anywhere-real';
 process.env.DB_FILE = DB;
 process.env.ADMIN_NAME = 'Test Admin';
@@ -34,6 +45,9 @@ const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
 const { MEMO_DIR, MEMO_MIN_GAP_MINUTES, ensureTodaysSlots, zonedTimeToUtc } = await import('../src/memo.js');
 const { renderDedications, newDedicationsDocument } = await import('../src/dedicationsPdf.js');
+const { translationsFor, queue, pending, markOk, markFailed, wipeFor, MAX_ATTEMPTS } =
+  await import('../src/translations.js');
+const { detectLang, isConfigured, interpretResponse } = await import('../src/translate.js');
 const { today, setClockForTests, now, getTimezone } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
@@ -1981,6 +1995,218 @@ test('Plaza is gated behind ENABLE_PLAZA - disabled means every endpoint 404s', 
   } finally {
     process.env.ENABLE_PLAZA = 'true';
   }
+});
+
+/* ------------------------------ Translations ------------------------------ */
+// Guest- and admin-written text is translated in the background so everyone
+// reads the party in the language they picked. None of this calls Anthropic:
+// the storage layer and both read paths are exercised by writing rows
+// directly, which is what the split between translations.js (storage) and
+// translate.js (the API client) exists for. The suite must stay green with
+// no key and no network.
+
+/** Writes a finished translation straight in, standing in for the API. */
+function fakeTranslation(entityType, entityId, field, lang, text) {
+  db.prepare(`
+    INSERT INTO translations (entity_type, entity_id, field, lang, text, status)
+    VALUES (?, ?, ?, ?, ?, 'ok')
+    ON CONFLICT(entity_type, entity_id, field, lang) DO UPDATE SET text = excluded.text, status = 'ok'
+  `).run(entityType, entityId, field, lang, text);
+}
+
+test('with no API key the app behaves exactly as it did before translations existed', async () => {
+  // The key is pinned empty at the top of this file, so this is the same
+  // state as a deploy before the secret is set - and the assertion is that
+  // the app is fine in it, not that the developer happens to lack a key.
+  // It read as the latter until a real key landed in .env and this test
+  // started failing for being true about the wrong thing.
+  assert.equal(isConfigured(), false, 'the suite must never reach the real API');
+
+  const posted = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'jantar às oito' },
+  });
+  assert.equal(posted.status, 200);
+
+  const { data } = await api('GET', '/plaza-posts?lang=en', { token: userToken });
+  const post = data.posts.find((p) => p.id === posted.data.id);
+  assert.equal(post.text, 'jantar às oito', 'the original must be shown when nothing was translated');
+  assert.equal(post.originalText, undefined, 'with no translation there is nothing to toggle to');
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('a reader gets their own language, and the original travels with it', async () => {
+  const posted = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'o jantar é às oito' },
+  });
+  fakeTranslation('plaza_post', posted.data.id, 'text', 'en', 'dinner is at eight');
+
+  const en = await api('GET', '/plaza-posts?lang=en', { token: userToken });
+  const enPost = en.data.posts.find((p) => p.id === posted.data.id);
+  assert.equal(enPost.text, 'dinner is at eight');
+  assert.equal(enPost.originalText, 'o jantar é às oito', 'the client needs the original to offer "see original"');
+
+  // The language it was written in has no translation row, so it is served
+  // untouched - nobody should be offered a "translation" of their own words.
+  const pt = await api('GET', '/plaza-posts?lang=pt', { token: userToken });
+  const ptPost = pt.data.posts.find((p) => p.id === posted.data.id);
+  assert.equal(ptPost.text, 'o jantar é às oito');
+  assert.equal(ptPost.originalText, undefined);
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('poll options and link labels are translated, but a link url never is', async () => {
+  const poll = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'a que horas?', options: ['às oito', 'às nove'] },
+  });
+  const before = (await api('GET', '/plaza-posts', { token: userToken }))
+    .data.posts.find((p) => p.id === poll.data.id);
+  fakeTranslation('poll_option', before.options[0].id, 'label', 'en', 'at eight');
+
+  const after = (await api('GET', '/plaza-posts?lang=en', { token: userToken }))
+    .data.posts.find((p) => p.id === poll.data.id);
+  assert.equal(after.options[0].label, 'at eight');
+  assert.equal(after.options[0].originalLabel, 'às oito');
+  assert.equal(after.options[1].label, 'às nove', 'an untranslated option keeps its own words');
+
+  const links = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'links', text: 'links úteis', links: [{ emoji: '🎵', label: 'a playlist', url: 'https://example.com/x' }] },
+  });
+  const linkBefore = (await api('GET', '/plaza-posts', { token: userToken }))
+    .data.posts.find((p) => p.id === links.data.id);
+  fakeTranslation('link_item', linkBefore.links[0].id, 'label', 'en', 'the playlist');
+
+  const linkAfter = (await api('GET', '/plaza-posts?lang=en', { token: userToken }))
+    .data.posts.find((p) => p.id === links.data.id);
+  assert.equal(linkAfter.links[0].label, 'the playlist');
+  assert.equal(linkAfter.links[0].url, 'https://example.com/x', 'the url is not text anyone reads - it must survive untouched');
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('a Snatch snapshot and a Memo recap are never translated, whatever is in the table', async () => {
+  // These two post types do not hold prose: a podium's text is a JSON
+  // snapshot the client parses, a video's is a recap filename it builds a
+  // URL from. Translating either corrupts the Wall rather than localising
+  // it, so the exclusion is by type and holds even if a row somehow exists.
+  const snapshot = JSON.stringify({ night: 'furnished', podium: [{ name: 'Alguém', votes: 3 }] });
+  const podiumId = db.prepare(
+    "INSERT INTO plaza_posts (type, author_id, text) VALUES ('podium', 1, ?)"
+  ).run(snapshot).lastInsertRowid;
+  const videoId = db.prepare(
+    "INSERT INTO plaza_posts (type, author_id, text) VALUES ('video', 1, '2026-09-18')"
+  ).run().lastInsertRowid;
+
+  fakeTranslation('plaza_post', podiumId, 'text', 'en', 'THIS WOULD BREAK THE WALL');
+  fakeTranslation('plaza_post', videoId, 'text', 'en', 'also broken');
+
+  const { data } = await api('GET', '/plaza-posts?lang=en', { token: userToken });
+  const podium = data.posts.find((p) => p.id === podiumId);
+  const video = data.posts.find((p) => p.id === videoId);
+  assert.equal(podium.text, snapshot, 'a podium snapshot must stay parseable JSON');
+  assert.deepEqual(JSON.parse(podium.text).podium[0].name, 'Alguém');
+  assert.equal(video.text, '2026-09-18', 'a recap filename must stay a filename');
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+});
+
+test('a Rata consequence reads in the language you picked, and editing a post drops its stale translation', async () => {
+  const suggester = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Translation Guest' } });
+  await api('POST', '/consequences', { token: suggester.data.token, body: { text: 'bebe um copo de água' } });
+  const row = db.prepare("SELECT id FROM consequences WHERE user_id = ?").get(suggester.data.id);
+  db.prepare("UPDATE consequences SET status = 'used', revealed_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?").run(row.id);
+  fakeTranslation('consequence', row.id, 'text', 'en', 'drink a glass of water');
+
+  const revealed = await api('GET', '/consequences/revealed?lang=en', { token: userToken });
+  const mine = revealed.data.consequences.find((c) => c.id === row.id);
+  assert.equal(mine.text, 'drink a glass of water');
+  assert.equal(mine.originalText, 'bebe um copo de água');
+
+  // Editing a post changes what it says, so the rendering of the old
+  // wording is now a translation of a sentence that no longer exists.
+  const posted = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'às oito' } });
+  fakeTranslation('plaza_post', posted.data.id, 'text', 'en', 'at eight');
+  await api('PATCH', `/admin/plaza-posts/${posted.data.id}`, { token: ADMIN, body: { text: 'às nove' } });
+
+  const after = (await api('GET', '/plaza-posts?lang=en', { token: userToken }))
+    .data.posts.find((p) => p.id === posted.data.id);
+  assert.equal(after.text, 'às nove', 'the stale translation must not outlive the text it came from');
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  db.prepare('DELETE FROM consequences').run();
+  await api('DELETE', `/admin/users/${suggester.data.id}`, { token: ADMIN });
+});
+
+test('a translation that keeps failing is given up on rather than retried forever', async () => {
+  queue('consequence', 4242, 'text', 'pt');
+  const queued = pending().filter((r) => r.entity_id === 4242);
+  assert.equal(queued.length, 1, 'only the language it was not written in gets queued');
+  assert.equal(queued[0].lang, 'en');
+
+  for (let i = 0; i < MAX_ATTEMPTS; i += 1) markFailed(queued[0].id);
+  assert.equal(pending().filter((r) => r.entity_id === 4242).length, 0,
+    `a row must stop being retried after ${MAX_ATTEMPTS} attempts - this runs against a paid API`);
+
+  // And a failed row is never shown: the reader sees the original instead.
+  assert.equal(translationsFor('consequence', [4242], 'en').size, 0);
+
+  markOk(queued[0].id, 'drink water');
+  assert.equal(translationsFor('consequence', [4242], 'en').get('consequence:4242:text'), 'drink water');
+  wipeFor('consequence', 4242);
+});
+
+test('a model that answers instead of translating is ignored, not published', async () => {
+  // This is the one that reached the Wall. A one-word link label read as an
+  // incomplete request, so the model replied conversationally - and the
+  // reply was stored and rendered as somebody's link. Two guards now: the
+  // response is shape-constrained server-side, and anything that still
+  // comes back wrong is dropped in favour of the original.
+  const chatty = JSON.stringify({
+    already_in_target: false,
+    translation: "I need the text you'd like me to translate. You've only provided the word \"Themes\" - is this what you want translated, or did you forget to paste the message?",
+  });
+  assert.equal(interpretResponse(chatty, 'Themes'), null,
+    'an answer many times longer than its source is prose about the request, not a translation');
+
+  // Text already in the target language gets no row, so the reader sees
+  // exactly what was written rather than a needless rewording.
+  const same = JSON.stringify({ already_in_target: true, translation: 'links úteis' });
+  assert.equal(interpretResponse(same, 'links úteis'), null);
+
+  // Anything unparseable is dropped rather than shown.
+  assert.equal(interpretResponse('not json at all', 'x'), null);
+  assert.equal(interpretResponse(JSON.stringify({ already_in_target: false, translation: '   ' }), 'x'), null);
+
+  // And a real translation survives all of it.
+  const good = JSON.stringify({ already_in_target: false, translation: 'dinner is at eight' });
+  assert.equal(interpretResponse(good, 'o jantar é às oito'), 'dinner is at eight');
+
+  // A long source is allowed a long translation - the guard is relative,
+  // not a fixed cap, or every real sentence over 60 characters would vanish.
+  const longSource = 'tens de cantar a próxima música toda de pé em cima de uma cadeira sem parar';
+  const longGood = JSON.stringify({
+    already_in_target: false,
+    translation: 'you have to sing the whole next song standing on a chair without stopping',
+  });
+  assert.ok(interpretResponse(longGood, longSource), 'a legitimate long translation must not be dropped');
+});
+
+test('the language of a message is detected rather than assumed from the app language', async () => {
+  // Someone reading the app in English may well write their dare in
+  // Portuguese. Assuming the author's UI language would translate pt->pt
+  // and produce mush, so the text itself decides.
+  assert.equal(detectLang('bebe um copo de água'), 'pt');
+  assert.equal(detectLang('não podes falar durante uma hora'), 'pt');
+  assert.equal(detectLang('drink a glass of water'), 'en');
+  assert.equal(detectLang('you have to sing the next song'), 'en');
+  // Too short or too ambiguous to call - both directions get queued, and
+  // the model passes through anything already in the target language.
+  assert.equal(detectLang('ok'), null);
 });
 
 /* ---------------------------------- Memo ---------------------------------- */

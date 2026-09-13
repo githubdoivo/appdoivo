@@ -484,6 +484,34 @@ db.exec(`
     UNIQUE(upload_id, user_id)
   );
 
+  -- Guest- and admin-written text, rendered in whichever language the
+  -- reader picked. One row per (thing, field, language) rather than a pair
+  -- of text_pt/text_en columns on each table: the same mechanism then
+  -- covers consequences, Wall posts, poll options and link labels, and a
+  -- third language is rows rather than another migration.
+  --
+  -- The status column is how a failure stays quiet. 'ok' has text; 'pending' is
+  -- queued; 'failed' has been tried and will not be retried past a couple
+  -- of attempts. Only 'ok' is ever shown, and a reader with no usable row
+  -- sees the original - so a missing API key, a refusal, or a dead network
+  -- degrades to exactly the app's behaviour before this feature existed.
+  CREATE TABLE IF NOT EXISTS translations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,
+    entity_id   INTEGER NOT NULL,
+    field       TEXT NOT NULL,
+    lang        TEXT NOT NULL,
+    text        TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+
+  -- One row per thing-and-language; a re-translation replaces rather than
+  -- accumulates (see upsert in translations.js).
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_target
+    ON translations(entity_type, entity_id, field, lang);
+
   CREATE TABLE IF NOT EXISTS memo_recaps (
     day         TEXT PRIMARY KEY,
     file_path   TEXT NOT NULL,

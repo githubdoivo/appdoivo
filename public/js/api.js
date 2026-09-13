@@ -1,5 +1,5 @@
 // API and session helpers (token stored in the browser).
-import { t } from './i18n.js';
+import { t, getLang } from './i18n.js';
 
 const TOKEN_KEY = 'appivo_token';
 
@@ -95,9 +95,23 @@ export async function api(path, { method = 'GET', body } = {}) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  // Every read carries the language the app is showing right now. Guest- and
+  // admin-written text (Rata consequences, Wall posts) is translated
+  // server-side, and the server needs to know which rendering to send.
+  // Attached here rather than at each call site so a new feed route cannot
+  // quietly forget it - and only on GET, since nothing else reads a feed.
+  //
+  // The value is the live one from localStorage rather than the saved
+  // preference on the account: the app repaints instantly when someone taps
+  // the language toggle and only persists the choice afterwards, so reading
+  // the stored one would serve a feed in the language they just left.
+  const url = method === 'GET' && !path.includes('lang=')
+    ? `/api${path}${path.includes('?') ? '&' : '?'}lang=${getLang()}`
+    : `/api${path}`;
+
   let res;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,

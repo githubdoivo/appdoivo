@@ -14,45 +14,6 @@ list of what is still owed, and by whom.
 These cannot start until he hands something over. Listing them is not a
 nudge; they sit here until they don't.
 
-### Three guest accounts missing from production
-
-Read off Ivo's own Guest DB on 12 Aug 2026: 24 guests plus the owner, 25
-accounts in all. `src/seedDemo.js` matches that list, so QA rebuilds
-itself correctly on every deploy. Production holds 22 and is missing:
-
-- **Joana Correia**
-- **Manuel Antunes**
-- **Zé Monteiro** — removed from production on 11 Aug for not being on
-  the shorter list that was to hand at the time. He was on the real one
-  all along.
-
-Nobody needs their key handed to them: each claims their own through the
-first-time name search. The quickest route is Ivo typing the three names
-into Manage Users himself — Claude Code's sandbox permits reading the
-production database but refuses to write to it, and the permission rule
-that would change that did not take effect mid-session (see the note in
-`.claude/settings.local.json`).
-
-Wants doing before invitations go out, since three guests currently have
-no way in. The party is 18–20 Sept 2026.
-
-### Replace both Fly API tokens
-
-`FLY_API_TOKEN_QA` and `FLY_API_TOKEN_PROD` were both echoed into a
-session transcript on 11 Aug 2026 — an unquoted value in `.env` run
-through `source`, which fails with the value itself in the error. They
-still work and are still in use; they should not be.
-
-Revoking has to happen in the Fly dashboard: the Fly API deliberately
-does not let a token revoke itself or any other. Once replaced, write
-them back **quoted** — `scripts/deploy.sh` now strips surrounding quotes
-when reading `.env`, so the quoted form is what survives the same
-accident a second time.
-
-The narrower replacement is one app-scoped deploy token per environment
-rather than an account-wide one, so a leaked QA credential cannot reach
-production at all.
-
 ### Express 5, after the party
 
 Dependabot raised this as PR #68 and then closed it automatically on
@@ -78,13 +39,21 @@ fifty guests pointed at it, for a dependency bump that fixes nothing we are
 exposed to. Do it after 20 September, on a branch, through QA like anything
 else.
 
-### High-resolution vectorised login background
+### A higher-resolution login illustration, if one exists
 
-The login background is still the placeholder noted in `styles.css`
-(`#login`). Ivo is providing a properly vectorised version of the same
-artwork. Once it lands, both the login image **and** every app icon size
-need regenerating from it - the current icons were cropped from the
-cottage in the placeholder, so they inherit its resolution.
+The artwork was replaced on 13 Sept 2026 with the version Ivo sent, and
+every icon was regenerated from it on the same crop (roof and both
+chimneys) - see `scripts/make-artwork.sh` for the exact numbers.
+
+It is worth knowing what it is not, though: the file is **804x1748**, and
+a modern iPhone is 1170-1320 device pixels wide, so it is being upscaled
+about 1.5x. For a soft painterly illustration that reads as atmosphere
+rather than detail, which is what this is, it holds up - the screenshots
+look fine. But if the original exists at a larger size (or as the vector
+it was drawn from), re-exporting at 1320px wide or more and re-running
+the script would be a free improvement.
+
+Not urgent, and explicitly not a blocker: what is shipped looks right.
 
 ### Copy rewrite
 

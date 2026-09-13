@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "version": "1.6.33",
+  "version": "1.6.55",
   "description": "Party web app with four features: wall, rata, snatch and plaza.",
   "type": "module",
   "main": "src/server.js",
@@ -18,8 +18,9 @@
     "node": ">=23.4"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "multer": "^2.3.0",
     "node-cron": "^4.6.0",
     "pdfkit": "^0.19.1",
