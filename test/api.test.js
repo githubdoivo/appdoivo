@@ -1808,6 +1808,51 @@ test('a user can change their own access key, given the correct current one', as
   assert.equal(newWorks.status, 200, 'new key should work immediately');
 });
 
+// Ivo's question: if two people end up choosing the same key, the second
+// one must be refused. It is - the existing test below covers the plain
+// case. These are the ways round it that nobody had checked.
+test('a key cannot be taken by changing its case, or by two people at once', async () => {
+  const ana = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Collision Ana' } });
+  const bruno = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Collision Bruno' } });
+
+  const taken = await api('POST', '/me/change-token', {
+    token: ana.data.token,
+    body: { currentToken: ana.data.token, newToken: 'partilhada1' },
+  });
+  assert.equal(taken.status, 200);
+
+  // Keys are lowercased on the way in, so capitals must not read as a
+  // different key - otherwise two people hold what they both type the same.
+  const shouted = await api('POST', '/me/change-token', {
+    token: bruno.data.token,
+    body: { currentToken: bruno.data.token, newToken: 'PARTILHADA1' },
+  });
+  assert.equal(shouted.status, 409, 'capitalising a taken key must not slip past the check');
+  assert.equal(shouted.data.error, 'err_key_taken');
+
+  // Two people choosing the same key in the same moment. One takes it; the
+  // other must be told it is taken, not handed a server error - people
+  // picking the same word at a party is ordinary, not a fault.
+  const carla = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Collision Carla' } });
+  const diogo = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Collision Diogo' } });
+  const [one, two] = await Promise.all([
+    api('POST', '/me/change-token', { token: carla.data.token, body: { currentToken: carla.data.token, newToken: 'simultanea9' } }),
+    api('POST', '/me/change-token', { token: diogo.data.token, body: { currentToken: diogo.data.token, newToken: 'simultanea9' } }),
+  ]);
+  const codes = [one.status, two.status].sort();
+  assert.deepEqual(codes, [200, 409], `expected one winner and one clean refusal, got ${codes}`);
+  assert.ok(![one.status, two.status].includes(500), 'a taken key is not a server error');
+
+  // Whatever happened, no two accounts may end up sharing a key.
+  const { distinct_keys: distinct, users } = db
+    .prepare('SELECT COUNT(DISTINCT token_hash) AS distinct_keys, COUNT(*) AS users FROM users').get();
+  assert.equal(distinct, users, 'two accounts are sharing a key');
+
+  for (const u of [ana, bruno, carla, diogo]) {
+    await api('DELETE', `/admin/users/${u.data.id}`, { token: ADMIN });
+  }
+});
+
 test('changing to a key that already belongs to someone else is rejected', async () => {
   const a = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'KeyOwnerA' } });
   const b = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'KeyOwnerB' } });

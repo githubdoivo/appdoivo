@@ -225,8 +225,25 @@ router.post('/me/change-token', (req, res) => {
     return res.status(409).json({ error: 'err_key_taken' });
   }
 
-  db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
-    .run(newHash, encryptToken(newToken), req.user.id);
+  try {
+    db.prepare("UPDATE users SET token_hash = ?, token_enc = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
+      .run(newHash, encryptToken(newToken), req.user.id);
+  } catch (err) {
+    // The check above and this write are two separate statements, and today
+    // nothing can slip between them - there is no await in the gap, so the
+    // handler runs to completion before another request is served. That is
+    // true by accident of how this function is written rather than by
+    // design, and it stops being true the moment somebody adds an await.
+    //
+    // token_hash is UNIQUE in the schema, so the database catches it either
+    // way; without this the caller would get a 500 for what is really "that
+    // key is taken". Two people picking the same key is a normal thing to
+    // happen at a party, not a server fault.
+    if (String(err?.code || '').includes('SQLITE_CONSTRAINT')) {
+      return res.status(409).json({ error: 'err_key_taken' });
+    }
+    throw err;
+  }
   res.json({ ok: true });
 });
 
