@@ -978,6 +978,49 @@ test('Miss Congeniality is a separate per-person round: duos split up, self-vote
   assert.equal(afterReset.data.congeniality.winner, null);
 });
 
+test('publishing a night twice replaces its post rather than stacking podiums', async () => {
+  // The publish button stays tappable once a night is published, so a
+  // double tap, a retried request on a bad connection, or a re-run after a
+  // reset used to leave several podiums on the Wall all claiming the same
+  // night. Found by publishing three times and counting.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+
+  const people = [];
+  for (const name of ['Dup One', 'Dup Two', 'Dup Three']) {
+    const u = await api('POST', '/admin/users', { token: ADMIN, body: { name } });
+    people.push(u.data);
+    await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night, userId: u.data.id } });
+  }
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  const roster = (await api('GET', `/votes/status?night=${night}`, { token: ADMIN })).data.contestants;
+  for (let i = 0; i < people.length; i += 1) {
+    await api('POST', '/votes', { token: people[i].token, body: { night, contestantId: roster[(i + 1) % roster.length].id } });
+  }
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+  for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+
+  const first = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(first.status, 201);
+
+  // Pin it, then publish again: the pin must survive, because re-publishing
+  // to correct a name should not quietly unpin what the party is looking at.
+  await api('PATCH', `/admin/plaza-posts/${first.data.id}/pin`, { token: ADMIN, body: { pinned: true } });
+  await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+
+  const posts = (await api('GET', '/plaza-posts', { token: ADMIN })).data.posts.filter((p) => p.type === 'podium');
+  assert.equal(posts.length, 1, `three publishes should leave one podium, found ${posts.length}`);
+  assert.ok(posts[0].pinnedAt, 'the pin should carry across a re-publish');
+  assert.equal(JSON.parse(posts[0].text).night, night);
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const p of people) await api('DELETE', `/admin/users/${p.id}`, { token: ADMIN });
+});
+
 // Every step of this had a test; the whole chain did not. Ivo reported
 // publishing "not working" and Miss Congeniality not appearing, and the
 // only way to tell a broken chain from a night sitting in the wrong state

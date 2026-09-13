@@ -398,10 +398,32 @@ export function castPlazaVote(userId, postId, optionId) {
  */
 export function createPodiumPost(authorId, { night, podium, congeniality }) {
   const payload = JSON.stringify({ night, podium, congeniality: congeniality ?? null });
+
+  // Publishing the same night twice replaces its post rather than adding a
+  // second one. A night has one result, and the button is tappable for as
+  // long as the night stays published - so a double tap, a retried request
+  // on a bad connection, or a re-run after a reset used to leave two or
+  // three podiums stacked on the Wall, all claiming to be the same night.
+  //
+  // The night is read back out of each snapshot rather than matched in SQL,
+  // so this does not depend on the JSON functions being compiled in.
+  const existing = db.prepare("SELECT id, pinned_at FROM plaza_posts WHERE type = 'podium'").all();
+  let pinnedAt = null;
+  for (const row of existing) {
+    let snap;
+    try { snap = JSON.parse(db.prepare('SELECT text FROM plaza_posts WHERE id = ?').get(row.id).text); }
+    catch { continue; }
+    if (snap?.night !== night) continue;
+    // Carry the pin across. Re-publishing to fix a typo in a name should not
+    // quietly unpin the thing the whole party is looking at.
+    if (row.pinned_at && !pinnedAt) pinnedAt = row.pinned_at;
+    db.prepare('DELETE FROM plaza_posts WHERE id = ?').run(row.id);
+  }
+
   const info = db.prepare(
-    "INSERT INTO plaza_posts (type, author_id, text) VALUES ('podium', ?, ?)"
-  ).run(authorId, payload);
-  return { ok: true, id: info.lastInsertRowid };
+    "INSERT INTO plaza_posts (type, author_id, text, pinned_at) VALUES ('podium', ?, ?, ?)"
+  ).run(authorId, payload, pinnedAt);
+  return { ok: true, id: info.lastInsertRowid, replaced: existing.length > 0 };
 }
 
 /**
