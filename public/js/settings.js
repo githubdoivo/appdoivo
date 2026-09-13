@@ -1383,6 +1383,17 @@ function renderCongenialityAdmin() {
   const podiumReady = state?.resultsPhase === 'all';
   const congRevealed = status === 'revealed' || (status === 'closed' && !hasVotes);
   $('publish-podium-btn').disabled = !podiumReady || !congRevealed;
+
+  // A disabled button with no reason is its own kind of broken: it reads as
+  // "this feature does not work" rather than "there is a step left". Say
+  // which step. Cleared once it is publishable so the line is not standing
+  // there claiming something when nothing is wrong.
+  const why = $('publish-podium-msg');
+  if (why && !why.dataset.busy) {
+    if (!podiumReady) why.textContent = t('publish_needs_reveal');
+    else if (!congRevealed) why.textContent = t('publish_needs_congeniality');
+    else why.textContent = '';
+  }
 }
 
 $('congeniality-advance-btn').addEventListener('click', async () => {
@@ -1442,6 +1453,7 @@ $('congeniality-reset-btn').addEventListener('click', async () => {
 $('publish-podium-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_publish_podium')))) return;
   const msg = $('publish-podium-msg');
+  msg.dataset.busy = '1';
   msg.classList.remove('error');
   msg.textContent = '';
   try {

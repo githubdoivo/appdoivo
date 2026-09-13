@@ -978,6 +978,85 @@ test('Miss Congeniality is a separate per-person round: duos split up, self-vote
   assert.equal(afterReset.data.congeniality.winner, null);
 });
 
+// Every step of this had a test; the whole chain did not. Ivo reported
+// publishing "not working" and Miss Congeniality not appearing, and the
+// only way to tell a broken chain from a night sitting in the wrong state
+// was to walk it end to end. It works - but nothing was guarding the walk,
+// so this does, from empty night to a post on the Wall carrying both rounds.
+test('the whole Snatch night, end to end: register, vote, close, reveal, congeniality, publish', async () => {
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+
+  const people = [];
+  for (const name of ['Chain Ana', 'Chain Bruno', 'Chain Carla']) {
+    const u = await api('POST', '/admin/users', { token: ADMIN, body: { name } });
+    people.push({ name, token: u.data.token, id: u.data.id });
+    await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night, userId: u.data.id } });
+  }
+
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  // force: not every eligible account entered, which is a warning the owner
+  // is meant to be able to override - and on a real night always will.
+  const opened = await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
+  assert.equal(opened.status, 200, 'voting should open once the warning is acknowledged');
+
+  const roster = (await api('GET', `/votes/status?night=${night}`, { token: ADMIN })).data.contestants;
+  for (const p of people) {
+    const target = roster.find((c) => c.name !== p.name);
+    const v = await api('POST', '/votes', { token: p.token, body: { night, contestantId: target.id } });
+    assert.equal(v.status, 201, `${p.name} could not vote`);
+  }
+
+  await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
+
+  // Publishing must be refused until every placement is out - the post
+  // freezes all three, so publishing at 'first' would bake in two blanks.
+  const early = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(early.status, 400);
+  assert.equal(early.data.error, 'err_results_not_revealed');
+
+  for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
+  const revealed = await api('GET', `/votes/status?night=${night}`, { token: ADMIN });
+  assert.equal(revealed.data.resultsPhase, 'all', 'four reveals should take a night from hidden to all');
+
+  // Miss Congeniality is its own round, and an open one blocks publishing:
+  // the post carries its winner, so going out mid-round would freeze a
+  // half-counted result into a snapshot that cannot be rewritten.
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+  const midRound = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(midRound.data.error, 'err_congeniality_not_revealed');
+
+  for (const p of people) {
+    const st = await api('GET', `/votes/status?night=${night}`, { token: p.token });
+    const target = st.data.congeniality.candidates.find((c) => c.id !== p.id);
+    const v = await api('POST', '/congeniality/vote', { token: p.token, body: { night, targetUserId: target.id } });
+    assert.equal(v.status, 201, `${p.name} could not cast a congeniality vote`);
+  }
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+
+  const published = await api('POST', `/admin/voting/${night}/publish-podium`, { token: ADMIN });
+  assert.equal(published.status, 201, 'the night should publish once both rounds are finished');
+
+  // And what landed has to carry both rounds - the placements *and* the
+  // congeniality winner. A post with an empty podium, or with congeniality
+  // null after the round actually ran, is the failure being guarded here.
+  const wall = await api('GET', '/plaza-posts', { token: ADMIN });
+  const post = wall.data.posts.find((p) => p.type === 'podium');
+  assert.ok(post, 'no podium post reached the Wall');
+  const snapshot = JSON.parse(post.text);
+  assert.equal(snapshot.night, night);
+  assert.equal(snapshot.podium.length, 3, 'all three placements should be in the snapshot');
+  assert.deepEqual(snapshot.podium.map((r) => r.rank), [1, 2, 3]);
+  assert.ok(snapshot.podium[0].votes >= snapshot.podium[1].votes, 'the podium should be in vote order');
+  assert.ok(snapshot.congeniality, 'miss congeniality ran, so its winner must be in the post');
+  assert.ok(snapshot.congeniality.votes > 0);
+
+  await api('POST', '/admin/plaza-posts/wipe', { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  for (const p of people) await api('DELETE', `/admin/users/${p.id}`, { token: ADMIN });
+});
+
 test('publishing a Snatch result to the Wall needs the podium revealed first, and snapshots it so a later reset cannot rewrite it', async () => {
   const night = 'furnished';
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
