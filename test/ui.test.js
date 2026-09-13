@@ -28,7 +28,8 @@ process.env.ENABLE_MEMO = 'true';
 
 const { default: app, seedResult } = await import('../src/app.js');
 const { default: db } = await import('../src/db.js');
-const { MEMO_DIR } = await import('../src/memo.js');
+const { MEMO_DIR, ensureTodaysSlots, zonedTimeToUtc } = await import('../src/memo.js');
+const { today, getTimezone, now, setClockForTests } = await import('../src/time.js');
 
 // The admin's real key is always generated (see seed() in db.js - no more
 // ADMIN_TOKEN pinning it, even outside production), so this reads the
@@ -2748,17 +2749,44 @@ test('the admin download-photos button shows progress, triggers a real download,
 // this test process (only app.js, not server.js) - slots are forced open
 // the same way api.test.js does, with a direct DB write.
 
-function markMemoSlotNotified(slotId, when = new Date()) {
+// Defaults to the app's clock rather than Date.now(), so a pinned test and
+// the 15-minute upload window it is exercising agree on what "now" means.
+function markMemoSlotNotified(slotId, when = new Date(now())) {
   const ts = when.toISOString().replace('T', ' ').replace('Z', '');
   db.prepare('UPDATE memo_slots SET notified_at = ? WHERE id = ?').run(ts, slotId);
+}
+
+// Memo's five moments only exist inside a 14:00-02:00 window, and the app's
+// day does not roll over until 06:00 - so between 02:00 and 06:00 there is
+// deliberately no schedule to generate, and after roughly 23:15 there is no
+// longer room for all five. Any test wanting a normal full day has to say
+// what time it is instead of inheriting the hour the suite started at.
+//
+// This is the same seam api.test.js uses. It was missed here first time
+// round, which is why the suite went red at 02:12 one morning on a change
+// that had nothing to do with Memo.
+function withFullMemoDay(fn) {
+  const restore = setClockForTests(zonedTimeToUtc(today(), 15, 0, getTimezone()).toISOString());
+  try {
+    db.prepare('DELETE FROM memo_slots').run();
+    ensureTodaysSlots();
+    return fn();
+  } finally {
+    restore();
+  }
 }
 
 test('Memo: a guest can shoot an open moment, it shows in the shared feed, another guest can react, and the owner publishes its video to the Wall', async () => {
   const { MEMO_REACTION_EMOJI } = await import('../src/memo.js');
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Tester' } });
   const bystander = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo UI Bystander' } });
-  const today = await api('GET', '/memo/today', { token: user.token });
-  const slot = today.slots[0];
+  // Built at a pinned afternoon, then read back over HTTP like any guest
+  // would. Generating it up front is what stops the hour of the run
+  // deciding whether this test has five moments, fewer, or none.
+  withFullMemoDay(() => {});
+  const todayRes = await api('GET', '/memo/today', { token: user.token });
+  assert.ok(todayRes.slots?.length, `expected a full day of moments, got ${JSON.stringify(todayRes)}`);
+  const slot = todayRes.slots[0];
   markMemoSlotNotified(slot.id);
 
   const context = await iphoneContext('iPhone 13');
