@@ -560,6 +560,25 @@ function stopMemoPolling() {
   if (memoTickTimer) { clearInterval(memoTickTimer); memoTickTimer = null; }
 }
 
+/**
+ * The capture attribute, but only where there is a camera to capture from.
+ *
+ * On a phone it is the point of Memo: the dot opens the camera rather than
+ * the photo library, so a moment is shot now and not dug out of last
+ * August. On a desktop there is no camera app to hand off to, and the
+ * attribute only narrows what the file picker will offer - which is why
+ * uploading from a laptop did nothing at all.
+ *
+ * Accept covers video as well as stills. The server has always taken both
+ * (see the fileFilter on the upload route) and the feed renders a <video>
+ * for them, but the input asked for image/* only - so the video half of a
+ * supported feature was unreachable from every device.
+ */
+function memoCaptureAttr() {
+  const hasCamera = window.matchMedia?.('(pointer: coarse)')?.matches;
+  return hasCamera ? ' capture="environment"' : '';
+}
+
 function memoUploadUrl(uploadId) {
   return `/api/memo/uploads/${uploadId}?token=${encodeURIComponent(getToken())}`;
 }
@@ -608,7 +627,7 @@ function renderMemoDots() {
     }
     return `<button type="button" class="memo-dot memo-dot-open" data-memo-upload-btn="${s.id}"
               aria-label="${esc(t('memo_shoot_btn'))}"></button>
-            <input type="file" accept="image/*" capture="environment"
+            <input type="file" accept="image/*,video/*"${memoCaptureAttr()}
               class="file-input-visually-hidden" data-memo-file-input="${s.id}" />`;
   }).join('');
 

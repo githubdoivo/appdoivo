@@ -2964,6 +2964,47 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
   await context.close();
 });
 
+// Ivo could not upload to Memo from a laptop. Two faults in one line of
+// markup: capture="environment" is meaningless without a camera and only
+// narrows what the picker offers, and accept was image/* on an input whose
+// server has always taken video too - so the video half of the feature was
+// unreachable from every device, phone included.
+test('the Memo picker takes video as well as stills, and drops capture where there is no camera', async () => {
+  const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Desktop' } });
+  withFullMemoDay(() => {});
+  const today = await api('GET', '/memo/today', { token: user.token });
+  markMemoSlotNotified(today.slots[0].id);
+
+  // A desktop-shaped context: fine pointer, no touch, so no camera to hand
+  // off to. This is the case that did nothing at all.
+  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: false });
+  const page = await loginPage(desktop, user.token);
+  await page.click('[data-tab="memo"]');
+  await page.waitForSelector('[data-memo-file-input]', { timeout: WAIT_TIMEOUT });
+
+  const onDesktop = await page.$eval('[data-memo-file-input]', (el) => ({
+    accept: el.getAttribute('accept'),
+    capture: el.getAttribute('capture'),
+  }));
+  assert.match(onDesktop.accept, /video/, 'the server accepts video, so the picker must offer it');
+  assert.match(onDesktop.accept, /image/, 'stills must still be offered');
+  assert.equal(onDesktop.capture, null, 'capture only narrows the picker when there is no camera behind it');
+  await desktop.close();
+
+  // On a phone the capture attribute is the whole point of Memo - the dot
+  // opens the camera rather than the library, so a moment is shot now
+  // rather than dug out of last August.
+  const phone = await iphoneContext('iPhone 13');
+  const phonePage = await loginPage(phone, user.token);
+  await phonePage.click('[data-tab="memo"]');
+  await phonePage.waitForSelector('[data-memo-file-input]', { timeout: WAIT_TIMEOUT });
+  const onPhone = await phonePage.$eval('[data-memo-file-input]', (el) => el.getAttribute('capture'));
+  assert.equal(onPhone, 'environment', 'a phone should still go straight to the camera');
+  await phone.close();
+
+  await api('DELETE', `/admin/users/${user.id}`, { token: ADMIN });
+});
+
 test('Memo is gated behind ENABLE_MEMO - hidden from the tab bar and the admin panel when disabled', async () => {
   process.env.ENABLE_MEMO = 'false';
   try {
