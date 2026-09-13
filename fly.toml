@@ -51,7 +51,15 @@ primary_region = "cdg"
   # it exists for. The owner's manual "open the next moment" trigger still
   # works meanwhile, which is what makes prod testable.
   ENABLE_MEMO = "true"
-  MEMO_START_DATE = "2026-09-17"
+  # Was 2026-09-17 - the day before the party, so guests got a day's margin
+  # rather than a week of notifications. Brought forward to the 13th at
+  # Ivo's request so friends can test Memo alongside everything else.
+  #
+  # Opening it to everyone also starts the scheduler broadcasting (see
+  # memoScheduleActive() in memo.js): five pushes a day, inside the
+  # 14:00-02:00 window, from now until the party. That is the trade, and it
+  # is why the date existed in the first place.
+  MEMO_START_DATE = "2026-09-13"
 
 [[mounts]]
   source = "appdoivo_data"
