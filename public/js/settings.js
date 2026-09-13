@@ -409,6 +409,17 @@ async function loadVotingState() {
     setLeadAction(btn, 'advance', t(NEXT_REVEAL_LABEL[phase]),
       phase === 'all' ? '' : 'reveal-next', phase === 'all');
   }
+
+  // A night that has already been revealed all the way through leaves this
+  // button disabled and reading "concluído", with nothing saying where to
+  // go next. That is a dead end rather than a finished job: the way to run
+  // the night again is the reset beside it, and the reset is an icon with
+  // no words on it. Say so, rather than leaving someone tapping a button
+  // that will never do anything again.
+  const msg = $('voting-msg');
+  if (msg && !msg.dataset.busy && started && status === 'closed' && phase === 'all') {
+    msg.textContent = t('voting_all_revealed');
+  }
 }
 
 /** Paints a phase button: its icon, its name, what it will do, and whether

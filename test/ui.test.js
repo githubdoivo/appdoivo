@@ -3748,6 +3748,24 @@ test('the reveal steps advance when confirmed, and say so when they are not', as
   await page.waitForTimeout(600);
   assert.equal(await phase(), 'third', 'confirming should move the night on one stage');
 
+  // Reveal the rest, then check the end state is not a dead end. A night
+  // that has been fully revealed leaves this button disabled and reading
+  // "done", and the only way to run it again is the reset beside it - which
+  // is an icon with no words on it. Ivo hit exactly this and read it as the
+  // button being jammed.
+  for (let i = 0; i < 3; i += 1) {
+    await page.click('#voting-advance-btn');
+    await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+    await page.click('.modal-actions button:last-child');
+    await page.waitForTimeout(500);
+  }
+  assert.equal(await phase(), 'all', 'four confirmed reveals should finish the night');
+  assert.equal(await page.$eval('#voting-advance-btn', (el) => el.disabled), true,
+    'with everything revealed there is nothing left for this button to do');
+  const endMsg = await page.$eval('#voting-msg', (el) => el.textContent.trim());
+  assert.ok(endMsg.length > 0,
+    'a disabled button with no explanation is a dead end - it must say how to run the night again');
+
   await context.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   for (const p of people) await api('DELETE', `/admin/users/${p.id}`, { token: ADMIN });
