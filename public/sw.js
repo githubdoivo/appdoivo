@@ -7,6 +7,47 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Android will only mint a proper, Google-signed app wrapper for a site
+// whose service worker handles fetch. Without one, some browsers fall back
+// to a legacy wrapper built against an old Android SDK - which is what
+// Play Protect refuses to install with "built for an older version of
+// Android". So this handler has to exist.
+//
+// It is network-first and caches only the page shell, deliberately. The
+// rest of the app is served no-cache on purpose (see the note by
+// express.static in app.js) because a stale bundle masking an already
+// shipped fix has cost real debugging time here before. Network-first
+// keeps that: online, every request goes to the network exactly as it did
+// before this handler existed, and nothing stale is ever served. The cache
+// is only reached for when the network is not there at all.
+const SHELL_CACHE = 'shell-v1';
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  // Navigations only. Assets, API calls and everything else are left
+  // completely alone - passing them through untouched is the whole point.
+  if (request.method !== 'GET' || request.mode !== 'navigate') return;
+
+  event.respondWith((async () => {
+    try {
+      const fresh = await fetch(request);
+      // Keep the last good page so a cold start with no signal opens
+      // something rather than the browser's dinosaur.
+      if (fresh && fresh.ok) {
+        const cache = await caches.open(SHELL_CACHE);
+        cache.put('/', fresh.clone()).catch(() => {});
+      }
+      return fresh;
+    } catch {
+      const cached = await caches.match('/', { cacheName: SHELL_CACHE });
+      // No cached shell either - let the browser show its own error, which
+      // is more honest than a blank page we invented.
+      if (cached) return cached;
+      throw new Error('offline and nothing cached');
+    }
+  })());
+});
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {

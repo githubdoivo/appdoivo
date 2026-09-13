@@ -421,6 +421,42 @@ test('visiting /settings.html with no session redirects to the login page', asyn
 // good. Neither needs a slow runner to happen - a phone moving between rooms
 // does the same thing.
 
+// Android will only mint a proper, Google-signed wrapper for a site whose
+// service worker handles fetch; without one, some browsers fall back to a
+// legacy wrapper and Play Protect refuses it as "built for an older version
+// of Android". Ivo hit exactly that installing on his phone.
+//
+// The risk in adding one is undoing the app's deliberate no-cache: a stale
+// bundle hiding an already-shipped fix has cost real debugging time here.
+// So this asserts both halves - the handler exists, and it does not serve
+// anything stale while the network is there.
+test('the service worker handles fetch, without serving anything stale', async () => {
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN);
+
+  const hasFetchHandler = await page.evaluate(async () => {
+    const res = await fetch('/sw.js', { cache: 'no-store' });
+    const src = await res.text();
+    return /addEventListener\(\s*['"]fetch['"]/.test(src);
+  });
+  assert.ok(hasFetchHandler, 'no fetch handler - Android will not build a proper app wrapper');
+
+  // Assets must still come from the network, not a cache. Change something
+  // server-side and the next load has to see it.
+  const posted = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'freshness check' },
+  });
+  await page.reload();
+  await page.waitForSelector('.plaza-post', { timeout: WAIT_TIMEOUT });
+  const seen = await page.$$eval('.plaza-post-text', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(seen.some((t) => t.includes('freshness check')),
+    'a reload served stale content - the fetch handler must stay network-first');
+
+  await api('DELETE', `/admin/plaza-posts/${posted.id}`, { token: ADMIN });
+  await context.close();
+});
+
 test('the app still opens when service worker registration never settles', async () => {
   const context = await iphoneContext('iPhone 13');
   await context.addInitScript(() => {

@@ -1,11 +1,20 @@
 {
+  "id": "/",
   "name": "appdoivo",
   "short_name": "appdoivo",
   "description": "Wall, rata, snatch and plaza - everything for the party.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#e2d8f2",
   "theme_color": "#e2d8f2",
+  "lang": "pt-PT",
+  "dir": "ltr",
+  "categories": [
+    "social",
+    "entertainment"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
