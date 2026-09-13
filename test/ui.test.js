@@ -3818,12 +3818,25 @@ test('the reveal steps advance when confirmed, and say so when they are not', as
   const msg = await page.$eval('#voting-msg', (el) => el.textContent.trim());
   assert.ok(msg.length > 0, 'declining silently is what made this look broken - it must say something');
 
+  // And the screen has to change when a reveal *does* happen. The button is
+  // the same arrow at every stage and its label lives in aria-label, which a
+  // phone never shows - so without this the screen was byte-identical after
+  // confirming, and four taps read as a dead button. This is the fault Ivo
+  // actually hit; it was never about contestants or about being blocked.
+  const stateLine = () => page.$eval('#voting-msg', (el) => el.textContent.trim());
+  const beforeReveal = await stateLine();
+
   // Confirming advances it.
   await page.click('#voting-advance-btn');
   await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
   await page.click('.modal-actions button:last-child');
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(900);
   assert.equal(await phase(), 'third', 'confirming should move the night on one stage');
+
+  const afterReveal = await stateLine();
+  assert.notEqual(afterReveal, beforeReveal,
+    'the screen must visibly change when a position is revealed, or the button reads as dead');
+  assert.ok(afterReveal.length > 0, 'the night should say what has been revealed so far');
 
   // Reveal the rest, then check the end state is not a dead end. A night
   // that has been fully revealed leaves this button disabled and reading
@@ -3846,6 +3859,44 @@ test('the reveal steps advance when confirmed, and say so when they are not', as
   await context.close();
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
   for (const p of people) await api('DELETE', `/admin/users/${p.id}`, { token: ADMIN });
+});
+
+// The same complaint as the tour, one screen over: dialogs put the end of
+// one sentence and the start of the next on the same line. They come from
+// one place (modal.js), so every confirm in the app is fixed or none is -
+// this checks the Memo one Ivo was looking at, and then a second from
+// somewhere else to be sure it is the shared path and not a special case.
+test('a dialog never puts two sentences on one line', async () => {
+  const context = await iphoneContext('iPhone SE');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="memo"]');
+  await page.waitForSelector('#memo-trigger-btn', { timeout: WAIT_TIMEOUT });
+
+  // "this opens the next moment and notifies everyone. continue?" - two
+  // sentences, and the one he was looking at.
+  await page.click('#memo-trigger-btn');
+  await page.waitForSelector('.modal-overlay:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+  const readModal = () => page.$eval('.modal-message', (el) => ({
+    text: el.textContent.trim(),
+    whiteSpace: getComputedStyle(el).whiteSpace,
+    // How many lines the browser actually laid out, rather than how many we
+    // asked for - the point is what a person sees.
+    lines: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+  }));
+
+  const memo = await readModal();
+  const sentences = memo.text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  if (sentences.length > 1) {
+    assert.ok(memo.text.includes('\n'),
+      `two sentences with no break between them: "${memo.text}"`);
+    assert.ok(memo.lines >= sentences.length,
+      'each sentence should occupy at least its own line');
+  }
+  assert.equal(memo.whiteSpace, 'pre-line', 'the newlines only render because of this');
+
+  await page.click('.modal-actions button:first-child');
+  await context.close();
 });
 
 test('the app tour never puts two sentences on one line', async () => {

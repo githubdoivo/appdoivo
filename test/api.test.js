@@ -47,7 +47,7 @@ const { MEMO_DIR, MEMO_MIN_GAP_MINUTES, ensureTodaysSlots, zonedTimeToUtc } = aw
 const { renderDedications, newDedicationsDocument } = await import('../src/dedicationsPdf.js');
 const { translationsFor, queue, pending, markOk, markFailed, wipeFor, MAX_ATTEMPTS } =
   await import('../src/translations.js');
-const { detectLang, isConfigured, interpretResponse, backfill } = await import('../src/translate.js');
+const { detectLang, isConfigured, interpretResponse, backfill, systemPromptFor } = await import('../src/translate.js');
 const { today, setClockForTests, now, getTimezone } = await import('../src/time.js');
 
 const ADMIN = seedResult.token;
@@ -2332,6 +2332,44 @@ test('content written before translations existed can be picked up by a backfill
 
   db.prepare('DELETE FROM consequences').run();
   db.prepare('DELETE FROM translations').run();
+});
+
+test('the translator is told, in detail, that portuguese means portugal', async () => {
+  // Ivo's emphasis, 14 Sept 2026, and he is right to press on it: a model
+  // left to its own devices drifts to Brazilian Portuguese, because there is
+  // far more of it about. Verified live at the time - "tens de", "telemóvel",
+  // "casa de banho", "sumo", "equipa", "ecrã", "apanha o autocarro", and the
+  // gerund avoided ("estás a dançar", not "está dançando").
+  //
+  // A live check cannot live in this suite, which must never reach the API.
+  // So this guards the instruction instead: if someone trims the prompt, or
+  // swaps the model and rewrites it, this fails rather than the party
+  // quietly reading in the wrong Portuguese. scripts/check-translation.mjs
+  // is the live counterpart, run by hand.
+  const pt = systemPromptFor('pt');
+
+  assert.match(pt, /european portuguese/i, 'the target must be named as European Portuguese');
+  assert.match(pt, /never brazilian/i, 'saying which one to use is not the same as saying which to avoid');
+
+  // The word pairs are the part that actually steers it. Each of these is a
+  // different word in Portugal and in Brazil.
+  for (const [ptPT, ptBR] of [
+    ['ecrã', 'tela'], ['telemóvel', 'celular'], ['casa de banho', 'banheiro'],
+    ['sumo', 'suco'], ['equipa', 'equipe'], ['autocarro', 'ônibus'],
+    ['utilizador', 'usuário'], ['partilhar', 'compartilhar'],
+  ]) {
+    assert.ok(pt.includes(ptPT), `the prompt no longer asks for "${ptPT}"`);
+    assert.ok(pt.includes(ptBR), `the prompt no longer warns against "${ptBR}"`);
+  }
+
+  // The two grammatical tells, which give a translation away faster than
+  // vocabulary does.
+  assert.match(pt, /tens de/, 'tu-form addressing must be spelled out');
+  assert.match(pt, /never the gerund|estás a dançar/, 'the gerund rule must be spelled out');
+
+  // English should not be caught by any of this.
+  const en = systemPromptFor('en');
+  assert.match(en, /English \(UK\)/, 'english should be UK-leaning, as the rest of the app is');
 });
 
 test('a model that answers instead of translating is ignored, not published', async () => {

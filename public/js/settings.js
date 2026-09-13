@@ -410,17 +410,33 @@ async function loadVotingState() {
       phase === 'all' ? '' : 'reveal-next', phase === 'all');
   }
 
-  // A night that has already been revealed all the way through leaves this
-  // button disabled and reading "concluído", with nothing saying where to
-  // go next. That is a dead end rather than a finished job: the way to run
-  // the night again is the reset beside it, and the reset is an icon with
-  // no words on it. Say so, rather than leaving someone tapping a button
-  // that will never do anything again.
+  // Say where the night actually is.
+  //
+  // Revealing changes the button's icon not at all - it is the same arrow
+  // for every stage - and its label only through aria-label and title,
+  // neither of which a phone shows. So confirming a reveal left the screen
+  // byte-identical, and four taps in a row looked like a button that does
+  // nothing. The phase was advancing the whole time; there was simply no
+  // way to see it.
   const msg = $('voting-msg');
-  if (msg && !msg.dataset.busy && started && status === 'closed' && phase === 'all') {
-    msg.textContent = t('voting_all_revealed');
+  if (msg && !msg.dataset.busy) {
+    msg.textContent = started ? t(REVEAL_STATE_LABEL[status === 'closed' ? phase : status] ?? '') : '';
   }
 }
+
+// What has been revealed so far, in words, for each state the night can be
+// in. Keyed by voting status while voting is still running, and by reveal
+// phase once it has closed - those are the two things the owner needs to
+// know and they never overlap.
+const REVEAL_STATE_LABEL = {
+  registration: 'voting_state_registration',
+  open: 'voting_state_open',
+  hidden: 'voting_state_nothing_revealed',
+  third: 'voting_state_third_out',
+  second: 'voting_state_second_out',
+  first: 'voting_state_first_out',
+  all: 'voting_all_revealed',
+};
 
 /** Paints a phase button: its icon, its name, what it will do, and whether
  *  there is anything left for it to do. */

@@ -2724,15 +2724,31 @@ html.mode-dark .plaza-post-type { color: #fff; }
 }
 .modal-card {
   width: 100%;
-  max-width: 300px;
-  padding: 20px 20px;
+  /* Was 300px. At this size that is roughly forty characters a line, which
+     wraps a short sentence into three and made every dialog read as a
+     block. 340 is still comfortably narrow on the smallest phone (320px
+     wide, minus the overlay's own padding) but gives a sentence room to be
+     one or two lines rather than three. */
+  max-width: 340px;
+  padding: 22px 20px 18px;
   background: var(--paper-2);
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   text-align: center;
 }
-.modal-message { color: var(--ink); line-height: 1.5; margin: 0 0 16px; white-space: pre-line; font-size: 0.92rem; }
+.modal-message {
+  color: var(--ink);
+  line-height: 1.55;
+  margin: 0 0 18px;
+  /* Sentences arrive newline-separated from oneSentencePerLine() in
+     modal.js - this is what renders them as separate lines. */
+  white-space: pre-line;
+  font-size: 0.92rem;
+  /* Evens out the wrap within a sentence, so a line is not left carrying a
+     single trailing word under a full one. Ignored where unsupported. */
+  text-wrap: pretty;
+}
 .modal-actions { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .modal-actions button { flex: 1; padding: 9px 16px; font-size: 0.74rem; }
 /* A single-button alert (e.g. notif on/off) doesn't need a full-width bar -

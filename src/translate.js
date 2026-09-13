@@ -66,9 +66,25 @@ rules:
 - do not soften, explain, censor or add anything.
 - keep names, nicknames and place names exactly as written.
 - keep any emoji.
-- portuguese means european portuguese - "ecrã" not "tela", "utilizador" not "usuário", tu-form verbs.
+- PORTUGUESE ALWAYS MEANS EUROPEAN PORTUGUESE, FROM PORTUGAL. never brazilian.
+  use: ecrã (not tela), utilizador (not usuário), telemóvel (not celular),
+  casa de banho (not banheiro), sumo (not suco), equipa (not equipe),
+  autocarro (not ônibus), partilhar (not compartilhar), comboio (not trem),
+  frigorífico (not geladeira), rapariga (not menina/garota), fixe (not legal).
+  address people as tu, never você: "tens de" not "você tem que".
+  use "estar a + infinitive", never the gerund: "estás a dançar", not
+  "está dançando". spelling follows portugal: "facto", "contacto", "óptimo"
+  are acceptable, but do not add letters brazilian spelling drops.
 - avoid gendered nouns and pronouns where the language allows it.
 - if the text is already in {TARGET}, set already_in_target true and copy it into translation character for character.`;
+
+/** The system prompt as sent, with the target language filled in. Exported
+ *  so the house rules can be guarded by a test rather than only by whoever
+ *  last read this file - the European Portuguese rule in particular is one
+ *  Ivo cares about and one a model will quietly drift away from. */
+export function systemPromptFor(targetLang) {
+  return SYSTEM.split('{TARGET}').join(LANG_NAMES[targetLang] ?? targetLang);
+}
 
 let client = null;
 

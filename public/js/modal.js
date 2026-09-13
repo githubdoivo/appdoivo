@@ -16,9 +16,30 @@ function build() {
   actionsEl = overlay.querySelector('.modal-actions');
 }
 
+/**
+ * One sentence per line.
+ *
+ * Most of these messages are two short sentences - "this opens the next
+ * moment and notifies everyone. continue?" - and left to wrap freely the
+ * end of one and the start of the next share a line, which reads as a wall
+ * rather than as a statement and a question. Splitting rather than styling,
+ * for the same reason as the tour: no text-wrap setting puts a line break
+ * at a sentence boundary.
+ *
+ * The element is already white-space: pre-line, so newlines are enough -
+ * no markup, and textContent keeps the message unescaped-by-construction.
+ */
+function oneSentencePerLine(message) {
+  return String(message ?? '')
+    .split(/(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 function open(message, buttons) {
   build();
-  messageEl.textContent = message;
+  messageEl.textContent = oneSentencePerLine(message);
   actionsEl.innerHTML = '';
   return new Promise((resolve) => {
     let done = false;
