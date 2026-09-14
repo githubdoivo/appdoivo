@@ -1448,24 +1448,67 @@ body.theme-memo .highlight::before {
   border-left-color: var(--outfit);
 }
 
-/* Plaza's own rule, chosen rather than inherited. Without an emblem it was
-   falling through to the base .highlight, whose 5px bar exists as a
-   fallback for an unthemed page and is heavy beside eight lines of a
-   dedication. Thinner, in the night's own colour, and the text keeps its
-   distance from it. */
-body.theme-plaza .highlight {
-  border-left: 3px solid var(--clay);
-  padding-left: 18px;
-}
+/* Plaza's emblem is a village, and it is built differently from every other
+   one in the app. The others are a single drawing pinned to the right edge.
+   This one is one house, repeated down the left margin, and the number of
+   houses is decided by how much somebody wrote.
 
-/* Plaza has no emblem, deliberately - the only section without one.
-   Its motif was never a free-standing drawing like the others (a tail,
-   reeds, a lens): it is a string of bunting, a repeat, and it read as
-   something falling out of the card at every size and orientation we tried.
-   Roughly thirty replacements were drawn and none of them belonged.
-   The reason they could not: this is the page where the writing is, the
-   open chat and the dedication, and a picture in the margin of a long
-   message competes with it. The rule and the words carry it here. */
+   That difference is the whole reason it works here. Plaza went without an
+   emblem for a long time - roughly thirty free-standing drawings were tried
+   and none belonged, because this is the page where the writing is, and a
+   picture in the margin of an eight-line dedication competes with it. A
+   repeat does not compete: it reads as texture beside a long message and as
+   a single house beside a short one.
+
+   mask-repeat: space is doing the load-bearing work. It lays down only as
+   many whole tiles as fit and shares the leftover space out between them,
+   so a house is never sliced off at the top or bottom of the block - which
+   is the failure every tiled version of this had before. repeat-y would
+   clip; space cannot. Supported in WebKit (checked against the same engine
+   iOS Safari runs), which is the only place this has to hold up.
+
+   Two consequences worth knowing before changing anything here:
+
+   - min-height exists so that a one-line dedication is still tall enough to
+     hold one entire house. Drop it and the shortest messages lose their
+     emblem to the no-clipping rule. It is tied to the 64px tile: if the
+     tile grows, this has to grow with it.
+
+   - The tile is ONE house, so every house is identical. An earlier version
+     alternated a gabled house with a flat-topped block, which looked better,
+     but a repeating tile is by definition the same every time - variety and
+     never-clipping cannot both come from one tile. Never-clipping won.
+
+   The house itself is lifted from this theme's own background (see the
+   background-image in body.theme-plaza): pitched roof, chimney, two lit
+   windows, a door. Painted as a mask in --clay like every other emblem, so
+   it follows the accent into dark mode on its own. */
+body.theme-plaza .highlight {
+  position: relative;
+  border-left: none;
+  padding-left: 38px;
+  padding-right: 18px;
+  min-height: 72px;
+}
+body.theme-plaza .highlight::before {
+  content: '';
+  position: absolute;
+  /* Inset top and bottom so the first and last house do not sit flush
+     against the edges of the block. */
+  inset: 4px auto 4px 0;
+  width: 26px;
+  background: var(--clay);
+  opacity: 0.5;
+  pointer-events: none;
+  -webkit-mask-image: var(--plaza-casa);
+  mask-image: var(--plaza-casa);
+  -webkit-mask-repeat: no-repeat space;
+  mask-repeat: no-repeat space;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+  -webkit-mask-size: 26px 64px;
+  mask-size: 26px 64px;
+}
 
 /* ----------------------------- Rata / Outfit ----------------------------- */
 
@@ -2054,6 +2097,11 @@ body.theme-plaza {
      purpose - fewer, larger flags was the call. */
   --highlight-motif: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='72'%3E%3Cpath d='M3 0 V72' stroke='%23000' stroke-opacity='0.65' stroke-width='1.4'/%3E%3Cpath d='M3.9 4 L3.9 18 L15 11 Z' fill='%23000' fill-opacity='0.85'/%3E%3Cpath d='M3.9 40 L3.9 54 L15 47 Z' fill='%23000' fill-opacity='0.45'/%3E%3C/svg%3E");
   --highlight-motif-h: 72px;
+  /* One house from the background above, centred in a 64px tile so the gaps
+     above and below it are equal. The tile height is the spacing dial: taller
+     tile, fewer and airier houses. Must stay in step with the mask-size and
+     min-height on .highlight. */
+  --plaza-casa: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='26'%20height='64'%3E%3Cg%20fill='%23000'%3E%3Crect%20x='18.5'%20y='15.75'%20width='3.2'%20height='6'%20fill-opacity='0.9'/%3E%3Cpolygon%20points='2,27.75%2013,15.25%2024,27.75'%20fill-opacity='0.9'/%3E%3Crect%20x='4.5'%20y='27.75'%20width='17'%20height='21'%20fill-opacity='0.45'/%3E%3Crect%20x='7.5'%20y='31.25'%20width='4.5'%20height='5.5'/%3E%3Crect%20x='14'%20y='31.25'%20width='4.5'%20height='5.5'/%3E%3Crect%20x='11'%20y='40.75'%20width='4.5'%20height='8'%20fill-opacity='0.8'/%3E%3C/g%3E%3C/svg%3E");
 }
 /* Every other night theme tints its own .hero-line with its accent
    (furnished/swamp -> --ot-2, rata/mural -> --clay-2) - plaza was missing

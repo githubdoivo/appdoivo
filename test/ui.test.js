@@ -634,17 +634,19 @@ test('a highlight carries the night motif once, as an emblem, with no tinted box
   await api('DELETE', `/admin/plaza-posts/${post.id}`, { token: ADMIN });
 });
 
-test('a long message is set to be read, and Plaza carries no emblem at all', async () => {
+test('a long message is set to be read, and Plaza\'s village never cuts a house in half', async () => {
   // Two decisions in one place. A highlight is set at headline size for a
   // sentence; a dedication can be a paragraph, and at that size a paragraph
   // is a wall of type to be scrolled past rather than read - so whatever
   // renders one drops it to reading size past a certain length.
-  // And Plaza is the one section with no motif. Its own was a string of
-  // bunting, a repeat rather than a free-standing mark, and it read as
-  // something falling out of the card at every size tried; roughly thirty
-  // replacements were drawn and none belonged. This is the page the writing
-  // lives on, and a picture in the margin of a long message competes with
-  // it.
+  // And Plaza's emblem is a village: one house repeated down the margin,
+  // with the number of houses decided by how much somebody wrote. Plaza
+  // went without an emblem for a long time because a free-standing drawing
+  // competes with the writing this page exists for - a repeat does not.
+  // What makes the repeat safe is mask-repeat: space, which lays down only
+  // whole tiles, so a house is never sliced off at the top or bottom of the
+  // block. That is the property worth guarding here: repeat-y would render
+  // perfectly well and quietly clip, which is exactly the bug this replaced.
   const writer = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'longdedication' } });
   const long = 'ivo, obrigada por teres feito isto tudo - a app, a casa, as noites com nome, '
     + 'e as consequencias que ninguem queria cumprir e cumpriu na mesma. foi a melhor festa '
@@ -664,6 +666,11 @@ test('a long message is set to be read, and Plaza carries no emblem at all', asy
       size: parseFloat(cs.fontSize),
       leading: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize),
       motif: before.maskImage || before.webkitMaskImage || 'none',
+      repeat: before.maskRepeat || before.webkitMaskRepeat || '',
+      // The strip's own height and the tile height, so "how many whole
+      // houses fit" is measured rather than assumed from the CSS numbers.
+      strip: parseFloat(before.height),
+      tile: parseFloat((before.maskSize || before.webkitMaskSize || '0 0').split(' ').pop()),
       wrap: cs.overflowWrap,
     };
   });
@@ -671,15 +678,35 @@ test('a long message is set to be read, and Plaza carries no emblem at all', asy
   assert.ok(written.size < 22, `and set smaller than a headline, got ${written.size}px`);
   assert.ok(written.leading > 1.4, `with leading opened up for reading, got ${written.leading.toFixed(2)}`);
   assert.equal(written.wrap, 'anywhere', 'an unbroken word must not push the card open');
-  assert.equal(written.motif, 'none', 'Plaza carries no emblem - see the note by theme-plaza in styles.css');
+  assert.notEqual(written.motif, 'none', 'Plaza carries a village down the margin - see the note by theme-plaza in styles.css');
+  assert.match(written.repeat, /space/, 'the houses must repeat with `space`, the only value that refuses to clip a tile');
+  assert.ok(written.tile > 0, `the tile height has to be a real number, got ${written.tile}`);
+  const longHouses = Math.floor(written.strip / written.tile);
+  assert.ok(longHouses >= 2, `a paragraph should earn more than one house, got ${longHouses}`);
 
-  // A one-liner keeps the headline size it was designed for.
+  // A one-liner keeps the headline size it was designed for - and still has
+  // room for one entire house. This is the assertion min-height exists for:
+  // drop it and the shortest dedication silently loses its emblem, because
+  // `space` would rather draw nothing than draw a house with its roof cut
+  // off. Nothing else in the suite would notice.
   await api('PUT', '/dedications/mine', { token: writer.token, body: { text: 'parabens!' } });
   await page.reload();
   await page.click('[data-tab="chat"]');
   await page.waitForSelector('.dedication-written', { timeout: WAIT_TIMEOUT });
-  const short = await page.$eval('.dedication-written', (el) => parseFloat(getComputedStyle(el).fontSize));
-  assert.ok(short > 22, `a short dedication should stay at headline size, got ${short}px`);
+  const shortest = await page.$eval('.dedication-written', (el) => {
+    const before = getComputedStyle(el, '::before');
+    return {
+      size: parseFloat(getComputedStyle(el).fontSize),
+      strip: parseFloat(before.height),
+      tile: parseFloat((before.maskSize || before.webkitMaskSize || '0 0').split(' ').pop()),
+    };
+  });
+  assert.ok(shortest.size > 22, `a short dedication should stay at headline size, got ${shortest.size}px`);
+  assert.ok(
+    shortest.strip >= shortest.tile,
+    `a one-line dedication must still fit a whole house: strip is ${shortest.strip}px against a ${shortest.tile}px tile`,
+  );
+  assert.ok(longHouses > Math.floor(shortest.strip / shortest.tile), 'the village has to grow with the writing');
 
   await context.close();
   await api('DELETE', `/admin/users/${writer.id}`, { token: ADMIN });
