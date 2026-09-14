@@ -14,6 +14,77 @@ list of what is still owed, and by whom.
 These cannot start until he hands something over. Listing them is not a
 nudge; they sit here until they don't.
 
+### Rotate the QA access key
+
+On 14 September 2026 a command meant to check whether Ivo had an account on
+QA printed the whole user row instead of just the name and permissions, and
+that row carries the `token` field. His **QA** key is therefore written into
+a chat transcript, which closing the chat does not undo. The key was not
+changed and not used; it was only exposed. **Production was never involved.**
+
+Rotating it is Manage Users -> his own row -> regenerate key, and then
+claiming the new one through the name search on the QA login screen, which
+reopens by itself whenever a key is regenerated. That route matters: it means
+the replacement never has to be read out or pasted anywhere.
+
+Deliberately not treated as urgent. QA is publicly reachable, so the exposure
+is real in the sense that someone holding the transcript could sign in there
+as the owner - but there is nothing on QA except test accounts and whatever
+we filled it with ourselves. Ivo already has a text file of keys, so rotating
+costs him an edit to that file. His call, and a defensible one either way.
+
+### Push reach on production, and what decides it
+
+Not a task - a measurement, written down because it answers a question that
+will be asked again and because the number moves on its own as people install
+the app.
+
+On 14 September 2026, with 24 accounts on production, **4 people** had
+notifications active, across 7 devices. Everything server-side is in place:
+the three VAPID secrets are deployed and the server logs no missing-key
+warning.
+
+The gap is not a fault, it is how Web Push works. Nobody can be switched on
+from this end: a person only becomes reachable once they have opened the app
+and allowed notifications on that device. On iPhone there is a further
+condition that catches people out - Web Push only reaches an app that has
+been **added to the Home Screen**; a page left open in a Safari tab receives
+nothing however many times permission is granted.
+
+So during testing, the reachable set is whoever has installed it, which is
+what the 4 above means. It should climb by itself as the rest of the guests
+install before the party.
+
+There is no endpoint for sending a free-text notification - every push in this
+app is tied to a real action - so the way to reach everyone deliberately is to
+publish a Wall announcement, which sends "wall - o anfitrião deixou um novo
+anúncio na wall" and opens on the post. Worth knowing; not a suggestion to do
+it.
+
+### Whether a Memo selfie comes back mirrored
+
+Ivo raised this while testing and it is still unresolved, because the half
+that is left needs an iPhone.
+
+What was measured, all of it against QA: the app mirrors nothing of its own -
+no transform in the CSS, no re-encoding on upload, and a photo comes back out
+of `/memo/uploads` byte for byte identical to the one that went in, EXIF and
+all. The browser applies EXIF orientation properly, including the mirrored
+values: a test image with red on the left and orientation 2 renders with blue
+on the left, which is correct behaviour and matches what the Photos app does.
+
+Which leaves exactly one place a mirror could still be introduced, and it is
+the one place that cannot be tested from here: an iPhone stores photos as
+HEIC and Safari converts them to JPEG at the moment of upload. If that
+conversion applies the rotation but mishandles the mirror flag, the result is
+a selfie that disagrees with the gallery it came from.
+
+The step that settles it is to shoot one selfie into Memo and compare it with
+the same photo in the gallery. If they differ, the fix is to normalise
+orientation server-side on upload - baking the EXIF flag into the pixels so
+nothing is left for a viewer to interpret - and that is worth writing only
+once the problem is known to be real.
+
 ### Express 5, after the party
 
 Dependabot raised this as PR #68 and then closed it automatically on
