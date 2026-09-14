@@ -2417,6 +2417,41 @@ test('the translator is told, in detail, that portuguese means portugal', async 
   assert.match(en, /English \(UK\)/, 'english should be UK-leaning, as the rest of the app is');
 });
 
+test('the five page names survive translation instead of being turned into words', async () => {
+  // Ivo, 14 Sept 2026: "the rat is translating to a rapariga". Reproduced
+  // live against the real API and it was worse than one word - the model was
+  // dissolving the section names into whatever the sentence seemed to mean:
+  //   "vai haver rata hoje à noite"  -> "there's going to be a party tonight"
+  //   "a rata de hoje"               -> "today's dare"
+  //   "check the wall"               -> "verifica a parede"
+  // Which is reasonable behaviour for a translator and wrong for this app:
+  // these five words are the names of its pages. A guest reading "today's
+  // dare" has been told about a section that does not exist.
+  //
+  // Note the names guarded here are the DISPLAY names, which is why this
+  // list does not match the internal ones (plaza-the-route is Wall on
+  // screen, chat-the-route is Plaza) - see the naming note in CLAUDE.md.
+  // What has to survive is what a guest types, and a guest types what they
+  // see.
+  //
+  // Live counterpart, run by hand and passing 10/10 at the time of writing:
+  // the same sentences through scripts/check-translation.mjs.
+  for (const target of ['pt', 'en']) {
+    const prompt = systemPromptFor(target);
+    for (const name of ['wall', 'rata', 'snatch', 'plaza', 'memo']) {
+      assert.ok(prompt.includes(name), `the prompt no longer protects the name "${name}" (${target})`);
+    }
+    // Naming them is not enough on its own - an earlier prompt already said
+    // "keep names exactly as written" and the model still translated them,
+    // because it had no way to know these particular words were names.
+    assert.match(prompt, /names of the app's own pages/i, `${target}: the prompt must say why these words are special`);
+    // And the two that a translator has the strongest reason to convert,
+    // because both are ordinary words in the other language.
+    assert.ok(prompt.includes('parede'), 'the prompt must warn against turning wall into parede');
+    assert.ok(prompt.includes('praça'), 'the prompt must warn against turning plaza into praça');
+  }
+});
+
 test('a model that answers instead of translating is ignored, not published', async () => {
   // This is the one that reached the Wall. A one-word link label read as an
   // incomplete request, so the model replied conversationally - and the
