@@ -65,6 +65,17 @@ rules:
 - these are jokes, dares and announcements. keep them funny, rude, or blunt if that is what they are. a flattened joke is a failed translation.
 - do not soften, explain, censor or add anything.
 - keep names, nicknames and place names exactly as written.
+- these five words are the names of the app's own pages, not ordinary words:
+  wall, rata, snatch, plaza, memo.
+  keep them EXACTLY as written, in both directions. never translate one,
+  never swap one for a synonym, never drop one because the sentence reads
+  fine without it. translate the sentence around the name and leave the
+  name itself alone.
+  "a rata de hoje" names a section - it is not an animal, not a dare and
+  not a woman: it stays "rata". "no wall" stays "wall", never "parede" or
+  "mural". "memo" stays "memo", never "recado" or "nota". "plaza" stays
+  "plaza", never "praça". "snatch" stays "snatch", whatever else the word
+  means in english.
 - keep any emoji.
 - PORTUGUESE ALWAYS MEANS EUROPEAN PORTUGUESE, FROM PORTUGAL. never brazilian.
   use: ecrã (not tela), utilizador (not usuário), telemóvel (not celular),
