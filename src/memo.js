@@ -285,7 +285,7 @@ export function getUpload(uploadId) {
 // A small fixed set rather than a full picker - keeps the feed a quick tap,
 // no emoji keyboard needed, and matches the deliberately light BeReal-style
 // reaction weight (a glance, not a comment thread).
-export const MEMO_REACTION_EMOJI = ['❤️', '💦'];
+export const MEMO_REACTION_EMOJI = ['❤️', '💦', '👎'];
 
 /**
  * The current moment's feed: what everyone else posted for the slot that is

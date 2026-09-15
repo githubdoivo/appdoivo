@@ -3167,6 +3167,69 @@ test('a results category subtitle never outranks the card header above it', asyn
   await context.close();
 });
 
+test('a destructive button is visible in both modes, not just the one it was tuned in', async () => {
+  // Ivo, testing on production: the Wall's remove button "cannot be seen" in
+  // light mode. Measured at 1.30:1 - drawn, sized and clickable, and to the
+  // eye simply not there.
+  //
+  // The cause is worth keeping, because the next person to touch these
+  // tokens will hit it again. --danger is deliberately a PALE tint in light
+  // mode, because it doubles as .error text on the login screen's dark
+  // artwork. The outline button reused that same token on pale paper, so it
+  // inherited a colour chosen for the opposite background. Hence
+  // --danger-edge: a red that is tuned against paper in each mode, which is
+  // the only thing this button should ever read from.
+  //
+  // Measured rather than asserted by colour so it survives a retune, and run
+  // in BOTH modes because tuning one is exactly how this happened.
+  const relLum = (css) => {
+    const nums = css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    // Modern WebKit can hand back color(srgb 0 1 scale) as well as rgb(0 255).
+    const chans = css.startsWith('color(') ? nums : nums.map((v) => v / 255);
+    const [r, g, b] = chans.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg, bg) => {
+    const [hi, lo] = [relLum(fg), relLum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
+
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await context.newPage();
+    await page.goto(base + '/');
+    await page.evaluate(([t, m]) => {
+      localStorage.setItem('appivo_token', t);
+      localStorage.setItem('appivo_mode', m);
+    }, [ADMIN, mode]);
+    await page.goto(base + '/settings.html');
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+    await page.click('[data-atab="plaza"]');
+    await waitOrExplain(page, 'button.icon-action.danger');
+
+    const seen = await page.$eval('button.icon-action.danger', (el) => {
+      // The ground the button is actually drawn on, which is whichever
+      // ancestor paints one - the button itself is transparent by design.
+      let node = el;
+      let bg = '';
+      while (node) {
+        const c = getComputedStyle(node).backgroundColor;
+        if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) { bg = c; break; }
+        node = node.parentElement;
+      }
+      return { fg: getComputedStyle(el).color, bg };
+    });
+    const contrast = ratio(seen.fg, seen.bg);
+    assert.ok(
+      contrast >= 4.5,
+      `in ${mode} mode the Wall's remove button reads at ${contrast.toFixed(2)}:1 (${seen.fg} on ${seen.bg}) - it has to clear 4.5`,
+    );
+    await context.close();
+  }
+});
+
 test('the settings user search is not something iOS password autofill will grab', async () => {
   // Settings also carries the change-key password fields, and Safari hunts
   // the page for a nearby text input to treat as the username - it popped

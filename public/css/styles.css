@@ -29,6 +29,14 @@
   --clay-2:   #bd8062;
 
   --danger:   #9c4a3c;
+  /* The red for a destructive button drawn as an outline on paper. It has
+     to be its own token because --danger cannot be it: --danger doubles as
+     .error TEXT on the login screen's dark artwork, so mode-light tints it
+     pale on purpose (see html.mode-light below). That pale tint on pale
+     paper is what made the Wall's "remover" button measure 1.3:1 - present
+     in the DOM, invisible on the screen. Whenever this is retuned, check it
+     against --paper-2 rather than against white. */
+  --danger-edge: #9c4a3c;
   --radius:   4px;
   --shadow:   0 12px 40px rgba(43, 39, 33, 0.12);
 
@@ -129,6 +137,9 @@ html.mode-light {
   --clay:     #e2a798;
   --clay-2:   #ecc0b4;
   --danger:   #d98a7a;
+  /* NOT tinted with --danger above: this one sits on paper, not on the
+     login art, so it keeps the strong red. */
+  --danger-edge: #7a2619;
   /* Solid fill for destructive buttons. --danger itself stays a light tint
      because .error uses it as *text* on dark login art; a button needs the
      opposite - a strong ground with light text on top. */
@@ -159,6 +170,8 @@ html.mode-dark {
   --clay:     #cf9a5c;
   --clay-2:   #dcb27c;
   --danger:   #c4685a;
+  /* Lighter than light mode's, because here it is drawn on a dark ground. */
+  --danger-edge: #e2897a;
   --danger-fill: #a83f2c;
   --danger-ink:  #fbeee7;
   --brand:    #e2a878;
@@ -672,6 +685,19 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 input[type="password"] { text-transform: none; }
+/* The note to Ivo is the one piece of writing in this app that is kept
+   rather than read once, and it is the only place the lowercase golden rule
+   is deliberately lifted. The rule is about the app's own voice - labels,
+   buttons, announcements - and this is nobody's voice but the person
+   writing it. The server never lowercased it and never capped its length
+   (see saveDedication in dedications.js, and the PDF that prints it as
+   typed); only this stylesheet was flattening it on the way to the screen,
+   so someone typing a name or an "Obrigado" watched it go lowercase as they
+   wrote. Both the field and the message it becomes are exempt, so what is
+   typed, what is shown back, and what reaches the PDF are finally the same
+   three things. */
+#dedication-text,
+.dedication-written { text-transform: none; }
 /* Character counter beside a capped field. Tabular figures so the number
    does not jitter sideways as it counts up. */
 .char-count { font-variant-numeric: tabular-nums; }
@@ -886,8 +912,8 @@ button.icon-action.danger:hover,
 button.icon-action.danger:active,
 button.icon-action.danger:focus {
   background: transparent;
-  color: var(--danger);
-  border-color: var(--danger);
+  color: var(--danger-edge);
+  border-color: var(--danger-edge);
 }
 /* The lead action of a card - revealing a consequence, throwing a Memo
    moment open. Round rather than square, and larger: it is the one thing
