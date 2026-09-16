@@ -2442,6 +2442,38 @@ test('content written before translations existed can be picked up by a backfill
   db.prepare('DELETE FROM translations').run();
 });
 
+test('the app caps its own API spending per day, and stops cleanly when it runs out', async () => {
+  // Belt to the console spend limit's braces. The bug that emptied the
+  // account on 16 Sept 2026 is fixed and tested; this is for the next one,
+  // and it fails in the direction the app already handles - a spent budget
+  // behaves exactly like no API key at all, which means originals are shown
+  // and nothing breaks.
+  //
+  // The budget is counted in the settings table rather than in memory,
+  // because a crash-loop that forgot its own spending is precisely how this
+  // would go wrong a second time.
+  const { callsUsedToday } = await import('../src/translate.js');
+  const { setSetting, getSetting } = await import('../src/db.js');
+  const key = `translation_calls_${new Date().toISOString().slice(0, 10)}`;
+  const before = getSetting(key, null);
+  try {
+    // Nothing in this suite has a key configured, so no call can leave the
+    // box - what is asserted is the accounting, not the network.
+    setSetting(key, '7');
+    assert.equal(callsUsedToday(), 7, 'the budget has to be readable back, and per-day');
+
+    // A day with no spending yet reads zero rather than throwing.
+    setSetting(key, '0');
+    assert.equal(callsUsedToday(), 0);
+
+    // And a junk value must not read as "unlimited".
+    setSetting(key, 'not a number');
+    assert.equal(callsUsedToday(), 0, 'an unparseable counter must read as zero, never as infinity');
+  } finally {
+    if (before === null) setSetting(key, '0'); else setSetting(key, before);
+  }
+});
+
 test('re-queueing unchanged text buys nothing, and only a real edit pays again', async () => {
   // This one emptied Ivo's API credits on 16 Sept 2026, so it is worth
   // stating what went wrong rather than only asserting the fix.

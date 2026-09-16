@@ -12,6 +12,17 @@ primary_region = "cdg"
 [build]
 
 [env]
+  # Hard ceiling on translation API calls per day, enforced by the app on
+  # itself (see DAILY_CAP in translate.js). Sized against real need rather
+  # than round numbers: a party day produces roughly 60 translatable things
+  # - the day's rata consequences, a handful of Wall posts, a chat pruned to
+  # 20 messages - so 300 is about five times the busiest plausible day and
+  # bounds a runaway to well under a euro instead of an account.
+  #
+  # If it ever trips, the log says so plainly and the app degrades to
+  # exactly what it does with no API key: originals everywhere, nothing
+  # broken. Raise it here rather than removing it.
+  TRANSLATION_DAILY_CAP = "300"
   PORT = "3000"
   # Only set in QA - labels the version badge "qa v1.2.3" instead of just
   # "v1.2.3", so it's obvious at a glance which environment is open.

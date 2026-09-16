@@ -10,7 +10,7 @@
 // everywhere, nothing queued, nothing logged as broken. That is deliberate
 // - shipping this to an environment without a key must be a non-event.
 import Anthropic from '@anthropic-ai/sdk';
-import db from './db.js';
+import db, { getSetting, setSetting } from './db.js';
 import * as store from './translations.js';
 
 // Ivo's call, 13 Sept 2026: Haiku, cheapest tier. Roughly 300 short strings
@@ -23,6 +23,47 @@ import * as store from './translations.js';
 // of "low effort" on this model is simply not turning thinking on, which is
 // already its default - so the absence of a thinking parameter below is the
 // setting, not an oversight.
+// A hard ceiling on API calls per day, enforced by the app on itself.
+//
+// This exists because on 16 Sept 2026 a queueing bug bought the same twenty
+// sentences hundreds of times per boot and emptied the account. That bug is
+// fixed and tested - this is for the next one. A spend limit in the console
+// is the real backstop and belongs there; this is the part the app can own,
+// and it fails in the direction the app already handles gracefully: with no
+// budget left, translate.js behaves exactly as it does with no API key at
+// all, which is to say the originals are shown and nothing breaks.
+//
+// 1000/day is roughly 5x the busiest plausible real day (24 guests, a Wall
+// that only admins post to, a chat pruned to 20 messages) and caps a runaway
+// at about a euro rather than an account. TRANSLATION_DAILY_CAP overrides it.
+const DAILY_CAP = Number(process.env.TRANSLATION_DAILY_CAP || 1000);
+
+/** Calls used today, and whether there is room for another. Counted in the
+ * settings table so a restart cannot reset the budget - a crash-loop that
+ * forgot its own spending is exactly how this would go wrong twice. */
+function budgetKeyForToday() {
+  return `translation_calls_${new Date().toISOString().slice(0, 10)}`;
+}
+
+export function callsUsedToday() {
+  return Number(getSetting(budgetKeyForToday(), 0)) || 0;
+}
+
+function takeFromBudget() {
+  const used = callsUsedToday();
+  if (used >= DAILY_CAP) {
+    // Once per day, not once per attempt - a capped day should not also
+    // produce a thousand log lines.
+    if (used === DAILY_CAP) {
+      console.warn(`[translate] daily cap of ${DAILY_CAP} reached - translations paused until tomorrow`);
+      setSetting(budgetKeyForToday(), String(used + 1));
+    }
+    return false;
+  }
+  setSetting(budgetKeyForToday(), String(used + 1));
+  return true;
+}
+
 const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 1024;
 
@@ -188,6 +229,9 @@ export async function translateText(text, targetLang) {
   if (!anthropic) return null;
   const source = String(text ?? '').trim();
   if (!source) return null;
+  // Taken before the call, not after: a budget decremented on success only
+  // is no budget at all when the failure mode is a loop.
+  if (!takeFromBudget()) return null;
 
   try {
     const target = LANG_NAMES[targetLang] ?? targetLang;
