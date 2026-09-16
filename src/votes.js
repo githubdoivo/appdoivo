@@ -1,6 +1,7 @@
 import db, { getSetting, setSetting } from './db.js';
 import { nightStatus } from './time.js';
 import { isNight } from './nights.js';
+import { decodeJpegDataUrl as decodePhoto, MAX_PHOTO_BYTES } from './photos.js';
 
 // Regular users don't see the full ranking the instant voting closes - the
 // admin reveals it in stages (3rd, 2nd, 1st, then everyone), like an
@@ -133,35 +134,6 @@ export function myContestantForNight(userId, night) {
   };
 }
 
-// Generous ceiling over what an 800px-JPEG-then-base64 photo should ever
-// weigh (the client resizes before sending) - this is the actual
-// enforcement, since a client-side cap alone can't be trusted.
-const MAX_PHOTO_BYTES = 400 * 1024;
-
-/** Decodes+validates a photo submitted as a JPEG data URL. Only JPEG is
- * accepted - the client always exports to JPEG before sending, so anything
- * else is either a bug or a bypass attempt. Returns { buffer, mime } or
- * { error }. */
-function decodePhoto(photoBase64) {
-  const prefix = 'data:image/jpeg;base64,';
-  if (typeof photoBase64 !== 'string' || !photoBase64.startsWith(prefix)) {
-    return { error: 'err_photo_invalid' };
-  }
-  let buffer;
-  try {
-    buffer = Buffer.from(photoBase64.slice(prefix.length), 'base64');
-  } catch {
-    return { error: 'err_photo_invalid' };
-  }
-  // JPEG magic bytes - catches empty/garbage payloads a spoofed prefix alone wouldn't.
-  if (buffer.length < 2 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
-    return { error: 'err_photo_invalid' };
-  }
-  if (buffer.length > MAX_PHOTO_BYTES) {
-    return { error: 'err_photo_too_large' };
-  }
-  return { buffer, mime: 'image/jpeg' };
-}
 
 /**
  * Self-registers the caller as a Best Look contestant for a night. Pass

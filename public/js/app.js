@@ -640,7 +640,7 @@ function renderMemoDots() {
 // Must stay in step with MEMO_REACTION_EMOJI in src/memo.js, which is what
 // the server validates against - a value listed only here renders a button
 // the API then rejects, and one listed only there can never be sent.
-const MEMO_REACTION_EMOJI = ['❤️', '💦'];
+const MEMO_REACTION_EMOJI = ['❤️', '💦', '👎'];
 
 // Hand-drawn-style FILLED icons instead of the OS's own emoji glyphs - a
 // native emoji renders as whatever the platform's font happens to look
@@ -650,8 +650,17 @@ const MEMO_REACTION_EMOJI = ['❤️', '💦'];
 // stroked specifically so they stay visible at the small size a reaction
 // button needs - a thin outline nearly disappears there. currentColor
 // still ties them to each theme's accent.
+// Every one of these is drawn symmetrical about x=12 and boxed so its
+// bounding box centres on 12,12. The heart used to be neither: its left
+// lobe reached x=4 and its right x=22, and the bottom "point" was a flat
+// two-unit segment rather than a tip, so the whole glyph sat right and low
+// inside a button that was centring it perfectly well. Anything added here
+// has to keep that property or it will look misaligned for the same reason.
 const MEMO_REACTION_ICON = {
-  '\u2764\uFE0F': '<path d="M12 20.5S4 15.8 4 9.8C4 6.6 6.4 4.5 9 4.5c1.7 0 3.1 1 4 2.4.9-1.4 2.3-2.4 4-2.4 2.6 0 5 2.1 5 5.3 0 6-8 10.7-8 10.7z"/>',
+  '\u2764\uFE0F': '<path d="M12 20.4C12 20.4 3.6 15 3.6 9C3.6 5.9 6 3.7 8.6 3.7C10.2 3.7 11.3 4.6 12 5.8C12.7 4.6 13.8 3.7 15.4 3.7C18 3.7 20.4 5.9 20.4 9C20.4 15 12 20.4 12 20.4Z"/>',
+  // Thumb down. Cuff on the left, hand falling to the right, so it reads at
+  // 19px without needing an outline - same filled treatment as the other two.
+  '\u{1F44E}': '<rect x="2.8" y="4.2" width="3.8" height="10.4" rx="1.1"/><path d="M8 4.2h8.9c1.1 0 2.1.7 2.4 1.7l1.9 5.4c.5 1.4-.5 2.9-2 2.9h-4.7l.7 3.2c.2 1-.2 2-1 2.5-.5.3-1.2.2-1.6-.3L8 13.6V4.2z"/>',
   // Three teardrops falling on a diagonal, tips up-left - the previous pair
   // sat upright and read as two plain blobs rather than splashing water.
   '\u{1F4A6}': '<path transform="rotate(-14 8.4 15.9)" d="M8.4 5.24C9.71 9.72 12.75 11.33 12.75 15.9A4.35 4.35 0 0 1 4.05 15.9C4.05 11.33 7.1 9.72 8.4 5.24Z"/><path transform="rotate(-52 17.2 7)" d="M17.2 -1.21C18.2 2.24 20.55 3.48 20.55 7A3.35 3.35 0 0 1 13.85 7C13.85 3.48 16.2 2.24 17.2 -1.21Z"/><path transform="rotate(-42 18.3 17.7)" d="M18.3 10.96C19.13 13.79 21.05 14.81 21.05 17.7A2.75 2.75 0 0 1 15.55 17.7C15.55 14.81 17.48 13.79 18.3 10.96Z"/>',
@@ -850,6 +859,14 @@ function renderPlazaPost(post) {
   // else says which kind of post this is before you start reading it.
   const typeLabel = `<h2 class="plaza-post-type">${esc(t(PLAZA_TYPE_LABEL[post.type] ?? 'plaza_type_announcement'))}</h2>`;
 
+  // The post's photo, when it has one. The key travels in the query string
+  // because an <img> cannot send an Authorization header - the same reason
+  // memoUploadUrl() does it. Sits under the type label and above the words,
+  // so the picture introduces the message instead of trailing it.
+  const photoHtml = post.hasPhoto
+    ? `<img class="plaza-post-photo" src="/api/plaza-posts/${post.id}/photo?token=${encodeURIComponent(getToken())}" alt="" loading="lazy" />`
+    : '';
+
   // A published Snatch result. Its text is a JSON snapshot taken at publish
   // time (see createPodiumPost() in plaza.js), not a live lookup - so what
   // the party saw announced stays exactly that, even if the night is later
@@ -874,6 +891,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-podium${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         <p class="podium-night">${esc(t(`theme_${snap.night}`))}</p>
         <ol class="podium-list">${rows}</ol>
         ${cong}
@@ -888,6 +906,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-video${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         <p class="podium-night">${esc(formatEuDate(post.text))}</p>
         <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(post.text)}"></video>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -917,6 +936,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         ${translatedText(post.text, post.originalText, { className: 'plaza-post-text plaza-links-intro', linkified: true })}
         <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -932,6 +952,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         ${translatedText(post.text, post.originalText, { className: `plaza-post-text highlight${post.text.length > 140 ? ' is-long' : ''}`, linkified: true })}
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;

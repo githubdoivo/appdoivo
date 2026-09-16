@@ -3167,6 +3167,116 @@ test('a results category subtitle never outranks the card header above it', asyn
   await context.close();
 });
 
+test('a destructive button is visible in both modes, not just the one it was tuned in', async () => {
+  // Ivo, testing on production: the Wall's remove button "cannot be seen" in
+  // light mode. Measured at 1.30:1 - drawn, sized and clickable, and to the
+  // eye simply not there.
+  //
+  // The cause is worth keeping, because the next person to touch these
+  // tokens will hit it again. --danger is deliberately a PALE tint in light
+  // mode, because it doubles as .error text on the login screen's dark
+  // artwork. The outline button reused that same token on pale paper, so it
+  // inherited a colour chosen for the opposite background. Hence
+  // --danger-edge: a red that is tuned against paper in each mode, which is
+  // the only thing this button should ever read from.
+  //
+  // Measured rather than asserted by colour so it survives a retune, and run
+  // in BOTH modes because tuning one is exactly how this happened.
+  const relLum = (css) => {
+    const nums = css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    // Modern WebKit can hand back color(srgb 0 1 scale) as well as rgb(0 255).
+    const chans = css.startsWith('color(') ? nums : nums.map((v) => v / 255);
+    const [r, g, b] = chans.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg, bg) => {
+    const [hi, lo] = [relLum(fg), relLum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'wifi: mossycottage' } });
+
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await context.newPage();
+    await page.goto(base + '/');
+    await page.evaluate(([t, m]) => {
+      localStorage.setItem('appivo_token', t);
+      localStorage.setItem('appivo_mode', m);
+    }, [ADMIN, mode]);
+    await page.goto(base + '/settings.html');
+    await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+    await page.click('[data-atab="plaza"]');
+    await waitOrExplain(page, 'button.icon-action.danger');
+
+    const seen = await page.$eval('button.icon-action.danger', (el) => {
+      // The ground the button is actually drawn on, which is whichever
+      // ancestor paints one - the button itself is transparent by design.
+      let node = el;
+      let bg = '';
+      while (node) {
+        const c = getComputedStyle(node).backgroundColor;
+        if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) { bg = c; break; }
+        node = node.parentElement;
+      }
+      return { fg: getComputedStyle(el).color, bg };
+    });
+    const contrast = ratio(seen.fg, seen.bg);
+    assert.ok(
+      contrast >= 4.5,
+      `in ${mode} mode the Wall's remove button reads at ${contrast.toFixed(2)}:1 (${seen.fg} on ${seen.bg}) - it has to clear 4.5`,
+    );
+    await context.close();
+  }
+});
+
+test('an admin attaches a photo to a Wall post and every guest sees it in the feed', async () => {
+  // The browser half of the photos-on-posts feature. The API test covers the
+  // three edit intentions; this covers the path a person actually takes -
+  // the drawn "escolher foto" button standing in for a hidden file input,
+  // the client-side resize to JPEG, and the picture arriving in somebody
+  // else's feed.
+  //
+  // It has to be a guest looking, not the admin who posted: the photo is
+  // fetched with the key in the query string because an <img> cannot send an
+  // Authorization header, and a route that only worked for the poster would
+  // pass any check made from the admin's own session.
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Wall Photo Viewer' } });
+
+  const adminContext = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(adminContext, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="plaza"]');
+  await waitOrExplain(adminPage, '#plaza-post-form');
+  await adminPage.fill('#plaza-post-text', 'a casa por dentro');
+  await pickPhotoViaButton(adminPage, '#plaza-post-photo-btn', {
+    name: 'casa.png', mimeType: 'image/png', buffer: PNG_1X1,
+  });
+  // The preview appearing is what tells the admin the file was taken - the
+  // resize is async, so publishing before it lands would post without one.
+  await waitOrExplain(adminPage, '#plaza-post-photo-preview:not(.hidden)');
+  await adminPage.click('#plaza-post-submit');
+  await adminPage.waitForTimeout(400);
+  await adminContext.close();
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await waitOrExplain(page, '.plaza-post-photo');
+
+  // Rendered is not the same as loaded: a broken src still produces an <img>
+  // in the DOM, and a JSON-serialized BLOB served as an image is exactly the
+  // failure that would leave one here. naturalWidth is 0 until real pixels
+  // have decoded.
+  const shown = await page.$eval('.plaza-post-photo', (el) => ({
+    src: el.getAttribute('src'),
+    decoded: el.naturalWidth > 0 && el.naturalHeight > 0,
+  }));
+  assert.match(shown.src, /\/api\/plaza-posts\/\d+\/photo\?token=/, 'the key has to travel in the query - an <img> cannot send a header');
+  assert.ok(shown.decoded, 'the photo has to actually decode, not just be present as a tag');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
 test('the settings user search is not something iOS password autofill will grab', async () => {
   // Settings also carries the change-key password fields, and Safari hunts
   // the page for a nearby text input to treat as the username - it popped

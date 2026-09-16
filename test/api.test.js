@@ -2120,6 +2120,69 @@ test('a post can be edited after it is up, and renaming a poll option keeps its 
   }
 });
 
+test('a Wall post can carry a photo, and an edit only drops it when told to', async () => {
+  // Ivo asked for photos on Wall posts. The half worth guarding is not that
+  // a photo can be attached - it is the edit path, which has three distinct
+  // intentions that all arrive as the same field:
+  //   a data URL replaces it, null removes it, and ABSENT leaves it alone.
+  // Collapsing the last two is the obvious bug, and it is silent: every
+  // admin fixing a typo from a form that knows nothing about photos would
+  // strip the picture off the post without being told.
+  const made = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'a casa por dentro', photoBase64: TEST_PHOTO },
+  });
+  assert.equal(made.status, 200);
+  const id = made.data.id;
+
+  const feed = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.ok(feed.data.posts.find((p) => p.id === id).hasPhoto, 'the feed has to say a post carries a photo');
+
+  // Served as an image, not as JSON. node:sqlite hands a BLOB back as a
+  // Uint8Array, which res.send() will happily serialize into {"0":255,...}
+  // if it is not wrapped - and an <img> reports that failure to nobody.
+  const shown = await fetch(`${base}/plaza-posts/${id}/photo`, { headers: { Authorization: `Bearer ${ADMIN}` } });
+  assert.equal(shown.status, 200);
+  assert.equal(shown.headers.get('content-type'), 'image/jpeg');
+  const bytes = Buffer.from(await shown.arrayBuffer());
+  assert.equal(bytes[0], 0xff, 'the first byte has to be JPEG, not a "{"');
+  assert.equal(bytes[1], 0xd8);
+
+  // Editing the words alone leaves the photo where it is.
+  await api('PATCH', `/admin/plaza-posts/${id}`, { token: ADMIN, body: { text: 'a casa por dentro e por fora' } });
+  const afterEdit = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.ok(afterEdit.data.posts.find((p) => p.id === id).hasPhoto, 'a text-only edit must not drop the photo');
+
+  // Asking for it to go is the only thing that removes it.
+  await api('PATCH', `/admin/plaza-posts/${id}`, { token: ADMIN, body: { text: 'sem foto', photoBase64: null } });
+  const afterRemove = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.equal(afterRemove.data.posts.find((p) => p.id === id).hasPhoto, 0);
+  const gone = await fetch(`${base}/plaza-posts/${id}/photo`, { headers: { Authorization: `Bearer ${ADMIN}` } });
+  assert.equal(gone.status, 404, 'once removed the photo route has nothing to serve');
+
+  // Anything that is not a JPEG is refused outright rather than stored and
+  // served as a broken image later.
+  const junk = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'lixo', photoBase64: 'data:image/jpeg;base64,bm90YWpwZWc=' },
+  });
+  assert.equal(junk.status, 400);
+  assert.equal(junk.data.error, 'err_photo_invalid');
+
+  // And the size ceiling is enforced here, not only in the browser.
+  const huge = `data:image/jpeg;base64,${Buffer.concat([
+    Buffer.from([0xff, 0xd8]), Buffer.alloc(500 * 1024, 0x41),
+  ]).toString('base64')}`;
+  const tooBig = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'enorme', photoBase64: huge },
+  });
+  assert.equal(tooBig.status, 400);
+  assert.equal(tooBig.data.error, 'err_photo_too_large');
+
+  await api('DELETE', `/admin/plaza-posts/${id}`, { token: ADMIN });
+});
+
 test('Plaza posts: only the owner can delete, and deleting one leaves the rest of the feed untouched', async () => {
   const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;
@@ -2377,6 +2440,72 @@ test('content written before translations existed can be picked up by a backfill
 
   db.prepare('DELETE FROM consequences').run();
   db.prepare('DELETE FROM translations').run();
+});
+
+test('re-queueing unchanged text buys nothing, and only a real edit pays again', async () => {
+  // This one emptied Ivo's API credits on 16 Sept 2026, so it is worth
+  // stating what went wrong rather than only asserting the fix.
+  //
+  // queue() used to reset every re-queued row to pending with attempts back
+  // to zero - which reads as "this was edited, translate it again". Correct
+  // for an edit; expensive nonsense for anything else, because re-queueing
+  // an unchanged sentence discarded a finished translation and bought it
+  // again. seedDemo re-queues its whole demo set on every boot, and QA has
+  // SEED_DEMO=true, so that happened on every single deploy.
+  //
+  // What tells the two cases apart is a hash of the source text. Nothing
+  // here calls the API - the count of rows left pending IS the bill.
+  const store = await import('../src/translations.js');
+  const TEXT = 'o jantar e as nove, tragam uma toalha';
+
+  // Five boots of identical content.
+  for (let boot = 0; boot < 5; boot++) {
+    store.queue('plaza_post', 90210, 'text', 'pt', TEXT);
+  }
+  const afterBoots = store.pending(1000).filter((r) => r.entity_id === 90210);
+  assert.equal(afterBoots.length, 1, 'five identical boots must queue one translation, not five');
+
+  // Once it has been paid for, booting again must not buy it a second time.
+  for (const row of afterBoots) store.markOk(row.id, 'dinner is at nine, bring a towel');
+  store.queue('plaza_post', 90210, 'text', 'pt', TEXT);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 0,
+    'a finished translation must survive a re-queue of the same text',
+  );
+
+  // A genuine edit is still worth paying for - the whole feature depends on
+  // a stale translation being thrown away.
+  store.queue('plaza_post', 90210, 'text', 'pt', `${TEXT} e chinelos`);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 1,
+    'editing the text must re-queue it',
+  );
+
+  // A permanent failure must not come back on every later write either -
+  // retrying something already given up on is the same bill in slow motion.
+  for (const row of store.pending(1000).filter((r) => r.entity_id === 90210)) store.markFailed(row.id);
+  for (const row of store.pending(1000).filter((r) => r.entity_id === 90210)) store.markFailed(row.id);
+  store.queue('plaza_post', 90210, 'text', 'pt', `${TEXT} e chinelos`);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 0,
+    'a row already given up on must not be retried by the next unrelated write',
+  );
+});
+
+test('only one translation sweep runs at a time, however many writes land together', async () => {
+  // The multiplier on the same incident. Every write fired
+  // setImmediate(runPending), and every sweep read the WHOLE pending queue
+  // with nothing marking a row as in flight - so N writes arriving together
+  // produced N overlapping sweeps that each translated the same rows.
+  // seedDemo writes about nineteen things at once, which is how nineteen
+  // sentences became hundreds of API calls per boot.
+  const { runPending } = await import('../src/translate.js');
+  // With no key configured every call returns 0 immediately, which is enough
+  // to prove the guard: what is asserted is that concurrent calls do not all
+  // enter the sweep, not what the sweep would have done.
+  const results = await Promise.all(Array.from({ length: 10 }, () => runPending()));
+  assert.equal(results.length, 10);
+  assert.ok(results.every((n) => n === 0), 'with no API key nothing is spent, whatever the concurrency');
 });
 
 test('the translator is told, in detail, that portuguese means portugal', async () => {
@@ -3127,6 +3256,125 @@ test('admin/owner can see per-day upload counts, download everything as a zip, a
 
   const daysAfterRecap = await api('GET', '/admin/memo/days', { token: ADMIN });
   assert.equal(daysAfterRecap.data.days.find((d) => d.day === day).hasRecap, true);
+});
+
+// A real (if tiny) 64x48 JPEG. The SOI+EOI stub used elsewhere is enough to
+// satisfy a magic-byte check but not enough for ffmpeg, which has to decode
+// these into actual frames.
+const REAL_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjI4LjEwMgD/2wBDAAg4OEI4Qk1NTU1NTVtUW15eXltbW1teXl5lZWV3d3dlZWVeXmVlcHB3d4GFgXp6d3qFhYyMjKiooaHExMvx8f//xABNAAEBAAAAAAAAAAAAAAAAAAAABgEBAQEAAAAAAAAAAAAAAAAAAAYHEAEAAAAAAAAAAAAAAAAAAAAAEQEAAAAAAAAAAAAAAAAAAAAA/8AAEQgAMABAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AiwEm38AAAAAAAAAAAAAAAAAAAAAB/9k=', 'base64');
+
+// The same 64x48 JPEG, carrying EXIF Orientation 2 - "mirror horizontal".
+// Built with exiftool rather than by hand so the bytes are a real camera's
+// shape, not this module's idea of one.
+const MIRRORED_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD/4QBiRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAIAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAEAAAITAAMAAAABAAEAAAAAAAAAAAABAAAAAQAAAAEAAAAB//4AEExhdmM2Mi4yOC4xMDIA/9sAQwAIODhCOEJNTU1NTU1bVFteXl5bW1tbXl5eZWVld3d3ZWVlXl5lZXBwd3eBhYF6end6hYWMjIyoqKGhxMTL8fH//8QATQABAQAAAAAAAAAAAAAAAAAAAAcBAQEBAAAAAAAAAAAAAAAAAAAFBxABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIADAAQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI4A39KAAAAAAAAAAAAAAAAAAAAAAf/Z', 'base64');
+
+test('a mirrored selfie is stored un-mirrored, and a rotated one keeps its rotation', async () => {
+  // Ivo: "as fotos no memo estão a espelhar - não queremos isso."
+  //
+  // The app never mirrored anything itself, which is what made this take a
+  // while to place. It stores the bytes it is handed and serves them back
+  // untouched, and every browser applies the EXIF orientation tag -
+  // including the four values that mean "and flip it left-to-right". That
+  // is correct, and normally agrees with the Photos app.
+  //
+  // It stops agreeing for selfies: an iPhone stores HEIC, Safari converts to
+  // JPEG at upload time, and what comes out has the mirror baked into the
+  // pixels AND a mirrored tag still attached - so a viewer honouring the tag
+  // flips an already-flipped photo. Two bytes are rewritten on the way in;
+  // the pixels are never touched, which is the only affordable option on a
+  // box this size.
+  const shooter = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mirror Tester' } })).data;
+  const slots = (await api('GET', '/memo/today', { token: shooter.token })).data.slots;
+  const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
+  markSlotNotified(slot.id);
+
+  const up = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: shooter.token, buffer: MIRRORED_JPEG, filename: 'selfie.jpg', mimeType: 'image/jpeg',
+  });
+  assert.equal(up.status, 201);
+
+  // Read it back the way a phone would, and check the tag the browser will act on.
+  const served = await fetch(`${base}/memo/uploads/${up.data.id}?token=${encodeURIComponent(shooter.token)}`);
+  assert.equal(served.status, 200);
+  const stored = Buffer.from(await served.arrayBuffer());
+  const { findOrientation } = await import('../src/exif.js');
+  assert.equal(findOrientation(stored)?.value, 1, 'a mirrored selfie must come back un-mirrored');
+
+  // The rotation half has to survive - stripping orientation wholesale would
+  // stand every sideways photo on its end, which is a worse bug than the one
+  // being fixed.
+  const { unmirrorJpeg } = await import('../src/exif.js');
+  for (const [from, to] of [[5, 8], [7, 6], [4, 3], [6, 6], [1, 1], [8, 8]]) {
+    const buf = Buffer.from(MIRRORED_JPEG);
+    const at = findOrientation(buf);
+    buf.writeUInt16LE(from, at.at);
+    if (!at.little) buf.writeUInt16BE(from, at.at);
+    unmirrorJpeg(buf);
+    assert.equal(findOrientation(buf).value, to, `orientation ${from} should become ${to}`);
+  }
+
+  await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
+test('stitching the day video answers immediately and reports when it is done', async () => {
+  // This is the bug Ivo hit as "publishing the video to the wall gives an
+  // error". Nothing in the encode was broken - the request simply outlived
+  // the proxy in front of it, which cuts at 100 seconds and returns a 524.
+  // A day with a hundred photos is a hundred seconds of video and was never
+  // going to fit inside an HTTP request, so the work moved out of it.
+  //
+  // What is guarded here is the shape of the exchange, not the speed: the
+  // call answers 202 without waiting, and the result arrives through the
+  // status endpoint.
+  const day = today();
+  const shooters = [];
+  for (let i = 0; i < 2; i++) {
+    shooters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Recap Shooter ${i}` } })).data);
+  }
+
+  const slots = (await api('GET', '/memo/today', { token: shooters[0].token })).data.slots;
+  const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
+  markSlotNotified(slot.id);
+  for (const shooter of shooters) {
+    const up = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+      token: shooter.token, buffer: REAL_JPEG, filename: 'shot.jpg', mimeType: 'image/jpeg',
+    });
+    assert.equal(up.status, 201);
+  }
+
+  // Answers without waiting for the encode.
+  const started = await api('POST', `/admin/memo/${day}/recap/generate`, { token: ADMIN });
+  assert.equal(started.status, 202, 'the encode must not be held inside the request');
+  assert.equal(started.data.started, true);
+
+  // Asking again while it runs is refused rather than starting a second
+  // encode on a box that can barely afford the first.
+  const again = await api('POST', `/admin/memo/${day}/recap/generate`, { token: ADMIN });
+  assert.ok([409, 200, 202].includes(again.status));
+  if (again.status === 409) assert.equal(again.data.error, 'err_memo_recap_running');
+
+  // And the result arrives by asking, which is what the button now does.
+  let state = 'running';
+  for (let i = 0; i < 120 && state === 'running'; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    state = (await api('GET', `/admin/memo/${day}/recap/status`, { token: ADMIN })).data.status;
+  }
+  assert.equal(state, 'done', 'the video has to finish and say so');
+
+  // Finishing means it is on the Wall, which is the thing that was asked for.
+  const posts = (await api('GET', '/plaza-posts', { token: ADMIN })).data.posts;
+  assert.ok(posts.some((p) => p.type === 'video'), 'a finished video is published to the Wall');
+
+  for (const shooter of shooters) await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
+test('a day with no photos is refused up front, not started and failed later', async () => {
+  // Answering "started" to work that is certain to fail leaves the button
+  // spinning against nothing. The one check cheap enough to do before
+  // replying is whether there is anything to stitch.
+  const empty = await api('POST', '/admin/memo/1999-01-01/recap/generate', { token: ADMIN });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.data.error, 'err_memo_no_photos');
 });
 
 test('Memo is gated behind ENABLE_MEMO - disabled means every endpoint 404s', async () => {

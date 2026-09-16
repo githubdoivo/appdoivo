@@ -15,7 +15,6 @@ import { postMessage } from './chat.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MEMO_DIR, ensureTodaysSlots } from './memo.js';
-import { queueAndRun } from './translate.js';
 
 // Flat-colour stand-in photos for the seeded contestants, so QA shows what
 // the voting list, the results podium and the published Wall post actually
@@ -202,8 +201,12 @@ export function seedDemoConsequences(demoUsers = seedDemoUsers()) {
     // consequence is seeded, the Rata tab never translated anything no
     // matter how long you waited. Wall posts were fine because seeding them
     // goes through createPlazaPost(). This closes the gap.
-    queueAndRun('consequence', revealedId, 'text', 'Act like a rat for 5 minutes.');
-    CONSEQUENCES_PENDING.forEach((text, i) => queueAndRun('consequence', pendingIds[i], 'text', text));
+    // Deliberately NOT queued for translation. This is throwaway data that
+    // is rebuilt on every boot, and on QA (SEED_DEMO=true) that means every
+    // deploy. Paying to translate the same six fake consequences again each
+    // time is money spent on sentences nobody reads - it is demo filler, and
+    // the English half of it is already English. Real content still queues
+    // normally; see queueAndRun() callers in plaza.js, chat.js and routes.js.
 
     console.log(`[seed-demo] Added 1 revealed consequence and ${CONSEQUENCES_PENDING.length} pending.`);
   }

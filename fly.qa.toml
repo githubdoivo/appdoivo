@@ -49,6 +49,15 @@ primary_region = "cdg"
   # Revert to 0 once Memo testing wraps up.
   min_machines_running = 1
 
+# 512MB, not the 256 this ran on until 16 Sept 2026. Memo's "video of the
+# day" shells out to ffmpeg, and on 256MB there was nothing left for it:
+# Node holds ~130MB of the 212MB a "256MB" machine actually reports, and a
+# 480p encode of three photos ran past ten minutes on QA before being
+# killed. The request in front of it died at the proxy's 100s limit, which
+# is what reached the admin as "publishing the video gives an error".
+#
+# Changing this file is the part that matters: `fly scale memory` alone
+# lasts until the next deploy, which reads this and puts it back.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"

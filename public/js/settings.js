@@ -2063,6 +2063,7 @@ function cancelPlazaEdit() {
     if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
     else row.remove();
   });
+  resetPlazaPostPhoto();
   $('plaza-post-submit').textContent = t('plaza_publish_btn');
   $('plaza-edit-cancel').classList.add('hidden');
   $('plaza-post-msg').textContent = '';
@@ -2100,11 +2101,57 @@ function startPlazaEdit(post) {
   } else {
     $('plaza-post-text').value = post.text;
   }
+  // Untouched to start with, so saving without opening the picker keeps
+  // whatever photo the post already had.
+  resetPlazaPostPhoto();
+  if (post.hasPhoto) {
+    const preview = $('plaza-post-photo-preview');
+    preview.querySelector('img').src = `/api/plaza-posts/${post.id}/photo?token=${encodeURIComponent(getToken())}`;
+    preview.classList.remove('hidden');
+  }
   $('plaza-post-submit').textContent = t('save');
   $('plaza-edit-cancel').classList.remove('hidden');
   placePlazaForm();
   $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
+
+// Three states, not two, and the difference matters on an edit:
+//   undefined -> the picker was never touched, leave whatever is stored
+//   null      -> "remover" was pressed, drop the stored photo
+//   data URL  -> a new photo to replace it with
+// Sending null where undefined was meant would strip the photo off every
+// post edited for a typo, which is exactly the bug this shape avoids.
+let plazaPostPhoto;
+
+function resetPlazaPostPhoto() {
+  plazaPostPhoto = undefined;
+  $('plaza-post-photo-input').value = '';
+  $('plaza-post-photo-preview').classList.add('hidden');
+  $('plaza-post-photo-preview').querySelector('img').removeAttribute('src');
+}
+
+$('plaza-post-photo-btn').addEventListener('click', () => $('plaza-post-photo-input').click());
+
+$('plaza-post-photo-input').addEventListener('change', async () => {
+  const file = $('plaza-post-photo-input').files[0];
+  if (!file) return;
+  const preview = $('plaza-post-photo-preview');
+  try {
+    plazaPostPhoto = await resizePhotoToJpeg(file);
+    preview.querySelector('img').src = plazaPostPhoto;
+    preview.classList.remove('hidden');
+  } catch (err) {
+    plazaPostPhoto = undefined;
+    preview.classList.add('hidden');
+    await showAlert(err.message);
+  }
+});
+
+$('plaza-post-photo-remove').addEventListener('click', () => {
+  plazaPostPhoto = null;
+  $('plaza-post-photo-input').value = '';
+  $('plaza-post-photo-preview').classList.add('hidden');
+});
 
 $('plaza-edit-cancel').addEventListener('click', cancelPlazaEdit);
 
@@ -2126,9 +2173,9 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
     if (editingPostId) {
       // The type is fixed at creation - a poll people have voted in is not
       // an announcement - so it is not sent, and the server ignores it.
-      await api(`/admin/plaza-posts/${editingPostId}`, { method: 'PATCH', body: { text, options, links } });
+      await api(`/admin/plaza-posts/${editingPostId}`, { method: 'PATCH', body: { text, options, links, photoBase64: plazaPostPhoto } });
     } else {
-      await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
+      await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links, photoBase64: plazaPostPhoto ?? undefined } });
     }
     editingPostId = null;
     $('plaza-post-submit').textContent = t('plaza_publish_btn');
@@ -2143,6 +2190,7 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
       if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
       else row.remove();
     });
+    resetPlazaPostPhoto();
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
     loadPlazaPosts();
@@ -2208,6 +2256,35 @@ async function downloadMemoFile(url, filename, msg, doneKey) {
   }
 }
 
+// Polls until the video exists or the encode gives up. Every 4s rather than
+// every second: the answer changes on the scale of minutes, and the machine
+// doing the asking is the same one doing the encoding.
+async function waitForRecap(day, msg) {
+  const STEP_MS = 4000;
+  const GIVE_UP_AFTER_MS = 20 * 60 * 1000;
+  const started = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, STEP_MS));
+    let state;
+    try {
+      state = await api(`/admin/memo/${encodeURIComponent(day)}/recap/status`);
+    } catch {
+      // A dropped poll is not a failed encode - the work carries on
+      // server-side, so keep asking.
+      continue;
+    }
+    if (state.status === 'done') return { ok: true, photoCount: state.photoCount };
+    if (state.status === 'failed') return { ok: false, error: t(state.error) || state.error };
+    if (state.status === 'idle') return { ok: false, error: t('err_memo_recap_failed') };
+    if (Date.now() - started > GIVE_UP_AFTER_MS) {
+      // The encode may well still finish; this only stops watching, which is
+      // why the wording says so rather than claiming it broke.
+      return { ok: false, error: t('memo_admin_still_running') };
+    }
+    if (msg) msg.textContent = t('memo_admin_publishing');
+  }
+}
+
 $('memo-days-list').addEventListener('click', async (e) => {
   const dayMsg = (day) => $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
 
@@ -2244,13 +2321,20 @@ $('memo-days-list').addEventListener('click', async (e) => {
     msg.textContent = t('memo_admin_publishing');
     pubBtn.disabled = true;
     try {
-      const r = await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      // The server starts the encode and answers straight away - it is
+      // minutes of work and used to sit inside this request until the proxy
+      // cut it at 100 seconds, which reached the admin as a plain error.
+      // So this now waits by asking, rather than by holding a connection
+      // open and hoping.
+      await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      const finished = await waitForRecap(day, msg);
       // Reload first, then write the message: the reload rebuilds every row
       // (that's what makes the download-video button appear), so setting the
       // text before it would just be thrown away with the old element.
       await loadMemoDays();
       const fresh = dayMsg(day);
-      if (fresh) fresh.textContent = t('memo_admin_published', { n: r.photoCount });
+      if (fresh) fresh.textContent = finished.ok ? t('memo_admin_published', { n: finished.photoCount }) : finished.error;
+      if (fresh && !finished.ok) fresh.classList.add('error');
     } catch (err) {
       msg.classList.add('error');
       msg.textContent = err.message;

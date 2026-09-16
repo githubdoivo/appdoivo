@@ -1,4 +1,5 @@
 import db from './db.js';
+import { decodeJpegDataUrl } from './photos.js';
 import { translationsFor } from './translations.js';
 import { queueAndRun } from './translate.js';
 import * as translations from './translations.js';
@@ -50,7 +51,8 @@ function normaliseUrl(raw) {
  */
 export function listPlazaPosts(userId, lang = null) {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author,
+           (p.photo IS NOT NULL) AS hasPhoto
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
     ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
@@ -133,7 +135,8 @@ function localiser(posts, lang) {
  */
 export function listPlazaPostsForAdmin() {
   const posts = db.prepare(`
-    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author
+    SELECT p.id, p.type, p.text, p.pinned_at AS pinnedAt, p.created_at, u.name AS author,
+           (p.photo IS NOT NULL) AS hasPhoto
     FROM plaza_posts p
     JOIN users u ON u.id = p.author_id
     ORDER BY (p.pinned_at IS NULL) ASC, p.pinned_at DESC, p.created_at DESC, p.id DESC
@@ -223,12 +226,22 @@ function validatePostContent(type, { text, options, links }) {
  * both extras; polls require 2-6 non-empty option labels; links require at
  * least one label+URL pair. Returns { ok, id } or { error }.
  */
-export function createPlazaPost(authorId, { type, text, options, links }) {
+export function createPlazaPost(authorId, { type, text, options, links, photoBase64 }) {
   const clean = validatePostContent(type, { text, options, links });
   if (clean.error) return clean;
 
-  const info = db.prepare('INSERT INTO plaza_posts (type, author_id, text) VALUES (?, ?, ?)')
-    .run(type, authorId, clean.text);
+  // A photo is optional on every post type. Decoded before the insert so a
+  // bad payload is refused outright rather than leaving a post behind with
+  // no picture and no explanation.
+  let photo = null;
+  if (photoBase64) {
+    const decoded = decodeJpegDataUrl(photoBase64);
+    if (decoded.error) return decoded;
+    photo = decoded;
+  }
+
+  const info = db.prepare('INSERT INTO plaza_posts (type, author_id, text, photo, photo_mime) VALUES (?, ?, ?, ?, ?)')
+    .run(type, authorId, clean.text, photo ? photo.buffer : null, photo ? photo.mime : null);
   const postId = info.lastInsertRowid;
 
   if (type === 'poll') {
@@ -284,7 +297,7 @@ function queueTranslations(postId, type) {
  *
  * Returns { ok, id } or { error }.
  */
-export function updatePlazaPost(id, { text, options, links }) {
+export function updatePlazaPost(id, { text, options, links, photoBase64 }) {
   const post = db.prepare('SELECT id, type FROM plaza_posts WHERE id = ?').get(id);
   if (!post) return { error: 'err_post_not_found' };
   // Snapshots and the day video are generated, not written - their text is
@@ -295,6 +308,22 @@ export function updatePlazaPost(id, { text, options, links }) {
   if (clean.error) return clean;
 
   db.prepare('UPDATE plaza_posts SET text = ? WHERE id = ?').run(clean.text, id);
+
+  // Three different intentions, and they have to stay distinguishable:
+  // a data URL replaces the photo, an explicit null removes it, and
+  // undefined (the field simply absent) leaves whatever is there alone -
+  // otherwise every text-only edit from a form that doesn't know about
+  // photos would silently strip one.
+  if (photoBase64 !== undefined) {
+    if (photoBase64 === null || photoBase64 === '') {
+      db.prepare('UPDATE plaza_posts SET photo = NULL, photo_mime = NULL WHERE id = ?').run(id);
+    } else {
+      const decoded = decodeJpegDataUrl(photoBase64);
+      if (decoded.error) return decoded;
+      db.prepare('UPDATE plaza_posts SET photo = ?, photo_mime = ? WHERE id = ?')
+        .run(decoded.buffer, decoded.mime, id);
+    }
+  }
 
   if (post.type === 'poll') {
     const existing = db.prepare(
@@ -449,4 +478,9 @@ export function createVideoPost(authorId, day) {
   }
   const info = db.prepare("INSERT INTO plaza_posts (type, author_id, text) VALUES ('video', ?, ?)").run(authorId, day);
   return { ok: true, id: info.lastInsertRowid };
+}
+
+/** The stored photo for a post, or undefined. Used by the serving route. */
+export function plazaPostPhotoRow(id) {
+  return db.prepare('SELECT photo, photo_mime FROM plaza_posts WHERE id = ? AND photo IS NOT NULL').get(id);
 }

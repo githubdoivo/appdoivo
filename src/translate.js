@@ -252,7 +252,7 @@ export function backfill() {
     for (const row of db.prepare(sql).all()) {
       if (has.get(type, row.id, field)) continue;
       if (!String(row.src ?? '').trim()) continue;
-      store.queue(type, row.id, field, detectLang(row.src));
+      store.queue(type, row.id, field, detectLang(row.src), row.src);
       queued += 1;
     }
   }
@@ -266,8 +266,38 @@ export function backfill() {
  * concurrent calls is the one way a party-sized workload could ever meet a
  * rate limit.
  */
+// Only one sweep at a time, ever.
+//
+// This is the bug that emptied Ivo's API credits on 16 Sept 2026. Every
+// write fired setImmediate(runPending), and every sweep read the whole
+// pending queue. Nothing marked a row as in flight, so N writes arriving
+// together produced N overlapping sweeps that each translated the SAME
+// rows. seedDemo writes about nineteen things at once on every QA boot -
+// nineteen sentences, hundreds of API calls, on every single deploy.
+//
+// A boolean is enough because this is one process with one event loop. The
+// trailing flag covers the case that matters: work queued while a sweep is
+// already running is not lost, it just waits for the current one to finish
+// instead of starting a second one beside it.
+let sweeping = false;
+let sweepAgain = false;
+
 export async function runPending(limit = 25) {
   if (!isConfigured()) return 0;
+  if (sweeping) { sweepAgain = true; return 0; }
+  sweeping = true;
+  try {
+    return await sweep(limit);
+  } finally {
+    sweeping = false;
+    if (sweepAgain) {
+      sweepAgain = false;
+      setImmediate(() => { runPending(limit).catch(() => {}); });
+    }
+  }
+}
+
+async function sweep(limit) {
   let done = 0;
   for (const row of store.pending(limit)) {
     const source = SOURCES[row.entity_type]?.(row.entity_id);
@@ -292,7 +322,7 @@ export async function runPending(limit = 25) {
  * wait. The write path calls this after it has already responded.
  */
 export function queueAndRun(entityType, entityId, field, text) {
-  store.queue(entityType, entityId, field, detectLang(text));
+  store.queue(entityType, entityId, field, detectLang(text), text);
   if (!isConfigured()) return;
   setImmediate(() => { runPending().catch(() => {}); });
 }
