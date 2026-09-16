@@ -2191,6 +2191,34 @@ body.theme-memo .card {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
 }
 html.mode-light body.theme-memo {
+  /* Ivo's pick, 16 Sept 2026, from four measured options.
+     This accent is drawn as the COLOUR of the section's buttons, icons and
+     hero line, on the section's own paper. The old #0e90aa was a lovely
+     cyan that read at 1.70:1 against the cards - the controls dissolved
+     into them. #0a5464, the darker tone already here, only reached 3.86:1,
+     so this was never fixable with what was in the block.
+     There is no bright version that works: the paper is too close to the
+     hue. Measured against BOTH surfaces, since controls sit on cards
+     (#87b6c3) and the hero line on the page (#94c3d1):
+       --clay    #08404e -> 5.13:1 cards, 5.93:1 page
+       --clay-2  #094552 -> 4.79:1 cards, 5.54:1 page
+     Retuning either means re-measuring against both. */
+
+  /* Ivo's pick, 16 Sept 2026, from four measured options.
+     The accent here is drawn as the COLOUR of this section's buttons, icons
+     and hero line - on this section's own paper. The old #0e90aa was a
+     lovely cyan and read at 1.70:1 against the cards, which is to say the
+     controls dissolved into them. #0a5464, the darker tone already in this
+     block, only reached 3.86:1, so this was never fixable by reaching for
+     what was here.
+     There is no bright version of this that works: the paper is too close
+     to the hue, so clearing 4.5:1 required going genuinely dark. Measured
+     against BOTH surfaces, because controls sit on cards (#87b6c3) and the
+     hero line sits on the page (#94c3d1):
+       --clay    #08404e -> 5.13:1 on cards, 5.93:1 on page
+       --clay-2  #094552 -> 4.79:1 on cards, 5.54:1 on page
+     Retuning either means re-measuring against both, not just one. */
+
   /* Was #e2eff3/#d5e6ec/#c8dde4 (L~85-88%) - noticeably lighter/more
      saturated than every other theme's light-mode paper (all sit around
      L65-77%), reading as glaringly bright/washed out by comparison even
@@ -2206,14 +2234,14 @@ html.mode-light body.theme-memo {
   --ink-soft: #2f4c59;
   --line:     #2d6478;
   --line-2:   #7bb0c2;
-  --clay:     #0e90aa;
-  --clay-2:   #0a5464;
-  --rata:     #0e90aa;
+  --clay:     #08404e;
+  --clay-2:   #094552;
+  --rata:     #08404e;
   /* Missing here despite the html.mode-light fallback's own comment
      claiming every regular-page theme sets one - fell through to that
      stray global default (#b5624a, meant only for admin's theme-less
      Settings tab) instead of Memo's own cyan underline. */
-  --clay-active: #0e90aa;
+  --clay-active: #08404e;
   /* Was #e2eff3 - the stale pre-darkening paper value, never updated when
      --paper darkened above, so the page background stayed pale while cards
      (which use --paper-2 via .card) correctly picked up the new color -
@@ -2297,7 +2325,27 @@ button.memo-dot-open { cursor: pointer; }
 }
 .memo-feed-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .memo-feed-name { font-family: var(--serif); font-size: 1rem; color: var(--ink); }
-.memo-reaction-bar { display: flex; gap: 4px; }
+.memo-reaction-bar { display: flex; gap: 4px; align-items: center; }
+/* Mirroring is a CSS transform, never a rewrite of the stored file - see
+   setUploadFlipped() in memo.js for why. */
+.memo-feed-thumb.flipped { transform: scaleX(-1); }
+/* Pushed to the far end: this is your own control over your own photo, not
+   another reaction, and sitting it in the same row as the reactions invites
+   being tapped as one. */
+.memo-flip {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  border-radius: 999px;
+  padding: 5px 9px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.memo-flip svg { width: 19px; height: 19px; display: block; }
+.memo-flip.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 .memo-reaction {
   display: flex;
   align-items: center;

@@ -2996,6 +2996,49 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
 // narrows what the picker offers, and accept was image/* on an input whose
 // server has always taken video too - so the video half of the feature was
 // unreachable from every device, phone included.
+test('tapping mirror actually flips the photo on screen, and it survives a reload', async () => {
+  // The browser half. What matters is not that a flag was stored but that
+  // the picture on screen turns round - the control exists so somebody can
+  // look at their own face and decide, which is worthless if the change
+  // waits for the next poll or for a round trip to finish.
+  const shooter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mirror Tapper' } });
+  const todayRes = await api('GET', '/memo/today', { token: shooter.token });
+  const slot = todayRes.slots.find((sl) => sl.status === 'waiting') ?? todayRes.slots[0];
+  markMemoSlotNotified(slot.id);
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, shooter.token);
+  await page.click('[data-tab="memo"]');
+  // Shot through the real picker, the way the moment is actually captured.
+  await page.waitForSelector(`button.memo-dot.memo-dot-open[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+  await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'me.png', mimeType: 'image/png', buffer: PNG_1X1 });
+  await waitOrExplain(page, '[data-memo-flip]');
+
+  const transformOf = () => page.$eval('.memo-feed-thumb', (el) => getComputedStyle(el).transform);
+  assert.equal(await transformOf(), 'none', 'nothing is mirrored until asked');
+
+  await page.click('[data-memo-flip]');
+  // matrix(-1, 0, 0, 1, 0, 0) is scaleX(-1). Asserting the computed
+  // transform rather than the class, because a class that styles nothing
+  // would pass a class assertion and leave the photo exactly as it was.
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.memo-feed-thumb')).transform.startsWith('matrix(-1'),
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  // And the choice is remembered, not just applied to the DOM in front of us.
+  await page.reload();
+  await page.click('[data-tab="memo"]');
+  await waitOrExplain(page, '.memo-feed-thumb');
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.memo-feed-thumb')).transform.startsWith('matrix(-1'),
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
 test('the Memo picker takes video as well as stills, and drops capture where there is no camera', async () => {
   const user = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Memo Desktop' } });
   withFullMemoDay(() => {});

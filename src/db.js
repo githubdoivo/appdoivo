@@ -533,6 +533,25 @@ db.exec(`
   );
 `);
 
+// Migration: whether a photo should be shown mirrored.
+//
+// iOS's "Mirror Front Camera" setting applies to the Camera app and NOT to
+// a web capture, so a selfie shot through Memo arrives un-mirrored while the
+// same shot taken normally sits mirrored in the gallery. Which of the two a
+// person wants is genuinely their call, and the file cannot answer it: the
+// HEIC->JPEG conversion Safari does on upload strips make, model and lens,
+// leaving only orientation. There is no way to tell a selfie from a group
+// photo server-side, so there is nothing to detect and this is a choice
+// rather than a fix.
+//
+// Stored as a flag and applied with a CSS transform when rendering, never by
+// rewriting pixels - re-encoding a 2.5MB photo on a shared CPU to flip it is
+// work this machine should not be doing, and it would be lossy every time
+// somebody changed their mind.
+if (!columnExists('memo_uploads', 'flipped')) {
+  db.exec('ALTER TABLE memo_uploads ADD COLUMN flipped INTEGER NOT NULL DEFAULT 0');
+}
+
 // Migration: a fingerprint of the text a translation was made from. Without
 // it, re-queueing an entity could not tell "this was edited, translate it
 // again" apart from "this is the same sentence it always was", so it

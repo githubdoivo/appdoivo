@@ -71,7 +71,6 @@ import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import { renderDedications, newDedicationsDocument } from './dedicationsPdf.js';
 import { queueAndRun, backfill as backfillTranslations } from './translate.js';
-import { unmirrorJpeg } from './exif.js';
 import { LANGS, wipeFor as wipeTranslationsFor } from './translations.js';
 import { localiseConsequences } from './consequences.js';
 
@@ -110,6 +109,7 @@ import {
   wipeAll as wipeAllMemo,
   dayHasPhotos,
   countDayPhotos,
+  setUploadFlipped,
 } from './memo.js';
 
 const router = Router();
@@ -651,21 +651,6 @@ router.post('/memo/slots/:id/upload', (req, res) => {
       return res.status(400).json({ error: code });
     }
     if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
-    // Selfies arrive mirrored. The app never flips anything itself, but an
-    // iPhone hands Safari a HEIC and gets a JPEG back with the mirror baked
-    // into the pixels AND a mirrored orientation tag still attached - so
-    // every viewer that honours the tag, which is all of them, flips an
-    // already-flipped photo and shows it backwards from the gallery it came
-    // from. Two bytes are rewritten to drop the mirror and keep the
-    // rotation; the pixels are not touched, which matters on a box this
-    // size. Photos only - a video carries its rotation somewhere else
-    // entirely, and this parser would simply find nothing.
-    if (/^image\/jpeg$/.test(req.file.mimetype)) {
-      try {
-        const bytes = readFileSync(req.file.path);
-        if (unmirrorJpeg(bytes).changed) writeFileSync(req.file.path, bytes);
-      } catch { /* an unreadable or odd file is stored as it arrived */ }
-    }
     try {
       const upload = recordUpload(Number(req.params.id), req.user.id, {
         mimeType: req.file.mimetype,
@@ -701,6 +686,22 @@ router.get('/memo/uploads/:id', (req, res) => {
 router.get('/memo/feed', (req, res) => {
   if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
   res.json(getTodayFeed(req.user.id));
+});
+
+// Mirror your own photo, or put it back. Needed because iOS's "Mirror Front
+// Camera" setting governs the Camera app and not a web capture, so a selfie
+// shot through Memo arrives un-mirrored while the same shot taken normally
+// sits mirrored in the gallery. Nothing in the uploaded file says which
+// camera took it - Safari's HEIC->JPEG conversion strips make, model and
+// lens - so this cannot be detected, only chosen.
+router.post('/memo/uploads/:id/flip', (req, res) => {
+  if (!memoAvailableTo(req.user)) return res.status(404).json({ error: 'err_not_found' });
+  try {
+    const flipped = setUploadFlipped(Number(req.params.id), req.user.id, !!req.body?.flipped);
+    res.json({ flipped });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
 });
 
 router.post('/memo/uploads/:id/react', (req, res) => {
