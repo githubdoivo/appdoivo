@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { ZipFile } from 'yazl';
@@ -71,6 +71,7 @@ import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import { renderDedications, newDedicationsDocument } from './dedicationsPdf.js';
 import { queueAndRun, backfill as backfillTranslations } from './translate.js';
+import { unmirrorJpeg } from './exif.js';
 import { LANGS, wipeFor as wipeTranslationsFor } from './translations.js';
 import { localiseConsequences } from './consequences.js';
 
@@ -107,6 +108,8 @@ import {
   getRecap,
   listRecapDays,
   wipeAll as wipeAllMemo,
+  dayHasPhotos,
+  countDayPhotos,
 } from './memo.js';
 
 const router = Router();
@@ -648,6 +651,21 @@ router.post('/memo/slots/:id/upload', (req, res) => {
       return res.status(400).json({ error: code });
     }
     if (!req.file) return res.status(400).json({ error: 'err_memo_invalid_type' });
+    // Selfies arrive mirrored. The app never flips anything itself, but an
+    // iPhone hands Safari a HEIC and gets a JPEG back with the mirror baked
+    // into the pixels AND a mirrored orientation tag still attached - so
+    // every viewer that honours the tag, which is all of them, flips an
+    // already-flipped photo and shows it backwards from the gallery it came
+    // from. Two bytes are rewritten to drop the mirror and keep the
+    // rotation; the pixels are not touched, which matters on a box this
+    // size. Photos only - a video carries its rotation somewhere else
+    // entirely, and this parser would simply find nothing.
+    if (/^image\/jpeg$/.test(req.file.mimetype)) {
+      try {
+        const bytes = readFileSync(req.file.path);
+        if (unmirrorJpeg(bytes).changed) writeFileSync(req.file.path, bytes);
+      } catch { /* an unreadable or odd file is stored as it arrived */ }
+    }
     try {
       const upload = recordUpload(Number(req.params.id), req.user.id, {
         mimeType: req.file.mimetype,
@@ -1603,19 +1621,71 @@ router.post('/admin/memo/:day/recap', (req, res) => {
 // loadWallVideo() in app.js) - so generating it *is* publishing it. Kept
 // separate from the manual upload route above rather than replacing it:
 // this one takes no file at all.
-router.post('/admin/memo/:day/recap/generate', async (req, res) => {
+// Stitching a day's photos into a video is minutes of work, not seconds -
+// and it used to happen inside this request. Nothing in the code was wrong;
+// the request simply outlived the proxy in front of it, which cuts at 100
+// seconds and hands the browser a 524. From the admin's side that is
+// indistinguishable from "the button is broken", which is exactly how it
+// was reported.
+//
+// So the encode is started and the request returns immediately. A day with
+// a hundred photos is a hundred seconds of video and would never have fit
+// inside any HTTP timeout, however fast the machine - this is not a
+// workaround for a slow box, it is where the work belongs.
+//
+// State lives in memory on purpose. A restart loses the fact that a job was
+// running, and that is the correct amount of bookkeeping for something whose
+// real completion signal is a row in memo_recaps: the days list already
+// reports hasRecap, so a lost job shows up as "still no video" and the
+// button can simply be pressed again.
+const recapJobs = new Map(); // day -> { status: 'running' | 'failed', error }
+
+router.post('/admin/memo/:day/recap/generate', (req, res) => {
   if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
-  try {
-    const built = await buildDayRecapVideo(req.params.day);
-    if (built.error) return res.status(400).json({ error: built.error });
-    saveRecap(req.params.day, req.user.id, built);
-    // Publishing means it shows up on the Wall as a post, so it can be
-    // pinned or removed there like anything else.
-    createVideoPost(req.user.id, req.params.day);
-    res.status(201).json({ ok: true, photoCount: built.photoCount });
-  } catch (e) {
-    res.status(500).json({ error: e.message || 'err_memo_recap_failed' });
+  const day = req.params.day;
+  if (recapJobs.get(day)?.status === 'running') {
+    return res.status(409).json({ error: 'err_memo_recap_running' });
   }
+  // The one check worth doing before answering: an empty day is an instant,
+  // certain failure, and telling someone "started" only to fail silently a
+  // moment later is worse than refusing up front.
+  if (!dayHasPhotos(day)) return res.status(400).json({ error: 'err_memo_no_photos' });
+
+  recapJobs.set(day, { status: 'running' });
+  res.status(202).json({ started: true });
+
+  const userId = req.user.id;
+  buildDayRecapVideo(day)
+    .then((built) => {
+      if (built.error) {
+        recapJobs.set(day, { status: 'failed', error: built.error });
+        return;
+      }
+      saveRecap(day, userId, built);
+      // Publishing means it shows up on the Wall as a post, so it can be
+      // pinned or removed there like anything else.
+      createVideoPost(userId, day);
+      recapJobs.delete(day);
+    })
+    .catch((e) => {
+      recapJobs.set(day, { status: 'failed', error: e.message || 'err_memo_recap_failed' });
+    });
+});
+
+// What the button polls while it waits. 'done' is answered from the stored
+// recap rather than from the job map, so a finished video still reports done
+// after a restart - the map only ever knows about work in flight.
+router.get('/admin/memo/:day/recap/status', (req, res) => {
+  if (process.env.ENABLE_MEMO !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const day = req.params.day;
+  const job = recapJobs.get(day);
+  if (job?.status === 'running') return res.json({ status: 'running' });
+  if (getRecap(day)) return res.json({ status: 'done', photoCount: countDayPhotos(day) });
+  if (job?.status === 'failed') {
+    recapJobs.delete(day);
+    return res.json({ status: 'failed', error: job.error });
+  }
+  res.json({ status: 'idle' });
 });
 
 // Owner-only: opens the next scheduled moment right now instead of waiting

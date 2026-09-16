@@ -3192,6 +3192,125 @@ test('admin/owner can see per-day upload counts, download everything as a zip, a
   assert.equal(daysAfterRecap.data.days.find((d) => d.day === day).hasRecap, true);
 });
 
+// A real (if tiny) 64x48 JPEG. The SOI+EOI stub used elsewhere is enough to
+// satisfy a magic-byte check but not enough for ffmpeg, which has to decode
+// these into actual frames.
+const REAL_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjI4LjEwMgD/2wBDAAg4OEI4Qk1NTU1NTVtUW15eXltbW1teXl5lZWV3d3dlZWVeXmVlcHB3d4GFgXp6d3qFhYyMjKiooaHExMvx8f//xABNAAEBAAAAAAAAAAAAAAAAAAAABgEBAQEAAAAAAAAAAAAAAAAAAAYHEAEAAAAAAAAAAAAAAAAAAAAAEQEAAAAAAAAAAAAAAAAAAAAA/8AAEQgAMABAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AiwEm38AAAAAAAAAAAAAAAAAAAAAB/9k=', 'base64');
+
+// The same 64x48 JPEG, carrying EXIF Orientation 2 - "mirror horizontal".
+// Built with exiftool rather than by hand so the bytes are a real camera's
+// shape, not this module's idea of one.
+const MIRRORED_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD/4QBiRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAIAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAEAAAITAAMAAAABAAEAAAAAAAAAAAABAAAAAQAAAAEAAAAB//4AEExhdmM2Mi4yOC4xMDIA/9sAQwAIODhCOEJNTU1NTU1bVFteXl5bW1tbXl5eZWVld3d3ZWVlXl5lZXBwd3eBhYF6end6hYWMjIyoqKGhxMTL8fH//8QATQABAQAAAAAAAAAAAAAAAAAAAAcBAQEBAAAAAAAAAAAAAAAAAAAFBxABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIADAAQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI4A39KAAAAAAAAAAAAAAAAAAAAAAf/Z', 'base64');
+
+test('a mirrored selfie is stored un-mirrored, and a rotated one keeps its rotation', async () => {
+  // Ivo: "as fotos no memo estão a espelhar - não queremos isso."
+  //
+  // The app never mirrored anything itself, which is what made this take a
+  // while to place. It stores the bytes it is handed and serves them back
+  // untouched, and every browser applies the EXIF orientation tag -
+  // including the four values that mean "and flip it left-to-right". That
+  // is correct, and normally agrees with the Photos app.
+  //
+  // It stops agreeing for selfies: an iPhone stores HEIC, Safari converts to
+  // JPEG at upload time, and what comes out has the mirror baked into the
+  // pixels AND a mirrored tag still attached - so a viewer honouring the tag
+  // flips an already-flipped photo. Two bytes are rewritten on the way in;
+  // the pixels are never touched, which is the only affordable option on a
+  // box this size.
+  const shooter = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mirror Tester' } })).data;
+  const slots = (await api('GET', '/memo/today', { token: shooter.token })).data.slots;
+  const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
+  markSlotNotified(slot.id);
+
+  const up = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: shooter.token, buffer: MIRRORED_JPEG, filename: 'selfie.jpg', mimeType: 'image/jpeg',
+  });
+  assert.equal(up.status, 201);
+
+  // Read it back the way a phone would, and check the tag the browser will act on.
+  const served = await fetch(`${base}/memo/uploads/${up.data.id}?token=${encodeURIComponent(shooter.token)}`);
+  assert.equal(served.status, 200);
+  const stored = Buffer.from(await served.arrayBuffer());
+  const { findOrientation } = await import('../src/exif.js');
+  assert.equal(findOrientation(stored)?.value, 1, 'a mirrored selfie must come back un-mirrored');
+
+  // The rotation half has to survive - stripping orientation wholesale would
+  // stand every sideways photo on its end, which is a worse bug than the one
+  // being fixed.
+  const { unmirrorJpeg } = await import('../src/exif.js');
+  for (const [from, to] of [[5, 8], [7, 6], [4, 3], [6, 6], [1, 1], [8, 8]]) {
+    const buf = Buffer.from(MIRRORED_JPEG);
+    const at = findOrientation(buf);
+    buf.writeUInt16LE(from, at.at);
+    if (!at.little) buf.writeUInt16BE(from, at.at);
+    unmirrorJpeg(buf);
+    assert.equal(findOrientation(buf).value, to, `orientation ${from} should become ${to}`);
+  }
+
+  await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
+test('stitching the day video answers immediately and reports when it is done', async () => {
+  // This is the bug Ivo hit as "publishing the video to the wall gives an
+  // error". Nothing in the encode was broken - the request simply outlived
+  // the proxy in front of it, which cuts at 100 seconds and returns a 524.
+  // A day with a hundred photos is a hundred seconds of video and was never
+  // going to fit inside an HTTP request, so the work moved out of it.
+  //
+  // What is guarded here is the shape of the exchange, not the speed: the
+  // call answers 202 without waiting, and the result arrives through the
+  // status endpoint.
+  const day = today();
+  const shooters = [];
+  for (let i = 0; i < 2; i++) {
+    shooters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Recap Shooter ${i}` } })).data);
+  }
+
+  const slots = (await api('GET', '/memo/today', { token: shooters[0].token })).data.slots;
+  const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
+  markSlotNotified(slot.id);
+  for (const shooter of shooters) {
+    const up = await apiUpload(`/memo/slots/${slot.id}/upload`, {
+      token: shooter.token, buffer: REAL_JPEG, filename: 'shot.jpg', mimeType: 'image/jpeg',
+    });
+    assert.equal(up.status, 201);
+  }
+
+  // Answers without waiting for the encode.
+  const started = await api('POST', `/admin/memo/${day}/recap/generate`, { token: ADMIN });
+  assert.equal(started.status, 202, 'the encode must not be held inside the request');
+  assert.equal(started.data.started, true);
+
+  // Asking again while it runs is refused rather than starting a second
+  // encode on a box that can barely afford the first.
+  const again = await api('POST', `/admin/memo/${day}/recap/generate`, { token: ADMIN });
+  assert.ok([409, 200, 202].includes(again.status));
+  if (again.status === 409) assert.equal(again.data.error, 'err_memo_recap_running');
+
+  // And the result arrives by asking, which is what the button now does.
+  let state = 'running';
+  for (let i = 0; i < 120 && state === 'running'; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    state = (await api('GET', `/admin/memo/${day}/recap/status`, { token: ADMIN })).data.status;
+  }
+  assert.equal(state, 'done', 'the video has to finish and say so');
+
+  // Finishing means it is on the Wall, which is the thing that was asked for.
+  const posts = (await api('GET', '/plaza-posts', { token: ADMIN })).data.posts;
+  assert.ok(posts.some((p) => p.type === 'video'), 'a finished video is published to the Wall');
+
+  for (const shooter of shooters) await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
+test('a day with no photos is refused up front, not started and failed later', async () => {
+  // Answering "started" to work that is certain to fail leaves the button
+  // spinning against nothing. The one check cheap enough to do before
+  // replying is whether there is anything to stitch.
+  const empty = await api('POST', '/admin/memo/1999-01-01/recap/generate', { token: ADMIN });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.data.error, 'err_memo_no_photos');
+});
+
 test('Memo is gated behind ENABLE_MEMO - disabled means every endpoint 404s', async () => {
   process.env.ENABLE_MEMO = 'false';
   try {

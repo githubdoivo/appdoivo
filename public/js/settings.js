@@ -2256,6 +2256,35 @@ async function downloadMemoFile(url, filename, msg, doneKey) {
   }
 }
 
+// Polls until the video exists or the encode gives up. Every 4s rather than
+// every second: the answer changes on the scale of minutes, and the machine
+// doing the asking is the same one doing the encoding.
+async function waitForRecap(day, msg) {
+  const STEP_MS = 4000;
+  const GIVE_UP_AFTER_MS = 20 * 60 * 1000;
+  const started = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, STEP_MS));
+    let state;
+    try {
+      state = await api(`/admin/memo/${encodeURIComponent(day)}/recap/status`);
+    } catch {
+      // A dropped poll is not a failed encode - the work carries on
+      // server-side, so keep asking.
+      continue;
+    }
+    if (state.status === 'done') return { ok: true, photoCount: state.photoCount };
+    if (state.status === 'failed') return { ok: false, error: t(state.error) || state.error };
+    if (state.status === 'idle') return { ok: false, error: t('err_memo_recap_failed') };
+    if (Date.now() - started > GIVE_UP_AFTER_MS) {
+      // The encode may well still finish; this only stops watching, which is
+      // why the wording says so rather than claiming it broke.
+      return { ok: false, error: t('memo_admin_still_running') };
+    }
+    if (msg) msg.textContent = t('memo_admin_publishing');
+  }
+}
+
 $('memo-days-list').addEventListener('click', async (e) => {
   const dayMsg = (day) => $('memo-days-list').querySelector(`[data-memo-day-msg="${day}"]`);
 
@@ -2292,13 +2321,20 @@ $('memo-days-list').addEventListener('click', async (e) => {
     msg.textContent = t('memo_admin_publishing');
     pubBtn.disabled = true;
     try {
-      const r = await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      // The server starts the encode and answers straight away - it is
+      // minutes of work and used to sit inside this request until the proxy
+      // cut it at 100 seconds, which reached the admin as a plain error.
+      // So this now waits by asking, rather than by holding a connection
+      // open and hoping.
+      await api(`/admin/memo/${encodeURIComponent(day)}/recap/generate`, { method: 'POST' });
+      const finished = await waitForRecap(day, msg);
       // Reload first, then write the message: the reload rebuilds every row
       // (that's what makes the download-video button appear), so setting the
       // text before it would just be thrown away with the old element.
       await loadMemoDays();
       const fresh = dayMsg(day);
-      if (fresh) fresh.textContent = t('memo_admin_published', { n: r.photoCount });
+      if (fresh) fresh.textContent = finished.ok ? t('memo_admin_published', { n: finished.photoCount }) : finished.error;
+      if (fresh && !finished.ok) fresh.classList.add('error');
     } catch (err) {
       msg.classList.add('error');
       msg.textContent = err.message;

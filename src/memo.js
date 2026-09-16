@@ -442,6 +442,23 @@ const RECAP_HEIGHT = 1280;
  * Returns { error } instead of throwing for the expected empty-day case, so
  * the route can surface it as a normal message.
  */
+/** Whether a day has any photo to stitch. Cheap enough to ask before
+ * answering "started" to a request that would otherwise fail a moment
+ * later with nobody listening. */
+/** How many photos a day has. Reported back when a video finishes so the
+ * admin is told what went into it, not just that something did. */
+export function countDayPhotos(day) {
+  return db.prepare(
+    "SELECT COUNT(*) AS n FROM memo_uploads WHERE day = ? AND kind = 'photo'"
+  ).get(day).n;
+}
+
+export function dayHasPhotos(day) {
+  return !!db.prepare(
+    "SELECT 1 FROM memo_uploads WHERE day = ? AND kind = 'photo' LIMIT 1"
+  ).get(day);
+}
+
 export async function buildDayRecapVideo(day) {
   const photos = db.prepare(
     "SELECT file_path FROM memo_uploads WHERE day = ? AND kind = 'photo' ORDER BY uploaded_at"
