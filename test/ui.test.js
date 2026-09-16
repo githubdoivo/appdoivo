@@ -2996,6 +2996,159 @@ test('Memo: a guest can shoot an open moment, it shows in the shared feed, anoth
 // narrows what the picker offers, and accept was image/* on an input whose
 // server has always taken video too - so the video half of the feature was
 // unreachable from every device, phone included.
+/**
+ * Draws a picture whose sides cannot be confused: a red left half with a
+ * white bar near the left edge, a blue right half with a white disc near the
+ * right. Returned as PNG bytes ready to hand to a file input.
+ *
+ * Colour rather than the word "LEFT" on purpose - text would need reading
+ * back with OCR, where a pixel two-thirds of the way across is either blue
+ * or it is not.
+ */
+async function leftRightPhoto(page) {
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 300;
+    const x = c.getContext('2d');
+    // Flat halves, nothing else. A white marker was tried and made the test
+    // lie: object-fit: cover crops the sides, so the sample point landed on
+    // the marker rather than the colour and every reading came back the
+    // same. Two solid fields cannot do that.
+    x.fillStyle = '#e02020'; x.fillRect(0, 0, 200, 300);
+    x.fillStyle = '#2040e0'; x.fillRect(200, 0, 200, 300);
+    return c.toDataURL('image/png');
+  });
+  return Buffer.from(dataUrl.split(',')[1], 'base64');
+}
+
+/** Samples a rendered element by screenshotting it and reading the pixels
+ * back through a canvas - so what is measured is what is on the screen,
+ * transforms and all, not what is in the file. */
+async function sampleRendered(page, selector) {
+  const shot = await (await page.$(selector)).screenshot({ type: 'png' });
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    // Well inside each half: .memo-feed-thumb is object-fit: cover, so the
+    // outer edges may be cropped away entirely. A quarter in from each side
+    // still lands in the right field even after a heavy crop.
+    const at = (fx) => {
+      const d = x.getImageData(Math.round(c.width * fx), Math.round(c.height * 0.5), 1, 1).data;
+      // Anything that is neither clearly red nor clearly blue is reported as
+      // such rather than guessed at - a sampler that quietly calls white
+      // "blue" is how this test passed itself the first time.
+      if (d[0] > d[2] + 40) return 'red';
+      if (d[2] > d[0] + 40) return 'blue';
+      return `neither (rgb ${d[0]},${d[1]},${d[2]})`;
+    };
+    return { left: at(0.25), right: at(0.75) };
+  }, shot.toString('base64'));
+}
+
+test('a photo with a red left and a blue right comes out of Memo the same way round', async () => {
+  // Ivo's idea, and a better test than the one I wrote first: rather than
+  // reasoning about EXIF tags, push a picture through whose sides cannot be
+  // confused and look at what lands on the screen. Every earlier attempt at
+  // this asserted metadata, which is exactly how I managed to ship a fix
+  // pointing the wrong way.
+  //
+  // Measured from a screenshot of the rendered <img>, so a CSS transform,
+  // an EXIF flag or a rewritten file would all show up here identically -
+  // as the wrong colour on the wrong side.
+  const shooter = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Left Right Tester' } });
+  const todayRes = await api('GET', '/memo/today', { token: shooter.token });
+  const slot = todayRes.slots.find((sl) => sl.status === 'waiting') ?? todayRes.slots[0];
+  markMemoSlotNotified(slot.id);
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, shooter.token);
+  await page.click('[data-tab="memo"]');
+  await page.waitForSelector(`button.memo-dot.memo-dot-open[data-memo-upload-btn="${slot.id}"]`, { timeout: WAIT_TIMEOUT });
+
+  const photo = await leftRightPhoto(page);
+  await page.setInputFiles(`[data-memo-file-input="${slot.id}"]`, { name: 'sides.png', mimeType: 'image/png', buffer: photo });
+  await page.waitForSelector('.memo-feed-item-mine img.memo-feed-thumb', { timeout: WAIT_TIMEOUT });
+  await page.waitForFunction(
+    () => document.querySelector('.memo-feed-item-mine img.memo-feed-thumb')?.naturalWidth > 0,
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  // Uploading must not turn anything round. This is the assertion that would
+  // have caught the mirrored-fix-pointing-the-wrong-way on the day.
+  const asPosted = await sampleRendered(page, '.memo-feed-item-mine img.memo-feed-thumb');
+  assert.deepEqual(
+    asPosted, { left: 'red', right: 'blue' },
+    `a photo posted to Memo must keep its sides - got ${JSON.stringify(asPosted)}`,
+  );
+
+  // And the mirror button has to genuinely swap them, not merely set a class.
+  await page.click('[data-memo-flip]');
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.memo-feed-item-mine img.memo-feed-thumb')).transform.startsWith('matrix(-1'),
+    { timeout: WAIT_TIMEOUT },
+  );
+  const mirrored = await sampleRendered(page, '.memo-feed-item-mine img.memo-feed-thumb');
+  assert.deepEqual(
+    mirrored, { left: 'blue', right: 'red' },
+    `tapping mirror has to actually swap the sides on screen - got ${JSON.stringify(mirrored)}`,
+  );
+
+  // Tapping again puts it back, because the point is comparing the two.
+  await page.click('[data-memo-flip]');
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.memo-feed-item-mine img.memo-feed-thumb')).transform === 'none',
+    { timeout: WAIT_TIMEOUT },
+  );
+  assert.deepEqual(await sampleRendered(page, '.memo-feed-item-mine img.memo-feed-thumb'), { left: 'red', right: 'blue' });
+
+  await context.close();
+  await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
+test('a photo attached to a Wall post survives the resize the same way round', async () => {
+  // The same check on the other photo path, which is the riskier of the two:
+  // a Wall photo is redrawn onto a canvas in the browser before it is sent
+  // (resizePhotoToJpeg in photo.js), and a canvas redraw is exactly where an
+  // orientation quietly gets applied twice or dropped. Memo uploads the file
+  // untouched; this one does not.
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Wall Sides Viewer' } });
+
+  const adminContext = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(adminContext, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="plaza"]');
+  await waitOrExplain(adminPage, '#plaza-post-form');
+  await adminPage.fill('#plaza-post-text', 'a casa, de frente');
+  await pickPhotoViaButton(adminPage, '#plaza-post-photo-btn', {
+    name: 'sides.png', mimeType: 'image/png', buffer: await leftRightPhoto(adminPage),
+  });
+  await waitOrExplain(adminPage, '#plaza-post-photo-preview:not(.hidden)');
+  await adminPage.click('#plaza-post-submit');
+  await adminPage.waitForTimeout(400);
+  await adminContext.close();
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await waitOrExplain(page, '.plaza-post-photo');
+  await page.waitForFunction(
+    () => document.querySelector('.plaza-post-photo')?.naturalWidth > 0,
+    { timeout: WAIT_TIMEOUT },
+  );
+
+  const shown = await sampleRendered(page, '.plaza-post-photo');
+  assert.deepEqual(
+    shown, { left: 'red', right: 'blue' },
+    `a photo published to the Wall must keep its sides through the resize - got ${JSON.stringify(shown)}`,
+  );
+
+  await context.close();
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
 test('tapping mirror actually flips the photo on screen, and it survives a reload', async () => {
   // The browser half. What matters is not that a flag was stored but that
   // the picture on screen turns round - the control exists so somebody can
