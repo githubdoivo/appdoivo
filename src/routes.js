@@ -86,7 +86,8 @@ function readerLang(req) {
   return LANGS.includes(req.user?.lang) ? req.user.lang : null;
 }
 import { listPlazaPosts, listPlazaPostsForAdmin, updatePlazaPost,
-  createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost } from './plaza.js';
+  createPlazaPost, deletePlazaPost, castPlazaVote, pinPlazaPost, createPodiumPost, createVideoPost,
+  plazaPostPhotoRow } from './plaza.js';
 import {
   MEMO_DIR,
   MEMO_MAX_FILE_BYTES,
@@ -265,6 +266,25 @@ router.post('/me/change-token', (req, res) => {
 router.get('/plaza-posts', (req, res) => {
   if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
   res.json({ posts: listPlazaPosts(req.user.id, readerLang(req)) });
+});
+
+// The photo on a post, if it has one. Readable by any logged-in guest, the
+// same as the post it belongs to - unlike a Snatch entry photo, which is a
+// reveal-night surprise and is gated accordingly. Nothing here is secret;
+// the admin chose to publish it to everybody.
+router.get('/plaza-posts/:id/photo', (req, res) => {
+  if (process.env.ENABLE_PLAZA !== 'true') return res.status(404).json({ error: 'err_not_found' });
+  const row = plazaPostPhotoRow(Number(req.params.id));
+  if (!row) return res.status(404).end();
+  res.set('Content-Type', row.photo_mime);
+  res.set('Cache-Control', 'no-store');
+  // Buffer.from is belt-and-braces rather than a fix for a live bug: the
+  // Snatch photo route needs it because node:sqlite hands a BLOB back as a
+  // plain Uint8Array, which res.send() JSON-serializes instead of sending
+  // as bytes. Verified that this driver returns a real Buffer already, so
+  // dropping the wrap here changes nothing today - it is kept so that a
+  // driver swap cannot quietly turn every Wall photo into {"0":255,...}.
+  res.send(Buffer.from(row.photo));
 });
 
 router.get('/admin/plaza-posts', requireAdmin, (req, res) => {

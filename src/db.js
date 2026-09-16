@@ -195,6 +195,17 @@ if (!columnExists('users', 'tutorial_seen')) {
   db.exec('ALTER TABLE users ADD COLUMN tutorial_seen INTEGER NOT NULL DEFAULT 0');
 }
 
+// Migration: a photo attached to a Wall post. Stored as a BLOB beside the
+// post rather than as a file on the volume, which is the same choice Snatch
+// entry photos made and for the same reason: a handful of admin-published
+// images is not worth a second storage path to back up, wipe and serve. If
+// Wall posts ever become something guests write, revisit that - the volume
+// is where a hundred of these would belong.
+if (!columnExists('plaza_posts', 'photo')) {
+  db.exec('ALTER TABLE plaza_posts ADD COLUMN photo BLOB');
+  db.exec('ALTER TABLE plaza_posts ADD COLUMN photo_mime TEXT');
+}
+
 // Migration: last language a user selected in the app, so push notifications
 // can be sent in their own language instead of a fixed default.
 if (!columnExists('users', 'lang')) {

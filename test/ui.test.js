@@ -3230,6 +3230,53 @@ test('a destructive button is visible in both modes, not just the one it was tun
   }
 });
 
+test('an admin attaches a photo to a Wall post and every guest sees it in the feed', async () => {
+  // The browser half of the photos-on-posts feature. The API test covers the
+  // three edit intentions; this covers the path a person actually takes -
+  // the drawn "escolher foto" button standing in for a hidden file input,
+  // the client-side resize to JPEG, and the picture arriving in somebody
+  // else's feed.
+  //
+  // It has to be a guest looking, not the admin who posted: the photo is
+  // fetched with the key in the query string because an <img> cannot send an
+  // Authorization header, and a route that only worked for the poster would
+  // pass any check made from the admin's own session.
+  const guest = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Wall Photo Viewer' } });
+
+  const adminContext = await iphoneContext('iPhone 13');
+  const adminPage = await loginPage(adminContext, ADMIN, '/settings.html');
+  await adminPage.click('[data-atab="plaza"]');
+  await waitOrExplain(adminPage, '#plaza-post-form');
+  await adminPage.fill('#plaza-post-text', 'a casa por dentro');
+  await pickPhotoViaButton(adminPage, '#plaza-post-photo-btn', {
+    name: 'casa.png', mimeType: 'image/png', buffer: PNG_1X1,
+  });
+  // The preview appearing is what tells the admin the file was taken - the
+  // resize is async, so publishing before it lands would post without one.
+  await waitOrExplain(adminPage, '#plaza-post-photo-preview:not(.hidden)');
+  await adminPage.click('#plaza-post-submit');
+  await adminPage.waitForTimeout(400);
+  await adminContext.close();
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, guest.token);
+  await waitOrExplain(page, '.plaza-post-photo');
+
+  // Rendered is not the same as loaded: a broken src still produces an <img>
+  // in the DOM, and a JSON-serialized BLOB served as an image is exactly the
+  // failure that would leave one here. naturalWidth is 0 until real pixels
+  // have decoded.
+  const shown = await page.$eval('.plaza-post-photo', (el) => ({
+    src: el.getAttribute('src'),
+    decoded: el.naturalWidth > 0 && el.naturalHeight > 0,
+  }));
+  assert.match(shown.src, /\/api\/plaza-posts\/\d+\/photo\?token=/, 'the key has to travel in the query - an <img> cannot send a header');
+  assert.ok(shown.decoded, 'the photo has to actually decode, not just be present as a tag');
+
+  await context.close();
+  await api('DELETE', `/admin/users/${guest.id}`, { token: ADMIN });
+});
+
 test('the settings user search is not something iOS password autofill will grab', async () => {
   // Settings also carries the change-key password fields, and Safari hunts
   // the page for a nearby text input to treat as the username - it popped

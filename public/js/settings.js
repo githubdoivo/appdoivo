@@ -2063,6 +2063,7 @@ function cancelPlazaEdit() {
     if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
     else row.remove();
   });
+  resetPlazaPostPhoto();
   $('plaza-post-submit').textContent = t('plaza_publish_btn');
   $('plaza-edit-cancel').classList.add('hidden');
   $('plaza-post-msg').textContent = '';
@@ -2100,11 +2101,57 @@ function startPlazaEdit(post) {
   } else {
     $('plaza-post-text').value = post.text;
   }
+  // Untouched to start with, so saving without opening the picker keeps
+  // whatever photo the post already had.
+  resetPlazaPostPhoto();
+  if (post.hasPhoto) {
+    const preview = $('plaza-post-photo-preview');
+    preview.querySelector('img').src = `/api/plaza-posts/${post.id}/photo?token=${encodeURIComponent(getToken())}`;
+    preview.classList.remove('hidden');
+  }
   $('plaza-post-submit').textContent = t('save');
   $('plaza-edit-cancel').classList.remove('hidden');
   placePlazaForm();
   $('plaza-post-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
+
+// Three states, not two, and the difference matters on an edit:
+//   undefined -> the picker was never touched, leave whatever is stored
+//   null      -> "remover" was pressed, drop the stored photo
+//   data URL  -> a new photo to replace it with
+// Sending null where undefined was meant would strip the photo off every
+// post edited for a typo, which is exactly the bug this shape avoids.
+let plazaPostPhoto;
+
+function resetPlazaPostPhoto() {
+  plazaPostPhoto = undefined;
+  $('plaza-post-photo-input').value = '';
+  $('plaza-post-photo-preview').classList.add('hidden');
+  $('plaza-post-photo-preview').querySelector('img').removeAttribute('src');
+}
+
+$('plaza-post-photo-btn').addEventListener('click', () => $('plaza-post-photo-input').click());
+
+$('plaza-post-photo-input').addEventListener('change', async () => {
+  const file = $('plaza-post-photo-input').files[0];
+  if (!file) return;
+  const preview = $('plaza-post-photo-preview');
+  try {
+    plazaPostPhoto = await resizePhotoToJpeg(file);
+    preview.querySelector('img').src = plazaPostPhoto;
+    preview.classList.remove('hidden');
+  } catch (err) {
+    plazaPostPhoto = undefined;
+    preview.classList.add('hidden');
+    await showAlert(err.message);
+  }
+});
+
+$('plaza-post-photo-remove').addEventListener('click', () => {
+  plazaPostPhoto = null;
+  $('plaza-post-photo-input').value = '';
+  $('plaza-post-photo-preview').classList.add('hidden');
+});
 
 $('plaza-edit-cancel').addEventListener('click', cancelPlazaEdit);
 
@@ -2126,9 +2173,9 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
     if (editingPostId) {
       // The type is fixed at creation - a poll people have voted in is not
       // an announcement - so it is not sent, and the server ignores it.
-      await api(`/admin/plaza-posts/${editingPostId}`, { method: 'PATCH', body: { text, options, links } });
+      await api(`/admin/plaza-posts/${editingPostId}`, { method: 'PATCH', body: { text, options, links, photoBase64: plazaPostPhoto } });
     } else {
-      await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links } });
+      await api('/admin/plaza-posts', { method: 'POST', body: { type: plazaPostType, text, options, links, photoBase64: plazaPostPhoto ?? undefined } });
     }
     editingPostId = null;
     $('plaza-post-submit').textContent = t('plaza_publish_btn');
@@ -2143,6 +2190,7 @@ $('plaza-post-form').addEventListener('submit', async (e) => {
       if (i === 0) row.querySelectorAll('input').forEach((input) => (input.value = ''));
       else row.remove();
     });
+    resetPlazaPostPhoto();
     $('plaza-post-msg').textContent = t('saved');
     setTimeout(() => ($('plaza-post-msg').textContent = ''), 2000);
     loadPlazaPosts();

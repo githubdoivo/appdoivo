@@ -2314,6 +2314,21 @@ button.memo-dot-open { cursor: pointer; }
 .memo-reaction span { font-size: var(--text-sm); color: var(--ink-soft); font-family: var(--body); }
 .memo-reaction.active { color: var(--rata); border-color: var(--rata); background: color-mix(in srgb, var(--rata) 15%, var(--paper-2)); }
 
+/* A photo on a Wall post. Width-constrained by the card and free in height,
+   so a portrait photo from a phone is not cropped to a letterbox - the whole
+   point is usually what is in it. max-height keeps a very tall one from
+   pushing the words it belongs to off the screen entirely. */
+.plaza-post-photo {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  margin: 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+}
+
 /* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
    glance tells an announcement from a poll - a plain torn front-page column
    for announcements, a boxed "magazine spread" card for polls (the

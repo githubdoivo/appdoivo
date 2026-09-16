@@ -859,6 +859,14 @@ function renderPlazaPost(post) {
   // else says which kind of post this is before you start reading it.
   const typeLabel = `<h2 class="plaza-post-type">${esc(t(PLAZA_TYPE_LABEL[post.type] ?? 'plaza_type_announcement'))}</h2>`;
 
+  // The post's photo, when it has one. The key travels in the query string
+  // because an <img> cannot send an Authorization header - the same reason
+  // memoUploadUrl() does it. Sits under the type label and above the words,
+  // so the picture introduces the message instead of trailing it.
+  const photoHtml = post.hasPhoto
+    ? `<img class="plaza-post-photo" src="/api/plaza-posts/${post.id}/photo?token=${encodeURIComponent(getToken())}" alt="" loading="lazy" />`
+    : '';
+
   // A published Snatch result. Its text is a JSON snapshot taken at publish
   // time (see createPodiumPost() in plaza.js), not a live lookup - so what
   // the party saw announced stays exactly that, even if the night is later
@@ -883,6 +891,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-podium${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         <p class="podium-night">${esc(t(`theme_${snap.night}`))}</p>
         <ol class="podium-list">${rows}</ol>
         ${cong}
@@ -897,6 +906,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-video${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         <p class="podium-night">${esc(formatEuDate(post.text))}</p>
         <video class="wall-video-player" controls preload="none" src="${memoRecapUrl(post.text)}"></video>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -926,6 +936,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-links${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         ${translatedText(post.text, post.originalText, { className: 'plaza-post-text plaza-links-intro', linkified: true })}
         <ul class="plaza-links">${rows}</ul>
         <p class="plaza-byline">${esc(byline)}</p>
@@ -941,6 +952,7 @@ function renderPlazaPost(post) {
       <article class="plaza-post plaza-post-announcement${post.pinnedAt ? ' pinned' : ''}">
         ${typeLabel}
         ${pinnedBadge}
+        ${photoHtml}
         ${translatedText(post.text, post.originalText, { className: `plaza-post-text highlight${post.text.length > 140 ? ' is-long' : ''}`, linkified: true })}
         <p class="plaza-byline">${esc(byline)}</p>
       </article>`;

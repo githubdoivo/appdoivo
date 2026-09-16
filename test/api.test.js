@@ -2120,6 +2120,69 @@ test('a post can be edited after it is up, and renaming a poll option keeps its 
   }
 });
 
+test('a Wall post can carry a photo, and an edit only drops it when told to', async () => {
+  // Ivo asked for photos on Wall posts. The half worth guarding is not that
+  // a photo can be attached - it is the edit path, which has three distinct
+  // intentions that all arrive as the same field:
+  //   a data URL replaces it, null removes it, and ABSENT leaves it alone.
+  // Collapsing the last two is the obvious bug, and it is silent: every
+  // admin fixing a typo from a form that knows nothing about photos would
+  // strip the picture off the post without being told.
+  const made = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'a casa por dentro', photoBase64: TEST_PHOTO },
+  });
+  assert.equal(made.status, 200);
+  const id = made.data.id;
+
+  const feed = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.ok(feed.data.posts.find((p) => p.id === id).hasPhoto, 'the feed has to say a post carries a photo');
+
+  // Served as an image, not as JSON. node:sqlite hands a BLOB back as a
+  // Uint8Array, which res.send() will happily serialize into {"0":255,...}
+  // if it is not wrapped - and an <img> reports that failure to nobody.
+  const shown = await fetch(`${base}/plaza-posts/${id}/photo`, { headers: { Authorization: `Bearer ${ADMIN}` } });
+  assert.equal(shown.status, 200);
+  assert.equal(shown.headers.get('content-type'), 'image/jpeg');
+  const bytes = Buffer.from(await shown.arrayBuffer());
+  assert.equal(bytes[0], 0xff, 'the first byte has to be JPEG, not a "{"');
+  assert.equal(bytes[1], 0xd8);
+
+  // Editing the words alone leaves the photo where it is.
+  await api('PATCH', `/admin/plaza-posts/${id}`, { token: ADMIN, body: { text: 'a casa por dentro e por fora' } });
+  const afterEdit = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.ok(afterEdit.data.posts.find((p) => p.id === id).hasPhoto, 'a text-only edit must not drop the photo');
+
+  // Asking for it to go is the only thing that removes it.
+  await api('PATCH', `/admin/plaza-posts/${id}`, { token: ADMIN, body: { text: 'sem foto', photoBase64: null } });
+  const afterRemove = await api('GET', '/plaza-posts', { token: ADMIN });
+  assert.equal(afterRemove.data.posts.find((p) => p.id === id).hasPhoto, 0);
+  const gone = await fetch(`${base}/plaza-posts/${id}/photo`, { headers: { Authorization: `Bearer ${ADMIN}` } });
+  assert.equal(gone.status, 404, 'once removed the photo route has nothing to serve');
+
+  // Anything that is not a JPEG is refused outright rather than stored and
+  // served as a broken image later.
+  const junk = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'lixo', photoBase64: 'data:image/jpeg;base64,bm90YWpwZWc=' },
+  });
+  assert.equal(junk.status, 400);
+  assert.equal(junk.data.error, 'err_photo_invalid');
+
+  // And the size ceiling is enforced here, not only in the browser.
+  const huge = `data:image/jpeg;base64,${Buffer.concat([
+    Buffer.from([0xff, 0xd8]), Buffer.alloc(500 * 1024, 0x41),
+  ]).toString('base64')}`;
+  const tooBig = await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'announcement', text: 'enorme', photoBase64: huge },
+  });
+  assert.equal(tooBig.status, 400);
+  assert.equal(tooBig.data.error, 'err_photo_too_large');
+
+  await api('DELETE', `/admin/plaza-posts/${id}`, { token: ADMIN });
+});
+
 test('Plaza posts: only the owner can delete, and deleting one leaves the rest of the feed untouched', async () => {
   const create = await api('POST', '/admin/plaza-posts', { token: ADMIN, body: { type: 'announcement', text: 'temporary announcement' } });
   const postId = create.data.id;
