@@ -14,24 +14,25 @@ list of what is still owed, and by whom.
 These cannot start until he hands something over. Listing them is not a
 nudge; they sit here until they don't.
 
-### Rotate the QA access key
+### The Memo section's accent cannot carry text
 
-On 14 September 2026 a command meant to check whether Ivo had an account on
-QA printed the whole user row instead of just the name and permissions, and
-that row carries the `token` field. His **QA** key is therefore written into
-a chat transcript, which closing the chat does not undo. The key was not
-changed and not used; it was only exposed. **Production was never involved.**
+Reported as "the delete button is invisible", which was a different bug and
+is fixed. Sweeping the rest of the admin panel for the same fault turned up
+something that is not a bug at all, but a palette decision.
 
-Rotating it is Manage Users -> his own row -> regenerate key, and then
-claiming the new one through the name search on the QA login screen, which
-reopens by itself whenever a key is regenerated. That route matters: it means
-the replacement never has to be read out or pasted anywhere.
+In light mode the Memo theme's accent (#0e90aa) sits on its own paper
+(#87b6c3) at **1.7:1**. The darker variant already in the file (#0a5464)
+only reaches 3.85:1. Nothing mixed from those two clears 4.5:1, because the
+paper is simply too close to the accent - reaching AA needs a *new,
+noticeably darker* accent, which changes how the whole section looks.
 
-Deliberately not treated as urgent. QA is publicly reachable, so the exposure
-is real in the sense that someone holding the transcript could sign in there
-as the owner - but there is nothing on QA except test accounts and whatever
-we filled it with ourselves. Ivo already has a text file of keys, so rotating
-costs him an edit to that file. His call, and a defensible one either way.
+Two things found on the way that are deliberately left alone: the
+wall-secret-btn at 1.7:1 is the easter-egg star, invisible on purpose at
+opacity 0.22 and covered by its own test; and inactive tab labels sit around
+2.7:1 because muting them is what makes the active one read.
+
+Not urgent and not a blocker - it is legible, just not AA. Worth deciding
+when the party is over and a palette change can be looked at properly.
 
 ### Push reach on production, and what decides it
 
@@ -60,30 +61,6 @@ app is tied to a real action - so the way to reach everyone deliberately is to
 publish a Wall announcement, which sends "wall - o anfitrião deixou um novo
 anúncio na wall" and opens on the post. Worth knowing; not a suggestion to do
 it.
-
-### Whether a Memo selfie comes back mirrored
-
-Ivo raised this while testing and it is still unresolved, because the half
-that is left needs an iPhone.
-
-What was measured, all of it against QA: the app mirrors nothing of its own -
-no transform in the CSS, no re-encoding on upload, and a photo comes back out
-of `/memo/uploads` byte for byte identical to the one that went in, EXIF and
-all. The browser applies EXIF orientation properly, including the mirrored
-values: a test image with red on the left and orientation 2 renders with blue
-on the left, which is correct behaviour and matches what the Photos app does.
-
-Which leaves exactly one place a mirror could still be introduced, and it is
-the one place that cannot be tested from here: an iPhone stores photos as
-HEIC and Safari converts them to JPEG at the moment of upload. If that
-conversion applies the rotation but mishandles the mirror flag, the result is
-a selfie that disagrees with the gallery it came from.
-
-The step that settles it is to shoot one selfie into Memo and compare it with
-the same photo in the gallery. If they differ, the fix is to normalise
-orientation server-side on upload - baking the EXIF flag into the pixels so
-nothing is left for a viewer to interpret - and that is worth writing only
-once the problem is known to be real.
 
 ### Express 5, after the party
 

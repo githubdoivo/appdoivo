@@ -1,6 +1,6 @@
 {
   "name": "appdoivo",
-  "version": "1.7.35",
+  "version": "1.7.40",
   "description": "Party web app with four features: wall, rata, snatch and plaza.",
   "type": "module",
   "main": "src/server.js",
