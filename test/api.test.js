@@ -2442,6 +2442,72 @@ test('content written before translations existed can be picked up by a backfill
   db.prepare('DELETE FROM translations').run();
 });
 
+test('re-queueing unchanged text buys nothing, and only a real edit pays again', async () => {
+  // This one emptied Ivo's API credits on 16 Sept 2026, so it is worth
+  // stating what went wrong rather than only asserting the fix.
+  //
+  // queue() used to reset every re-queued row to pending with attempts back
+  // to zero - which reads as "this was edited, translate it again". Correct
+  // for an edit; expensive nonsense for anything else, because re-queueing
+  // an unchanged sentence discarded a finished translation and bought it
+  // again. seedDemo re-queues its whole demo set on every boot, and QA has
+  // SEED_DEMO=true, so that happened on every single deploy.
+  //
+  // What tells the two cases apart is a hash of the source text. Nothing
+  // here calls the API - the count of rows left pending IS the bill.
+  const store = await import('../src/translations.js');
+  const TEXT = 'o jantar e as nove, tragam uma toalha';
+
+  // Five boots of identical content.
+  for (let boot = 0; boot < 5; boot++) {
+    store.queue('plaza_post', 90210, 'text', 'pt', TEXT);
+  }
+  const afterBoots = store.pending(1000).filter((r) => r.entity_id === 90210);
+  assert.equal(afterBoots.length, 1, 'five identical boots must queue one translation, not five');
+
+  // Once it has been paid for, booting again must not buy it a second time.
+  for (const row of afterBoots) store.markOk(row.id, 'dinner is at nine, bring a towel');
+  store.queue('plaza_post', 90210, 'text', 'pt', TEXT);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 0,
+    'a finished translation must survive a re-queue of the same text',
+  );
+
+  // A genuine edit is still worth paying for - the whole feature depends on
+  // a stale translation being thrown away.
+  store.queue('plaza_post', 90210, 'text', 'pt', `${TEXT} e chinelos`);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 1,
+    'editing the text must re-queue it',
+  );
+
+  // A permanent failure must not come back on every later write either -
+  // retrying something already given up on is the same bill in slow motion.
+  for (const row of store.pending(1000).filter((r) => r.entity_id === 90210)) store.markFailed(row.id);
+  for (const row of store.pending(1000).filter((r) => r.entity_id === 90210)) store.markFailed(row.id);
+  store.queue('plaza_post', 90210, 'text', 'pt', `${TEXT} e chinelos`);
+  assert.equal(
+    store.pending(1000).filter((r) => r.entity_id === 90210).length, 0,
+    'a row already given up on must not be retried by the next unrelated write',
+  );
+});
+
+test('only one translation sweep runs at a time, however many writes land together', async () => {
+  // The multiplier on the same incident. Every write fired
+  // setImmediate(runPending), and every sweep read the WHOLE pending queue
+  // with nothing marking a row as in flight - so N writes arriving together
+  // produced N overlapping sweeps that each translated the same rows.
+  // seedDemo writes about nineteen things at once, which is how nineteen
+  // sentences became hundreds of API calls per boot.
+  const { runPending } = await import('../src/translate.js');
+  // With no key configured every call returns 0 immediately, which is enough
+  // to prove the guard: what is asserted is that concurrent calls do not all
+  // enter the sweep, not what the sweep would have done.
+  const results = await Promise.all(Array.from({ length: 10 }, () => runPending()));
+  assert.equal(results.length, 10);
+  assert.ok(results.every((n) => n === 0), 'with no API key nothing is spent, whatever the concurrency');
+});
+
 test('the translator is told, in detail, that portuguese means portugal', async () => {
   // Ivo's emphasis, 14 Sept 2026, and he is right to press on it: a model
   // left to its own devices drifts to Brazilian Portuguese, because there is

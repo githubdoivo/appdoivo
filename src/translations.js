@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 // Storage for machine translations of text the guests and admins write.
 // Reading and writing only - the API call itself lives in translate.js, so
 // this module stays usable (and testable) with no network and no API key.
@@ -49,17 +50,42 @@ export function translationOf(entityType, entityId, field, lang) {
  * from their app language, because someone reading the app in English may
  * well write their dare in Portuguese. Translating pt->pt produces mush.
  */
-export function queue(entityType, entityId, field, sourceLang) {
+/**
+ * Queues a translation - but only when there is actually something new to
+ * translate.
+ *
+ * The ON CONFLICT clause used to reset every re-queued row to pending with
+ * attempts back to 0, which reads as "this was edited, do it again". That is
+ * right for an edit and expensive nonsense for everything else: re-queueing
+ * an unchanged sentence discarded a finished translation and bought it
+ * again. seedDemo re-queues its whole demo set on every boot, so on QA that
+ * happened on every deploy.
+ *
+ * Comparing a hash of the source text tells the two cases apart. Same text
+ * and a finished row: leave it alone. Different text: the translation is
+ * stale and is correctly thrown away.
+ */
+export function queue(entityType, entityId, field, sourceLang, sourceText = null) {
   try {
+    const hash = sourceText == null ? null : createHash('sha256').update(String(sourceText)).digest('hex').slice(0, 32);
+    const existing = db.prepare(
+      'SELECT lang, status, source_hash FROM translations WHERE entity_type = ? AND entity_id = ? AND field = ?'
+    ).all(entityType, entityId, field);
     const insert = db.prepare(`
-      INSERT INTO translations (entity_type, entity_id, field, lang, status)
-      VALUES (?, ?, ?, ?, 'pending')
+      INSERT INTO translations (entity_type, entity_id, field, lang, status, source_hash)
+      VALUES (?, ?, ?, ?, 'pending', ?)
       ON CONFLICT(entity_type, entity_id, field, lang) DO UPDATE SET
-        status = 'pending', text = NULL, attempts = 0
+        status = 'pending', text = NULL, attempts = 0, source_hash = excluded.source_hash
     `);
     for (const lang of LANGS) {
       if (lang === sourceLang) continue;
-      insert.run(entityType, entityId, field, lang);
+      const row = existing.find((r) => r.lang === lang);
+      // Already done, from exactly this text - nothing to buy.
+      if (row && row.status === 'ok' && hash && row.source_hash === hash) continue;
+      // Already given up on, from exactly this text - retrying it on every
+      // subsequent write is how a permanent failure became a recurring bill.
+      if (row && row.status === 'failed' && hash && row.source_hash === hash) continue;
+      insert.run(entityType, entityId, field, lang, hash);
     }
   } catch {
     // Queueing is best-effort by design - see the note above.

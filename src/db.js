@@ -533,6 +533,17 @@ db.exec(`
   );
 `);
 
+// Migration: a fingerprint of the text a translation was made from. Without
+// it, re-queueing an entity could not tell "this was edited, translate it
+// again" apart from "this is the same sentence it always was", so it
+// assumed the former and threw away work already paid for. On QA, where
+// seedDemo re-queues the whole demo set on every boot, that meant buying
+// the same translations again on every single deploy.
+if (!columnExists('translations', 'source_hash')) {
+  db.exec('ALTER TABLE translations ADD COLUMN source_hash TEXT');
+}
+
+
 export function generateUserToken(name) {
   const base = tokenBase(name);
 
