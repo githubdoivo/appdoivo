@@ -3295,57 +3295,56 @@ test('admin/owner can see per-day upload counts, download everything as a zip, a
 // these into actual frames.
 const REAL_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjI4LjEwMgD/2wBDAAg4OEI4Qk1NTU1NTVtUW15eXltbW1teXl5lZWV3d3dlZWVeXmVlcHB3d4GFgXp6d3qFhYyMjKiooaHExMvx8f//xABNAAEBAAAAAAAAAAAAAAAAAAAABgEBAQEAAAAAAAAAAAAAAAAAAAYHEAEAAAAAAAAAAAAAAAAAAAAAEQEAAAAAAAAAAAAAAAAAAAAA/8AAEQgAMABAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AiwEm38AAAAAAAAAAAAAAAAAAAAAB/9k=', 'base64');
 
-// The same 64x48 JPEG, carrying EXIF Orientation 2 - "mirror horizontal".
-// Built with exiftool rather than by hand so the bytes are a real camera's
-// shape, not this module's idea of one.
-const MIRRORED_JPEG = Buffer.from('/9j/4AAQSkZJRgABAgAAAQABAAD/4QBiRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAIAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAEAAAITAAMAAAABAAEAAAAAAAAAAAABAAAAAQAAAAEAAAAB//4AEExhdmM2Mi4yOC4xMDIA/9sAQwAIODhCOEJNTU1NTU1bVFteXl5bW1tbXl5eZWVld3d3ZWVlXl5lZXBwd3eBhYF6end6hYWMjIyoqKGhxMTL8fH//8QATQABAQAAAAAAAAAAAAAAAAAAAAcBAQEBAAAAAAAAAAAAAAAAAAAFBxABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIADAAQAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AI4A39KAAAAAAAAAAAAAAAAAAAAAAf/Z', 'base64');
+test('you can mirror your own Memo photo, and only your own', async () => {
+  // iOS applies "Mirror Front Camera" in its own Camera app and NOT to a web
+  // capture, so a selfie shot through Memo arrives the opposite way round
+  // from the one that lands in the gallery. Nothing in the uploaded file can
+  // settle which is wanted - Safari's HEIC->JPEG conversion strips make,
+  // model and lens, leaving only orientation - so this is a control rather
+  // than a detection, and the only interesting rule is whose photo it is.
+  const owner = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Flip Owner' } })).data;
+  const other = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Flip Onlooker' } })).data;
 
-test('a mirrored selfie is stored un-mirrored, and a rotated one keeps its rotation', async () => {
-  // Ivo: "as fotos no memo estão a espelhar - não queremos isso."
-  //
-  // The app never mirrored anything itself, which is what made this take a
-  // while to place. It stores the bytes it is handed and serves them back
-  // untouched, and every browser applies the EXIF orientation tag -
-  // including the four values that mean "and flip it left-to-right". That
-  // is correct, and normally agrees with the Photos app.
-  //
-  // It stops agreeing for selfies: an iPhone stores HEIC, Safari converts to
-  // JPEG at upload time, and what comes out has the mirror baked into the
-  // pixels AND a mirrored tag still attached - so a viewer honouring the tag
-  // flips an already-flipped photo. Two bytes are rewritten on the way in;
-  // the pixels are never touched, which is the only affordable option on a
-  // box this size.
-  const shooter = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Mirror Tester' } })).data;
-  const slots = (await api('GET', '/memo/today', { token: shooter.token })).data.slots;
+  const slots = (await api('GET', '/memo/today', { token: owner.token })).data.slots;
   const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
   markSlotNotified(slot.id);
-
   const up = await apiUpload(`/memo/slots/${slot.id}/upload`, {
-    token: shooter.token, buffer: MIRRORED_JPEG, filename: 'selfie.jpg', mimeType: 'image/jpeg',
+    token: owner.token, buffer: REAL_JPEG, filename: 'selfie.jpg', mimeType: 'image/jpeg',
   });
   assert.equal(up.status, 201);
 
-  // Read it back the way a phone would, and check the tag the browser will act on.
-  const served = await fetch(`${base}/memo/uploads/${up.data.id}?token=${encodeURIComponent(shooter.token)}`);
-  assert.equal(served.status, 200);
-  const stored = Buffer.from(await served.arrayBuffer());
-  const { findOrientation } = await import('../src/exif.js');
-  assert.equal(findOrientation(stored)?.value, 1, 'a mirrored selfie must come back un-mirrored');
+  // Nothing is mirrored until somebody says so.
+  await apiUpload(`/memo/slots/${slot.id}/upload`, {
+    token: other.token, buffer: REAL_JPEG, filename: 'theirs.jpg', mimeType: 'image/jpeg',
+  });
+  const before = (await api('GET', '/memo/feed', { token: owner.token })).data.uploads.find((u) => u.id === up.data.id);
+  assert.equal(before.flipped, false);
 
-  // The rotation half has to survive - stripping orientation wholesale would
-  // stand every sideways photo on its end, which is a worse bug than the one
-  // being fixed.
-  const { unmirrorJpeg } = await import('../src/exif.js');
-  for (const [from, to] of [[5, 8], [7, 6], [4, 3], [6, 6], [1, 1], [8, 8]]) {
-    const buf = Buffer.from(MIRRORED_JPEG);
-    const at = findOrientation(buf);
-    buf.writeUInt16LE(from, at.at);
-    if (!at.little) buf.writeUInt16BE(from, at.at);
-    unmirrorJpeg(buf);
-    assert.equal(findOrientation(buf).value, to, `orientation ${from} should become ${to}`);
-  }
+  const flipped = await api('POST', `/memo/uploads/${up.data.id}/flip`, { token: owner.token, body: { flipped: true } });
+  assert.equal(flipped.status, 200);
+  assert.equal(flipped.data.flipped, true);
 
-  await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+  const after = (await api('GET', '/memo/feed', { token: owner.token })).data.uploads.find((u) => u.id === up.data.id);
+  assert.equal(after.flipped, true, 'the feed has to carry the choice, or the client cannot render it');
+
+  // It is a toggle, not a one-way door - the whole point is comparing.
+  await api('POST', `/memo/uploads/${up.data.id}/flip`, { token: owner.token, body: { flipped: false } });
+  const back = (await api('GET', '/memo/feed', { token: owner.token })).data.uploads.find((u) => u.id === up.data.id);
+  assert.equal(back.flipped, false);
+
+  // And nobody else gets a say in how you look in your own picture.
+  const meddling = await api('POST', `/memo/uploads/${up.data.id}/flip`, { token: other.token, body: { flipped: true } });
+  assert.equal(meddling.status, 403);
+  assert.equal(meddling.data.error, 'err_not_your_photo');
+
+  // The stored file is untouched either way - flipping is a render-time
+  // transform, never a re-encode.
+  const served = await fetch(`${base}/memo/uploads/${up.data.id}?token=${encodeURIComponent(owner.token)}`);
+  const bytes = Buffer.from(await served.arrayBuffer());
+  assert.deepEqual(bytes, REAL_JPEG, 'the photo on disk must be byte-identical to the one uploaded');
+
+  await api('DELETE', `/admin/users/${owner.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${other.id}`, { token: ADMIN });
 });
 
 test('stitching the day video answers immediately and reports when it is done', async () => {

@@ -345,11 +345,38 @@ export function getTodayFeed(viewerUserId) {
       userName: u.user_name,
       mine: u.user_id === viewerUserId,
       kind: u.kind,
+      flipped: !!u.flipped,
       uploadedAt: u.uploaded_at,
       reactions: countsByUpload.get(u.id) || {},
       myReaction: myReactionByUpload.get(u.id) || null,
     })),
   };
+}
+
+/**
+ * Mirrors a photo left-to-right, or puts it back. Your own photo only -
+ * how somebody looks in their own picture is not a thing anyone else gets a
+ * vote on.
+ *
+ * Stored as a flag, applied as a CSS transform at render time. Nothing
+ * rewrites the pixels: re-encoding a 2.5MB JPEG on a shared CPU to flip it
+ * is work this machine should not be doing, and it would be lossy every
+ * time somebody changed their mind.
+ */
+export function setUploadFlipped(uploadId, userId, flipped) {
+  const row = db.prepare('SELECT user_id FROM memo_uploads WHERE id = ?').get(uploadId);
+  if (!row) {
+    const err = new Error('err_not_found');
+    err.status = 404;
+    throw err;
+  }
+  if (row.user_id !== userId) {
+    const err = new Error('err_not_your_photo');
+    err.status = 403;
+    throw err;
+  }
+  db.prepare('UPDATE memo_uploads SET flipped = ? WHERE id = ?').run(flipped ? 1 : 0, uploadId);
+  return !!flipped;
 }
 
 /** Reacting again with the same emoji clears it (toggle); a different one replaces it. */

@@ -701,7 +701,20 @@ function renderMemoFeed() {
   $('memo-feed').innerHTML = memoFeedCache.map((u) => {
     const preview = u.kind === 'video'
       ? `<video class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" muted controls></video>`
-      : `<img class="memo-feed-thumb" src="${memoUploadUrl(u.id)}" alt="" />`;
+      : `<img class="memo-feed-thumb${u.flipped ? ' flipped' : ''}" src="${memoUploadUrl(u.id)}" alt="" />`;
+    // Your own photo only. iOS mirrors the front camera in its own Camera
+    // app but not in a web capture, so a selfie shot here arrives the
+    // opposite way round to the one in your gallery - and nothing in the
+    // file says which camera took it, so this is a choice rather than
+    // something that can be detected. Photos only: a video carries its
+    // rotation elsewhere and flipping one is a different job.
+    const flipBtn = u.mine && u.kind === 'photo'
+      ? `<button type="button" class="memo-flip${u.flipped ? ' active' : ''}" data-memo-flip="${u.id}" data-flipped="${u.flipped ? '1' : '0'}" aria-label="${esc(t('memo_flip'))}" title="${esc(t('memo_flip'))}">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <path d="M12 3v18"/><path d="M8 7 3 12l5 5V7Z"/><path d="M16 7l5 5-5 5V7Z"/>
+           </svg>
+         </button>`
+      : '';
     // Your own moment is here so you can see what you captured, but the
     // reaction row is not: reacting to your own photo is not a thing, and
     // the counts on it are other people's business anyway.
@@ -716,7 +729,7 @@ function renderMemoFeed() {
         ${preview}
         <div class="memo-feed-meta">
           <span class="memo-feed-name">${name}</span>
-          <div class="memo-reaction-bar">${reactionBar}</div>
+          <div class="memo-reaction-bar">${reactionBar}${flipBtn}</div>
         </div>
       </div>`;
   }).join('');
@@ -763,6 +776,28 @@ $('memo-dots').addEventListener('change', async (e) => {
 // Tapping your own already-active reaction clears it (toggle) - see
 // toggleReaction() in memo.js, which mirrors that same rule server-side.
 $('memo-feed').addEventListener('click', async (e) => {
+  const flip = e.target.closest('[data-memo-flip]');
+  if (flip) {
+    const next = flip.dataset.flipped !== '1';
+    // Turned on the image before the request lands. The whole point of this
+    // control is judging how the photo looks, and a mirror that waits for a
+    // round trip is a mirror you cannot judge against.
+    const img = flip.closest('.memo-feed-item')?.querySelector('.memo-feed-thumb');
+    img?.classList.toggle('flipped', next);
+    flip.classList.toggle('active', next);
+    flip.dataset.flipped = next ? '1' : '0';
+    flip.disabled = true;
+    try {
+      await api(`/memo/uploads/${flip.dataset.memoFlip}/flip`, { method: 'POST', body: { flipped: next } });
+    } catch {
+      // Put it back rather than leave the screen disagreeing with the server.
+      img?.classList.toggle('flipped', !next);
+      flip.classList.toggle('active', !next);
+      flip.dataset.flipped = next ? '0' : '1';
+    } finally { flip.disabled = false; }
+    return;
+  }
+
   const btn = e.target.closest('[data-memo-react]');
   if (!btn) return;
   btn.disabled = true;
