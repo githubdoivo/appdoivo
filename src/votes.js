@@ -8,6 +8,26 @@ import { decodeJpegDataUrl as decodePhoto, MAX_PHOTO_BYTES } from './photos.js';
 // awards countdown, at their own pace during the event.
 const REVEAL_PHASES = ['hidden', 'third', 'second', 'first', 'all'];
 
+/** Which round of voting is live: 0 for the night's real vote, 1+ while a
+ * tie-breaker runoff is running. Ballots are kept apart by round so that
+ * settling a tie cannot disturb the placings it sits below. */
+function currentRound(night) {
+  return Number(getSetting(`runoff_round_${night}`, 0)) || 0;
+}
+
+/** The order a finished runoff settled a tied group into, as contestant ids.
+ * Empty when no tie has been broken on this night yet. */
+function getTiebreakOrder(night) {
+  const raw = getSetting(`tiebreak_order_${night}`);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Contestant IDs currently in a tie-breaker runoff for a night, or null if
  * none is active - see startRunoff() below. */
 function getRunoffIds(night) {
@@ -82,8 +102,8 @@ function duoPartnerId(userId, night) {
 function voteRowFor(userId, night) {
   const partnerId = duoPartnerId(userId, night);
   const row = partnerId
-    ? db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND user_id IN (?, ?)').get(night, userId, partnerId)
-    : db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND user_id = ?').get(night, userId);
+    ? db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND round = ? AND user_id IN (?, ?)').get(night, currentRound(night), userId, partnerId)
+    : db.prepare('SELECT id, user_id, contestant_id, confirmed_at FROM votes WHERE night = ? AND round = ? AND user_id = ?').get(night, currentRound(night), userId);
   return { row: row || null, partnerId };
 }
 
@@ -356,8 +376,8 @@ export function castVote(userId, contestantId, night) {
   }
 
   const info = db.prepare(
-    'INSERT INTO votes (user_id, contestant_id, night) VALUES (?, ?, ?)'
-  ).run(userId, contestantId, night);
+    'INSERT INTO votes (user_id, contestant_id, night, round) VALUES (?, ?, ?, ?)'
+  ).run(userId, contestantId, night, currentRound(night));
   // Solo: nobody left to agree with, so it counts immediately. Duo: left
   // unconfirmed until the partner signs off (see confirmDuoVote()).
   if (!partnerId) {
@@ -412,8 +432,8 @@ export function cancelPendingVote(userId, night) {
  * them (they never counted and never will). */
 export function pendingVoteCount(night) {
   return db.prepare(
-    'SELECT COUNT(*) AS n FROM votes WHERE night = ? AND confirmed_at IS NULL'
-  ).get(night).n;
+    'SELECT COUNT(*) AS n FROM votes WHERE night = ? AND round = ? AND confirmed_at IS NULL'
+  ).get(night, currentRound(night)).n;
 }
 
 /** How many accounts have no confirmed vote for a night yet - the owner
@@ -467,23 +487,75 @@ export function usersWithoutVoteCount(night) {
  * rows, organiser-created entries) instead of showing a broken-image icon -
  * the actual bytes are only ever served by the separately-gated photo route. */
 export function resultsForNight(night) {
+  // Counts the live round's ballots: the night's real vote normally, the
+  // runoff's while one is running. Without the round filter a runoff's
+  // ballots would be added to the tally they were meant to break.
+  const round = currentRound(night);
   const rows = db.prepare(`
     SELECT c.id, c.name, u1.name AS registeredBy, u2.name AS partnerName, COUNT(v.id) AS votes,
            c.photo IS NOT NULL AS hasPhoto
     FROM contestants c
     LEFT JOIN users u1 ON u1.id = c.user_id
     LEFT JOIN users u2 ON u2.id = c.partner_user_id
-    LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night AND v.confirmed_at IS NOT NULL
+    LEFT JOIN votes v ON v.contestant_id = c.id AND v.night = c.night AND v.round = ? AND v.confirmed_at IS NOT NULL
     WHERE c.night = ? AND c.confirmed_at IS NOT NULL
     GROUP BY c.id
     ORDER BY votes DESC, c.name COLLATE NOCASE
-  `).all(night);
+  `).all(round, night);
   // Once a runoff is active, the standings that matter are just the tied
   // group revoting among themselves - everyone else's (now stale) tally
   // from the first round would just be confusing clutter here.
   const runoff = getRunoffIds(night);
   const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
-  return scoped.map((r, i) => ({ ...r, hasPhoto: !!r.hasPhoto, rank: i + 1 }));
+  return rankRows(scoped, getTiebreakOrder(night));
+}
+
+/**
+ * Competition ranking: equal votes share a place and the next place skips,
+ * so four contestants on 3,3,1,1 come out 1st, 1st, 3rd, 3rd.
+ *
+ * Rank used to be the row's position in the list - `i + 1` over a query
+ * sorted by votes then `name COLLATE NOCASE`. That quietly made the
+ * alphabet the tiebreaker: a genuine tie was reported as a clean 1st and
+ * 2nd, and the podium published whichever name came first. Nobody could
+ * see that a tie had happened, least of all the person who lost one.
+ *
+ * `order` is a runoff outcome - the ids of a tied group in the order that
+ * runoff settled them. Applying it gives that group sequential places
+ * within the band it already occupies, so breaking a tie for 2nd cannot
+ * move anybody past 1st. A group with no runoff behind it keeps its shared
+ * rank and is flagged `tied`, which is what tells the admin one is owed.
+ */
+function rankRows(rows, order) {
+  const byVotes = new Map();
+  for (const r of rows) {
+    if (!byVotes.has(r.votes)) byVotes.set(r.votes, []);
+    byVotes.get(r.votes).push(r);
+  }
+  const out = [];
+  let place = 1;
+  for (const votes of [...byVotes.keys()].sort((a, b) => b - a)) {
+    const group = byVotes.get(votes);
+    // Everyone on nought is not a tie, it is a night nobody has voted in
+    // yet. Flagging it as one would offer a runoff between contestants who
+    // have not been judged at all, and would block publishing a night that
+    // simply went unvoted.
+    const isRealTie = group.length > 1 && votes > 0;
+    const settled = isRealTie && group.every((r) => order.includes(r.id));
+    const ordered = settled
+      ? [...group].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+      : group;
+    ordered.forEach((r, i) => {
+      out.push({
+        ...r,
+        hasPhoto: !!r.hasPhoto,
+        rank: settled ? place + i : place,
+        tied: isRealTie && !settled,
+      });
+    });
+    place += group.length;
+  }
+  return out;
 }
 
 /** Results a regular user may see right now, filtered by the reveal phase. */
@@ -509,21 +581,73 @@ export function visibleResultsForNight(night) {
  * scoped to just the tied group; see contestantsForNight()/castVote()/
  * resultsForNight() above for where that scope is enforced.
  */
-export function startRunoff(night) {
+export function startRunoff(night, atRank = null) {
   if (!isNight(night)) return { error: 'err_invalid_night' };
   if (nightStatus(night) !== 'closed') return { error: 'err_voting_not_closed' };
 
   const results = resultsForNight(night);
-  const topVotes = results[0]?.votes ?? 0;
-  const tied = results.filter((r) => r.votes === topVotes);
+  // Any place, not only the top. Defaults to the highest unresolved tie,
+  // because that is the one an organiser means when they press the button
+  // without choosing.
+  const tiedPlaces = [...new Set(results.filter((r) => r.tied).map((r) => r.rank))].sort((a, b) => a - b);
+  const rank = atRank == null ? tiedPlaces[0] : Number(atRank);
+  if (rank == null || Number.isNaN(rank)) return { error: 'err_no_tie' };
+
+  const tied = results.filter((r) => r.tied && r.rank === rank);
   if (tied.length < 2) return { error: 'err_no_tie' };
 
+  // A NEW round rather than a wipe. Deleting the night's votes settled the
+  // tie and destroyed every placing below it in the same stroke - after a
+  // runoff for 1st, 2nd and 3rd were left on zero votes each. Rounds are
+  // counted separately (see currentRound), so the real tally survives.
+  setSetting(`runoff_round_${night}`, String(currentRound(night) + 1));
   setSetting(`runoff_ids_${night}`, JSON.stringify(tied.map((r) => r.id)));
-  db.prepare('DELETE FROM votes WHERE night = ?').run(night);
+  setSetting(`runoff_rank_${night}`, String(rank));
   resetResultsPhase(night);
   setSetting(`voting_status_${night}`, 'open');
-  return { ok: true, contestantIds: tied.map((r) => r.id) };
+  return { ok: true, rank, contestantIds: tied.map((r) => r.id) };
 }
+
+/**
+ * Closes a runoff and records what it decided.
+ *
+ * The outcome is an ORDER, not a score. The tied group keeps the band of
+ * places it already held - a runoff for 2nd settles 2nd and 3rd between
+ * those two and cannot promote either past 1st - because a runoff is voted
+ * by a different, smaller ballot and its counts mean nothing next to the
+ * main round's.
+ *
+ * A runoff that ties again records nothing and says so, leaving the tie
+ * standing for another one. Picking a winner out of a second dead heat is
+ * exactly the silent alphabetical decision this replaced.
+ */
+export function resolveRunoff(night) {
+  const ids = getRunoffIds(night);
+  if (!ids) return { error: 'err_no_runoff' };
+  const round = currentRound(night);
+
+  const tallies = new Map(ids.map((id) => [id, 0]));
+  for (const row of db.prepare(
+    'SELECT contestant_id AS id, COUNT(*) AS votes FROM votes WHERE night = ? AND round = ? AND confirmed_at IS NOT NULL GROUP BY contestant_id'
+  ).all(night, round)) {
+    if (tallies.has(row.id)) tallies.set(row.id, row.votes);
+  }
+
+  const order = [...ids].sort((a, b) => tallies.get(b) - tallies.get(a));
+  const stillTied = tallies.get(order[0]) === tallies.get(order[order.length - 1]);
+
+  setSetting(`runoff_round_${night}`, '0');
+  setSetting(`runoff_ids_${night}`, '');
+  setSetting(`runoff_rank_${night}`, '');
+  if (stillTied) return { ok: true, stillTied: true };
+
+  // Kept alongside any earlier tie this night already settled, so breaking a
+  // second tie does not forget the first.
+  const kept = getTiebreakOrder(night).filter((id) => !ids.includes(id));
+  setSetting(`tiebreak_order_${night}`, JSON.stringify([...kept, ...order]));
+  return { ok: true, stillTied: false, order };
+}
+
 
 /* -------------------------- Miss Congeniality ----------------------------- */
 // A second vote per night, run after the outfit vote. Two things make it

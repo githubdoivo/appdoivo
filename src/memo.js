@@ -458,6 +458,29 @@ export const MEMO_RECAP_SECONDS_PER_PHOTO = 1;
 const RECAP_WIDTH = 720;
 const RECAP_HEIGHT = 1280;
 
+// The video that goes on the Wall is compressed harder than ffmpeg's
+// defaults, for the feed's sake more than the disk's.
+//
+// Measured on 20 deliberately noisy photos - the worst case for a codec,
+// far harder to compress than a real photograph:
+//   30fps, default crf .... 1561 KB
+//   12fps, crf 28 ..........  764 KB
+// So a full party day of ~120 photos goes from roughly 9MB to under 5MB,
+// and what that buys is a feed that does not stall on somebody's mobile
+// data halfway through the night.
+//
+// 12fps rather than 30 is free: this is a slideshow of stills, so the extra
+// 18 frames a second were duplicates of a photo that is not moving. crf 28
+// is a real (small) quality cost and where the line was drawn - 540p at crf
+// 30 was another 2.3x smaller and visibly soft, which is the wrong trade for
+// something people keep.
+//
+// The zip download is untouched and still hands over the original files.
+// Compression here is about the thing that gets watched in a feed, not
+// about what anybody takes home.
+const RECAP_FPS = 12;
+const RECAP_CRF = 28;
+
 /**
  * Stitches every photo uploaded on `day` into a single mp4, one second per
  * photo, in the order they were taken. Videos in that day are skipped -
@@ -515,9 +538,10 @@ export async function buildDayRecapVideo(day) {
         `pad=${RECAP_WIDTH}:${RECAP_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
         'format=yuv420p',
       ].join(','),
-      '-r', '30',
+      '-r', String(RECAP_FPS),
       '-c:v', 'libx264',
       '-preset', 'veryfast',
+      '-crf', String(RECAP_CRF),
       // Single-threaded with a short lookahead and no B-frames: libx264's
       // memory scales with threads and lookahead depth, and on a 256MB box
       // the defaults are what tipped it over. Slower, but a day's photos is

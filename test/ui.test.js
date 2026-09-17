@@ -1627,6 +1627,36 @@ test('the lead action of a card is its own artwork, and still has a name', async
   await context.close();
 });
 
+test('switching the last Rata tag off brings them all back, never an empty list', async () => {
+  // Ivo, from real use: "filter tag from rata always a tag should be
+  // selected like history in wall". Turning every tag off left the table
+  // blank, which reads as "there are no consequences" rather than "you have
+  // hidden them", and with nothing on screen the way back is not obvious.
+  // The Wall history filter already refills itself; this now matches.
+  await api('POST', '/consequences', { token: ADMIN, body: { text: 'uma consequencia para filtrar' } });
+
+  const context = await iphoneContext('iPhone 13');
+  const page = await loginPage(context, ADMIN, '/settings.html');
+  await page.click('[data-atab="rata"]');
+  await waitOrExplain(page, '#rata-status-filter .role-pill');
+
+  const activeCount = () => page.$$eval('#rata-status-filter .role-pill.active', (els) => els.length);
+  const startedWith = await activeCount();
+  assert.ok(startedWith > 0, 'the filter starts with tags on');
+
+  // Turn every one of them off.
+  const pills = await page.$$('#rata-status-filter .role-pill');
+  for (const pill of pills) await pill.click();
+
+  // The last tap must not leave nothing selected.
+  assert.equal(
+    await activeCount(), pills.length,
+    'switching the last tag off has to bring them all back, not leave the list empty',
+  );
+
+  await context.close();
+});
+
 test('a filter chip cannot keep its hover look after a tap on a phone', async () => {
   // iOS applies :hover on tap and leaves it applied until you touch
   // something else, so a chip switched off went on wearing the "on" look

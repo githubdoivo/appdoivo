@@ -533,6 +533,24 @@ db.exec(`
   );
 `);
 
+// Migration: which round of voting a ballot belongs to. 0 is the night's
+// real vote; 1 and up are tie-breaker runoffs.
+//
+// Without this a runoff had nowhere to put its ballots, so startRunoff()
+// deleted every vote for the night and reopened - which settled the tie and
+// destroyed every placing below it in the same stroke. Keeping rounds apart
+// means a runoff for 2nd cannot touch who won, and the night's real tally
+// survives being tie-broken.
+//
+// The uniqueness rule moves with it: one vote per person per night becomes
+// one vote per person per night PER ROUND, or nobody could vote in a runoff
+// having already voted in the night proper.
+if (!columnExists('votes', 'round')) {
+  db.exec('ALTER TABLE votes ADD COLUMN round INTEGER NOT NULL DEFAULT 0');
+  db.exec('DROP INDEX IF EXISTS idx_vote_user_night');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_vote_user_night_round ON votes(user_id, night, round)');
+}
+
 // Migration: whether a photo should be shown mirrored.
 //
 // iOS's "Mirror Front Camera" setting applies to the Camera app and NOT to

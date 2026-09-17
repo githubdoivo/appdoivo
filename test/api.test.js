@@ -855,6 +855,148 @@ test('reset-all clears votes AND contestants, back to a never-started night', as
   assert.equal(night.started, false, 'reset-all should return the night to its never-started state');
 });
 
+test('a tie is reported as a tie, at any place, instead of being settled alphabetically', async () => {
+  // Ivo, testing with real people: "when it's a tie it published the first
+  // alphabetically with the same votes". Exactly so - rank was `i + 1`,
+  // position in a list sorted by votes then `c.name COLLATE NOCASE`, which
+  // makes the alphabet the silent tiebreaker and hides the tie completely.
+  //
+  // Two ties on purpose, at different places, because the runoff only ever
+  // understood first place. Scores here: Alpha and Zulu tied on 3, then
+  // Bravo and Yankee tied on 1.
+  await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  const entries = {};
+  for (const name of ['Alpha Tie', 'Zulu Tie', 'Bravo Tie', 'Yankee Tie']) {
+    entries[name] = (await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night: NIGHT } })).data;
+  }
+  await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
+
+  const plan = [
+    ['Alpha Tie', 3], ['Zulu Tie', 3], ['Bravo Tie', 1], ['Yankee Tie', 1],
+  ];
+  let n = 0;
+  for (const [name, count] of plan) {
+    for (let i = 0; i < count; i++) {
+      const voter = (await api('POST', '/admin/users', { token: ADMIN, body: { name: `Tie Voter ${n++}` } })).data;
+      await api('POST', '/votes', { token: voter.token, body: { contestantId: entries[name].id, night: NIGHT } });
+    }
+  }
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN });
+
+  const results = (await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN })).data.results;
+  const rankOf = (name) => results.find((r) => r.name === name)?.rank;
+
+  // Equal votes, equal rank. Alphabetical order must not decide a placing.
+  assert.equal(rankOf('Alpha Tie'), rankOf('Zulu Tie'),
+    `two contestants on the same votes must share a rank, got ${rankOf('Alpha Tie')} and ${rankOf('Zulu Tie')}`);
+  assert.equal(rankOf('Alpha Tie'), 1);
+
+  // And the next place skips, the way any scoreboard works: 1, 1, 3, 3.
+  assert.equal(rankOf('Bravo Tie'), 3, 'after two firsts the next place is third, not second');
+  assert.equal(rankOf('Bravo Tie'), rankOf('Yankee Tie'));
+
+  // The tie has to be visible as such, not inferred by the reader comparing
+  // numbers - the admin needs to know a runoff is owed.
+  assert.ok(results.find((r) => r.name === 'Alpha Tie').tied, 'a tied row has to say it is tied');
+  assert.ok(results.find((r) => r.name === 'Bravo Tie').tied, 'including a tie that is not for first place');
+});
+
+test('an unbroken tie cannot be published to the Wall, and says why', async () => {
+  // A podium post is a snapshot - once it is on the Wall the tie is frozen
+  // into it with no way to tell the story afterwards. The whole reason ties
+  // are visible now is so one gets broken first, so publishing refuses.
+  // With a reason, not silently: a button that appears to do nothing is a
+  // complaint this app has already had.
+  await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  const ids = {};
+  for (const name of ['Dead Heat A', 'Dead Heat B']) {
+    ids[name] = (await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night: NIGHT } })).data.id;
+  }
+  await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
+  for (const [i, name] of ['Dead Heat A', 'Dead Heat B'].entries()) {
+    const voter = (await api('POST', '/admin/users', { token: ADMIN, body: { name: `Heat Voter ${i}` } })).data;
+    await api('POST', '/votes', { token: voter.token, body: { contestantId: ids[name], night: NIGHT } });
+  }
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+  for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN });
+
+  const refused = await api('POST', `/admin/voting/${NIGHT}/publish-podium`, { token: ADMIN });
+  assert.equal(refused.status, 400);
+  assert.equal(refused.data.error, 'err_tie_unresolved');
+  assert.equal(refused.data.rank, 1, 'and names which place is still open');
+
+  // Break it, and the same button goes through.
+  await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN });
+  const decider = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Heat Decider' } })).data;
+  await api('POST', '/votes', { token: decider.token, body: { contestantId: ids['Dead Heat B'], night: NIGHT } });
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+  for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${NIGHT}/reveal-next`, { token: ADMIN });
+
+  const published = await api('POST', `/admin/voting/${NIGHT}/publish-podium`, { token: ADMIN });
+  assert.equal(published.status, 201, 'once the tie is settled the podium publishes normally');
+});
+
+test('a runoff for second place settles second and third without touching who won', async () => {
+  // The half that matters most and was impossible before: a runoff used to
+  // delete every vote for the night, which broke the tie and wiped the
+  // placings below it at the same time. After a runoff for 1st, 2nd and 3rd
+  // were both sitting on zero. Ballots now carry a round, so the night's
+  // real tally survives being tie-broken.
+  await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
+  const ids = {};
+  for (const name of ['Winner Clear', 'Second A', 'Second B']) {
+    ids[name] = (await api('POST', '/admin/contestants', { token: ADMIN, body: { name, night: NIGHT } })).data.id;
+  }
+  await api('POST', `/admin/voting/${NIGHT}/open`, { token: ADMIN, body: { force: true } });
+
+  const voters = [];
+  for (let i = 0; i < 8; i++) {
+    voters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Tier Voter ${i}` } })).data.token);
+  }
+  // 4 for the winner, 2 each for the pair tied behind.
+  const cast = async (token, id) => api('POST', '/votes', { token, body: { contestantId: id, night: NIGHT } });
+  for (let i = 0; i < 4; i++) await cast(voters[i], ids['Winner Clear']);
+  for (let i = 4; i < 6; i++) await cast(voters[i], ids['Second A']);
+  for (let i = 6; i < 8; i++) await cast(voters[i], ids['Second B']);
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+
+  const read = async () => (await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN })).data.results;
+  let results = await read();
+  const row = (n) => results.find((r) => r.name === n);
+  assert.equal(row('Winner Clear').rank, 1);
+  assert.equal(row('Second A').rank, 2);
+  assert.equal(row('Second B').rank, 2, 'both tied for second share the place');
+  assert.ok(row('Second A').tied);
+  assert.equal(row('Winner Clear').tied, false, 'a clear winner is not tied with anybody');
+
+  // Break the tie for SECOND. The old code only ever looked at results[0].
+  const started = await api('POST', `/admin/voting/${NIGHT}/runoff`, { token: ADMIN, body: { rank: 2 } });
+  assert.equal(started.status, 200);
+  assert.equal(started.data.rank, 2);
+  assert.deepEqual([...started.data.contestantIds].sort(), [ids['Second A'], ids['Second B']].sort());
+
+  // Only the tied pair can be voted for now.
+  const blocked = await cast(voters[0], ids['Winner Clear']);
+  assert.equal(blocked.status, 400);
+  assert.equal(blocked.data.error, 'err_not_in_runoff');
+
+  // Three of the eight turn up to the runoff, favouring B.
+  await cast(voters[0], ids['Second B']);
+  await cast(voters[1], ids['Second B']);
+  await cast(voters[2], ids['Second A']);
+  await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+
+  results = await read();
+  // The winner is untouched - same rank, same votes as before the runoff.
+  assert.equal(row('Winner Clear').rank, 1, 'the runoff must not disturb first place');
+  assert.equal(row('Winner Clear').votes, 4, 'nor its votes - the runoff was a separate ballot');
+  // And the tie is settled, in the order the runoff decided.
+  assert.equal(row('Second B').rank, 2);
+  assert.equal(row('Second A').rank, 3);
+  assert.equal(row('Second B').tied, false, 'a settled tie is no longer a tie');
+  assert.equal(row('Second A').tied, false);
+});
+
 test('a tie for first place can be broken with a runoff scoped to just the tied contestants', async () => {
   await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
   const a = await api('POST', '/admin/contestants', { token: ADMIN, body: { name: 'Runoff A', night: NIGHT } });
@@ -905,8 +1047,21 @@ test('a tie for first place can be broken with a runoff scoped to just the tied 
   assert.equal(okA.status, 201, 'voting for a tied contestant during the runoff should still work');
 
   await api('POST', `/admin/voting/${NIGHT}/close`, { token: ADMIN, body: { force: true } });
+  // This expectation changed deliberately on 17 Sept 2026, and the old one
+  // was the bug. A runoff used to DELETE every vote for the night, so
+  // afterwards only the tied pair existed at all and C - who had earned a
+  // third place fairly - was gone from the standings entirely. Rounds are
+  // now kept apart, so the runoff settles the tie and leaves everything
+  // below it exactly where it was.
   const runoffResults = await api('GET', `/admin/votes?night=${NIGHT}`, { token: ADMIN });
-  assert.equal(runoffResults.data.results.length, 2, 'runoff results should only include the tied contestants, not C');
+  const names = runoffResults.data.results.map((r) => r.name);
+  assert.ok(names.includes('Runoff C'), 'C keeps the place it earned - a runoff above it is none of its business');
+  const cRow = runoffResults.data.results.find((r) => r.name === 'Runoff C');
+  assert.equal(cRow.votes, 1, "and keeps its votes: the runoff was a separate ballot, not a re-count");
+  assert.equal(cRow.rank, 3, 'still third, behind the two the runoff has now separated');
+  const settled = runoffResults.data.results.filter((r) => r.name !== 'Runoff C');
+  assert.deepEqual(settled.map((r) => r.rank).sort(), [1, 2], 'the tied pair come out ranked, not still sharing a place');
+  assert.ok(settled.every((r) => r.tied === false), 'and no longer flagged as tied');
 
   const resetAgain = await api('POST', `/admin/voting/${NIGHT}/reset-all`, { token: ADMIN });
   assert.equal(resetAgain.status, 200);
@@ -996,8 +1151,14 @@ test('publishing a night twice replaces its post rather than stacking podiums', 
   await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
   await api('POST', `/admin/voting/${night}/open`, { token: ADMIN, body: { force: true } });
   const roster = (await api('GET', `/votes/status?night=${night}`, { token: ADMIN })).data.contestants;
+  // Everyone voted round-robin here, which gave every contestant an
+  // identical tally - a perfect N-way tie, and publishing one is now
+  // refused on purpose (see err_tie_unresolved). Nothing in this test is
+  // about ties, so the fixture gets what a real night has instead: a clear
+  // winner. The first voter and the last both back the same entry.
   for (let i = 0; i < people.length; i += 1) {
-    await api('POST', '/votes', { token: people[i].token, body: { night, contestantId: roster[(i + 1) % roster.length].id } });
+    const pick = i === people.length - 1 ? roster[1] : roster[(i + 1) % roster.length];
+    await api('POST', '/votes', { token: people[i].token, body: { night, contestantId: pick.id } });
   }
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN, body: { force: true } });
   for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
@@ -1275,6 +1436,43 @@ test('a pending duo proposal can be swapped for another, and blocks closing unti
   assert.equal(results.data.results.find((r) => r.id === second.data.id).votes, 0);
 
   await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+});
+
+test('naming somebody as your Snatch partner tells them, so the entry is not left pending', async () => {
+  // Ivo, from the real night: nothing told the partner they had been named.
+  // A duo entry does not count until they confirm, so entries sat pending
+  // while somebody went round the party chasing people in person.
+  //
+  // Push is not configured in this suite, which is the point worth guarding
+  // as much as the message itself: registering must still succeed and still
+  // return pending when there is nowhere to send a notification. An entry
+  // that failed because the party had no push keys would be a worse bug
+  // than the one being fixed.
+  const night = 'swamp';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  const asker = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Duo Asker' } })).data;
+  const partner = (await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Duo Partner' } })).data;
+
+  const entry = await api('POST', '/outfit/register', {
+    token: asker.token,
+    body: { name: 'Two Of Us', night, partnerUserId: partner.id, photoBase64: TEST_PHOTO },
+  });
+  assert.equal(entry.status, 201);
+  assert.equal(entry.data.pending, true, 'a duo entry waits on the partner');
+
+  // And it is genuinely waiting on them - visible to nobody as a contestant
+  // until confirmed, which is what makes the notification worth sending.
+  const roster = (await api('GET', `/votes/status?night=${night}`, { token: partner.token })).data.contestants;
+  assert.equal(roster.find((c) => c.name === 'Two Of Us'), undefined);
+
+  const confirmed = await api('POST', '/outfit/register/confirm', { token: partner.token, body: { night } });
+  assert.equal(confirmed.status, 200);
+  const after = (await api('GET', `/votes/status?night=${night}`, { token: partner.token })).data.contestants;
+  assert.ok(after.find((c) => c.name === 'Two Of Us'), 'once confirmed it joins the running');
+
+  await api('DELETE', `/admin/users/${asker.id}`, { token: ADMIN });
+  await api('DELETE', `/admin/users/${partner.id}`, { token: ADMIN });
 });
 
 test('a duo entry is not in the running until the named partner confirms it', async () => {
@@ -3399,6 +3597,59 @@ test('stitching the day video answers immediately and reports when it is done', 
   for (const shooter of shooters) await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
 });
 
+test('the published day video is compressed, not handed over at ffmpeg defaults', async () => {
+  // Ivo, after a night with real people: the video that goes on the Wall has
+  // to be compressed "to not jam the FE". His worry was the volume filling
+  // up; measuring says the feed is the better reason. A day of ~120 photos
+  // is roughly 9MB at ffmpeg's defaults and under 5MB at these settings -
+  // the disk would have coped either way, somebody's mobile data at 2am is
+  // the part that would not.
+  //
+  // Asserted as a bitrate rather than a file size, because file size only
+  // says "this day was short". What this guards is that the encoder settings
+  // do not quietly go back to the defaults.
+  const day = today();
+  const shooters = [];
+  for (let i = 0; i < 3; i++) {
+    shooters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Bitrate Shooter ${i}` } })).data);
+  }
+  const slots = (await api('GET', '/memo/today', { token: shooters[0].token })).data.slots;
+  const slot = slots.find((sl) => sl.status === 'waiting') ?? slots[0];
+  markSlotNotified(slot.id);
+  for (const shooter of shooters) {
+    await apiUpload(`/memo/slots/${slot.id}/upload`, {
+      token: shooter.token, buffer: REAL_JPEG, filename: 'shot.jpg', mimeType: 'image/jpeg',
+    });
+  }
+
+  await api('POST', `/admin/memo/${day}/recap/generate`, { token: ADMIN });
+  let state = 'running';
+  for (let i = 0; i < 120 && state === 'running'; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    state = (await api('GET', `/admin/memo/${day}/recap/status`, { token: ADMIN })).data.status;
+  }
+  assert.equal(state, 'done');
+
+  const { getRecap, MEMO_DIR, MEMO_RECAP_SECONDS_PER_PHOTO } = await import('../src/memo.js');
+  const { statSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const recap = getRecap(day);
+  assert.ok(recap, 'the day has a video');
+
+  const bytes = statSync(join(MEMO_DIR, recap.file_path)).size;
+  const seconds = shooters.length * MEMO_RECAP_SECONDS_PER_PHOTO;
+  const kbPerSecond = bytes / 1024 / seconds;
+  // Generous: these are tiny flat test frames, so the real ceiling is far
+  // below this. It is set to catch the settings being dropped, which would
+  // multiply this several times over, not to police a few KB either way.
+  assert.ok(
+    kbPerSecond < 400,
+    `the Wall video should stay light - got ${kbPerSecond.toFixed(0)} KB per second of video`,
+  );
+
+  for (const shooter of shooters) await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
+});
+
 test('a day with no photos is refused up front, not started and failed later', async () => {
   // Answering "started" to work that is certain to fail leaves the button
   // spinning against nothing. The one check cheap enough to do before
@@ -3575,6 +3826,12 @@ test('publishing the night to the Wall waits for both rounds, but not for a roun
   // Everyone eligible has to have voted before this can go out, so b votes
   // too. The Wall keeps the post as a snapshot that cannot be rewritten.
   await api('POST', '/votes', { token: b.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate A')).id } });
+  // A third voter, only to stop the two entries finishing level. A and B
+  // voting for each other is a perfect 1-1 tie, and publishing an unbroken
+  // tie is now refused (err_tie_unresolved) - nothing in this test is about
+  // ties, so it gets a night with a winner instead.
+  const decider = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Publish Gate Decider' } });
+  await api('POST', '/votes', { token: decider.data.token, body: { night, contestantId: listed.find((c) => c.name.startsWith('Publish Gate B')).id } });
   await api('POST', `/admin/voting/${night}/close`, { token: ADMIN });
   for (let i = 0; i < 4; i += 1) await api('POST', `/admin/voting/${night}/reveal-next`, { token: ADMIN });
 
