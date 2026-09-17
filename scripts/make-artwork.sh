@@ -19,16 +19,33 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # 2026 and were chosen by matching the framing of the previous icon, not
 # derived from anything - if the source is re-exported at a different size,
 # scale them by the width ratio and check the result by eye.
-ICON_SIZE=338; ICON_Y=562; ICON_X=248
+# Tuned by eye against the 804x1748 illustration delivered on 13 Sept 2026,
+# then scaled to whatever is handed in. The scaling is done here rather than
+# left as a note to a future reader, because the note said "scale them by
+# the width ratio and check by eye" and that is a step somebody will skip.
+REF_WIDTH=804
+SRC_WIDTH=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
+scale() { python3 -c "print(round($1 * $SRC_WIDTH / $REF_WIDTH))"; }
 
-# The maskable icon is the same centre, pulled back about 25%. Android and
-# friends apply their own circular or rounded mask to it, so the subject has
-# to survive having its corners cut off - a crop as tight as the icon above
-# loses the chimneys to the mask.
-MASK_SIZE=422; MASK_Y=520; MASK_X=206
+# The icon crop: the mossy roof with both chimneys and their smoke, the
+# dormer window low-left, and the corner of the white gable wall low-right.
+ICON_SIZE=$(scale 338); ICON_Y=$(scale 562); ICON_X=$(scale 248)
 
-cd "$ROOT"
-cp "$SRC" public/images/login-bg.png
+# The maskable icon gets a wider crop of the same spot: Android shaves a
+# safe zone off every edge, so a mark framed for the plain icon loses its
+# chimneys to the mask.
+MASK_SIZE=$(scale 422); MASK_Y=$(scale 520); MASK_X=$(scale 206)
+
+echo "source is ${SRC_WIDTH}px wide - crop scaled ${REF_WIDTH} -> ${SRC_WIDTH}"
+
+# JPEG, not a copy of the source. The illustration is painterly and has no
+# transparency, so PNG spends its bytes on something nothing needs: the
+# 1608x3496 source lands at 6.3MB as PNG and 768KB as JPEG q75 - and the
+# 804-wide PNG this replaces was already 1.9MB. So the artwork doubled in
+# resolution while the login screen got lighter, which matters because this
+# is the first thing a guest loads, often on a phone at a party.
+sips -s format jpeg -s formatOptions 78 "$SRC" --out public/images/login-bg.jpg >/dev/null
+rm -f public/images/login-bg.png
 
 sips -c $ICON_SIZE $ICON_SIZE --cropOffset $ICON_Y $ICON_X "$SRC" --out /tmp/_icon.png >/dev/null
 sips -c $MASK_SIZE $MASK_SIZE --cropOffset $MASK_Y $MASK_X "$SRC" --out /tmp/_mask.png >/dev/null

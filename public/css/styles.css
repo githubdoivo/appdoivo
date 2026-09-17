@@ -479,7 +479,7 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 0;
   background-image:
     linear-gradient(180deg, rgba(10, 16, 8, 0.10) 0%, rgba(10, 14, 8, 0.04) 34%, rgba(8, 12, 6, 0.80) 80%),
-    url('/images/login-bg.png');
+    url('/images/login-bg.jpg');
   background-size: cover;
   background-position: top center;
   background-repeat: no-repeat;
