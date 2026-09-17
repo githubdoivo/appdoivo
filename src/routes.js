@@ -47,6 +47,7 @@ import {
   isRunoffActive,
   clearRunoff,
   startRunoff,
+  resolveRunoff,
   congenialityStatus,
   setCongenialityStatus,
   congenialityCandidates,
@@ -447,7 +448,7 @@ router.post('/congeniality/vote', (req, res) => {
 // their own persona/creature-of-the-night, optionally teamed up with
 // another user (picked via /users/basic) - see registerContestant() for
 // the duo-matching and vote-merging rules.
-router.post('/outfit/register', (req, res) => {
+router.post('/outfit/register', async (req, res) => {
   const night = isNight(req.body?.night) ? req.body.night : DEFAULT_NIGHT;
   // A photo is required to complete a self-registration (not to use the
   // app at all) - see registerContestant()'s requirePhoto. Organiser-
@@ -460,6 +461,24 @@ router.post('/outfit/register', (req, res) => {
   // pending: a duo entry the named partner hasn't agreed to yet - not on
   // the voting list until they confirm below.
   res.status(201).json(result);
+  // Tell the partner, because nothing else will. A duo entry does not count
+  // until they confirm it, and until now the only way they learned they had
+  // been named was opening Snatch and noticing - so entries sat pending
+  // until somebody chased them round the party in person.
+  //
+  // Only on the self-registration path: an organiser entering a pair on
+  // their behalf auto-confirms, so there is nothing to ask for.
+  if (result.pending && req.body?.partnerUserId) {
+    await notifyUser(Number(req.body.partnerUserId), {
+      title: { pt: 'snatch', en: 'snatch' },
+      body: {
+        pt: `${req.user.name} inscreveu-vos juntos no snatch - confirma para a entrada contar.`,
+        en: `${req.user.name} entered snatch with you - confirm so the entry counts.`,
+      },
+      tag: 'outfit-duo-invite',
+      url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+    });
+  }
 });
 
 // The named partner's half of a duo entry (see confirmContestant()): only
@@ -1359,7 +1378,18 @@ router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
     return res.status(400).json({ error: 'err_congeniality_not_revealed' });
   }
 
-  const podium = resultsForNight(night)
+  // An unsettled tie must not be frozen into the post. Publishing it would
+  // put two people in the same place on the Wall with no way to tell the
+  // story afterwards - and the whole reason ties are now visible is so one
+  // gets broken first. Refused with a reason rather than silently, because
+  // a button that does nothing is the complaint this app has had before.
+  const standings = resultsForNight(night);
+  const unsettled = standings.find((r) => r.tied && r.rank <= 3);
+  if (unsettled) {
+    return res.status(400).json({ error: 'err_tie_unresolved', rank: unsettled.rank });
+  }
+
+  const podium = standings
     .filter((r) => r.rank <= 3)
     .map((r) => ({
       rank: r.rank, id: r.id, name: r.name, votes: r.votes,
@@ -1463,8 +1493,12 @@ router.post('/admin/voting/:night/close', async (req, res) => {
     return res.status(409).json({ error: 'err_pending_duo_votes', pending });
   }
   setSetting(`voting_status_${night}`, 'closed');
+  // Closing a runoff is what records what it decided. Doing it here rather
+  // than behind a separate button means an organiser cannot leave a runoff
+  // half-finished - closing the vote is the same gesture either way.
+  const settled = isRunoffActive(night) ? resolveRunoff(night) : null;
   resetResultsPhase(night);
-  res.json({ ok: true, night, votingStatus: 'closed' });
+  res.json({ ok: true, night, votingStatus: 'closed', ...(settled ? { runoffResolved: true, stillTied: !!settled.stillTied } : {}) });
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
     body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
@@ -1531,15 +1565,17 @@ router.post('/admin/voting/:night/reset-all', (req, res) => {
 });
 
 // Tie-breaker: a fresh round of voting scoped to just the contestants tied
-// for 1st place - see startRunoff() in votes.js for the actual rule (needs
-// voting closed, needs a real tie). Broadcasts the same way opening voting
-// normally does, so guests know to come back and vote again.
+// at one place - any place, not only first. Without a `rank` in the body it
+// takes the highest unresolved tie, which is what an organiser means when
+// they just press the button. See startRunoff() in votes.js for the rule
+// (needs voting closed, needs a real tie). Broadcasts the same way opening
+// voting normally does, so guests know to come back and vote again.
 router.post('/admin/voting/:night/runoff', async (req, res) => {
   const { night } = req.params;
   if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
-  const result = startRunoff(night);
+  const result = startRunoff(night, req.body?.rank ?? null);
   if (result.error) return res.status(409).json({ error: result.error });
-  res.json({ ok: true, night, votingStatus: 'open', contestantIds: result.contestantIds });
+  res.json({ ok: true, night, votingStatus: 'open', rank: result.rank, contestantIds: result.contestantIds });
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
     body: {

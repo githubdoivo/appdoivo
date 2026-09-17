@@ -2377,6 +2377,17 @@ button.memo-dot-open { cursor: pointer; }
   background: var(--paper-3);
 }
 
+/* A tie, said out loud in the standings. The row is not recoloured - a
+   whole tinted row reads as an error, and a tie is a normal outcome. */
+.tie-flag {
+  font-family: var(--body);
+  font-size: var(--text-xs);
+  letter-spacing: 0.12em;
+  color: var(--clay-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Plaza feed: pinned-first, then most-recent-first, two banner styles so a
    glance tells an announcement from a poll - a plain torn front-page column
    for announcements, a boxed "magazine spread" card for polls (the

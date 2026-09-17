@@ -535,11 +535,17 @@ $('voting-advance-btn').addEventListener('click', async () => {
   loadContestants();
 });
 
+// Which place the runoff button would break, set when the standings render.
+// Ties are settled one place at a time, highest first, so an organiser with
+// two ties runs this twice rather than being asked to choose.
+let tieToBreak = null;
+
 $('voting-runoff-btn').addEventListener('click', async () => {
-  if (!(await showConfirm(t('confirm_voting_runoff')))) return;
+  if (tieToBreak === null) return;
+  if (!(await showConfirm(t('confirm_voting_runoff', { place: tieToBreak })))) return;
   $('voting-msg').textContent = '';
   try {
-    await api(`/admin/voting/${currentNight()}/runoff`, { method: 'POST' });
+    await api(`/admin/voting/${currentNight()}/runoff`, { method: 'POST', body: { rank: tieToBreak } });
     loadVotingState();
     loadVotes();
   } catch (err) {
@@ -1322,9 +1328,16 @@ async function loadVotes() {
   $('voting-tally').innerHTML = line(t('best_outfit_title'), cast(results))
     + line(t('congeniality_title'), cast(congResultsForTally));
 
+  // A tie is named, not left for the reader to spot by comparing two numbers
+  // in adjacent rows. It used to be invisible: equal votes were given
+  // consecutive ranks in alphabetical order, so a dead heat published as a
+  // clean 1st and 2nd and nobody knew a tie had happened at all.
   $('results-table').innerHTML = results.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
-      results.map((r) => `<tr><td>${esc(contestantLabel(r))}</td><td>${r.votes}</td></tr>`).join('')
+      results.map((r) => `<tr${r.tied ? ' class="is-tied"' : ''}>
+          <td>${esc(contestantLabel(r))}${r.tied ? ` <span class="tie-flag">${esc(t('tie_at_place', { place: r.rank }))}</span>` : ''}</td>
+          <td>${r.votes}</td>
+        </tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
   // The night's other round, in the same card - it comes from
@@ -1336,13 +1349,15 @@ async function loadVotes() {
       congResults.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
-  // The runoff button only makes sense once voting's closed, there's
-  // already a runoff going and it also closed (tie could recur), and the
-  // top spot is a genuine tie (0-0 across the board doesn't count - that's
-  // just nobody having voted yet, not a real tie to break).
+  // The runoff button appears for a tie at ANY place, not just the top -
+  // this used to compare results[0] against results[1] and could not see a
+  // tie for second at all. The server decides what counts as tied (a night
+  // where nobody has voted is 0-0 everywhere and is not a tie), so this just
+  // reads the flag rather than recomputing the rule badly.
   const status = votingStateCache[currentNight()]?.status;
-  const isTie = results.length >= 2 && results[0].votes > 0 && results[0].votes === results[1].votes;
-  $('voting-runoff-btn').classList.toggle('hidden', !(status === 'closed' && isTie));
+  const tiedPlaces = [...new Set(results.filter((r) => r.tied).map((r) => r.rank))].sort((a, b) => a - b);
+  tieToBreak = tiedPlaces[0] ?? null;
+  $('voting-runoff-btn').classList.toggle('hidden', !(status === 'closed' && tieToBreak !== null));
 
   renderCongenialityAdmin();
 
@@ -1702,11 +1717,25 @@ function renderConsequences() {
   }, rataStatusFilter.size < RATA_STATES.length);
 }
 
+// Switching every tag off left the list showing nothing at all, which reads
+// as "there are no consequences" rather than "you have filtered them all
+// out" - and the way back is not obvious once the list is empty. Turning the
+// last one off now means everything comes back, which is the same rule the
+// Wall history filter follows (see renderPlazaPostsList).
+const RATA_STATUSES = ['fila', 'atribuir', 'pendente', 'feita'];
+
+function syncRataFilterPills() {
+  $('rata-status-filter').querySelectorAll('.role-pill').forEach((b) => {
+    b.classList.toggle('active', rataStatusFilter.has(b.dataset.status));
+  });
+}
+
 $('rata-status-filter').querySelectorAll('.role-pill').forEach((btn) => {
   btn.addEventListener('click', () => {
     if (rataStatusFilter.has(btn.dataset.status)) rataStatusFilter.delete(btn.dataset.status);
     else rataStatusFilter.add(btn.dataset.status);
-    btn.classList.toggle('active', rataStatusFilter.has(btn.dataset.status));
+    if (rataStatusFilter.size === 0) RATA_STATUSES.forEach((st) => rataStatusFilter.add(st));
+    syncRataFilterPills();
     renderConsequences();
   });
 });
