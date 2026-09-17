@@ -480,16 +480,20 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   background-image:
     linear-gradient(180deg, rgba(10, 16, 8, 0.10) 0%, rgba(10, 14, 8, 0.04) 34%, rgba(8, 12, 6, 0.80) 80%),
     url('/images/login-bg.jpg');
-  /* Scaled up 15% and anchored to the bottom, which pushes the painting's
-     own lettering off the top of the screen. Ivo's call: the house alone,
-     sitting above "bem-vinde", with the app's own type doing the talking
-     instead of type baked into the artwork.
-     Done here rather than by cropping the file, so the framing can be
-     retuned by changing one number instead of re-exporting. 125% and 135%
-     were tried and both cut the roof off; 115% keeps the whole cottage,
-     both chimneys and their smoke. */
-  background-size: auto 115%;
-  background-position: bottom center;
+  /* Ivo's pick after seeing ten framings side by side: the house centred,
+     with "bem-vinde" sitting over its wall.
+     This is the 13 September painting, which never had the title painted
+     into it - which is why no trick is needed here. The newer export has
+     "twenty-nine divine" across the top, and in that file the lettering
+     sits about 2% of the image height above the roof, so pushing it off the
+     screen pins the house to the top edge and clips the smoke. Fading it out
+     worked but Ivo did not want a fade, and painting it out flattened the
+     grass and erased the tall smoke plume with it.
+     So: the untitled painting, framed the way he chose. If the newer
+     illustration is ever exported without its lettering, it can drop
+     straight in here at twice this resolution. */
+  background-size: cover;
+  background-position: center center;
   background-repeat: no-repeat;
 }
 
