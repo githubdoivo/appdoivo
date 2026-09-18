@@ -3456,6 +3456,79 @@ test('a destructive button is visible in both modes, not just the one it was tun
   }
 });
 
+test('the day video is a card in the feed like every other post, not bare on the page', async () => {
+  // Ivo: "the video of the day should have a post background like the others
+  // on the wall."
+  //
+  // .plaza-post-video had no rule anywhere in styles.css, so it fell through
+  // to the plain divider and sat straight on the page background between two
+  // cards. Every other type had been boxed over time - announcement, podium,
+  // poll, then links - and the video was the last one left.
+  //
+  // Asserted against a poll rather than against fixed colours, so a retune of
+  // the palette moves both together and this keeps testing the thing it is
+  // about: that the two read as the same kind of object.
+  const day = today();
+  const { writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+
+  const recapName = 'ui-recap.mp4';
+  execFileSync('ffmpeg', [
+    '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=720x1280:d=1',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(MEMO_DIR, recapName),
+  ]);
+  db.prepare('INSERT INTO memo_recaps (day, file_path, mime_type, file_size) VALUES (?, ?, ?, ?)')
+    .run(day, recapName, 'video/mp4', 1000);
+  const owner = db.prepare('SELECT id FROM users WHERE is_owner = 1').get();
+  db.prepare("INSERT INTO plaza_posts (type, author_id, text) VALUES ('video', ?, ?)").run(owner.id, day);
+  // A poll to compare against - the video should be indistinguishable from it
+  // as a container.
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'quem traz o gelo?', options: ['eu', 'tu'] },
+  });
+
+  try {
+    for (const mode of ['light', 'dark']) {
+      const context = await iphoneContext('iPhone 13');
+      const page = await loginPage(context, ADMIN);
+      await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+      await page.goto(base + '/');
+      await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+      await waitOrExplain(page, '.plaza-post-video');
+
+      const box = (sel) => page.$eval(sel, (el) => {
+        const cs = getComputedStyle(el);
+        return {
+          background: cs.backgroundColor,
+          border: `${cs.borderTopWidth} ${cs.borderTopStyle}`,
+          radius: cs.borderTopLeftRadius,
+          padding: cs.paddingLeft,
+        };
+      });
+      const video = await box('.plaza-post-video');
+      const poll = await box('.plaza-post-poll');
+
+      assert.deepEqual(
+        video, poll,
+        `in ${mode} mode the day video should be boxed exactly like a poll - got ${JSON.stringify(video)} against ${JSON.stringify(poll)}`,
+      );
+      // And specifically: it must actually paint a ground, not inherit the
+      // page's. A transparent background is the bug this is about.
+      const parts = video.background.match(/[\d.]+/g);
+      assert.ok(
+        parts && (parts.length < 4 || Number(parts[3]) > 0.9),
+        `in ${mode} mode the day video post has no background of its own (${video.background})`,
+      );
+      await context.close();
+    }
+  } finally {
+    db.prepare("DELETE FROM plaza_posts WHERE type = 'video' AND text = ?").run(day);
+    db.prepare('DELETE FROM memo_recaps WHERE day = ?').run(day);
+  }
+});
+
 test('the selected tab is the brightest one in the row, on every tab and in both modes', async () => {
   // Ivo: "plaza and snatch tab menu displayed when selected should be a bit
   // more bright like the other pages when selected - it's too faded."

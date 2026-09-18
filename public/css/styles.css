@@ -2504,7 +2504,7 @@ button.memo-dot-open { cursor: pointer; }
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links):not(.plaza-post-video) { border-top: none; padding-top: 0; }
 /* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
    an announcement/poll post is its own self-contained "boxed" card (see
    the comment on .plaza-post above), so its type label is that card's
@@ -2604,9 +2604,14 @@ html.mode-dark .plaza-post-type { color: #fff; }
 
 /* Boxed like every other post type. A links post was the one kind left
    sitting straight on the page background, so in a mixed feed it read as
-   loose furniture between the cards rather than as a post of its own. */
+   loose furniture between the cards rather than as a post of its own.
+   The Memo day video was the last one still doing that - .plaza-post-video
+   had no rule of its own anywhere in this file, so it fell through to the
+   plain divider and sat bare between two cards, which is exactly what the
+   links post used to do. Same treatment, same reason. */
 .plaza-post-poll,
-.plaza-post-links {
+.plaza-post-links,
+.plaza-post-video {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2614,8 +2619,10 @@ html.mode-dark .plaza-post-type { color: #fff; }
   margin: 10px 0;
 }
 .plaza-post-poll.plaza-post:first-child,
-.plaza-post-links.plaza-post:first-child { margin-top: 0; }
+.plaza-post-links.plaza-post:first-child,
+.plaza-post-video.plaza-post:first-child { margin-top: 0; }
 .plaza-post-links.pinned { border-color: var(--clay); }
+.plaza-post-video.pinned { border-color: var(--clay); }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */
