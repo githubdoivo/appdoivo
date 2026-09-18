@@ -497,6 +497,26 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   background-repeat: no-repeat;
 }
 
+/* Landscape is the one shape the framing above cannot serve. The painting is
+   about 1:2; a phone on its side is about 2:1, so `cover` scales it to the
+   width and the visible slice is a narrow band across the middle of the
+   cottage - roof gone, form sitting on its face. Tall phones, short phones
+   and a tablet are all fine on the rule above; this is the only shape that
+   needed its own.
+   Three answers were tried and none shows the cottage well, because a 1:2
+   painting cannot fill a 2:1 frame with the house intact. Fitting it whole
+   stood it in a narrow column mostly hidden behind the form; keeping cover
+   and looking lower put a slice of roof behind the inputs. Moving the frame
+   UP to the grass is the least bad: nothing is mangled, the form reads
+   cleanly, and the cottage simply is not in shot. A login screen held
+   sideways is a corner case for an app installed portrait, and calm grass
+   beats a chopped house. */
+@media (orientation: landscape) and (max-height: 520px) {
+  #login::before {
+    background-position: center 22%;
+  }
+}
+
 #login .cover {
   position: relative;
   z-index: 1;
