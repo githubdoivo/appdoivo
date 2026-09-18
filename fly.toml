@@ -92,6 +92,14 @@ primary_region = "cdg"
 #
 # Changing this file is the part that matters: `fly scale memory` alone
 # lasts until the next deploy, which reads this and puts it back.
+# Swap, as a backstop under the memo video rather than a substitute for
+# fixing it. The stitch itself no longer needs this - it is capped at about
+# 102MB now (see buildDayRecapVideo in src/memo.js) - but a Fly machine has
+# no swap at all by default, which means any transient spike over the limit
+# is not slow, it is an instant SIGKILL with the job half done. Half a gig
+# of swap turns the worst case back into something that merely takes longer.
+swap_size_mb = 512
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"

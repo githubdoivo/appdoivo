@@ -1,6 +1,6 @@
 import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, unlinkSync, existsSync, writeFileSync, statSync } from 'node:fs';
+import { mkdirSync, unlinkSync, existsSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import db from './db.js';
 import { today, getTimezone, now } from './time.js';
@@ -515,35 +515,92 @@ export async function buildDayRecapVideo(day) {
   ).all(day);
   if (photos.length === 0) return { error: 'err_memo_no_photos' };
 
-  const outName = `recap-${day}-${Date.now()}.mp4`;
-  const outPath = join(MEMO_DIR, outName);
-  // ffmpeg's concat demuxer reads durations from a manifest. Its parser
-  // treats a single quote as the path delimiter, so the only escaping that
-  // matters is a quote inside a filename - ours are all generated names,
-  // but this stays honest about it rather than assuming.
-  const listPath = join(MEMO_DIR, `.recap-${day}-${Date.now()}.txt`);
-  const q = (p) => `'${join(MEMO_DIR, p).replace(/'/g, "'\\''")}'`;
-  const lines = photos.map((p) => `file ${q(p.file_path)}\nduration ${MEMO_RECAP_SECONDS_PER_PHOTO}`);
-  // The concat demuxer ignores the final entry's duration, so the last
-  // photo is repeated - without this it flashes by in a single frame.
-  lines.push(`file ${q(photos[photos.length - 1].file_path)}`);
-  writeFileSync(listPath, `${lines.join('\n')}\n`);
+  const stamp = Date.now();
+  const scratch = join(MEMO_DIR, `.recap-${day}-${stamp}`);
+  mkdirSync(scratch, { recursive: true });
+  const listPath = join(scratch, 'list.txt');
 
   try {
+    // ---- pass 1: shrink each photo on its own -----------------------------
+    //
+    // This pass exists for memory, and it is the fix for the video being
+    // OOM-killed on a day with only three photos in it.
+    //
+    // Memo deliberately stores what the phone actually shot, untouched and
+    // up to MEMO_MAX_FILE_BYTES - that is what makes the zip download worth
+    // having (see the note on RECAP_FPS above). Nothing resizes it on the
+    // way in, the way Snatch and Wall photos are resized. So the stitch is
+    // the one place in the app that pays for a full-resolution phone photo,
+    // and a current iPhone shoots 48MP.
+    //
+    // Measured peak RSS of the old single pass, three photos, which is the
+    // case that actually failed:
+    //   12MP (4032x3024) .... 106 MB
+    //   24MP (5712x4284) .... 144 MB
+    //   48MP (8064x6048) .... 219 MB
+    // The count barely matters - frames go through one at a time - but the
+    // resolution decides everything, because a full-size decode, swscale
+    // and libx264 were all resident at once. 219 MB next to the app's own
+    // ~95 MB is enough to lose on a 512 MB machine with no swap.
+    //
+    // Splitting the two halves apart caps it at 102 MB whatever the phone:
+    // pass 1 decodes big but has no encoder in memory, pass 2 has the
+    // encoder but only ever decodes 720x1280. Same output, ~1% size drift.
+    //
+    // Scaling AND padding here means pass 2 gets frames that are already
+    // exactly the target size, so the concat stream is uniform and needs no
+    // filtering beyond the pixel format.
+    const frames = [];
+    const unreadable = [];
+    for (const [index, photo] of photos.entries()) {
+      const frame = join(scratch, `f-${String(index).padStart(5, '0')}.jpg`);
+      try {
+        await runFfmpeg([
+          '-y', '-i', join(MEMO_DIR, photo.file_path),
+          '-vf', [
+            `scale=${RECAP_WIDTH}:${RECAP_HEIGHT}:force_original_aspect_ratio=decrease`,
+            `pad=${RECAP_WIDTH}:${RECAP_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
+          ].join(','),
+          '-frames:v', '1', '-q:v', '2', frame,
+        ]);
+        frames.push(frame);
+      } catch {
+        // One photo nobody can decode - a HEIC on a build without it, a
+        // half-finished upload - used to take the whole day's video down
+        // with it. It is skipped and named in the log instead: 41 good
+        // moments are worth more than an error message about the 42nd.
+        unreadable.push(photo.file_path);
+      }
+    }
+    if (unreadable.length) {
+      console.error(`[memo] skipped ${unreadable.length} unreadable photo(s) for ${day}:`, unreadable.join(', '));
+    }
+    if (frames.length === 0) return { error: 'err_memo_recap_unreadable' };
+
+    // ---- pass 2: stitch the small frames ----------------------------------
+    // ffmpeg's concat demuxer reads durations from a manifest. Its parser
+    // treats a single quote as the path delimiter, so the only escaping that
+    // matters is a quote inside a filename - these are all generated names,
+    // but this stays honest about it rather than assuming.
+    const q = (f) => `'${f.replace(/'/g, "'\\''")}'`;
+    const lines = frames.map((f) => `file ${q(f)}\nduration ${MEMO_RECAP_SECONDS_PER_PHOTO}`);
+    // The concat demuxer ignores the final entry's duration, so the last
+    // photo is repeated - without this it flashes by in a single frame.
+    lines.push(`file ${q(frames[frames.length - 1])}`);
+    writeFileSync(listPath, `${lines.join('\n')}\n`);
+
+    const outName = `recap-${day}-${stamp}.mp4`;
+    const outPath = join(MEMO_DIR, outName);
     await runFfmpeg([
       '-y',
       '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-vf', [
-        `scale=${RECAP_WIDTH}:${RECAP_HEIGHT}:force_original_aspect_ratio=decrease`,
-        `pad=${RECAP_WIDTH}:${RECAP_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
-        'format=yuv420p',
-      ].join(','),
+      '-vf', 'format=yuv420p',
       '-r', String(RECAP_FPS),
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', String(RECAP_CRF),
       // Single-threaded with a short lookahead and no B-frames: libx264's
-      // memory scales with threads and lookahead depth, and on a 256MB box
+      // memory scales with threads and lookahead depth, and on a small box
       // the defaults are what tipped it over. Slower, but a day's photos is
       // a few seconds of video either way.
       '-threads', '1',
@@ -553,11 +610,17 @@ export async function buildDayRecapVideo(day) {
       '-movflags', '+faststart',
       outPath,
     ]);
-  } finally {
-    try { unlinkSync(listPath); } catch { /* best effort */ }
-  }
 
-  return { filePath: outName, mimeType: 'video/mp4', fileSize: statSync(outPath).size, photoCount: photos.length };
+    return {
+      filePath: outName,
+      mimeType: 'video/mp4',
+      fileSize: statSync(outPath).size,
+      photoCount: frames.length,
+      skipped: unreadable.length,
+    };
+  } finally {
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
 }
 
 function runFfmpeg(args) {

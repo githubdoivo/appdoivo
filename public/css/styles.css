@@ -1953,6 +1953,11 @@ body.theme-rata {
   /* Same off-red-toward-mauve shift as the light variant below. */
   --clay:     #b8438a;
   --clay-2:   #d678ad;
+  /* Dark is this theme's base (light is the override below), so the
+     selected tab is set here. Without it the fallback reached --clay, and
+     3.76 sat under the unselected tabs' 5.81 - faint for the same reason
+     the other themes were, by a different route. */
+  --clay-active: #d678ad;
   --rata:     #b8438a;
   background-color: #190f13;
   background-image:
@@ -1966,6 +1971,19 @@ body.theme-rata .card {
 
 /* --- Dark/light variants per night: each theme gets its own pair --- */
 html.mode-dark body.theme-furnished {
+  /* The selected tab, in this theme's own hue. Set per mode, and that is
+     the whole point: --clay-active used to be declared once in the
+     unscoped body.theme-* block, so the LIGHT value went on painting the
+     selected tab in dark mode too, where the dark block had already moved
+     --clay somewhere brighter. Measured on the tab row, the selected tab
+     came out fainter than its own unselected neighbours - Snatch 2.02 next
+     to 7.38, Plaza 2.70 next to 6.25 - which is exactly the "too faded"
+     this fixes. The var(--clay-active, var(--clay)) fallback could never
+     catch it either: --clay-active was defined, just wrong.
+     The value is the theme's existing --clay-2 (its own lighter variant),
+     which clears the unselected tabs in every theme without inventing a
+     colour that is not already in the palette. */
+  --clay-active: #7dc072;
   --paper:    #172015;
   --paper-2:  #202c1e;
   --paper-3:  #283725;
@@ -1987,6 +2005,8 @@ html.mode-dark body.theme-furnished {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23161f14'/%3E%3Cg stroke='%2366ae5b' stroke-opacity='0.20' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%2366ae5b' fill-opacity='0.16'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23161f14'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-swamp {
+  /* Same fix as furnished dark above - the other Snatch night. */
+  --clay-active: #a3b768;
   --paper:    #1a2010;
   --paper-2:  #212912;
   --paper-3:  #283114;
@@ -2084,7 +2104,10 @@ body.theme-mural {
      agora") failed WCAG AA even at large-text size. Darkened within the
      same rust family to ~4.6:1. */
   --clay-2:   #642818;
-  --clay-active: #8f3a26;
+  /* Not --clay (#8f3a26): on this theme's tan paper that measures 2.68,
+     under the unselected tabs' 4.41 - the selected tab read as the faded
+     one. Same terracotta hue, taken down to 5.51 (1.25x the idle tabs). */
+  --clay-active: #3f1911;
   --rata:     #8f3a26;
   background-color: #c48f6d;
   background-image:
@@ -2106,6 +2129,8 @@ body.theme-mural .card {
 }
 
 html.mode-dark body.theme-mural {
+  /* Same fix as furnished dark above. */
+  --clay-active: #d97a52;
   --paper:    #241512;
   --paper-2:  #2e1c17;
   --paper-3:  #38241d;
@@ -2160,7 +2185,9 @@ body.theme-plaza {
      every other theme keeps --clay-active/--rata identical to --clay, so
      this diverging quietly undid the yellow-not-brown fix for both the
      tab underline and the .highlight box accent. */
-  --clay-active: #7a6200;
+  /* Same story as mural light: #7a6200 measured 3.66 on this gold paper,
+     under the unselected tabs' 4.13. Same gold, down to 5.53 (1.34x). */
+  --clay-active: #5a4800;
   --rata:     #7a6200;
   background-color: #e8c97a;
   background-image:
@@ -2183,6 +2210,8 @@ body.theme-plaza {
    noticeably bolder/heavier than the same line on every other tab. */
 body.theme-plaza .hero-line { color: var(--clay-2); }
 html.mode-dark body.theme-plaza {
+  /* Same fix as furnished dark above. */
+  --clay-active: #e8bb5c;
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
   --paper:    #2b2107;

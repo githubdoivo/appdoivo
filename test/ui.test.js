@@ -3456,6 +3456,92 @@ test('a destructive button is visible in both modes, not just the one it was tun
   }
 });
 
+test('the selected tab is the brightest one in the row, on every tab and in both modes', async () => {
+  // Ivo: "plaza and snatch tab menu displayed when selected should be a bit
+  // more bright like the other pages when selected - it's too faded."
+  //
+  // Measured, the selected tab was reading FAINTER than the unselected ones
+  // it sits next to - Snatch in dark mode at 2.02:1 against neighbours at
+  // 7.38:1, Plaza at 2.70 against 6.25. Cause: --clay-active was declared
+  // once in the unscoped body.theme-* block, so the light-mode value went on
+  // painting the selected tab in dark mode, where the dark block had already
+  // moved --clay somewhere brighter. The var(--clay-active, var(--clay))
+  // fallback could not save it either, because --clay-active was defined -
+  // just wrong.
+  //
+  // The assertion is deliberately relative as well as absolute. "Clears
+  // 4.5:1" alone would have passed a row where the selected tab was still
+  // the dimmest thing in it, which is precisely the bug a person sees.
+  const relLum = (css) => {
+    const nums = css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const chans = css.startsWith('color(') ? nums : nums.map((v) => v / 255);
+    const [r, g, b] = chans.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg, bg) => {
+    const [hi, lo] = [relLum(fg), relLum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  const failures = [];
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN);
+    await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+    await page.goto(base + '/');
+    await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+    for (const tab of ['plaza', 'rata', 'outfit', 'chat', 'memo']) {
+      await page.click(`.tab[data-tab="${tab}"]`);
+      // Each tab swaps the whole body theme, so let the new palette settle
+      // before reading colours off it.
+      await page.waitForFunction(
+        (t) => document.querySelector(`.tab[data-tab="${t}"]`)?.classList.contains('active'),
+        tab,
+        { timeout: WAIT_TIMEOUT },
+      );
+      await page.waitForTimeout(250);
+
+      const seen = await page.evaluate((t) => {
+        const el = document.querySelector(`.tab[data-tab="${t}"]`);
+        // The ground the row is actually drawn on - tabs are transparent by
+        // design, so walk up to whatever paints one. An alpha of 0 is what
+        // disqualifies an ancestor; checking the string for a trailing ", 0)"
+        // would also match an opaque rgb(138, 106, 0), which is a real colour
+        // in this app's gold theme.
+        let node = el.parentElement;
+        let bg = '';
+        while (node) {
+          const c = getComputedStyle(node).backgroundColor;
+          const parts = c.match(/[\d.]+/g);
+          if (parts && (parts.length < 4 || Number(parts[3]) > 0.9)) { bg = c; break; }
+          node = node.parentElement;
+        }
+        const idle = [...document.querySelectorAll('.tab')].find((x) => !x.classList.contains('active'));
+        return {
+          label: el.textContent.trim(),
+          active: getComputedStyle(el).color,
+          idle: getComputedStyle(idle).color,
+          bg,
+        };
+      }, tab);
+
+      const active = ratio(seen.active, seen.bg);
+      const idle = ratio(seen.idle, seen.bg);
+      if (active < 4.5) {
+        failures.push(`${mode}/${seen.label}: selected reads ${active.toFixed(2)}:1, under AA`);
+      }
+      if (active < idle) {
+        failures.push(
+          `${mode}/${seen.label}: selected (${active.toFixed(2)}:1) is fainter than the unselected tabs (${idle.toFixed(2)}:1)`,
+        );
+      }
+    }
+    await context.close();
+  }
+  assert.deepEqual(failures, [], `selected tabs that do not stand out:\n  ${failures.join('\n  ')}`);
+});
+
 test('an admin attaches a photo to a Wall post and every guest sees it in the feed', async () => {
   // The browser half of the photos-on-posts feature. The API test covers the
   // three edit intentions; this covers the path a person actually takes -
