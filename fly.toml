@@ -26,18 +26,15 @@
 app = "appdoivo"
 primary_region = "cdg"
 
-# Swap, as a backstop under the memo video rather than a substitute for
-# fixing it. The stitch itself no longer needs this - it is capped at about
-# 102MB now (see buildDayRecapVideo in src/memo.js) - but a Fly machine has
-# no swap at all by default, which means any transient spike over the limit
-# is not slow, it is an instant SIGKILL with the job half done. Half a gig
-# of swap turns the worst case back into something that merely takes longer.
-#
-# Top-level on purpose: this key is a property of the machine, not of a
-# table. Put after any [table] header it silently becomes a key of THAT
-# table - it sat under [http_service] first time and was ignored without a
-# word of complaint, which the deployed machine reporting swap=None caught.
-swap_size_mb = 512
+# No swap here on purpose, and this note is so nobody adds it back expecting
+# it to work. A Fly machine has no swap by default, which would be a useful
+# backstop under the memo video, but swap_size_mb is not a key this flyctl
+# (v0.4.74) understands: it validates clean, then gets dropped from the
+# resolved config without a word, and the deployed machine reports no swap.
+# The video was fixed where it actually broke instead - the stitch is two
+# passes now and peaks around 102MB whatever the phone shot (see
+# buildDayRecapVideo in src/memo.js). If more headroom is ever wanted, the
+# honest lever is the memory line below, which is real and verifiable.
 
 
 [build]
