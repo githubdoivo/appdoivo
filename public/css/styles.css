@@ -492,8 +492,20 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
      So: the untitled painting, framed the way he chose. If the newer
      illustration is ever exported without its lettering, it can drop
      straight in here at twice this resolution. */
+  /* Plain cover. The painting's top 12% is cropped off the FILE instead of
+     being pushed off-screen with a zoom - Ivo spotted on a real phone that
+     the tone shifts there (darker at the very edge, brightening around a
+     tenth of the way down) and it read as a seam across the top.
+     Cropping rather than zooming matters: `auto 112%` hid the band on a
+     phone and left black bars down both sides of a tablet, because 112% of
+     the height is narrower than a wide viewport. cover always covers. */
   background-size: cover;
-  background-position: center center;
+  /* Anchored to the bottom rather than centred: on a phone the painting is
+     proportionally taller than the screen, so cover leaves a little vertical
+     overflow, and spending all of it upward is what Ivo asked for after
+     seeing it on his own phone. It also puts the crop where the gradient is
+     already darkest, so what gets trimmed is the part fading out anyway. */
+  background-position: center bottom;
   background-repeat: no-repeat;
 }
 
@@ -513,6 +525,10 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
    beats a chopped house. */
 @media (orientation: landscape) and (max-height: 520px) {
   #login::before {
+    /* Back to cover: `auto 112%` of a short, wide viewport is a different
+       thing entirely, and the reason for the 112% (trimming the top edge on
+       a tall screen) does not apply here. */
+    background-size: cover;
     background-position: center 22%;
   }
 }
