@@ -3456,6 +3456,165 @@ test('a destructive button is visible in both modes, not just the one it was tun
   }
 });
 
+test('the day video is a card in the feed like every other post, not bare on the page', async () => {
+  // Ivo: "the video of the day should have a post background like the others
+  // on the wall."
+  //
+  // .plaza-post-video had no rule anywhere in styles.css, so it fell through
+  // to the plain divider and sat straight on the page background between two
+  // cards. Every other type had been boxed over time - announcement, podium,
+  // poll, then links - and the video was the last one left.
+  //
+  // Asserted against a poll rather than against fixed colours, so a retune of
+  // the palette moves both together and this keeps testing the thing it is
+  // about: that the two read as the same kind of object.
+  const day = today();
+  const { writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+
+  const recapName = 'ui-recap.mp4';
+  execFileSync('ffmpeg', [
+    '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=720x1280:d=1',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(MEMO_DIR, recapName),
+  ]);
+  db.prepare('INSERT INTO memo_recaps (day, file_path, mime_type, file_size) VALUES (?, ?, ?, ?)')
+    .run(day, recapName, 'video/mp4', 1000);
+  const owner = db.prepare('SELECT id FROM users WHERE is_owner = 1').get();
+  db.prepare("INSERT INTO plaza_posts (type, author_id, text) VALUES ('video', ?, ?)").run(owner.id, day);
+  // A poll to compare against - the video should be indistinguishable from it
+  // as a container.
+  await api('POST', '/admin/plaza-posts', {
+    token: ADMIN,
+    body: { type: 'poll', text: 'quem traz o gelo?', options: ['eu', 'tu'] },
+  });
+
+  try {
+    for (const mode of ['light', 'dark']) {
+      const context = await iphoneContext('iPhone 13');
+      const page = await loginPage(context, ADMIN);
+      await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+      await page.goto(base + '/');
+      await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+      await waitOrExplain(page, '.plaza-post-video');
+
+      const box = (sel) => page.$eval(sel, (el) => {
+        const cs = getComputedStyle(el);
+        return {
+          background: cs.backgroundColor,
+          border: `${cs.borderTopWidth} ${cs.borderTopStyle}`,
+          radius: cs.borderTopLeftRadius,
+          padding: cs.paddingLeft,
+        };
+      });
+      const video = await box('.plaza-post-video');
+      const poll = await box('.plaza-post-poll');
+
+      assert.deepEqual(
+        video, poll,
+        `in ${mode} mode the day video should be boxed exactly like a poll - got ${JSON.stringify(video)} against ${JSON.stringify(poll)}`,
+      );
+      // And specifically: it must actually paint a ground, not inherit the
+      // page's. A transparent background is the bug this is about.
+      const parts = video.background.match(/[\d.]+/g);
+      assert.ok(
+        parts && (parts.length < 4 || Number(parts[3]) > 0.9),
+        `in ${mode} mode the day video post has no background of its own (${video.background})`,
+      );
+      await context.close();
+    }
+  } finally {
+    db.prepare("DELETE FROM plaza_posts WHERE type = 'video' AND text = ?").run(day);
+    db.prepare('DELETE FROM memo_recaps WHERE day = ?').run(day);
+  }
+});
+
+test('the selected tab is the brightest one in the row, on every tab and in both modes', async () => {
+  // Ivo: "plaza and snatch tab menu displayed when selected should be a bit
+  // more bright like the other pages when selected - it's too faded."
+  //
+  // Measured, the selected tab was reading FAINTER than the unselected ones
+  // it sits next to - Snatch in dark mode at 2.02:1 against neighbours at
+  // 7.38:1, Plaza at 2.70 against 6.25. Cause: --clay-active was declared
+  // once in the unscoped body.theme-* block, so the light-mode value went on
+  // painting the selected tab in dark mode, where the dark block had already
+  // moved --clay somewhere brighter. The var(--clay-active, var(--clay))
+  // fallback could not save it either, because --clay-active was defined -
+  // just wrong.
+  //
+  // The assertion is deliberately relative as well as absolute. "Clears
+  // 4.5:1" alone would have passed a row where the selected tab was still
+  // the dimmest thing in it, which is precisely the bug a person sees.
+  const relLum = (css) => {
+    const nums = css.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const chans = css.startsWith('color(') ? nums : nums.map((v) => v / 255);
+    const [r, g, b] = chans.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg, bg) => {
+    const [hi, lo] = [relLum(fg), relLum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  const failures = [];
+  for (const mode of ['light', 'dark']) {
+    const context = await iphoneContext('iPhone 13');
+    const page = await loginPage(context, ADMIN);
+    await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
+    await page.goto(base + '/');
+    await page.waitForSelector('#app:not(.hidden)', { timeout: WAIT_TIMEOUT });
+
+    for (const tab of ['plaza', 'rata', 'outfit', 'chat', 'memo']) {
+      await page.click(`.tab[data-tab="${tab}"]`);
+      // Each tab swaps the whole body theme, so let the new palette settle
+      // before reading colours off it.
+      await page.waitForFunction(
+        (t) => document.querySelector(`.tab[data-tab="${t}"]`)?.classList.contains('active'),
+        tab,
+        { timeout: WAIT_TIMEOUT },
+      );
+      await page.waitForTimeout(250);
+
+      const seen = await page.evaluate((t) => {
+        const el = document.querySelector(`.tab[data-tab="${t}"]`);
+        // The ground the row is actually drawn on - tabs are transparent by
+        // design, so walk up to whatever paints one. An alpha of 0 is what
+        // disqualifies an ancestor; checking the string for a trailing ", 0)"
+        // would also match an opaque rgb(138, 106, 0), which is a real colour
+        // in this app's gold theme.
+        let node = el.parentElement;
+        let bg = '';
+        while (node) {
+          const c = getComputedStyle(node).backgroundColor;
+          const parts = c.match(/[\d.]+/g);
+          if (parts && (parts.length < 4 || Number(parts[3]) > 0.9)) { bg = c; break; }
+          node = node.parentElement;
+        }
+        const idle = [...document.querySelectorAll('.tab')].find((x) => !x.classList.contains('active'));
+        return {
+          label: el.textContent.trim(),
+          active: getComputedStyle(el).color,
+          idle: getComputedStyle(idle).color,
+          bg,
+        };
+      }, tab);
+
+      const active = ratio(seen.active, seen.bg);
+      const idle = ratio(seen.idle, seen.bg);
+      if (active < 4.5) {
+        failures.push(`${mode}/${seen.label}: selected reads ${active.toFixed(2)}:1, under AA`);
+      }
+      if (active < idle) {
+        failures.push(
+          `${mode}/${seen.label}: selected (${active.toFixed(2)}:1) is fainter than the unselected tabs (${idle.toFixed(2)}:1)`,
+        );
+      }
+    }
+    await context.close();
+  }
+  assert.deepEqual(failures, [], `selected tabs that do not stand out:\n  ${failures.join('\n  ')}`);
+});
+
 test('an admin attaches a photo to a Wall post and every guest sees it in the feed', async () => {
   // The browser half of the photos-on-posts feature. The API test covers the
   // three edit intentions; this covers the path a person actually takes -

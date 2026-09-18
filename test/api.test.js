@@ -3650,6 +3650,66 @@ test('the published day video is compressed, not handed over at ffmpeg defaults'
   for (const shooter of shooters) await api('DELETE', `/admin/users/${shooter.id}`, { token: ADMIN });
 });
 
+test('one photo nobody can decode is skipped, not allowed to kill the whole day\'s video', async () => {
+  // The video was OOM-killed on a day holding three photos. The cause was
+  // resolution, not count: Memo stores what the phone actually shot,
+  // untouched, and decoding a 48MP JPEG while libx264 was also resident
+  // peaked at 219MB next to the app's own ~95MB on a 512MB machine. The
+  // stitch is two passes now (see buildDayRecapVideo), which caps it at
+  // about 102MB whatever the phone.
+  //
+  // Splitting it also made this possible, which is what the test is for: a
+  // photo that will not decode - a HEIC on a build without it, an upload cut
+  // off halfway - used to take every other photo of that day down with it.
+  // It should cost its own second of video and nothing else.
+  //
+  // On a day of its own, not today(): the suite shares today's day with
+  // every other Memo test, several of which upload deliberate junk, so
+  // counting skips there measures the other tests rather than this one.
+  const day = '2026-01-15';
+  const { MEMO_DIR, buildDayRecapVideo } = await import('../src/memo.js');
+  const { writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+
+  const slot = db.prepare('SELECT id FROM memo_slots LIMIT 1').get()
+    ?? (() => {
+      db.prepare('INSERT INTO memo_slots (day, slot_index, scheduled_at, notified_at) VALUES (?, 0, 1, 1)').run(day);
+      return db.prepare('SELECT id FROM memo_slots WHERE day = ?').get(day);
+    })();
+
+  // Two photos that decode, and one that stops right after the JPEG magic
+  // bytes - what a truncated upload leaves on disk.
+  writeFileSync(join(MEMO_DIR, 'salvage-ok-1.jpg'), REAL_JPEG);
+  writeFileSync(join(MEMO_DIR, 'salvage-ok-2.jpg'), REAL_JPEG);
+  writeFileSync(join(MEMO_DIR, 'salvage-truncated.jpg'), Buffer.from([0xff, 0xd8, 0x00, 0x01, 0x02, 0x03]));
+
+  // One row per user - (slot_id, user_id) is unique, one upload each.
+  const people = [];
+  for (let i = 0; i < 3; i++) {
+    people.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Salvage Person ${i}` } })).data);
+  }
+  const files = ['salvage-ok-1.jpg', 'salvage-truncated.jpg', 'salvage-ok-2.jpg'];
+  files.forEach((file, i) => {
+    db.prepare(
+      "INSERT INTO memo_uploads (slot_id, user_id, day, kind, mime_type, file_path, file_size) VALUES (?, ?, ?, 'photo', 'image/jpeg', ?, ?)"
+    ).run(slot.id, people[i].id, day, file, 100);
+  });
+
+  const result = await buildDayRecapVideo(day);
+  assert.ok(!result.error, `the day should still produce a video - got ${result.error}`);
+  assert.equal(result.skipped, 1, 'only the truncated photo should be skipped');
+  assert.equal(result.photoCount, 2, 'both readable photos should still be in the video');
+
+  // And a day where nothing at all decodes says so, rather than handing back
+  // a video with no frames in it.
+  db.prepare('DELETE FROM memo_uploads WHERE day = ? AND file_path LIKE ?').run(day, 'salvage-ok-%');
+  const allBad = await buildDayRecapVideo(day);
+  assert.equal(allBad.error, 'err_memo_recap_unreadable');
+
+  db.prepare('DELETE FROM memo_uploads WHERE day = ?').run(day);
+  for (const person of people) await api('DELETE', `/admin/users/${person.id}`, { token: ADMIN });
+});
+
 test('a day with no photos is refused up front, not started and failed later', async () => {
   // Answering "started" to work that is certain to fail leaves the button
   // spinning against nothing. The one check cheap enough to do before

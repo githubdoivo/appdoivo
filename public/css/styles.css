@@ -479,10 +479,58 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
   z-index: 0;
   background-image:
     linear-gradient(180deg, rgba(10, 16, 8, 0.10) 0%, rgba(10, 14, 8, 0.04) 34%, rgba(8, 12, 6, 0.80) 80%),
-    url('/images/login-bg.png');
+    url('/images/login-bg.jpg');
+  /* Ivo's pick after seeing ten framings side by side: the house centred,
+     with "bem-vinde" sitting over its wall.
+     This is the 13 September painting, which never had the title painted
+     into it - which is why no trick is needed here. The newer export has
+     "twenty-nine divine" across the top, and in that file the lettering
+     sits about 2% of the image height above the roof, so pushing it off the
+     screen pins the house to the top edge and clips the smoke. Fading it out
+     worked but Ivo did not want a fade, and painting it out flattened the
+     grass and erased the tall smoke plume with it.
+     So: the untitled painting, framed the way he chose. If the newer
+     illustration is ever exported without its lettering, it can drop
+     straight in here at twice this resolution. */
+  /* Plain cover. The painting's top 12% is cropped off the FILE instead of
+     being pushed off-screen with a zoom - Ivo spotted on a real phone that
+     the tone shifts there (darker at the very edge, brightening around a
+     tenth of the way down) and it read as a seam across the top.
+     Cropping rather than zooming matters: `auto 112%` hid the band on a
+     phone and left black bars down both sides of a tablet, because 112% of
+     the height is narrower than a wide viewport. cover always covers. */
   background-size: cover;
-  background-position: top center;
+  /* Anchored to the bottom rather than centred: on a phone the painting is
+     proportionally taller than the screen, so cover leaves a little vertical
+     overflow, and spending all of it upward is what Ivo asked for after
+     seeing it on his own phone. It also puts the crop where the gradient is
+     already darkest, so what gets trimmed is the part fading out anyway. */
+  background-position: center bottom;
   background-repeat: no-repeat;
+}
+
+/* Landscape is the one shape the framing above cannot serve. The painting is
+   about 1:2; a phone on its side is about 2:1, so `cover` scales it to the
+   width and the visible slice is a narrow band across the middle of the
+   cottage - roof gone, form sitting on its face. Tall phones, short phones
+   and a tablet are all fine on the rule above; this is the only shape that
+   needed its own.
+   Three answers were tried and none shows the cottage well, because a 1:2
+   painting cannot fill a 2:1 frame with the house intact. Fitting it whole
+   stood it in a narrow column mostly hidden behind the form; keeping cover
+   and looking lower put a slice of roof behind the inputs. Moving the frame
+   UP to the grass is the least bad: nothing is mangled, the form reads
+   cleanly, and the cottage simply is not in shot. A login screen held
+   sideways is a corner case for an app installed portrait, and calm grass
+   beats a chopped house. */
+@media (orientation: landscape) and (max-height: 520px) {
+  #login::before {
+    /* Back to cover: `auto 112%` of a short, wide viewport is a different
+       thing entirely, and the reason for the 112% (trimming the top edge on
+       a tall screen) does not apply here. */
+    background-size: cover;
+    background-position: center 22%;
+  }
 }
 
 #login .cover {
@@ -1905,6 +1953,11 @@ body.theme-rata {
   /* Same off-red-toward-mauve shift as the light variant below. */
   --clay:     #b8438a;
   --clay-2:   #d678ad;
+  /* Dark is this theme's base (light is the override below), so the
+     selected tab is set here. Without it the fallback reached --clay, and
+     3.76 sat under the unselected tabs' 5.81 - faint for the same reason
+     the other themes were, by a different route. */
+  --clay-active: #d678ad;
   --rata:     #b8438a;
   background-color: #190f13;
   background-image:
@@ -1918,6 +1971,19 @@ body.theme-rata .card {
 
 /* --- Dark/light variants per night: each theme gets its own pair --- */
 html.mode-dark body.theme-furnished {
+  /* The selected tab, in this theme's own hue. Set per mode, and that is
+     the whole point: --clay-active used to be declared once in the
+     unscoped body.theme-* block, so the LIGHT value went on painting the
+     selected tab in dark mode too, where the dark block had already moved
+     --clay somewhere brighter. Measured on the tab row, the selected tab
+     came out fainter than its own unselected neighbours - Snatch 2.02 next
+     to 7.38, Plaza 2.70 next to 6.25 - which is exactly the "too faded"
+     this fixes. The var(--clay-active, var(--clay)) fallback could never
+     catch it either: --clay-active was defined, just wrong.
+     The value is the theme's existing --clay-2 (its own lighter variant),
+     which clears the unselected tabs in every theme without inventing a
+     colour that is not already in the palette. */
+  --clay-active: #7dc072;
   --paper:    #172015;
   --paper-2:  #202c1e;
   --paper-3:  #283725;
@@ -1939,6 +2005,8 @@ html.mode-dark body.theme-furnished {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Crect width='120' height='160' fill='%23161f14'/%3E%3Cg stroke='%2366ae5b' stroke-opacity='0.20' fill='none'%3E%3Cpath d='M20 0V160M60 0V160M100 0V160'/%3E%3C/g%3E%3Cg fill='%2366ae5b' fill-opacity='0.16'%3E%3Cpath d='M60 30 L74 55 L60 80 L46 55 Z'/%3E%3Cpath d='M60 45 L67 55 L60 65 L53 55 Z' fill='%23161f14'/%3E%3Ccircle cx='20' cy='120' r='3'/%3E%3Ccircle cx='100' cy='120' r='3'/%3E%3Cpath d='M0 130 L10 145 L0 160 M120 130 L110 145 L120 160'/%3E%3C/g%3E%3C/svg%3E");
 }
 html.mode-dark body.theme-swamp {
+  /* Same fix as furnished dark above - the other Snatch night. */
+  --clay-active: #a3b768;
   --paper:    #1a2010;
   --paper-2:  #212912;
   --paper-3:  #283114;
@@ -2036,7 +2104,10 @@ body.theme-mural {
      agora") failed WCAG AA even at large-text size. Darkened within the
      same rust family to ~4.6:1. */
   --clay-2:   #642818;
-  --clay-active: #8f3a26;
+  /* Not --clay (#8f3a26): on this theme's tan paper that measures 2.68,
+     under the unselected tabs' 4.41 - the selected tab read as the faded
+     one. Same terracotta hue, taken down to 5.51 (1.25x the idle tabs). */
+  --clay-active: #3f1911;
   --rata:     #8f3a26;
   background-color: #c48f6d;
   background-image:
@@ -2058,6 +2129,8 @@ body.theme-mural .card {
 }
 
 html.mode-dark body.theme-mural {
+  /* Same fix as furnished dark above. */
+  --clay-active: #d97a52;
   --paper:    #241512;
   --paper-2:  #2e1c17;
   --paper-3:  #38241d;
@@ -2112,7 +2185,9 @@ body.theme-plaza {
      every other theme keeps --clay-active/--rata identical to --clay, so
      this diverging quietly undid the yellow-not-brown fix for both the
      tab underline and the .highlight box accent. */
-  --clay-active: #7a6200;
+  /* Same story as mural light: #7a6200 measured 3.66 on this gold paper,
+     under the unselected tabs' 4.13. Same gold, down to 5.53 (1.34x). */
+  --clay-active: #5a4800;
   --rata:     #7a6200;
   background-color: #e8c97a;
   background-image:
@@ -2135,6 +2210,8 @@ body.theme-plaza {
    noticeably bolder/heavier than the same line on every other tab. */
 body.theme-plaza .hero-line { color: var(--clay-2); }
 html.mode-dark body.theme-plaza {
+  /* Same fix as furnished dark above. */
+  --clay-active: #e8bb5c;
   /* Was #1f1a0e/#26200f/#2e2712 - dark enough that the gold hue read as
      plain brown-black. Lifted + more saturated so it reads as dark gold. */
   --paper:    #2b2107;
@@ -2427,7 +2504,7 @@ button.memo-dot-open { cursor: pointer; }
    doesn't apply to them - without the :not()s, this still won, its
    :first-child pseudo-class outranking their plain-class border/padding
    overrides, leaving whichever post landed first missing its top edge. */
-.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links) { border-top: none; padding-top: 0; }
+.plaza-post:first-child:not(.plaza-post-announcement):not(.plaza-post-poll):not(.plaza-post-podium):not(.plaza-post-links):not(.plaza-post-video) { border-top: none; padding-top: 0; }
 /* A real <h2> now (see renderPlazaPost() in app.js), not a small <span> -
    an announcement/poll post is its own self-contained "boxed" card (see
    the comment on .plaza-post above), so its type label is that card's
@@ -2527,9 +2604,14 @@ html.mode-dark .plaza-post-type { color: #fff; }
 
 /* Boxed like every other post type. A links post was the one kind left
    sitting straight on the page background, so in a mixed feed it read as
-   loose furniture between the cards rather than as a post of its own. */
+   loose furniture between the cards rather than as a post of its own.
+   The Memo day video was the last one still doing that - .plaza-post-video
+   had no rule of its own anywhere in this file, so it fell through to the
+   plain divider and sat bare between two cards, which is exactly what the
+   links post used to do. Same treatment, same reason. */
 .plaza-post-poll,
-.plaza-post-links {
+.plaza-post-links,
+.plaza-post-video {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2537,8 +2619,10 @@ html.mode-dark .plaza-post-type { color: #fff; }
   margin: 10px 0;
 }
 .plaza-post-poll.plaza-post:first-child,
-.plaza-post-links.plaza-post:first-child { margin-top: 0; }
+.plaza-post-links.plaza-post:first-child,
+.plaza-post-video.plaza-post:first-child { margin-top: 0; }
 .plaza-post-links.pinned { border-color: var(--clay); }
+.plaza-post-video.pinned { border-color: var(--clay); }
 .plaza-post-poll .plaza-post-text { border-left: none; padding-left: 0; font-weight: 600; }
 /* A poll is already boxed - pinning it upgrades the border rather than
    changing layout, same "stands out" intent as the announcement treatment. */

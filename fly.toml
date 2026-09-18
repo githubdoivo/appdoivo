@@ -26,6 +26,17 @@
 app = "appdoivo"
 primary_region = "cdg"
 
+# No swap here on purpose, and this note is so nobody adds it back expecting
+# it to work. A Fly machine has no swap by default, which would be a useful
+# backstop under the memo video, but swap_size_mb is not a key this flyctl
+# (v0.4.74) understands: it validates clean, then gets dropped from the
+# resolved config without a word, and the deployed machine reports no swap.
+# The video was fixed where it actually broke instead - the stitch is two
+# passes now and peaks around 102MB whatever the phone shot (see
+# buildDayRecapVideo in src/memo.js). If more headroom is ever wanted, the
+# honest lever is the memory line below, which is real and verifiable.
+
+
 [build]
 
 [env]
