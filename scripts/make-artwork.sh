@@ -15,28 +15,34 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # The icon crop: the mossy roof with both chimneys and their smoke, the
 # dormer window low-left, and the corner of the white gable wall low-right.
-# These numbers are tuned to the 804x1748 illustration delivered on 13 Sept
-# 2026 and were chosen by matching the framing of the previous icon, not
-# derived from anything - if the source is re-exported at a different size,
-# scale them by the width ratio and check the result by eye.
-# Tuned by eye against the 804x1748 illustration delivered on 13 Sept 2026,
-# then scaled to whatever is handed in. The scaling is done here rather than
-# left as a note to a future reader, because the note said "scale them by
-# the width ratio and check by eye" and that is a step somebody will skip.
-REF_WIDTH=804
+#
+# These four numbers were tuned by eye against ONE export - the 804x1748
+# illustration of 13 Sept 2026 - and mean nothing on any other. They were
+# briefly scaled automatically by the source width ratio, on the assumption
+# that a re-export is the same painting at a new size. That assumption is
+# wrong: the 1608x3496 v2 export re-composed the scene and baked lettering
+# into the top, so the scaled crop slid off the roof onto the gable wall,
+# and that icon reached production before anyone looked at it.
+#
+# So the numbers stay fixed and the script says so when the source is not
+# the one they were tuned for. Re-tune them by eye for a new export, and
+# LOOK at public/icons/icon-192.png before you commit it.
+REF_WIDTH=804; REF_HEIGHT=1748
 SRC_WIDTH=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
-scale() { python3 -c "print(round($1 * $SRC_WIDTH / $REF_WIDTH))"; }
+SRC_HEIGHT=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
 
-# The icon crop: the mossy roof with both chimneys and their smoke, the
-# dormer window low-left, and the corner of the white gable wall low-right.
-ICON_SIZE=$(scale 338); ICON_Y=$(scale 562); ICON_X=$(scale 248)
+ICON_SIZE=338; ICON_Y=562; ICON_X=248
 
 # The maskable icon gets a wider crop of the same spot: Android shaves a
 # safe zone off every edge, so a mark framed for the plain icon loses its
 # chimneys to the mask.
-MASK_SIZE=$(scale 422); MASK_Y=$(scale 520); MASK_X=$(scale 206)
+MASK_SIZE=422; MASK_Y=520; MASK_X=206
 
-echo "source is ${SRC_WIDTH}px wide - crop scaled ${REF_WIDTH} -> ${SRC_WIDTH}"
+if [ "$SRC_WIDTH" != "$REF_WIDTH" ] || [ "$SRC_HEIGHT" != "$REF_HEIGHT" ]; then
+  echo "WARNING: the crop is tuned to a ${REF_WIDTH}x${REF_HEIGHT} export;"
+  echo "         this source is ${SRC_WIDTH}x${SRC_HEIGHT}. Do not trust the"
+  echo "         icons this produces - re-tune ICON_*/MASK_* and check by eye."
+fi
 
 # JPEG, not a copy of the source. The illustration is painterly and has no
 # transparency, so PNG spends its bytes on something nothing needs: the

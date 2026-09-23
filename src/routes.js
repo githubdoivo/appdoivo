@@ -55,6 +55,9 @@ import {
   castCongenialityVote,
   congenialityResults,
   congenialityWinner,
+  isCongenialityRunoffActive,
+  startCongenialityRunoff,
+  resolveCongenialityRunoff,
   resetCongeniality,
   resetCongenialityVotes,
 } from './votes.js';
@@ -433,6 +436,9 @@ router.get('/votes/status', (req, res) => {
       candidates: congenialityCandidates(night),
       myVote: myCongenialityVote(req.user.id, night),
       winner: congenialityWinner(night),
+      // Same reason as runoffActive above: otherwise the card just quietly
+      // shows a shorter list of people with no word about why.
+      runoffActive: isCongenialityRunoffActive(night),
     },
   });
 });
@@ -1304,6 +1310,7 @@ router.get('/admin/voting', (req, res) => {
       // point (guests only ever get the winner, and only once revealed).
       congenialityStatus: congenialityStatus(night),
       congenialityResults: congenialityResults(night),
+      congenialityRunoffActive: isCongenialityRunoffActive(night),
     })),
   });
 });
@@ -1330,9 +1337,16 @@ const CONGENIALITY_NOTIFY = {
 router.post('/admin/voting/:night/congeniality', async (req, res) => {
   const { night } = req.params;
   const status = req.body?.status;
+  // Whether a runoff is running has to be read before the status changes,
+  // since closing is what ends one.
+  const closingRunoff = status === 'closed' && isCongenialityRunoffActive(night);
   const result = setCongenialityStatus(night, status);
   if (result.error) return res.status(400).json(result);
-  res.json(result);
+  // Closing is what records what a runoff decided, exactly as it is for the
+  // outfit vote - so an organiser cannot leave one half-finished by walking
+  // away from a separate button.
+  const settled = closingRunoff ? resolveCongenialityRunoff(night) : null;
+  res.json({ ...result, ...(settled ? { runoffResolved: true, stillTied: !!settled.stillTied } : {}) });
 
   const notify = CONGENIALITY_NOTIFY[status];
   if (notify) {
@@ -1400,6 +1414,27 @@ router.post('/admin/voting/:night/publish-podium', requireOwner, (req, res) => {
   const winner = congenialityWinner(night);
   const result = createPodiumPost(req.user.id, { night, podium, congeniality: winner });
   res.status(201).json(result);
+});
+
+// Miss Congeniality's tie-breaker, the same gesture as the outfit vote's
+// /runoff above: needs the round closed and a real tie, reopens voting
+// between only the tied people, and is settled by closing it again. Without
+// a `rank` in the body it takes the highest unresolved tie.
+router.post('/admin/voting/:night/congeniality/runoff', async (req, res) => {
+  const { night } = req.params;
+  if (!isNight(night)) return res.status(404).json({ error: 'err_invalid_night' });
+  const result = startCongenialityRunoff(night, req.body?.rank ?? null);
+  if (result.error) return res.status(409).json({ error: result.error });
+  res.json({ ok: true, night, congenialityStatus: 'open', rank: result.rank, userIds: result.userIds });
+  await broadcast({
+    title: { pt: 'snatch', en: 'snatch' },
+    body: {
+      pt: `miss congeniality: há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
+      en: `miss congeniality: it's a tie - runoff for ${NIGHT_LABEL[night]} night, vote again!`,
+    },
+    tag: 'congeniality',
+    url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
+  });
 });
 
 router.post('/admin/voting/:night/congeniality/reset', (req, res) => {

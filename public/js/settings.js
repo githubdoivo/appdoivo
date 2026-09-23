@@ -553,6 +553,26 @@ $('voting-runoff-btn').addEventListener('click', async () => {
   }
 });
 
+// Miss Congeniality's own tie, tracked separately - the two rounds are
+// voted apart and can be tied at different places at the same time.
+let congTieToBreak = null;
+
+$('congeniality-runoff-btn').addEventListener('click', async () => {
+  if (congTieToBreak === null) return;
+  if (!(await showConfirm(t('confirm_congeniality_runoff', { place: congTieToBreak })))) return;
+  const msg = $('congeniality-msg');
+  msg.classList.remove('error');
+  msg.textContent = '';
+  try {
+    await api(`/admin/voting/${currentNight()}/congeniality/runoff`, { method: 'POST', body: { rank: congTieToBreak } });
+    await loadVotingState();
+    await loadVotes();
+  } catch (err) {
+    msg.classList.add('error');
+    msg.textContent = err.message;
+  }
+});
+
 $('voting-reset-btn').addEventListener('click', async () => {
   if (!(await showConfirm(t('confirm_reset')))) return;
   $('voting-msg').textContent = '';
@@ -1344,9 +1364,15 @@ async function loadVotes() {
   // GET /admin/voting (already cached per night), not /admin/votes. Both
   // tables live behind the dot at the end of the tab now, with the logs.
   const congResults = votingStateCache[currentNight()]?.congenialityResults ?? [];
+  // Named the same way as the outfit table above - this round had the same
+  // fault and worse, since it announces a single winner: two people on the
+  // same count were printed as a clean 1st and 2nd, in alphabetical order.
   $('congeniality-results-table').innerHTML = congResults.length
     ? `<tr><th>${t('ranking')}</th><th>${t('col_votes')}</th></tr>` +
-      congResults.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.votes}</td></tr>`).join('')
+      congResults.map((r) => `<tr${r.tied ? ' class="is-tied"' : ''}>
+          <td>${esc(r.name)}${r.tied ? ` <span class="tie-flag">${esc(t('tie_at_place', { place: r.rank }))}</span>` : ''}</td>
+          <td>${r.votes}</td>
+        </tr>`).join('')
     : `<tr><td class="muted">${t('no_votes')}</td></tr>`;
 
   // The runoff button appears for a tie at ANY place, not just the top -
@@ -1400,13 +1426,29 @@ function renderCongenialityAdmin() {
   const results = state?.congenialityResults ?? [];
   const hasVotes = results.some((r) => r.votes > 0);
 
+  // Only a tie for FIRST blocks anything here: this round announces one
+  // winner, so a tie further down decides nothing and is not worth a runoff.
+  // The server decides what counts as tied (a round nobody voted in is 0-0
+  // everywhere and is not one), so this reads the flag rather than
+  // recomputing the rule badly.
+  const tied = results.some((r) => r.tied && r.rank === 1);
+  congTieToBreak = tied ? 1 : null;
+  $('congeniality-runoff-btn').classList.toggle('hidden', !(status === 'closed' && tied));
+
   const label = $('congeniality-state');
   label.textContent = t(`congeniality_state_${status}`);
   label.classList.toggle('is-open', status === 'open');
   label.classList.toggle('is-closed', status !== 'open');
 
   const btn = $('congeniality-advance-btn');
+  // A standing tie takes the reveal off the table until the runoff has been
+  // run: revealing cannot be undone, and it would crown two people at once.
+  // The server refuses it anyway (err_congeniality_tie_unresolved) - this is
+  // so the button does not offer something that will be refused.
   const next = congenialityAdvance(status, hasVotes);
+  // Disabled rather than relabelled: the button still says what the step
+  // would be, so the round does not read as finished when it is only stuck.
+  const blocked = tied && status === 'closed';
   // Same word as Best Outfit's own terminal state (reveal_next_btn_done),
   // not this round's status label - one finished round should not read
   // as 'revealed' next to another reading as 'done'.
@@ -1416,10 +1458,10 @@ function renderCongenialityAdmin() {
     btn,
     next ? next.icon : 'advance',
     next ? t(next.label) : t('reveal_next_btn_done'),
-    next ? next.action : '',
-    !next,
+    next && !blocked ? next.action : '',
+    blocked || !next,
   );
-  btn.dataset.confirm = next ? next.confirm : '';
+  btn.dataset.confirm = next && !blocked ? next.confirm : '';
 
   // The Wall post carries both rounds, so it can only go out once both are
   // finished. Disabled rather than left tappable to fail: the server
@@ -1432,6 +1474,13 @@ function renderCongenialityAdmin() {
   // by this point anyway, and somebody always never gets round to it.
   const podiumReady = state?.resultsPhase === 'all';
   const congRevealed = status === 'revealed' || (status === 'closed' && !hasVotes);
+  // Say which step is left rather than leaving a dead button: a tie waiting
+  // on a runoff is the one reason this round can be closed, voted in, and
+  // still not finishable.
+  const congMsg = $('congeniality-msg');
+  if (congMsg && !congMsg.classList.contains('error')) {
+    congMsg.textContent = blocked ? t('congeniality_needs_runoff') : '';
+  }
   $('publish-podium-btn').disabled = !podiumReady || !congRevealed;
 
   // A disabled button with no reason is its own kind of broken: it reads as

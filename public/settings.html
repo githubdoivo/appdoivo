@@ -24,13 +24,13 @@
        under a home screen icon is drawn by the OS, so the golden rule has
        to be kept in the markup (same reason as the push copy), and two
        icons both called "appdoivo" would be indistinguishable. -->
-  <link rel="apple-touch-icon" href="/icons/icon-180.png?v=8" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png?v=9" />
   <meta name="apple-mobile-web-app-title" content="settings" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=8" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=8" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png?v=8" />
-  <link rel="icon" href="/favicon.ico?v=8" sizes="32x32" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg?v=9" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=9" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png?v=9" />
+  <link rel="icon" href="/favicon.ico?v=9" sizes="32x32" />
   <link rel="stylesheet" href="/css/fonts.css" />
   <link rel="stylesheet" href="/css/styles.css" />
   <title>Settings - appdoivo</title>
@@ -230,6 +230,11 @@
           <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" class="icon-action" id="congeniality-advance-btn" aria-label="Iniciar" title="Iniciar"></button>
+            <!-- Same tie-breaker the outfit vote has above: only shown once
+                 this round is closed AND a place is actually tied, and it
+                 reopens voting between just those people (see
+                 startCongenialityRunoff() in votes.js). -->
+            <button type="button" class="icon-action hidden" id="congeniality-runoff-btn" data-i18n-label="voting_runoff_btn" aria-label="Desempate" title="Desempate" data-icon="runoff"></button>
             <button type="button" class="icon-action" id="congeniality-reset-votes-btn" data-i18n-label="voting_reset_btn" aria-label="Reiniciar votação" title="Reiniciar votação" data-icon="reset"></button>
             <button type="button" class="icon-action danger" id="congeniality-reset-btn" data-i18n-label="congeniality_reset_btn" aria-label="Reiniciar tudo" title="Reiniciar tudo" data-icon="resetAll"></button>
           </div>
