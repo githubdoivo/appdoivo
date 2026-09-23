@@ -64,6 +64,37 @@ session's work and deploy once at the end.
 8. Verify production directly (HTTP check, login, and whatever the batch
    actually touched) before considering the session's work done.
 
+### The app is closed (23 September 2026)
+
+**Both apps are scaled to zero machines** - `fly scale count 0` on
+`appdoivo` and `appdoivo-qa`. The party is over and nothing needs to be
+running; neither domain answers, and nothing can wake them, which is the
+difference between this and stopping a machine (`auto_start_machines` is
+on, so any stray request would have restarted a stopped one and started
+charging again).
+
+Nothing was deleted. The apps, their secrets, their IPs and the production
+volume are all still there:
+
+- `appdoivo_data` (20GB, `vol_v8ep3d82yoxxg65v`) still holds the real
+  database and every Memo upload. **It is still billed** - volumes are
+  charged on provisioned size whether or not a machine is attached, ~$3/month
+  (see the section below). Shutting the machines down does not stop that;
+  only deleting the volume would, and that deletes the party with it.
+- No compute is billed while the machine count is zero, and the app makes no
+  Claude API calls with nothing running.
+
+To bring it back:
+
+```
+scripts/deploy.sh prod      # recreates the machine and reattaches the volume
+```
+
+The volume is in `cdg` and the machine comes back in the same region, so it
+reattaches on its own - there is no separate step to restore anything. Same
+for QA with `scripts/deploy.sh qa`, which has no volume and comes back
+empty, as it always does.
+
 ### The production volume (extended 12 Sept 2026)
 
 **Done - `appdoivo_data` is 20GB as of 12 September 2026.** Fly extended it
