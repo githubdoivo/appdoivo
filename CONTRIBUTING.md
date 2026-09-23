@@ -73,34 +73,43 @@ difference between this and stopping a machine (`auto_start_machines` is
 on, so any stray request would have restarted a stopped one and started
 charging again).
 
-Nothing was deleted. The apps, their secrets, their IPs and the production
-volume are all still there:
+**The production volume was destroyed the same day** - `appdoivo_data`,
+`vol_v8ep3d82yoxxg65v`, 20GB, gone. Ivo had already downloaded the photos
+and chose to delete it rather than keep paying ~$3/month for storage that
+volumes are charged for whether or not a machine is attached. That was the
+only remaining cost; nothing else here is billed.
 
-- `appdoivo_data` (20GB, `vol_v8ep3d82yoxxg65v`) still holds the real
-  database and every Memo upload. **It is still billed** - volumes are
-  charged on provisioned size whether or not a machine is attached, ~$3/month
-  (see the section below). Shutting the machines down does not stop that;
-  only deleting the volume would, and that deletes the party with it.
-- No compute is billed while the machine count is zero, and the app makes no
-  Claude API calls with nothing running.
+So there is **no production data left on Fly** - not the photos, and not
+`/data/app.sqlite`, which held the guest accounts and their access keys,
+Wall, Plaza, Rata, the dedications, and the night results. Whatever was
+saved off the app before this is the only copy there is.
+
+What does still exist: both apps, their secrets, and their IPs. The apps
+themselves cost nothing with no machines running, and the app makes no
+Claude API calls with nothing running.
 
 To bring it back:
 
 ```
-scripts/deploy.sh prod      # recreates the machine and reattaches the volume
+scripts/deploy.sh prod      # creates a machine and a new, empty volume
 ```
 
-The volume is in `cdg` and the machine comes back in the same region, so it
-reattaches on its own - there is no separate step to restore anything. Same
-for QA with `scripts/deploy.sh qa`, which has no volume and comes back
-empty, as it always does.
+**It comes back empty**, and that is the part to know before promising
+anyone their account still works. The deploy provisions a fresh volume from
+the `[[mounts]]` block in `fly.toml` and the app builds a new database on
+first boot, with a new owner token from `ADMIN_TOKEN`. Every guest key is
+gone, so everybody would have to be re-created and re-invited. Same story
+for QA with `scripts/deploy.sh qa`, which never had a volume and always
+came back empty anyway.
 
-### The production volume (extended 12 Sept 2026)
+### The production volume (extended 12 Sept 2026, deleted 23 Sept 2026)
 
-**Done - `appdoivo_data` is 20GB as of 12 September 2026.** Fly extended it
-in place, with no restart and no downtime. Nothing further is needed before
-the party; what follows is why the size is what it is, for whoever looks at
-the bill.
+**This volume no longer exists** - see the section above. What follows is
+kept as the record of why it was sized the way it was, and is worth reading
+before provisioning another one for a second party.
+
+**`appdoivo_data` was extended to 20GB on 12 September 2026.** Fly extended
+it in place, with no restart and no downtime.
 
 **The party is 18-20 September 2026.** Memo stores every uploaded photo
 and video, plus the generated day videos, as real files on the production
