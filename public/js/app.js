@@ -1824,8 +1824,12 @@ function renderCongeniality(c) {
   // server-side), so you are left out of the list entirely rather than
   // shown and then rejected on tap - same as the outfit round already does.
   const votable = c.candidates.filter((x) => x.id !== myUserId);
+  // Mid-runoff the list is only whoever tied (congenialityCandidates()
+  // server-side). Said out loud, like the outfit vote's own runoff line -
+  // otherwise the card just comes back with two names on it and no reason.
+  const lead = c.runoffActive ? `<p class="highlight">${t('congeniality_runoff_open')}</p>` : '';
   area.innerHTML = votable.length
-    ? votable.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
+    ? lead + votable.map((x) => `<button type="button" class="vote-option" data-congeniality-vote="${x.id}">${esc(x.name)}</button>`).join('')
     : `<p class="muted">${t('congeniality_no_candidates')}</p>`;
 }
 

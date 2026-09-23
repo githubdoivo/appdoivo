@@ -8,17 +8,39 @@ import { decodeJpegDataUrl as decodePhoto, MAX_PHOTO_BYTES } from './photos.js';
 // awards countdown, at their own pace during the event.
 const REVEAL_PHASES = ['hidden', 'third', 'second', 'first', 'all'];
 
+/**
+ * Tie-breaking is the same machinery for both of the night's rounds - the
+ * outfit vote and Miss Congeniality - so it is written once here and each
+ * round keeps its own copy of the state under its own settings prefix.
+ * Miss Congeniality used to have none of it: equal votes were sorted by
+ * name, so the alphabet crowned somebody and no tie was ever visible. It
+ * gets the same runoff the outfit vote has.
+ */
+function runoffKeys(prefix) {
+  return {
+    round: (night) => `${prefix}runoff_round_${night}`,
+    ids: (night) => `${prefix}runoff_ids_${night}`,
+    rank: (night) => `${prefix}runoff_rank_${night}`,
+    order: (night) => `${prefix}tiebreak_order_${night}`,
+  };
+}
+// The outfit vote's keys are unprefixed - they were named before there was
+// a second round to tell apart, and renaming them would orphan the state of
+// a night already in progress.
+const OUTFIT_KEYS = runoffKeys('');
+const CONG_KEYS = runoffKeys('cong_');
+
 /** Which round of voting is live: 0 for the night's real vote, 1+ while a
  * tie-breaker runoff is running. Ballots are kept apart by round so that
  * settling a tie cannot disturb the placings it sits below. */
-function currentRound(night) {
-  return Number(getSetting(`runoff_round_${night}`, 0)) || 0;
+function roundFor(keys, night) {
+  return Number(getSetting(keys.round(night), 0)) || 0;
 }
 
-/** The order a finished runoff settled a tied group into, as contestant ids.
+/** The order a finished runoff settled a tied group into, as row ids.
  * Empty when no tie has been broken on this night yet. */
-function getTiebreakOrder(night) {
-  const raw = getSetting(`tiebreak_order_${night}`);
+function tiebreakOrderFor(keys, night) {
+  const raw = getSetting(keys.order(night));
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -28,11 +50,91 @@ function getTiebreakOrder(night) {
   }
 }
 
-/** Contestant IDs currently in a tie-breaker runoff for a night, or null if
- * none is active - see startRunoff() below. */
-function getRunoffIds(night) {
-  const raw = getSetting(`runoff_ids_${night}`);
+/** The ids currently in a tie-breaker runoff for a night, or null if none
+ * is active - see startRunoff()/startCongenialityRunoff() below. */
+function runoffIdsFor(keys, night) {
+  const raw = getSetting(keys.ids(night));
   return raw ? JSON.parse(raw) : null;
+}
+
+/**
+ * Opens a runoff on an already-ranked set of standings: picks the tied
+ * group at `atRank` (or the highest unresolved tie when not told which) and
+ * moves the round on, so the new ballots land somewhere of their own
+ * instead of on top of the tally they exist to break. The caller does the
+ * round-specific parts - checking its own vote is closed, and reopening it.
+ */
+function beginRunoff(keys, night, results, atRank) {
+  const tiedPlaces = [...new Set(results.filter((r) => r.tied).map((r) => r.rank))].sort((a, b) => a - b);
+  const rank = atRank == null ? tiedPlaces[0] : Number(atRank);
+  if (rank == null || Number.isNaN(rank)) return { error: 'err_no_tie' };
+
+  const tied = results.filter((r) => r.tied && r.rank === rank);
+  if (tied.length < 2) return { error: 'err_no_tie' };
+
+  // A NEW round rather than a wipe. Deleting the night's votes settled the
+  // tie and destroyed every placing below it in the same stroke - after a
+  // runoff for 1st, 2nd and 3rd were left on zero votes each. Rounds are
+  // counted separately (see roundFor), so the real tally survives.
+  setSetting(keys.round(night), String(roundFor(keys, night) + 1));
+  setSetting(keys.ids(night), JSON.stringify(tied.map((r) => r.id)));
+  setSetting(keys.rank(night), String(rank));
+  return { ok: true, rank, ids: tied.map((r) => r.id) };
+}
+
+/**
+ * Closes a runoff and records what it decided, given that round's own
+ * tallies (id -> votes).
+ *
+ * The outcome is an ORDER, not a score. The tied group keeps the band of
+ * places it already held - a runoff for 2nd settles 2nd and 3rd between
+ * those two and cannot promote either past 1st - because a runoff is voted
+ * by a different, smaller ballot and its counts mean nothing next to the
+ * main round's.
+ *
+ * A runoff that ties again records nothing and says so, leaving the tie
+ * standing for another one. Picking a winner out of a second dead heat is
+ * exactly the silent alphabetical decision this replaced.
+ */
+function endRunoff(keys, night, tallies) {
+  const ids = runoffIdsFor(keys, night);
+  if (!ids) return { error: 'err_no_runoff' };
+
+  const order = [...ids].sort((a, b) => tallies.get(b) - tallies.get(a));
+  const stillTied = tallies.get(order[0]) === tallies.get(order[order.length - 1]);
+
+  setSetting(keys.round(night), '0');
+  setSetting(keys.ids(night), '');
+  setSetting(keys.rank(night), '');
+  if (stillTied) return { ok: true, stillTied: true };
+
+  // Kept alongside any earlier tie this night already settled, so breaking a
+  // second tie does not forget the first.
+  const kept = tiebreakOrderFor(keys, night).filter((id) => !ids.includes(id));
+  setSetting(keys.order(night), JSON.stringify([...kept, ...order]));
+  return { ok: true, stillTied: false, order };
+}
+
+/** Ends a runoff scope without recording an outcome - a fresh
+ * registration/reset(-all) starts a genuinely new round, not a
+ * continuation of an old tie. */
+function discardRunoff(keys, night) {
+  setSetting(keys.ids(night), '');
+  setSetting(keys.round(night), '0');
+  setSetting(keys.rank(night), '');
+  setSetting(keys.order(night), '');
+}
+
+function currentRound(night) {
+  return roundFor(OUTFIT_KEYS, night);
+}
+
+function getTiebreakOrder(night) {
+  return tiebreakOrderFor(OUTFIT_KEYS, night);
+}
+
+function getRunoffIds(night) {
+  return runoffIdsFor(OUTFIT_KEYS, night);
 }
 
 export function isRunoffActive(night) {
@@ -507,7 +609,7 @@ export function resultsForNight(night) {
   // from the first round would just be confusing clutter here.
   const runoff = getRunoffIds(night);
   const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
-  return rankRows(scoped, getTiebreakOrder(night));
+  return rankRows(scoped.map((r) => ({ ...r, hasPhoto: !!r.hasPhoto })), getTiebreakOrder(night));
 }
 
 /**
@@ -519,6 +621,9 @@ export function resultsForNight(night) {
  * alphabet the tiebreaker: a genuine tie was reported as a clean 1st and
  * 2nd, and the podium published whichever name came first. Nobody could
  * see that a tie had happened, least of all the person who lost one.
+ *
+ * Shared by both of the night's rounds, so it knows nothing about
+ * contestants specifically - it ranks anything with an `id` and a `votes`.
  *
  * `order` is a runoff outcome - the ids of a tied group in the order that
  * runoff settled them. Applying it gives that group sequential places
@@ -548,7 +653,6 @@ function rankRows(rows, order) {
     ordered.forEach((r, i) => {
       out.push({
         ...r,
-        hasPhoto: !!r.hasPhoto,
         rank: settled ? place + i : place,
         tied: isRealTie && !settled,
       });
@@ -585,67 +689,30 @@ export function startRunoff(night, atRank = null) {
   if (!isNight(night)) return { error: 'err_invalid_night' };
   if (nightStatus(night) !== 'closed') return { error: 'err_voting_not_closed' };
 
-  const results = resultsForNight(night);
   // Any place, not only the top. Defaults to the highest unresolved tie,
   // because that is the one an organiser means when they press the button
   // without choosing.
-  const tiedPlaces = [...new Set(results.filter((r) => r.tied).map((r) => r.rank))].sort((a, b) => a - b);
-  const rank = atRank == null ? tiedPlaces[0] : Number(atRank);
-  if (rank == null || Number.isNaN(rank)) return { error: 'err_no_tie' };
+  const started = beginRunoff(OUTFIT_KEYS, night, resultsForNight(night), atRank);
+  if (started.error) return started;
 
-  const tied = results.filter((r) => r.tied && r.rank === rank);
-  if (tied.length < 2) return { error: 'err_no_tie' };
-
-  // A NEW round rather than a wipe. Deleting the night's votes settled the
-  // tie and destroyed every placing below it in the same stroke - after a
-  // runoff for 1st, 2nd and 3rd were left on zero votes each. Rounds are
-  // counted separately (see currentRound), so the real tally survives.
-  setSetting(`runoff_round_${night}`, String(currentRound(night) + 1));
-  setSetting(`runoff_ids_${night}`, JSON.stringify(tied.map((r) => r.id)));
-  setSetting(`runoff_rank_${night}`, String(rank));
   resetResultsPhase(night);
   setSetting(`voting_status_${night}`, 'open');
-  return { ok: true, rank, contestantIds: tied.map((r) => r.id) };
+  return { ok: true, rank: started.rank, contestantIds: started.ids };
 }
 
-/**
- * Closes a runoff and records what it decided.
- *
- * The outcome is an ORDER, not a score. The tied group keeps the band of
- * places it already held - a runoff for 2nd settles 2nd and 3rd between
- * those two and cannot promote either past 1st - because a runoff is voted
- * by a different, smaller ballot and its counts mean nothing next to the
- * main round's.
- *
- * A runoff that ties again records nothing and says so, leaving the tie
- * standing for another one. Picking a winner out of a second dead heat is
- * exactly the silent alphabetical decision this replaced.
- */
+/** Closes the outfit vote's runoff and records what it decided - see
+ * endRunoff() for what "decided" means here. */
 export function resolveRunoff(night) {
   const ids = getRunoffIds(night);
   if (!ids) return { error: 'err_no_runoff' };
-  const round = currentRound(night);
 
   const tallies = new Map(ids.map((id) => [id, 0]));
   for (const row of db.prepare(
     'SELECT contestant_id AS id, COUNT(*) AS votes FROM votes WHERE night = ? AND round = ? AND confirmed_at IS NOT NULL GROUP BY contestant_id'
-  ).all(night, round)) {
+  ).all(night, currentRound(night))) {
     if (tallies.has(row.id)) tallies.set(row.id, row.votes);
   }
-
-  const order = [...ids].sort((a, b) => tallies.get(b) - tallies.get(a));
-  const stillTied = tallies.get(order[0]) === tallies.get(order[order.length - 1]);
-
-  setSetting(`runoff_round_${night}`, '0');
-  setSetting(`runoff_ids_${night}`, '');
-  setSetting(`runoff_rank_${night}`, '');
-  if (stillTied) return { ok: true, stillTied: true };
-
-  // Kept alongside any earlier tie this night already settled, so breaking a
-  // second tie does not forget the first.
-  const kept = getTiebreakOrder(night).filter((id) => !ids.includes(id));
-  setSetting(`tiebreak_order_${night}`, JSON.stringify([...kept, ...order]));
-  return { ok: true, stillTied: false, order };
+  return endRunoff(OUTFIT_KEYS, night, tallies);
 }
 
 
@@ -655,6 +722,11 @@ export function resolveRunoff(night) {
 // rather than an entry (so a duo splits into its two individuals - the
 // pairing only ever mattered for the outfit itself), and it has no staged
 // reveal, just open -> closed -> revealed.
+//
+// Ties are NOT one of the differences, though they were: this round used to
+// order by votes then name, which handed a dead heat to whoever came first
+// in the alphabet without anyone seeing a tie had happened. It now ranks and
+// flags ties the same way, and breaks them with the same kind of runoff.
 
 const CONGENIALITY_PHASES = ['closed', 'open', 'revealed'];
 
@@ -667,8 +739,23 @@ export function congenialityStatus(night) {
 export function setCongenialityStatus(night, status) {
   if (!isNight(night)) return { error: 'err_invalid_night' };
   if (!CONGENIALITY_PHASES.includes(status)) return { error: 'err_invalid_congeniality_status' };
+  // Revealing is this round's equivalent of publishing the podium, and the
+  // outfit vote refuses that over an unbroken tie for the same reason: a
+  // reveal cannot be taken back, so a tie has to be settled by a runoff
+  // before it, not discovered afterwards by two people being crowned at
+  // once. Only the top place matters here - this round announces a winner,
+  // not a ranking, so a tie further down decides nothing.
+  if (status === 'revealed') {
+    const tie = congenialityResults(night).find((r) => r.tied && r.rank === 1);
+    if (tie) return { error: 'err_congeniality_tie_unresolved', rank: tie.rank };
+  }
   setSetting(`congeniality_status_${night}`, status);
   return { ok: true, night, congenialityStatus: status };
+}
+
+/** Whether a Miss Congeniality tie-breaker is running for a night. */
+export function isCongenialityRunoffActive(night) {
+  return runoffIdsFor(CONG_KEYS, night) !== null;
 }
 
 /**
@@ -678,7 +765,7 @@ export function setCongenialityStatus(night, status) {
  * the outfit was the shared part), and an admin-added entry with nobody
  * linked to it contributes nobody, since there's no person to vote for.
  */
-export function congenialityCandidates(night) {
+function allCongenialityCandidates(night) {
   return db.prepare(`
     SELECT DISTINCT u.id, u.name
     FROM contestants c
@@ -688,10 +775,21 @@ export function congenialityCandidates(night) {
   `).all(night);
 }
 
+export function congenialityCandidates(night) {
+  const rows = allCongenialityCandidates(night);
+  // A runoff narrows who is actually votable to just the tied group, the
+  // same way the outfit vote's does - everyone else was already judged in
+  // the round that produced the tie.
+  const runoff = runoffIdsFor(CONG_KEYS, night);
+  return runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
+}
+
+/** This user's vote in the round that is live - so somebody who voted in the
+ * night proper still has a vote to cast in a runoff. */
 export function myCongenialityVote(userId, night) {
   const row = db.prepare(
-    'SELECT target_user_id FROM congeniality_votes WHERE user_id = ? AND night = ?'
-  ).get(userId, night);
+    'SELECT target_user_id FROM congeniality_votes WHERE user_id = ? AND night = ? AND round = ?'
+  ).get(userId, night, roundFor(CONG_KEYS, night));
   return row ? row.target_user_id : null;
 }
 
@@ -700,40 +798,98 @@ export function castCongenialityVote(userId, targetUserId, night) {
   if (congenialityStatus(night) !== 'open') return { error: 'err_congeniality_not_open' };
   // Same rule as the outfit vote - you don't get to crown yourself.
   if (Number(targetUserId) === Number(userId)) return { error: 'err_cannot_vote_self' };
-  if (!congenialityCandidates(night).some((c) => c.id === Number(targetUserId))) {
+  if (!allCongenialityCandidates(night).some((c) => c.id === Number(targetUserId))) {
     return { error: 'err_not_a_candidate' };
   }
+  // Mid-runoff only the tied group is votable. Told apart from "not a
+  // candidate" on purpose: this person WAS in the running and no longer is,
+  // which is a different thing to say.
+  const runoff = runoffIdsFor(CONG_KEYS, night);
+  if (runoff && !runoff.includes(Number(targetUserId))) return { error: 'err_not_in_runoff' };
   if (myCongenialityVote(userId, night) !== null) return { error: 'err_already_voted' };
 
   db.prepare(
-    'INSERT INTO congeniality_votes (user_id, target_user_id, night) VALUES (?, ?, ?)'
-  ).run(userId, targetUserId, night);
+    'INSERT INTO congeniality_votes (user_id, target_user_id, night, round) VALUES (?, ?, ?, ?)'
+  ).run(userId, targetUserId, night, roundFor(CONG_KEYS, night));
   return { ok: true };
 }
 
-/** Full standings, most votes first. Admin-visible at any phase. */
+/**
+ * Full standings, ranked. Admin-visible at any phase.
+ *
+ * Carries the same `rank`/`tied` pair as the outfit vote's results and for
+ * the same reason: this used to be a bare list ordered by votes then name,
+ * so two people on the same count came out as a clean 1st and 2nd and the
+ * alphabet decided which - invisibly, to everyone including whoever lost.
+ */
 export function congenialityResults(night) {
-  return db.prepare(`
+  // The live round's ballots only: the night's real vote normally, the
+  // runoff's while one is running (see startCongenialityRunoff()).
+  const round = roundFor(CONG_KEYS, night);
+  const rows = db.prepare(`
     SELECT u.id, u.name, COUNT(v.id) AS votes
     FROM contestants c
     JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
-    LEFT JOIN congeniality_votes v ON v.target_user_id = u.id AND v.night = c.night
+    LEFT JOIN congeniality_votes v
+      ON v.target_user_id = u.id AND v.night = c.night AND v.round = ?
     WHERE c.night = ? AND c.confirmed_at IS NOT NULL
     GROUP BY u.id
     ORDER BY votes DESC, u.name COLLATE NOCASE
-  `).all(night);
+  `).all(round, night);
+  const runoff = runoffIdsFor(CONG_KEYS, night);
+  const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
+  return rankRows(scoped, tiebreakOrderFor(CONG_KEYS, night));
 }
 
-/** Just the winner, and only once revealed - what a guest is allowed to see. */
+/** Just the winner, and only once revealed - what a guest is allowed to see.
+ * An unbroken tie for the top has no winner to show: setCongenialityStatus()
+ * refuses to reveal one, so this only returns null here if a night somehow
+ * got past it. */
 export function congenialityWinner(night) {
   if (congenialityStatus(night) !== 'revealed') return null;
-  const [top] = congenialityResults(night);
-  return top && top.votes > 0 ? top : null;
+  const top = congenialityResults(night).filter((r) => r.rank === 1);
+  return top.length === 1 && top[0].votes > 0 ? top[0] : null;
 }
 
-/** Wipes this night's congeniality vote back to square one. */
+/**
+ * Starts a Miss Congeniality tie-breaker: a fresh vote scoped to just the
+ * people tied at one place, exactly as the outfit vote's runoff works (see
+ * startRunoff()). Needs the round closed first - a tie can only be judged
+ * once nobody can still change it - and reopens voting scoped to the tied
+ * group. The earlier ballots are kept, in their own round, so the tally the
+ * tie came out of survives being broken.
+ */
+export function startCongenialityRunoff(night, atRank = null) {
+  if (!isNight(night)) return { error: 'err_invalid_night' };
+  if (congenialityStatus(night) !== 'closed') return { error: 'err_congeniality_not_closed' };
+
+  const started = beginRunoff(CONG_KEYS, night, congenialityResults(night), atRank);
+  if (started.error) return started;
+
+  setSetting(`congeniality_status_${night}`, 'open');
+  return { ok: true, rank: started.rank, userIds: started.ids };
+}
+
+/** Closes a Miss Congeniality runoff and records what it decided - see
+ * endRunoff() for what that means. */
+export function resolveCongenialityRunoff(night) {
+  const ids = runoffIdsFor(CONG_KEYS, night);
+  if (!ids) return { error: 'err_no_runoff' };
+
+  const tallies = new Map(ids.map((id) => [id, 0]));
+  for (const row of db.prepare(
+    'SELECT target_user_id AS id, COUNT(*) AS votes FROM congeniality_votes WHERE night = ? AND round = ? GROUP BY target_user_id'
+  ).all(night, roundFor(CONG_KEYS, night))) {
+    if (tallies.has(row.id)) tallies.set(row.id, row.votes);
+  }
+  return endRunoff(CONG_KEYS, night, tallies);
+}
+
+/** Wipes this night's congeniality vote back to square one - every round of
+ * it, and whatever a runoff had already settled. */
 export function resetCongeniality(night) {
   db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
+  discardRunoff(CONG_KEYS, night);
   setSetting(`congeniality_status_${night}`, 'closed');
 }
 
@@ -741,5 +897,6 @@ export function resetCongeniality(night) {
  *  shutting everyone out" case, mirroring the outfit vote's own reset. */
 export function resetCongenialityVotes(night) {
   db.prepare('DELETE FROM congeniality_votes WHERE night = ?').run(night);
+  discardRunoff(CONG_KEYS, night);
   setSetting(`congeniality_status_${night}`, 'open');
 }

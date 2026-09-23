@@ -1133,6 +1133,101 @@ test('Miss Congeniality is a separate per-person round: duos split up, self-vote
   assert.equal(afterReset.data.congeniality.winner, null);
 });
 
+test('a tie for Miss Congeniality is broken by a runoff, exactly as the outfit vote is', async () => {
+  // The bug this covers: this round ranked by votes then name, so a dead
+  // heat for first was published as a clean 1st and 2nd with the alphabet
+  // deciding which - invisibly, including to whoever lost. It now flags the
+  // tie and breaks it with the same runoff the outfit vote has.
+  const night = 'furnished';
+  await api('POST', `/admin/voting/${night}/reset-all`, { token: ADMIN });
+  const ana = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Tie Ana' } });
+  const bea = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Tie Bea' } });
+  const caio = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Tie Caio' } });
+
+  await api('POST', `/admin/voting/${night}/registration`, { token: ADMIN });
+  for (const p of [ana, bea, caio]) {
+    await api('POST', '/admin/contestants/register', { token: ADMIN, body: { night, name: `Look ${p.data.id}`, userId: p.data.id } });
+  }
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
+
+  const voters = [];
+  for (let i = 0; i < 5; i++) {
+    voters.push((await api('POST', '/admin/users', { token: ADMIN, body: { name: `Tie Voter ${i}` } })).data.token);
+  }
+  // Ana and Bea tied at 2 each, Caio behind at 1.
+  const vote = (token, target) => api('POST', '/congeniality/vote', { token, body: { night, targetUserId: target } });
+  assert.equal((await vote(voters[0], ana.data.id)).status, 201);
+  assert.equal((await vote(voters[1], ana.data.id)).status, 201);
+  assert.equal((await vote(voters[2], bea.data.id)).status, 201);
+  assert.equal((await vote(voters[3], bea.data.id)).status, 201);
+  assert.equal((await vote(voters[4], caio.data.id)).status, 201);
+
+  const rowsFor = async () => {
+    const view = await api('GET', '/admin/voting', { token: ADMIN });
+    return view.data.nights.find((n) => n.night === night).congenialityResults;
+  };
+  const standing = await rowsFor();
+  const top = standing.filter((r) => r.rank === 1);
+  assert.equal(top.length, 2, 'two people on the same count share first place, they are not silently ordered');
+  assert.ok(top.every((r) => r.tied === true), 'and the tie is flagged, which is what tells the organiser a runoff is owed');
+  assert.equal(standing.find((r) => r.id === caio.data.id).rank, 3, 'the place below a shared first is third, not second');
+
+  // Revealing over an unbroken tie would crown two people at once, and
+  // cannot be taken back - refused for the same reason publishing the
+  // podium is.
+  const earlyReveal = await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+  assert.equal(earlyReveal.status, 400);
+  assert.equal(earlyReveal.data.error, 'err_congeniality_tie_unresolved');
+
+  const beforeClose = await api('POST', `/admin/voting/${night}/congeniality/runoff`, { token: ADMIN });
+  assert.equal(beforeClose.status, 409);
+  assert.equal(beforeClose.data.error, 'err_congeniality_not_closed', 'a tie can only be judged once nobody can still change it');
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'closed' } });
+  const runoff = await api('POST', `/admin/voting/${night}/congeniality/runoff`, { token: ADMIN });
+  assert.equal(runoff.status, 200);
+  assert.equal(runoff.data.congenialityStatus, 'open', 'a runoff is a real round of voting, so it reopens the round');
+  assert.deepEqual(new Set(runoff.data.userIds), new Set([ana.data.id, bea.data.id]));
+
+  // Caio lost the first round - out of the running, even though voting is
+  // open again.
+  const guest = await api('GET', `/votes/status?night=${night}`, { token: voters[0] });
+  assert.equal(guest.data.congeniality.runoffActive, true, 'the card has to be able to say why the list got shorter');
+  assert.deepEqual(new Set(guest.data.congeniality.candidates.map((c) => c.id)), new Set([ana.data.id, bea.data.id]));
+  assert.equal(guest.data.congeniality.myVote, null, 'a new round is a new ballot - the first-round vote must not block this one');
+
+  const rejected = await vote(voters[4], caio.data.id);
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.data.error, 'err_not_in_runoff');
+
+  // Bea takes the runoff 2-1 - including a vote from somebody who already
+  // voted in the round proper, which is the whole point of keeping the
+  // ballots in separate rounds.
+  assert.equal((await vote(voters[0], bea.data.id)).status, 201);
+  assert.equal((await vote(voters[2], bea.data.id)).status, 201);
+  assert.equal((await vote(voters[1], ana.data.id)).status, 201);
+
+  await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'closed' } });
+  const settled = await rowsFor();
+  assert.deepEqual(
+    settled.map((r) => [r.id, r.rank, r.votes, r.tied]),
+    [[bea.data.id, 1, 2, false], [ana.data.id, 2, 2, false], [caio.data.id, 3, 1, false]],
+    'the runoff separates the tied pair and leaves everything else - places and counts - exactly as it was'
+  );
+
+  const revealed = await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'revealed' } });
+  assert.equal(revealed.status, 200, 'with the tie settled there is one winner, so the reveal goes through');
+  const seen = await api('GET', `/votes/status?night=${night}`, { token: voters[0] });
+  assert.equal(seen.data.congeniality.winner.id, bea.data.id, 'and it is the one the runoff chose, not the first name in the alphabet');
+
+  // A reset takes the settled order with it, or the next run of this night
+  // would start already tie-broken.
+  await api('POST', `/admin/voting/${night}/reset`, { token: ADMIN });
+  const afterReset = await api('POST', `/admin/voting/${night}/congeniality/runoff`, { token: ADMIN });
+  assert.equal(afterReset.status, 409);
+  assert.equal(afterReset.data.error, 'err_no_tie');
+});
+
 test('publishing a night twice replaces its post rather than stacking podiums', async () => {
   // The publish button stays tappable once a night is published, so a
   // double tap, a retried request on a bad connection, or a re-run after a

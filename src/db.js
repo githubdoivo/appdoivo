@@ -551,6 +551,18 @@ if (!columnExists('votes', 'round')) {
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_vote_user_night_round ON votes(user_id, night, round)');
 }
 
+// Migration: the same round column for Miss Congeniality, for the same
+// reason. That round had no tie-breaker at all - equal votes were sorted by
+// name and the alphabet quietly crowned one of them - so it never needed
+// somewhere to keep a second ballot. Now that it runs a runoff like the
+// outfit vote does, its ballots have to be kept apart by round too, and the
+// one-vote-per-person rule becomes one per person per night per round.
+if (!columnExists('congeniality_votes', 'round')) {
+  db.exec('ALTER TABLE congeniality_votes ADD COLUMN round INTEGER NOT NULL DEFAULT 0');
+  db.exec('DROP INDEX IF EXISTS idx_congeniality_user_night');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_congeniality_user_night_round ON congeniality_votes(user_id, night, round)');
+}
+
 // Migration: whether a photo should be shown mirrored.
 //
 // iOS's "Mirror Front Camera" setting applies to the Camera app and NOT to

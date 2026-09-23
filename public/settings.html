@@ -230,6 +230,11 @@
           <p class="help" data-i18n="congeniality_admin_help">Explicação</p>
           <div class="voting-controls" style="margin-top:12px">
             <button type="button" class="icon-action" id="congeniality-advance-btn" aria-label="Iniciar" title="Iniciar"></button>
+            <!-- Same tie-breaker the outfit vote has above: only shown once
+                 this round is closed AND a place is actually tied, and it
+                 reopens voting between just those people (see
+                 startCongenialityRunoff() in votes.js). -->
+            <button type="button" class="icon-action hidden" id="congeniality-runoff-btn" data-i18n-label="voting_runoff_btn" aria-label="Desempate" title="Desempate" data-icon="runoff"></button>
             <button type="button" class="icon-action" id="congeniality-reset-votes-btn" data-i18n-label="voting_reset_btn" aria-label="Reiniciar votação" title="Reiniciar votação" data-icon="reset"></button>
             <button type="button" class="icon-action danger" id="congeniality-reset-btn" data-i18n-label="congeniality_reset_btn" aria-label="Reiniciar tudo" title="Reiniciar tudo" data-icon="resetAll"></button>
           </div>
