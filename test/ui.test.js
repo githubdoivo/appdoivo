@@ -3832,6 +3832,10 @@ test('the populate and delete buttons carry one label colour, on every admin tab
     await page.evaluate((m) => localStorage.setItem('appivo_mode', m), mode);
     await page.reload();
     await page.waitForSelector('#admin-content:not(.hidden)', { timeout: WAIT_TIMEOUT });
+    // The mode switch fades colours in. Reading them mid-fade on a slow CI
+    // runner caught one label at rgba(231, 231, 231, 0.976) - almost white,
+    // and not a real difference - so let every running transition land first.
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 
     // Worded buttons only. A row action is destructive too, but it is an
     // icon in an outline now (see button.icon-action in styles.css) - it
