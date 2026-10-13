@@ -20,8 +20,12 @@ Never commit straight to `main`.
   automatically. Use throwaway test users here, not real ones.
 - **Production** (`appdoivo`, https://appdoivo.com) - the real app, real data,
   persistent volume. Only ever deployed from `main`.
+- **Demo** (`appdoivo-demo`, https://appdoivo-demo.fly.dev) - public, for
+  anyone to try (the README links it). Mock data only, `DEMO_MODE=true` (see
+  `src/demo.js`), no volume, stops when idle. Deployed from `main` with
+  `scripts/deploy.sh demo`, using `FLY_API_TOKEN_DEMO` from `.env`.
 
-Databases are intentionally isolated between the two - QA is for testing
+Databases are intentionally isolated between all three - QA is for testing
 behaviour safely, not for managing real users.
 
 ## Process for a change

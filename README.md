@@ -42,6 +42,17 @@ The interface has a PT/EN language switch everywhere.
 > **Status:** built for, and used at, a real private party (~50 guests, two
 > nights). The app is now shut down; this repo is kept as a reference.
 
+## Live demo
+
+**[appdoivo-demo.fly.dev](https://appdoivo-demo.fly.dev)**: the app with mock data. The login screen
+offers two keys, a **guest** and an **admin**, so no account is needed.
+
+Demo mode (`src/demo.js`) keeps it safe to leave open: photo uploads become a
+placeholder, and link posts, the anonymous chat, wipes, deletions and key
+changes are turned off. The demo has no persistent storage and sleeps when
+idle, so it wakes up fresh, with the demo data, after a quiet spell (the
+first load after that takes a few seconds).
+
 ## Screenshots
 
 <p align="center">

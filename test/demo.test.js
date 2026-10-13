@@ -1,0 +1,111 @@
+// Public demo mode (src/demo.js). DEMO_MODE is read once at startup, so it
+// gets its own file: everything here boots the app with it on, against a
+// throwaway database seeded the way the demo server seeds itself.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+
+const DB = join(tmpdir(), `appdoivo-demo-test-${process.pid}-${Date.now()}.sqlite`);
+process.env.DB_FILE = DB;
+process.env.TOKEN_SECRET = 'demo-test-secret';
+process.env.DEMO_MODE = 'true';
+process.env.ANTHROPIC_API_KEY = '';
+process.env.ENABLE_PLAZA = 'true';
+
+const { default: app } = await import('../src/app.js');
+const { seedDemo } = await import('../src/seedDemo.js');
+seedDemo();
+
+let server;
+let base;
+before(async () => {
+  server = createServer(app).listen(0);
+  await once(server, 'listening');
+  base = `http://127.0.0.1:${server.address().port}/api`;
+});
+after(() => {
+  server?.close();
+  for (const ext of ['', '-wal', '-shm']) {
+    try { rmSync(DB + ext); } catch { /* ignore */ }
+  }
+});
+
+async function api(method, path, { token, body } = {}) {
+  const res = await fetch(base + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: res.status, data: await res.json().catch(() => null) };
+}
+
+async function demoKeys() {
+  const { data } = await api('GET', '/demo');
+  return Object.fromEntries(data.keys.map((k) => [k.role, k.key]));
+}
+
+test('the demo offers a guest key and an admin key, and both log in as what they say', async () => {
+  const keys = await demoKeys();
+  const guest = await api('POST', '/auth/login', { body: { token: keys.guest } });
+  const admin = await api('POST', '/auth/login', { body: { token: keys.admin } });
+  assert.equal(guest.status, 200);
+  assert.equal(admin.status, 200);
+
+  const guestMe = await api('GET', '/me', { token: keys.guest });
+  const adminMe = await api('GET', '/me', { token: keys.admin });
+  assert.ok(!guestMe.data.isAdmin, 'the guest key is a regular guest');
+  assert.ok(adminMe.data.isAdmin, 'the admin key opens the admin panel');
+  assert.ok(!adminMe.data.isOwner, 'but it is not the owner - keys and pseudonyms stay hidden');
+});
+
+test('nobody can lock the next visitor out of the shared keys', async () => {
+  const keys = await demoKeys();
+  const changed = await api('POST', '/me/change-token', { token: keys.guest, body: { currentToken: keys.guest, newToken: 'mine12345' } });
+  assert.equal(changed.status, 403);
+  assert.equal(changed.data.error, 'err_demo_disabled');
+  assert.equal((await api('POST', '/auth/login', { body: { token: keys.guest } })).status, 200, 'the shared key still works');
+});
+
+test('what a stranger could abuse, or what wipes the demo for everyone, is refused', async () => {
+  const { guest, admin } = await demoKeys();
+  const refused = [
+    ['POST', '/chat/messages', guest, { text: 'hello' }],
+    ['POST', '/admin/plaza-posts', admin, { type: 'links', text: 'links', links: [{ emoji: '🔗', label: 'x', url: 'https://example.com' }] }],
+    ['POST', '/admin/consequences/wipe', admin],
+    ['POST', '/admin/plaza-posts/wipe', admin],
+    ['POST', '/admin/voting/furnished/reset-all', admin],
+    ['POST', '/admin/contestants/seed-demo', admin],
+    ['DELETE', '/admin/contestants/1', admin],
+    ['PUT', '/admin/settings', admin, {}],
+  ];
+  for (const [method, path, token, body] of refused) {
+    const res = await api(method, path, { token, body });
+    assert.equal(res.status, 403, `${method} ${path} should be refused in the demo`);
+    assert.equal(res.data.error, 'err_demo_disabled');
+  }
+});
+
+test('the rest of the app still works: a plain announcement and a guest vote', async () => {
+  const { guest, admin } = await demoKeys();
+  const post = await api('POST', '/admin/plaza-posts', { token: admin, body: { type: 'announcement', text: 'hello from the demo' } });
+  assert.ok(post.status < 300, `an announcement is fine: ${JSON.stringify(post.data)}`);
+
+  const { posts } = (await api('GET', '/plaza-posts', { token: guest })).data;
+  const poll = posts.find((p) => p.type === 'poll');
+  assert.ok(poll, 'the demo seeds a poll');
+  const vote = await api('POST', `/plaza-posts/${poll.id}/vote`, { token: guest, body: { optionId: poll.options[0].id } });
+  assert.ok(vote.status < 300, `voting on the seeded poll works: ${JSON.stringify(vote.data)}`);
+});
+
+test('an uploaded photo is swapped for the placeholder, so entering an outfit still works', async () => {
+  const { guest, admin } = await demoKeys();
+  await api('POST', '/admin/voting/swamp/registration', { token: admin });
+
+  // Not a real JPEG at all - in the demo it never reaches the decoder.
+  const res = await api('POST', '/outfit/register', { token: guest, body: { night: 'swamp', name: 'Lily Pad', photoBase64: 'data:image/png;base64,AAAA' } });
+  assert.ok(res.status < 300, `registration with a photo works in the demo: ${JSON.stringify(res.data)}`);
+});

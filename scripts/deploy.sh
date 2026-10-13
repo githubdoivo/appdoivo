@@ -12,8 +12,8 @@
 set -euo pipefail
 
 target="${1:-}"
-if [[ "$target" != "qa" && "$target" != "prod" ]]; then
-  echo "Usage: scripts/deploy.sh <qa|prod>" >&2
+if [[ "$target" != "qa" && "$target" != "prod" && "$target" != "demo" ]]; then
+  echo "Usage: scripts/deploy.sh <qa|prod|demo>" >&2
   exit 1
 fi
 
@@ -37,6 +37,8 @@ read_env() {
 
 if [[ "$target" == "qa" ]]; then
   token="${FLY_API_TOKEN_QA:-$(read_env FLY_API_TOKEN_QA)}"
+elif [[ "$target" == "demo" ]]; then
+  token="${FLY_API_TOKEN_DEMO:-$(read_env FLY_API_TOKEN_DEMO)}"
 else
   token="${FLY_API_TOKEN_PROD:-$(read_env FLY_API_TOKEN_PROD)}"
 fi
@@ -54,6 +56,8 @@ npm test
 
 if [[ "$target" == "qa" ]]; then
   fly deploy -a appdoivo-qa --config fly.qa.toml
+elif [[ "$target" == "demo" ]]; then
+  fly deploy -a appdoivo-demo --config fly.demo.toml
 else
   fly deploy -a appdoivo
 fi

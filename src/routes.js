@@ -72,6 +72,7 @@ import {
 import { listMessages, postMessage, resetPseudonym, wallPseudonymDirectory } from './chat.js';
 import { seedDemo, seedGuestList, seedDemoConsequences, seedDemoContestants, seedDemoWall, seedDemoChat, seedDemoMemo } from './seedDemo.js';
 import { searchUnclaimedUsers, claimKey } from './keyClaim.js';
+import { demoGuard, demoKeys } from './demo.js';
 import { myDedication, saveDedication, allDedications, wipeAll as wipeAllDedications } from './dedications.js';
 import { renderDedications, newDedicationsDocument } from './dedicationsPdf.js';
 import { queueAndRun, backfill as backfillTranslations } from './translate.js';
@@ -117,6 +118,7 @@ import {
 } from './memo.js';
 
 const router = Router();
+router.use(demoGuard);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { version: appVersion } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -130,6 +132,12 @@ const { version: appVersion } = JSON.parse(readFileSync(join(__dirname, '..', 'p
 // only ever gets an env label on QA, never a redundant "prod" one.
 router.get('/version', (req, res) => {
   res.json({ version: appVersion, env: process.env.APP_ENV || null });
+});
+
+// The shared logins for the public demo's login screen - empty everywhere
+// else (see src/demo.js).
+router.get('/demo', (req, res) => {
+  res.json({ keys: demoKeys() });
 });
 
 // Validates a token and returns the user.

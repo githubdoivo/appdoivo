@@ -695,6 +695,20 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
 .wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.55; }
 .login-lang-toggle:hover { opacity: 0.9; }
 
+/* Public demo: the shared keys under the login form. */
+.demo-keys {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 18px;
+  text-align: center;
+}
+.demo-keys-help { margin: 0 0 8px; font-size: 0.9rem; color: var(--ink-soft); }
+.demo-keys-list { display: flex; gap: 8px; }
+/* flex: 1 + min-width: 0 keeps two keys side by side on an iPhone SE
+   instead of the second running off the edge. */
+.demo-keys-list .find-key-result { flex: 1; min-width: 0; text-align: center; padding: 10px 8px; letter-spacing: normal; }
+.demo-keys-list .find-key-result small { display: block; margin-top: 2px; font-size: 0.75rem; letter-spacing: normal; color: var(--ink-soft); overflow-wrap: anywhere; }
+
 #find-key-results {
   width: 100%;
   max-width: 320px;
