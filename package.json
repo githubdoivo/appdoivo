@@ -12,7 +12,8 @@
     "seed-demo": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
     "test": "node scripts/run-tests.js",
     "test:ui": "node --disable-warning=ExperimentalWarning --test test/ui.test.js",
-    "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
+    "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "screenshots": "node --disable-warning=ExperimentalWarning scripts/screenshots.js"
   },
   "engines": {
     "node": ">=23.4"

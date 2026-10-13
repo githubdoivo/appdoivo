@@ -42,6 +42,22 @@ The interface has a PT/EN language switch everywhere.
 > **Status:** built for, and used at, a real private party (~50 guests, two
 > nights). The app is now shut down; this repo is kept as a reference.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/demo.gif" width="260" alt="Walkthrough: logging in, then the Wall, Rata, Snatch and Plaza tabs, the theme toggle and the language switch">
+</p>
+<p align="center"><a href="docs/demo.mp4">Watch the walkthrough as video</a></p>
+
+| Login | Wall | Rata |
+|---|---|---|
+| <img src="docs/screenshots/1-login.jpg" width="240" alt="Login screen"> | <img src="docs/screenshots/2-wall.jpg" width="240" alt="Wall with announcements"> | <img src="docs/screenshots/3-rata.jpg" width="240" alt="Rata consequence game"> |
+| **Snatch** | **Plaza** | **Admin: voting control** |
+| <img src="docs/screenshots/4-outfit.jpg" width="240" alt="Snatch outfit voting"> | <img src="docs/screenshots/5-chat.jpg" width="240" alt="Plaza anonymous chat"> | <img src="docs/screenshots/6-admin.jpg" width="240" alt="Admin voting control"> |
+
+All captured with mock data by `npm run screenshots` (Playwright WebKit,
+iPhone 13 profile), so they can be regenerated after any UI change.
+
 ## Engineering & quality
 
 This is a side project, but it was built the way I'd want a production
