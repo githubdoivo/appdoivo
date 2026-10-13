@@ -86,6 +86,12 @@ test framework)
 
 Every suite runs against a temporary database and never touches real data.
 
+**End-to-end, from the outside:** a separate BDD suite,
+[appdoivo-e2e](https://github.com/githubdoivo/appdoivo-e2e) (Playwright + Cucumber,
+TypeScript), runs every day against the [live demo](https://appdoivo-demo.fly.dev):
+API scenarios plus UI scenarios on iPhone and desktop, with a
+[published report](https://githubdoivo.github.io/appdoivo-e2e/).
+
 **Quality gates**
 
 - **Pre-commit hook** (`.githooks/pre-commit`, plain git hook, no husky) runs
