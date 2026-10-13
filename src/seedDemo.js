@@ -12,8 +12,8 @@ import { NIGHTS } from './nights.js';
 import { deflateSync } from 'node:zlib';
 import { createPlazaPost } from './plaza.js';
 import { postMessage } from './chat.js';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { MEMO_DIR, ensureTodaysSlots } from './memo.js';
 
 // Flat-colour stand-in photos for the seeded contestants, so QA shows what
@@ -64,23 +64,16 @@ function crc32(buf) {
 }
 
 
-// The actual guest list, confirmed by Ivo on 2026-08-11, so seeding QA gives
-// the same room the party will have rather than a cast of strangers. Anyone
-// not on the guest list does not belong here: "who is Tomás Vieira and why
-// is he on the user list" is the only thing an invented name ever produces.
-// The list is 21 here and 22 in Ivo's own copy of it - the difference is
-// Ivo himself, who is the seeded owner account and must not appear as a
-// guest too (see the note below).
+// Mock guests - the repo never holds real people's names. For a real party,
+// put the guest list in data/guest-list.txt (one name per line; data/ is
+// gitignored, so it stays on the machine) and it replaces this list. The file
+// sits next to the database, so tests, which use a temp database, always get
+// these mocks.
 //
-// Never include "Ivo Lopes" (or any name matching the real owner) here -
-// a demo account sharing the owner's name showed up in the unclaimed-user
-// search on QA, which is confusing/alarming even though it's just a
-// regular demo user under the hood, not an actual owner-account exposure.
-// The real guest list, minus the owner, read back from Ivo on 13 Sept 2026
-// and reconciled against production the same day: 23 guests + the owner =
-// the 24 accounts the app should hold. Rebeca Campos came off the list
-// then (not coming) and was removed from production too.
-const NAMES = [
+// Never include the owner's own name in either list - a demo account sharing
+// the owner's name shows up in the unclaimed-user search, which is
+// confusing/alarming even though it's just a regular user under the hood.
+const MOCK_NAMES = [
   'Alice Moreira', 'Bruno Teixeira', 'Carla Mendes', 'Daniel Sousa',
   'Elisa Carvalho', 'Fábio Nunes', 'Gabriela Pinto', 'Hugo Ribeiro',
   'Joana Correia', 'Leonor Matos', 'Manuel Antunes', 'Marta Freitas',
@@ -89,9 +82,20 @@ const NAMES = [
   'Xavier Salgado', 'Zé Monteiro', 'Inácio Pires', 'Simão Valente',
 ];
 
+const GUEST_LIST_FILE = join(dirname(MEMO_DIR), 'guest-list.txt');
+
+function loadGuestNames() {
+  if (!existsSync(GUEST_LIST_FILE)) return MOCK_NAMES;
+  const names = readFileSync(GUEST_LIST_FILE, 'utf8')
+    .split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+  return names.length ? names : MOCK_NAMES;
+}
+
+const NAMES = loadGuestNames();
+
 // The one demo user pre-promoted to admin on every fresh seed, so there's
 // always a stable non-owner admin tester available without manually
-// promoting someone after each QA reseed.
+// promoting someone after each QA reseed. Only applies to the mock list.
 const PRESET_ADMIN_NAME = 'Elisa Carvalho';
 
 // The rata is a passable, anonymous token - whoever ends up holding it when
@@ -115,7 +119,7 @@ const CONSEQUENCES_PENDING = [
  * pressing twice cannot double up.
  */
 /**
- * Creates the party's actual guest list - every name in NAMES that has no
+ * Creates the guest list (data/guest-list.txt, or the mocks) - every name in NAMES that has no
  * account yet - and nothing else. This is what the button under Manage
  * Users calls: that card sits below the list of people, so it acts on the
  * list of people.

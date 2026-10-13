@@ -207,6 +207,9 @@ consequences survive each deploy.
 - The database is stored in `data/app.sqlite` (ignored by Git).
 - Demo data (users, contestants and votes per night, consequences) for
   preview: `npm run seed-demo`. Do not use in production.
+- Guest names: the repo only ships mock names. For a real event, put the
+  guest list in `data/guest-list.txt` (one name per line, gitignored) and the
+  "create guest list" button and demo seed use it instead.
 - Any CLI script that imports `src/db.js` must load `dotenv` first
   (`import 'dotenv/config';`), otherwise `TOKEN_SECRET` is undefined and the
   token data can be corrupted.
