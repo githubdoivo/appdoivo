@@ -183,8 +183,9 @@ scanner will keep flagging the domain as unconfigured however correct the file
 in here is. Edit it via the zone's `security-center/securitytxt` API, or under
 Security -> Settings in the dashboard.
 
-It names `security@appdoivo.com`, which is a Cloudflare Email Routing address,
-not a real mailbox. Two things about that:
+It names `mail@ivolopes.com` (it used to be `security@appdoivo.com`, retired
+with the app), which is a Cloudflare Email Routing address, not a real
+mailbox. Two things about that:
 
 - **Failure is silent.** DNS being right (MX, SPF, the DMARC `rua`) is not
   enough; if the routing destination has never been verified, mail is accepted
