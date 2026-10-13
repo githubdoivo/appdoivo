@@ -39,6 +39,65 @@ it out). There are three roles:
 
 The interface has a PT/EN language switch everywhere.
 
+> **Status:** built for, and used at, a real private party (~50 guests, two
+> nights). The app is now shut down; this repo is kept as a reference.
+
+## Engineering & quality
+
+This is a side project, but it was built the way I'd want a production
+system to be tested: quality gates first, then features.
+
+**Test suite: ~250 automated tests** (Node's built-in `node:test`, no extra
+test framework)
+
+| Suite | Tests | What it covers |
+|---|---|---|
+| `test/api.test.js` | 137 | API and business logic: auth, roles, voting rules, ties and runoffs, duo confirmations, rate limits, wipe/seed flows |
+| `test/ui.test.js` | 104 | Real-browser UI tests with Playwright (WebKit, the iOS Safari engine) on iPhone SE / 13 / Pro Max viewports: layout overflow, alignment, end-to-end flows |
+| `test/migration.test.js` | 1 | Schema migrations run cleanly against an existing database |
+| `test/ci-smoke.test.js`, `test/demoSeed.test.js` | 8 | Boot smoke test and seeded QA data |
+
+Every suite runs against a temporary database and never touches real data.
+
+**Quality gates**
+
+- **Pre-commit hook** (`.githooks/pre-commit`, plain git hook, no husky) runs
+  the full suite and blocks the commit if anything fails.
+- **GitHub Actions** (`.github/workflows/test.yml`) runs the same suite on
+  every pull request and on `main`. A red check means the branch can't be merged.
+- **Branch-per-change workflow**: `feat/`, `fix/`, `test/`, `chore/`; nothing
+  goes straight to `main`. ~75 pull requests merged. See
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Dependabot** keeps dependencies current.
+
+**Environments**
+
+- **QA** (`fly.qa.toml`): ephemeral database that resets on every deploy,
+  auto-seeded demo data (`SEED_DEMO`), and QA-only feature flags
+  (`ENABLE_ADMIN_PROMOTION`), so every role and flow can be tested from a
+  clean state.
+- **Production** (`fly.toml`): persistent volume, deployed only from `main`.
+- A version badge (`APP_ENV`) shows which environment is open, so QA and
+  production can't be confused on a phone.
+
+**Flaky test investigation**
+
+The UI suite started failing about half of its tests on CI, on `main` too.
+The cause was the API and UI suites running in parallel on a two-core runner,
+which starved the browser. I measured both modes (206 tests: 116s serial vs
+120s parallel locally) and switched to serial everywhere. It turned out to be
+both faster and deterministic. The reasoning is written up in
+`scripts/run-tests.js`.
+
+**Security & privacy by design**
+
+- Access keys are stored hashed (for lookup) and encrypted (`TOKEN_SECRET`),
+  never in plaintext.
+- Three roles (owner / admin / user) with checks on the server; the
+  most sensitive data (other users' keys, who's behind the anonymous
+  pseudonyms) is owner-only, even for admins.
+- Rate limiting on login and key-claim endpoints (`src/rateLimit.js`).
+
 ## Stack
 
 - Node.js 23.4+ (uses the built-in `node:sqlite`, no native build step)
