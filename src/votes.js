@@ -759,24 +759,22 @@ export function isCongenialityRunoffActive(night) {
 }
 
 /**
- * Everyone in the running: the individual people behind the night's
- * confirmed entries, each listed once. A duo entry contributes both of its
- * people separately (that's the whole point - congeniality is personal,
- * the outfit was the shared part), and an admin-added entry with nobody
- * linked to it contributes nobody, since there's no person to vote for.
+ * Everyone in the running: every guest, whether or not they entered the
+ * outfit vote. Congeniality is about the company someone was, not the look,
+ * so it was wrong to limit it to people with a Best Outfit entry - a guest
+ * who skipped the costume could still be the best company of the night.
+ * The owner is the host, not a guest, so they are left out.
  */
-function allCongenialityCandidates(night) {
+function allCongenialityCandidates() {
   return db.prepare(`
-    SELECT DISTINCT u.id, u.name
-    FROM contestants c
-    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
-    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
-    ORDER BY u.name COLLATE NOCASE
-  `).all(night);
+    SELECT id, name FROM users
+    WHERE is_owner = 0
+    ORDER BY name COLLATE NOCASE
+  `).all();
 }
 
 export function congenialityCandidates(night) {
-  const rows = allCongenialityCandidates(night);
+  const rows = allCongenialityCandidates();
   // A runoff narrows who is actually votable to just the tied group, the
   // same way the outfit vote's does - everyone else was already judged in
   // the round that produced the tie.
@@ -798,7 +796,7 @@ export function castCongenialityVote(userId, targetUserId, night) {
   if (congenialityStatus(night) !== 'open') return { error: 'err_congeniality_not_open' };
   // Same rule as the outfit vote - you don't get to crown yourself.
   if (Number(targetUserId) === Number(userId)) return { error: 'err_cannot_vote_self' };
-  if (!allCongenialityCandidates(night).some((c) => c.id === Number(targetUserId))) {
+  if (!allCongenialityCandidates().some((c) => c.id === Number(targetUserId))) {
     return { error: 'err_not_a_candidate' };
   }
   // Mid-runoff only the tied group is votable. Told apart from "not a
@@ -828,14 +826,13 @@ export function congenialityResults(night) {
   const round = roundFor(CONG_KEYS, night);
   const rows = db.prepare(`
     SELECT u.id, u.name, COUNT(v.id) AS votes
-    FROM contestants c
-    JOIN users u ON u.id IN (c.user_id, c.partner_user_id)
+    FROM users u
     LEFT JOIN congeniality_votes v
-      ON v.target_user_id = u.id AND v.night = c.night AND v.round = ?
-    WHERE c.night = ? AND c.confirmed_at IS NOT NULL
+      ON v.target_user_id = u.id AND v.night = ? AND v.round = ?
+    WHERE u.is_owner = 0
     GROUP BY u.id
     ORDER BY votes DESC, u.name COLLATE NOCASE
-  `).all(round, night);
+  `).all(night, round);
   const runoff = runoffIdsFor(CONG_KEYS, night);
   const scoped = runoff ? rows.filter((r) => runoff.includes(r.id)) : rows;
   return rankRows(scoped, tiebreakOrderFor(CONG_KEYS, night));

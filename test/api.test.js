@@ -1090,19 +1090,24 @@ test('Miss Congeniality is a separate per-person round: duos split up, self-vote
 
   await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'open' } });
 
+  // Every guest is in the running, not just the people behind an outfit
+  // entry - a guest who never entered Best Outfit can still be the best
+  // company of the night. The owner hosts, so they are not a candidate.
+  const outsider = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Outsider' } });
   const status = await api('GET', `/votes/status?night=${night}`, { token: ana.data.token });
-  assert.deepEqual(
-    new Set(status.data.congeniality.candidates.map((c) => c.id)),
-    new Set([ana.data.id, bea.data.id, caio.data.id]),
-    'the duo should appear as its two individuals, alongside the solo entrant'
-  );
+  const candidateIds = new Set(status.data.congeniality.candidates.map((c) => c.id));
+  for (const person of [ana, bea, caio]) {
+    assert.ok(candidateIds.has(person.data.id), 'everyone with an entry is in, duo partners as two separate people');
+  }
+  assert.ok(candidateIds.has(outsider.data.id), 'a guest with no outfit entry is votable too');
+  const owner = await api('GET', '/me', { token: ADMIN });
+  assert.ok(!candidateIds.has(owner.data.id), 'the owner is the host, not a candidate');
 
   const own = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: ana.data.id } });
   assert.equal(own.data.error, 'err_cannot_vote_self');
 
-  const outsider = await api('POST', '/admin/users', { token: ADMIN, body: { name: 'Cong Outsider' } });
-  const notRunning = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: outsider.data.id } });
-  assert.equal(notRunning.data.error, 'err_not_a_candidate');
+  const forOwner = await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: owner.data.id } });
+  assert.equal(forOwner.data.error, 'err_not_a_candidate');
 
   assert.equal((await api('POST', '/congeniality/vote', { token: ana.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
   assert.equal((await api('POST', '/congeniality/vote', { token: caio.data.token, body: { night, targetUserId: bea.data.id } })).status, 201);
@@ -1210,7 +1215,8 @@ test('a tie for Miss Congeniality is broken by a runoff, exactly as the outfit v
   await api('POST', `/admin/voting/${night}/congeniality`, { token: ADMIN, body: { status: 'closed' } });
   const settled = await rowsFor();
   assert.deepEqual(
-    settled.map((r) => [r.id, r.rank, r.votes, r.tied]),
+    // Only the people who got votes - every other guest is also listed, on nought.
+    settled.filter((r) => r.votes > 0).map((r) => [r.id, r.rank, r.votes, r.tied]),
     [[bea.data.id, 1, 2, false], [ana.data.id, 2, 2, false], [caio.data.id, 3, 1, false]],
     'the runoff separates the tied pair and leaves everything else - places and counts - exactly as it was'
   );
