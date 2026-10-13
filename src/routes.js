@@ -305,9 +305,9 @@ router.post('/admin/plaza-posts', requireAdmin, async (req, res) => {
   if (result.error) return res.status(400).json({ error: result.error });
   res.json(result);
   const bodyByType = {
-    poll: { pt: 'nova sondagem na wall - vem votar.', en: 'new poll on the wall - come vote.' },
-    links: { pt: 'links novos na wall - tudo num sítio.', en: 'new links on the wall - everything in one place.' },
-    announcement: { pt: 'o anfitrião deixou um novo anúncio na wall.', en: 'your host left a new announcement on the wall.' },
+    poll: { pt: 'há uma nova sondagem na wall, vem votar.', en: 'there’s a new poll on the wall, come and vote.' },
+    links: { pt: 'há links novos na wall.', en: 'there are new links on the wall.' },
+    announcement: { pt: 'a organização deixou um novo anúncio na wall.', en: 'the hosts left a new announcement on the wall.' },
   };
   await broadcast({
     title: { pt: 'wall', en: 'wall' },
@@ -478,8 +478,8 @@ router.post('/outfit/register', async (req, res) => {
     await notifyUser(Number(req.body.partnerUserId), {
       title: { pt: 'snatch', en: 'snatch' },
       body: {
-        pt: `${req.user.name} inscreveu-vos juntos no snatch - confirma para a entrada contar.`,
-        en: `${req.user.name} entered snatch with you - confirm so the entry counts.`,
+        pt: `${req.user.name} inscreveu-te em par no snatch, confirma para a inscrição contar.`,
+        en: `${req.user.name} entered snatch as a duo with you, confirm so the entry counts.`,
       },
       tag: 'outfit-duo-invite',
       url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -877,10 +877,10 @@ router.patch('/admin/users/:id/admin', (req, res) => {
   notifyUser(id, {
     title: { pt: 'appdoivo', en: 'appdoivo' },
     body: isAdmin
-      ? { pt: 'passaste a organizador - tens acesso ao painel de administração.',
-          en: 'you are an organiser now - the admin panel is yours.' }
-      : { pt: 'já não és organizador. continuas com tudo o resto, como qualquer convidado.',
-          en: 'you are no longer an organiser. everything else stays, like any guest.' },
+      ? { pt: 'agora és admin e tens acesso ao painel de administração.',
+          en: 'you are an admin now and have access to the admin panel.' }
+      : { pt: 'já não és admin, mas continuas a ter acesso a tudo o resto.',
+          en: 'you are no longer an admin, but you keep access to everything else.' },
     url: '/settings.html',
   }).catch((err) => console.error('[push] role-change notify failed:', err));
 });
@@ -1429,8 +1429,8 @@ router.post('/admin/voting/:night/congeniality/runoff', async (req, res) => {
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
     body: {
-      pt: `miss congeniality: há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
-      en: `miss congeniality: it's a tie - runoff for ${NIGHT_LABEL[night]} night, vote again!`,
+      pt: `miss congeniality: houve um empate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
+      en: `miss congeniality: it's a tie on ${NIGHT_LABEL[night]} night, vote again!`,
     },
     tag: 'congeniality',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1473,7 +1473,7 @@ router.post('/admin/voting/:night/registration', async (req, res) => {
   res.json({ ok: true, night, votingStatus: 'registration' });
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
-    body: { pt: `candidaturas abertas - já podes inscrever-te para a noite ${NIGHT_LABEL[night]}!`, en: `entries are open - you can now register for ${NIGHT_LABEL[night]} night!` },
+    body: { pt: `as inscrições para a noite ${NIGHT_LABEL[night]} estão abertas!`, en: `entries for ${NIGHT_LABEL[night]} night are open!` },
     tag: 'outfit-registration',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -1507,7 +1507,7 @@ router.post('/admin/voting/:night/open', async (req, res) => {
   res.json({ ok: true, night, votingStatus: 'open' });
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
-    body: { pt: `votação aberta - já podes votar na noite ${NIGHT_LABEL[night]}!`, en: `voting is open - you can now vote for ${NIGHT_LABEL[night]} night!` },
+    body: { pt: `a votação da noite ${NIGHT_LABEL[night]} está aberta!`, en: `voting for ${NIGHT_LABEL[night]} night is open!` },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -1536,7 +1536,7 @@ router.post('/admin/voting/:night/close', async (req, res) => {
   res.json({ ok: true, night, votingStatus: 'closed', ...(settled ? { runoffResolved: true, stillTied: !!settled.stillTied } : {}) });
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
-    body: { pt: `votação encerrada - a noite ${NIGHT_LABEL[night]} encerrou, os resultados vêm aí.`, en: `voting closed - ${NIGHT_LABEL[night]} night is done, results coming soon.` },
+    body: { pt: `a votação da noite ${NIGHT_LABEL[night]} fechou, os resultados vêm aí.`, en: `voting for ${NIGHT_LABEL[night]} night is closed, results coming soon.` },
     tag: 'outfit-closed',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
   });
@@ -1546,7 +1546,7 @@ const REVEAL_NOTIFY = {
   third: { pt: 'já sabes quem ficou em 3º lugar!', en: 'the 3rd place result is in!' },
   second: { pt: 'já sabes quem ficou em 2º lugar!', en: 'the 2nd place result is in!' },
   first: { pt: 'já sabes quem ficou em 1º lugar!', en: 'the 1st place result is in!' },
-  all: { pt: 'já podes ver quem venceu o snatch!', en: 'you can now see who won snatch!' },
+  all: { pt: 'já podes ver quem ganhou o snatch!', en: 'you can now see who won snatch!' },
 };
 
 // Advances the results reveal one stage: hidden -> third -> second -> first
@@ -1614,8 +1614,8 @@ router.post('/admin/voting/:night/runoff', async (req, res) => {
   await broadcast({
     title: { pt: 'snatch', en: 'snatch' },
     body: {
-      pt: `há um empate - desempate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
-      en: `it's a tie - runoff vote for ${NIGHT_LABEL[night]} night, vote again!`,
+      pt: `houve um empate na noite ${NIGHT_LABEL[night]}, vota outra vez!`,
+      en: `it's a tie on ${NIGHT_LABEL[night]} night, vote again!`,
     },
     tag: 'outfit-voting',
     url: `/?tab=outfit&night=${encodeURIComponent(night)}`,
@@ -1777,8 +1777,8 @@ router.post('/admin/memo/trigger-next', async (req, res) => {
   const payload = {
     title: { pt: 'memo', en: 'memo' },
     body: {
-      pt: 'é agora - tens 15 minutos para captar este momento.',
-      en: "it's now - you have 15 minutes to capture this moment.",
+      pt: 'é agora, tens 15 minutos para captar este momento.',
+      en: "it's time, you have 15 minutes to capture this moment.",
     },
     tag: 'memo',
     url: '/?tab=memo',

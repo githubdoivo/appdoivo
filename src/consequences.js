@@ -27,7 +27,7 @@ export async function revealRandomConsequence() {
 
   await broadcast({
     title: { pt: 'rata', en: 'rata' },
-    body: { pt: 'quem tem a rata? a consequência foi revelada! entra na app agora.', en: 'who has the rat? the consequence was revealed - open the app now.' },
+    body: { pt: 'saiu uma nova consequência, abre a app para a veres.', en: 'a new consequence was drawn, open the app to see it.' },
     tag: 'consequence',
     url: '/?tab=rata',
   });
@@ -104,8 +104,8 @@ export async function assignConsequenceUser(consequenceId, userId) {
     await notifyUser(userId, {
       title: { pt: 'rata', en: 'rata' },
       body: {
-        pt: `foste marcado como quem tinha a rata em: "${consequence.text}". faz e marca como feito na app.`,
-        en: `you were marked as holding the rat for: "${consequence.text}". do it and mark it done in the app.`,
+        pt: `ficaste com a rata em: "${consequence.text}". quando a fizeres, marca-a como feita na app.`,
+        en: `you got the rat for: "${consequence.text}". once you've done it, mark it as done in the app.`,
       },
       tag: 'consequence-assigned',
       url: '/?tab=rata',

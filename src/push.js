@@ -145,7 +145,7 @@ export async function checkVersionUpdate(currentVersion) {
   if (!previous || previous === currentVersion) return;
   await broadcast({
     title: { pt: 'atualização', en: 'update' },
-    body: { pt: 'há novidades - abre a app outra vez para as veres.', en: 'there’s something new - reopen the app to see it.' },
+    body: { pt: 'há uma nova versão, abre a app outra vez para a veres.', en: 'there’s a new version, reopen the app to see it.' },
     tag: 'app-update',
     url: '/',
   });

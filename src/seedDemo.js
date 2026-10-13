@@ -217,6 +217,15 @@ export function seedDemoConsequences(demoUsers = seedDemoUsers()) {
 
 }
 
+// The persona each demo entry competes as, per night - the voting list shows
+// "persona (person)", so a persona that just repeated the person's name read
+// as a duplicate. Themed to the night: furniture for Furnished, creatures for
+// Swamp.
+const DEMO_PERSONAS = {
+  furnished: ['Velvet Armchair', 'Grandfather Clock', 'Lava Lamp', 'Persian Rug', 'Crystal Chandelier'],
+  swamp: ['Bog Spirit', 'Firefly', 'Mossy Toad', "Will-o'-the-Wisp", 'Lily Pad'],
+};
+
 export function seedDemoContestants(demoUsers = seedDemoUsers()) {
   const day = today();
   // 3) Contestants (QA convenience only - prod never sets SEED_DEMO, so the
@@ -242,7 +251,7 @@ export function seedDemoContestants(demoUsers = seedDemoUsers()) {
     NIGHTS.forEach((night, i) => {
       NAMES.slice(i * 5, i * 5 + 5).forEach((name, j) => {
         insContestant.run(
-          name, night, userIdByName.get(name) ?? null,
+          DEMO_PERSONAS[night]?.[j] ?? name, night, userIdByName.get(name) ?? null,
           solidPhoto(DEMO_PHOTO_COLORS[(i * 5 + j) % DEMO_PHOTO_COLORS.length])
         );
       });
@@ -260,27 +269,16 @@ export function seedDemoWall(demoUsers = seedDemoUsers()) {
   if (plazaPostCount === 0 && demoUsers.length) {
     createPlazaPost(demoUsers[0], {
       type: 'announcement',
-      text: 'Bem-vindos à festa! Password do wifi: party-wifi-2026.',
+      text: 'Boas-vindas à festa, a password do wifi é party-wifi-2026.',
     });
     createPlazaPost(demoUsers[0], {
       type: 'poll',
       text: 'Qual foi o melhor momento da noite até agora?',
-      options: ['A Rata', 'Best Look', 'A Plaza', 'Ainda não sei'],
+      options: ['Rata', 'Snatch', 'Plaza', 'Ainda não sei'],
     });
-    // The real party links. They arrived shortened through shorturl.at,
-    // which meant every tap opened an interstitial before going anywhere -
-    // resolved once and written out in full instead.
-    //
-    // Two of them did not even reach their destination that way. The
-    // shortener sent Location to Google's consent wall and Playlist to
-    // Spotify's login, both with the real target buried in a `continue=`
-    // parameter; a guest with no Google or Spotify session got the wall and
-    // not the map. Those two are the canonical URLs pulled out of it, with
-    // the tracking noise (entry, shh, lucs, g_ep, skid) dropped.
-    //
-    // These are the same private invite links the short ones already led to,
-    // so nothing here is more exposed than it was - a shortener hides a
-    // destination from a reader, never from anyone who follows it.
+    // Placeholder links that show what the post looks like. Real event links
+    // are posted from the admin panel while the app is running, so they live
+    // in the database and never in the repo.
     createPlazaPost(demoUsers[0], {
       type: 'links',
       text: 'useful links 🔗',
@@ -306,7 +304,7 @@ export function seedDemoChat(demoUsers = seedDemoUsers()) {
   const lines = [
     'quem trouxe o gelo?',
     'a playlist está a carregar demasiado nos anos 2000 e ninguém se queixa',
-    'alguém viu o meu casaco? preto, com um bolso rasgado',
+    'alguém viu um casaco preto com um bolso rasgado?',
     'confirmo que a sobremesa vale a pena esperar',
   ];
   lines.forEach((text, i) => postMessage(demoUsers[i % demoUsers.length], text));

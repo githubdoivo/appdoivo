@@ -49,8 +49,8 @@ export function startScheduler() {
           await broadcast({
             title: { pt: 'memo', en: 'memo' },
             body: {
-              pt: 'é agora - tens 15 minutos para captar este momento.',
-              en: "it's now - you have 15 minutes to capture this moment.",
+              pt: 'é agora, tens 15 minutos para captar este momento.',
+              en: "it's time, you have 15 minutes to capture this moment.",
             },
             tag: 'memo',
             url: '/?tab=memo',
