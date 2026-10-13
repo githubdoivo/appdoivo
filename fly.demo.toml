@@ -1,0 +1,38 @@
+# Public demo (https://appdoivo-demo.fly.dev): the app with mock data for
+# anyone to try, linked from the README. See src/demo.js for what demo mode
+# turns off and why.
+#
+# - No volume: the database lives in the machine and is re-seeded on every
+#   start, and the machine stops when idle - so the demo cleans itself up
+#   and costs next to nothing.
+# - No ANTHROPIC_API_KEY (no auto-translation of posts) and no VAPID keys
+#   (no push notifications to strangers' phones).
+# - Memo is off: it is photo uploads plus ffmpeg, the two things a public
+#   demo should not be running.
+#
+#   scripts/deploy.sh demo
+
+app = "appdoivo-demo"
+primary_region = "cdg"
+
+[build]
+
+[env]
+  PORT = "3000"
+  APP_ENV = "demo"
+  DEMO_MODE = "true"
+  SEED_DEMO = "true"
+  ENABLE_PLAZA = "true"
+  ENABLE_MEMO = "false"
+  ADMIN_NAME = "Host"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

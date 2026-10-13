@@ -96,7 +96,10 @@ const NAMES = loadGuestNames();
 // The one demo user pre-promoted to admin on every fresh seed, so there's
 // always a stable non-owner admin tester available without manually
 // promoting someone after each QA reseed. Only applies to the mock list.
-const PRESET_ADMIN_NAME = 'Elisa Carvalho';
+export const PRESET_ADMIN_NAME = 'Elisa Carvalho';
+
+// The guest the public demo's login screen offers (see src/demo.js).
+export const DEMO_GUEST_NAME = 'Alice Moreira';
 
 // The rata is a passable, anonymous token - whoever ends up holding it when
 // a consequence is revealed might not be near anyone else at that moment.

@@ -333,6 +333,31 @@ $('theme-toggle').addEventListener('click', () => toggleMode());
 
 wirePasswordToggle('token-input', 'token-toggle');
 
+// Public demo only: offer the shared keys (GET /api/demo is empty anywhere
+// else, so this stays hidden). Tapping one logs straight in with it.
+(async () => {
+  try {
+    const { keys } = await (await fetch('/api/demo')).json();
+    if (!keys?.length) return;
+    const list = $('demo-keys-list');
+    list.innerHTML = '';
+    for (const k of keys) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'find-key-result';
+      btn.innerHTML = `<span data-i18n="demo_role_${esc(k.role)}">${esc(t(`demo_role_${k.role}`))}</span><small>${esc(k.key)}</small>`;
+      btn.addEventListener('click', () => {
+        $('token-input').value = k.key;
+        $('login-form').requestSubmit();
+      });
+      list.appendChild(btn);
+    }
+    $('demo-keys').classList.remove('hidden');
+  } catch {
+    // No demo on this server - nothing to show.
+  }
+})();
+
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (findKeyMode) return;
