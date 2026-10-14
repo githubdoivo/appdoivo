@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
@@ -15,6 +15,8 @@ process.env.TOKEN_SECRET = 'demo-test-secret';
 process.env.DEMO_MODE = 'true';
 process.env.ANTHROPIC_API_KEY = '';
 process.env.ENABLE_PLAZA = 'true';
+process.env.CANONICAL_HOST = 'demo.appdoivo.com';
+process.env.REDIRECT_HOSTS = 'appdoivo.com, www.appdoivo.com,appdoivo-demo.fly.dev';
 
 const { default: app } = await import('../src/app.js');
 const { seedDemo } = await import('../src/seedDemo.js');
@@ -108,4 +110,27 @@ test('an uploaded photo is swapped for the placeholder, so entering an outfit st
   // Not a real JPEG at all - in the demo it never reaches the decoder.
   const res = await api('POST', '/outfit/register', { token: guest, body: { night: 'swamp', name: 'Lily Pad', photoBase64: 'data:image/png;base64,AAAA' } });
   assert.ok(res.status < 300, `registration with a photo works in the demo: ${JSON.stringify(res.data)}`);
+});
+
+// GET with a chosen Host header (fetch() won't let you set Host).
+function getAs(host, path) {
+  const { port } = server.address();
+  return new Promise((resolve, reject) => {
+    request({ host: '127.0.0.1', port, path, headers: { Host: host } }, (res) => { res.resume(); resolve(res); }).on('error', reject).end();
+  });
+}
+
+test('the bare domain, www and the old fly.dev address forward to demo.appdoivo.com', async () => {
+  for (const host of ['appdoivo.com', 'www.appdoivo.com', 'appdoivo-demo.fly.dev']) {
+    const res = await getAs(host, '/plaza?x=1');
+    assert.equal(res.statusCode, 301, host);
+    assert.equal(res.headers.location, 'https://demo.appdoivo.com/plaza?x=1', host);
+  }
+});
+
+test('the canonical host and unlisted hosts (health checks) are served, not redirected', async () => {
+  for (const host of ['demo.appdoivo.com', '172.19.0.2:3000']) {
+    const res = await getAs(host, '/api/health');
+    assert.notEqual(res.statusCode, 301, host);
+  }
 });
