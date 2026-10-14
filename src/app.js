@@ -28,6 +28,20 @@ const app = express();
 // Fly.io terminates TLS and proxies requests, so trust its X-Forwarded-For
 // header to get each client's real IP (needed for per-IP rate limiting).
 app.set('trust proxy', 1);
+
+// One address per app: other hosts listed in REDIRECT_HOSTS forward to
+// CANONICAL_HOST, path and query kept. The demo lives at demo.appdoivo.com,
+// and appdoivo.com points at it between parties, so old links and the bare
+// domain all land there. Only the listed hosts are redirected - Fly's health
+// checks (internal IP) and anything else are left alone.
+const CANONICAL_HOST = process.env.CANONICAL_HOST;
+const REDIRECT_HOSTS = new Set((process.env.REDIRECT_HOSTS || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean));
+if (CANONICAL_HOST && REDIRECT_HOSTS.size) {
+  app.use((req, res, next) => {
+    if (!REDIRECT_HOSTS.has(req.hostname.toLowerCase())) return next();
+    res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+  });
+}
 // Default 100kb is too small for a base64-encoded outfit photo (client
 // resizes to ~800px JPEG first, but base64 still adds ~33% overhead) - 2mb
 // leaves generous headroom while still bounding the request body.
