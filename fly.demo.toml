@@ -26,7 +26,7 @@ primary_region = "cdg"
   ENABLE_MEMO = "false"
   ADMIN_NAME = "Host"
   CANONICAL_HOST = "festa-demo.appdoivo.com"
-  REDIRECT_HOSTS = "festa.appdoivo.com,demo.appdoivo.com,appdoivo.com,www.appdoivo.com,appdoivo-demo.fly.dev"
+  REDIRECT_HOSTS = "appdoivo-demo.fly.dev"
 
 [http_service]
   internal_port = 3000

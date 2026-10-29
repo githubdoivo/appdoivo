@@ -20,7 +20,7 @@ Never commit straight to `main`.
   automatically. Use throwaway test users here, not real ones.
 - **Production** (`appdoivo`, https://festa.appdoivo.com) - the real app, real data,
   persistent volume. Only ever deployed from `main`. Between parties
-  festa.appdoivo.com forwards to the demo.
+  festa.appdoivo.com is attached to the demo instead (no redirect).
 - **Demo** (`appdoivo-demo`, https://festa-demo.appdoivo.com) - public, for
   anyone to try (the README links it). Mock data only, `DEMO_MODE=true` (see
   `src/demo.js`), no volume, stops when idle. Deployed from `main` with
