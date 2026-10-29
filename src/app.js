@@ -30,9 +30,10 @@ const app = express();
 app.set('trust proxy', 1);
 
 // One address per app: other hosts listed in REDIRECT_HOSTS forward to
-// CANONICAL_HOST, path and query kept. The demo lives at demo.appdoivo.com,
-// and appdoivo.com points at it between parties, so old links and the bare
-// domain all land there. Only the listed hosts are redirected - Fly's health
+// CANONICAL_HOST, path and query kept. The demo lives at
+// festa-demo.appdoivo.com. Between parties festa.appdoivo.com (the real app's
+// address), the old demo.appdoivo.com and the bare domain point at it, so old
+// links all land there. Only the listed hosts are redirected - Fly's health
 // checks (internal IP) and anything else are left alone.
 const CANONICAL_HOST = process.env.CANONICAL_HOST;
 const REDIRECT_HOSTS = new Set((process.env.REDIRECT_HOSTS || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean));

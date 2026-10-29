@@ -15,8 +15,8 @@ process.env.TOKEN_SECRET = 'demo-test-secret';
 process.env.DEMO_MODE = 'true';
 process.env.ANTHROPIC_API_KEY = '';
 process.env.ENABLE_PLAZA = 'true';
-process.env.CANONICAL_HOST = 'demo.appdoivo.com';
-process.env.REDIRECT_HOSTS = 'appdoivo.com, www.appdoivo.com,appdoivo-demo.fly.dev';
+process.env.CANONICAL_HOST = 'festa-demo.appdoivo.com';
+process.env.REDIRECT_HOSTS = 'festa.appdoivo.com, demo.appdoivo.com,appdoivo.com, www.appdoivo.com,appdoivo-demo.fly.dev';
 
 const { default: app } = await import('../src/app.js');
 const { seedDemo } = await import('../src/seedDemo.js');
@@ -120,16 +120,16 @@ function getAs(host, path) {
   });
 }
 
-test('the bare domain, www and the old fly.dev address forward to demo.appdoivo.com', async () => {
-  for (const host of ['appdoivo.com', 'www.appdoivo.com', 'appdoivo-demo.fly.dev']) {
+test('the real app\'s address, the old demo address, the bare domain, www and fly.dev forward to festa-demo.appdoivo.com', async () => {
+  for (const host of ['festa.appdoivo.com', 'demo.appdoivo.com', 'appdoivo.com', 'www.appdoivo.com', 'appdoivo-demo.fly.dev']) {
     const res = await getAs(host, '/plaza?x=1');
     assert.equal(res.statusCode, 301, host);
-    assert.equal(res.headers.location, 'https://demo.appdoivo.com/plaza?x=1', host);
+    assert.equal(res.headers.location, 'https://festa-demo.appdoivo.com/plaza?x=1', host);
   }
 });
 
 test('the canonical host and unlisted hosts (health checks) are served, not redirected', async () => {
-  for (const host of ['demo.appdoivo.com', '172.19.0.2:3000']) {
+  for (const host of ['festa-demo.appdoivo.com', '172.19.0.2:3000']) {
     const res = await getAs(host, '/api/health');
     assert.notEqual(res.statusCode, 301, host);
   }
