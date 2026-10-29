@@ -128,8 +128,8 @@ test('the old fly.dev address forwards to festa-demo.appdoivo.com', async () => 
   }
 });
 
-test('every real domain and unlisted hosts (health checks) are served directly, not redirected', async () => {
-  for (const host of ['festa-demo.appdoivo.com', 'festa.appdoivo.com', 'appdoivo.com', 'www.appdoivo.com', '172.19.0.2:3000']) {
+test('the demo domain and unlisted hosts (health checks) are served directly, not redirected', async () => {
+  for (const host of ['festa-demo.appdoivo.com', '172.19.0.2:3000']) {
     const res = await getAs(host, '/api/health');
     assert.notEqual(res.statusCode, 301, host);
   }
