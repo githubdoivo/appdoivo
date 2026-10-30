@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the test suite, then deploys to the given target - refuses to touch
-# qa.appdoivo.com or appdoivo.com if a test fails.
+# festa-qa.appdoivo.com or festa.appdoivo.com if a test fails.
 # See CONTRIBUTING.md for the full branch -> QA -> prod process this fits into.
 #
 # Auth: one token per environment, picked by target, so the credential that
