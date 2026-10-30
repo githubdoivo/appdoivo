@@ -722,12 +722,28 @@ body:has(#login:not(.hidden)) { background-color: #241d17; }
 .wall-secret-btn:hover, .wall-secret-btn:active { opacity: 0.55; }
 .login-lang-toggle:hover { opacity: 0.9; }
 
-/* Public demo: the shared keys under the login form. */
+/* Public demo: the shared keys. */
 .demo-keys {
   width: 100%;
   max-width: 320px;
   margin-top: 18px;
   text-align: center;
+}
+/* Under the form they added ~135px to a bottom-anchored stack, which
+   pushed the key field up over the cottage. On any screen tall enough
+   they sit in the empty grass at the top instead, so the demo keeps the
+   real app's framing: the house whole, the form below it. Short screens
+   (a phone on its side) keep them in the flow, where there is no room
+   above. */
+@media (min-height: 540px) {
+  #login .cover > .demo-keys {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top));
+    left: 20px;
+    right: 20px;
+    width: auto;
+    margin: 0 auto;
+  }
 }
 .demo-keys-help { margin: 0 0 8px; font-size: 0.9rem; color: var(--ink-soft); }
 .demo-keys-list { display: flex; gap: 8px; }
