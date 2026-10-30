@@ -1,4 +1,6 @@
-# appdoivo
+# festa-app
+
+**Festa**, the party app (first called appdoivo). Try the demo at **[festa-demo.appdoivo.com](https://festa-demo.appdoivo.com)**.
 
 A private-party PWA (~50 guests) with four features, all behind one login:
 
@@ -87,10 +89,10 @@ test framework)
 Every suite runs against a temporary database and never touches real data.
 
 **End-to-end, from the outside:** a separate BDD suite,
-[appdoivo-e2e](https://github.com/githubdoivo/appdoivo-e2e) (Playwright + Cucumber,
+[festa-app-e2e](https://github.com/githubdoivo/festa-app-e2e) (Playwright + Cucumber,
 TypeScript), runs every day against the [live demo](https://festa-demo.appdoivo.com):
 API scenarios plus UI scenarios on iPhone and desktop, with a
-[published report](https://githubdoivo.github.io/appdoivo-e2e/).
+[published report](https://githubdoivo.github.io/festa-app-e2e/).
 
 **Quality gates**
 
