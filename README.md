@@ -44,7 +44,7 @@ The interface has a PT/EN language switch everywhere.
 
 ## Live demo
 
-**[demo.appdoivo.com](https://demo.appdoivo.com)**: the app with mock data. The login screen
+**[festa-demo.appdoivo.com](https://festa-demo.appdoivo.com)**: the app with mock data. The login screen
 offers two keys, a **guest** and an **admin**, so no account is needed.
 
 Demo mode (`src/demo.js`) keeps it safe to leave open: photo uploads become a
@@ -88,7 +88,7 @@ Every suite runs against a temporary database and never touches real data.
 
 **End-to-end, from the outside:** a separate BDD suite,
 [appdoivo-e2e](https://github.com/githubdoivo/appdoivo-e2e) (Playwright + Cucumber,
-TypeScript), runs every day against the [live demo](https://demo.appdoivo.com):
+TypeScript), runs every day against the [live demo](https://festa-demo.appdoivo.com):
 API scenarios plus UI scenarios on iPhone and desktop, with a
 [published report](https://githubdoivo.github.io/appdoivo-e2e/).
 

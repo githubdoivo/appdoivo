@@ -18,9 +18,9 @@ Never commit straight to `main`.
   Same admin login as production, but its own `TOKEN_SECRET`/VAPID keys.
   Deployed manually, on demand, from whatever branch is being tested - never
   automatically. Use throwaway test users here, not real ones.
-- **Production** (`appdoivo`, https://appdoivo.com) - the real app, real data,
-  persistent volume. Only ever deployed from `main`.
-- **Demo** (`appdoivo-demo`, https://demo.appdoivo.com) - public, for
+- **Production** (`appdoivo`, https://festa.appdoivo.com) - the real app, real data,
+  persistent volume. Only ever deployed from `main`. Suspended between parties.
+- **Demo** (`appdoivo-demo`, https://festa-demo.appdoivo.com) - public, for
   anyone to try (the README links it). Mock data only, `DEMO_MODE=true` (see
   `src/demo.js`), no volume, stops when idle. Deployed from `main` with
   `scripts/deploy.sh demo`, using `FLY_API_TOKEN_DEMO` from `.env`.
