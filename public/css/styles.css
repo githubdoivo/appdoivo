@@ -329,6 +329,12 @@ html.mode-dark body:not([class*="theme-"]) {
   user-select: none;
 }
 
+/* On the login screen the badge sits on the painting's bottom edge instead of
+   below it: in the flow it added a strip of plain background under the
+   picture, which read as the end of a frame. */
+body:has(#login:not(.hidden)) { position: relative; }
+body:has(#login:not(.hidden)) .version-badge { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; }
+
 .muted { color: var(--ink-soft); font-size: 0.92rem; }
 /* Kill-switch confirmation ("apagado.") sits on its own line below the
    danger button, not crammed beside it like the other inline action msgs. */
