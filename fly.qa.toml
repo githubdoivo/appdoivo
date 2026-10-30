@@ -45,6 +45,8 @@ primary_region = "cdg"
   # reset on every deploy - exactly like QA's DB already does, no extra
   # volume needed for QA testing.
   ENABLE_MEMO = "true"
+  CANONICAL_HOST = "festa-qa.appdoivo.com"
+  REDIRECT_HOSTS = "appdoivo-qa.fly.dev"
 
 [http_service]
   internal_port = 3000
@@ -58,7 +60,7 @@ primary_region = "cdg"
   # like several "moments" opening simultaneously, when really they're just
   # queued. Same fix fly.toml already uses for Rata's 3h reveal in prod.
   # Revert to 0 once Memo testing wraps up.
-  min_machines_running = 1
+  min_machines_running = 0
 
 # 512MB, not the 256 this ran on until 16 Sept 2026. Memo's "video of the
 # day" shells out to ffmpeg, and on 256MB there was nothing left for it:
