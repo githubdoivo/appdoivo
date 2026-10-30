@@ -10,3 +10,4 @@ npm-debug.log*
 .agents/
 skills-lock.json
 feedback-screenshots/
+test-results/
